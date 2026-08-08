@@ -2,6 +2,10 @@ import "server-only";
 
 import { env } from "@/lib/env";
 import type {
+  SendHistoryEntry,
+  SendQuota,
+  SendResult,
+  SendTarget,
   ActivityResponse,
   Conversation,
   FriendRequestsResponse,
@@ -205,6 +209,39 @@ export const nekobot = {
    */
   acceptFriendRequest: (wxId: string) =>
     request<unknown>(`/friend-requests/${encodeURIComponent(wxId)}/accept`, { method: "POST" }),
+
+  // ── 发送侧 ──────────────────────────────────────────────
+  //
+  // 这是全站唯一能主动向一千六百人发消息的能力。
+  // 用户定的规矩：**网站不能替用户发消息**，只有系统/管理员公告能发。
+  // 所以这里只暴露最小面：查额度、查可发目标、发文本、撤回。
+
+  /** 当前 key 的发送额度。发之前必须查 —— 撞上限被上游拒是最难解释的失败 */
+  sendQuota: () => request<SendQuota>("/send/quota"),
+
+  /** 可发送的会话。群和私聊混在一起，调用方自己按 is_group 过滤 */
+  sendTargets: () => request<SendTarget[]>("/send/targets"),
+
+  sendHistory: () => request<SendHistoryEntry[]>("/send/history"),
+
+  /**
+   * 发一条文本。
+   *
+   * **不可逆**（撤回窗口很短且不保证成功）。调用前该做的检查
+   * 全部在 broadcast 那一层，这里只负责发。
+   */
+  sendText: (convId: string, text: string) =>
+    request<SendResult>("/send/text", {
+      method: "POST",
+      body: JSON.stringify({ conv_id: convId, text }),
+    }),
+
+  /** 撤回自己发的消息。微信只允许很短的窗口，失败是常态，不能当成保证 */
+  revoke: (convId: string, msgSvrId: string) =>
+    request<SendResult>("/send/revoke", {
+      method: "POST",
+      body: JSON.stringify({ conv_id: convId, msg_svr_id: msgSvrId }),
+    }),
 
   /**
    * 分页拉取消息。上游单次有 limit 上限，这里按页迭代。

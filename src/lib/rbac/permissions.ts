@@ -130,6 +130,13 @@ export const PERMISSIONS = [
     description: "仅系统与管理员行为，网站永不代用户发消息",
     dangerLevel: 3,
   },
+  {
+    key: "broadcast.approve",
+    category: "broadcast",
+    label: "复核群发",
+    description: "双人复核的第二个人。起草人不能自己批准自己的稿子",
+    dangerLevel: 2,
+  },
   { key: "broadcast.email", category: "broadcast", label: "群发邮件", dangerLevel: 3 },
   { key: "digest.manage", category: "broadcast", label: "管理每周精选推送", dangerLevel: 1 },
 

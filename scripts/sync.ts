@@ -13,6 +13,7 @@ import { syncPeople } from "@/lib/sync/people";
 import { syncAllMembers } from "@/lib/sync/members";
 import { syncAllGroups, syncGroupMessages } from "@/lib/sync/messages";
 import { claimPending, collapseJobs, completeJob } from "@/lib/sync/queue";
+import { deliverBroadcast, pendingBroadcasts } from "@/lib/broadcast/sender";
 
 const keyword = process.argv[2];
 
@@ -64,8 +65,32 @@ async function drainQueue() {
   }
 }
 
+/**
+ * 把排队中的群发真正发出去。
+ *
+ * 和同步队列一样：**没有这一步的话，后台那个「发送」按钮是个谎**。
+ * 上一轮就是这么栽的 —— 排进去的任务永远不会被执行。
+ */
+async function drainBroadcasts() {
+  const ids = pendingBroadcasts();
+  if (ids.length === 0) return;
+
+  console.log(`→ 排队中的群发：${ids.length} 条`);
+  for (const id of ids) {
+    const report = await deliverBroadcast(id);
+    if (report.error) {
+      console.error(`  ✗ ${id}：${report.error}`);
+    } else {
+      console.log(
+        `  ${id}：成功 ${report.sent}，失败 ${report.failed}，跳过 ${report.skipped}`,
+      );
+    }
+  }
+}
+
 async function main() {
   await drainQueue();
+  await drainBroadcasts();
 
   console.log("→ 刷新群列表");
   const convs = await syncConversations({ triggeredBy: "admin" });

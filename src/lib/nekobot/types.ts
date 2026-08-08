@@ -219,3 +219,51 @@ export interface MessageQuery {
   limit?: number;
   offset?: number;
 }
+
+// ── 发送侧（/send/*）────────────────────────────────────────
+//
+// 形态全部按实测响应定义，不按文档推测 —— 这条规矩踩过坑：
+// /users/{wx_id}/groups 文档说是数组、实测是对象，
+// 当时的 catch 把 TypeError 吞了，结果每个人都被告知「你不是社群成员」。
+
+/** GET /send/quota 实测：{"per_minute":{"used":0,"limit":20},"per_hour":{...}} */
+export interface SendQuotaWindow {
+  used: number;
+  limit: number;
+}
+
+export interface SendQuota {
+  per_minute: SendQuotaWindow;
+  per_hour: SendQuotaWindow;
+}
+
+/** GET /send/targets 实测：数组，群和私聊混在一起 */
+export interface SendTarget {
+  conv_id: string;
+  name: string;
+  is_group: boolean;
+  bound: boolean;
+  last_active: string;
+}
+
+/** GET /send/history 实测：{action,target,detail,ok,at} */
+export interface SendHistoryEntry {
+  action: string;
+  target: string;
+  detail: Record<string, unknown> | null;
+  ok: boolean;
+  at: string;
+}
+
+/**
+ * POST /send/text 的响应。
+ *
+ * ⚠️ msg_svr_id 是**撤回的唯一凭据**，拿不到就再也撤不回来了。
+ * 所以这里定成可选并在调用侧显式检查 —— 假定它一定存在的话，
+ * 真出事那天会发现手里什么都没有。
+ */
+export interface SendResult {
+  ok?: boolean;
+  msg_svr_id?: string;
+  [key: string]: unknown;
+}
