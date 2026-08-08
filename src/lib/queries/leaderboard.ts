@@ -5,6 +5,7 @@ import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { dailyStats, people } from "@/lib/db/schema";
 import { shiftDateKey, todayKey } from "@/lib/time";
+import { resolveDisplayName } from "@/lib/users/display-name";
 
 /**
  * 排行榜查询。
@@ -120,7 +121,8 @@ export function getLeaderboard(options: BoardOptions): BoardEntry[] {
   return current.map((row, index) => ({
     rank: index + 1,
     wxId: row.wxId,
-    name: profiles.get(row.wxId)?.name ?? row.wxId,
+    // 兜底绝不能是 wx_id —— 排行榜对未登录访客公开，wx_id 漏出去就是隐私事故
+    name: resolveDisplayName([profiles.get(row.wxId)?.name], { wxId: row.wxId }),
     avatarUrl: profiles.get(row.wxId)?.avatar ?? null,
     quality: Number(row.quality),
     messages: Number(row.messages),

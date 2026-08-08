@@ -198,65 +198,65 @@ export function BindFlow({ next }: { next?: string } = {}) {
         </p>
       </div>
 
-      <div className="inset-group">
-        <Step
-          index={1}
-          title={`添加 ${BOT_NAME} 为好友`}
-          detail="在「申请理由」里填上这 6 位数字。不需要等对方通过。"
-        />
-        <Step
-          index={2}
-          title="或者，如果已经是好友"
-          detail={`直接私聊 ${BOT_NAME} 发送这 6 位数字。`}
-        />
+      {/*
+        主通道：群里发。
+        加好友已经触发微信风控，那条路实际走不通，所以不再引导。
+        整句话直接做成一个可点复制的按钮 —— 让人自己照着抄「登录」两个字，
+        总有人会漏掉前缀，然后卡在这里不知道为什么没反应。
+      */}
+      <div className="space-y-3">
+        <p className="text-[15px] leading-relaxed">
+          在<strong>任意一个有 {BOT_NAME} 的群</strong>里发送这句话：
+        </p>
+        <button
+          type="button"
+          onClick={() => void copy(`${groupPrefix} ${code}`, "group")}
+          className="tabular flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--color-surface)] px-4 py-4 text-[19px] font-medium shadow-[var(--shadow-hairline)] transition active:scale-[0.98]"
+        >
+          <span>
+            {groupPrefix} {code}
+          </span>
+          <span className="text-[13px] font-normal text-[var(--color-ink-tertiary)]">
+            {copied === "group" ? "已复制" : "轻点复制整句"}
+          </span>
+        </button>
+        <p className="text-[13px] leading-relaxed text-[var(--color-ink-secondary)]">
+          必须带上「{groupPrefix}」两个字，只发数字不算。
+          <br />
+          <strong>不要替别人发送验证码</strong> —— 那会把对方的登录会话绑定到你的身份上。
+        </p>
       </div>
 
       <StatusLine upstreamDown={upstreamDown} elapsed={elapsed} />
 
-      {/* 兜底通道 15 秒后才出现 —— 不能一上来就引导所有人往群里发验证码 */}
+      {/* 备用通道同样等 15 秒再出现：主通道通常几秒就成了，一上来给两个选择只会让人犹豫 */}
       {showFallback && (
         <details className="animate-rise">
           <summary className="cursor-pointer list-none text-center text-[15px] text-[var(--color-accent)] transition active:opacity-60">
-            遇到问题？
+            群里发不了？
           </summary>
           <div className="mt-4 space-y-3 rounded-[var(--radius-card)] bg-[var(--color-accent-soft)] p-4">
             <p className="text-[15px] leading-relaxed">
-              在<strong>任意一个有 {BOT_NAME} 的群</strong>里发送：
+              如果你已经是 {BOT_NAME} 的好友，可以<strong>直接私聊</strong>发送这 6 位数字：
             </p>
             <button
               type="button"
-              onClick={() => void copy(`${groupPrefix} ${code}`, "group")}
+              onClick={() => void copy(code, "code")}
               className="tabular flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--color-surface)] px-4 py-3 text-[19px] font-medium shadow-[var(--shadow-hairline)] transition active:scale-[0.98]"
             >
-              <span>
-                {groupPrefix} {code}
-              </span>
+              <span>{code}</span>
               <span className="text-[13px] font-normal text-[var(--color-ink-tertiary)]">
-                {copied === "group" ? "已复制" : "轻点复制"}
+                {copied === "code" ? "已复制" : "轻点复制"}
               </span>
             </button>
             <p className="text-[13px] leading-relaxed text-[var(--color-ink-secondary)]">
-              必须带上「{groupPrefix}」两个字。
+              私聊不需要带「{groupPrefix}」。
               <br />
-              <strong>不要替别人发送验证码</strong> —— 那会把对方的登录会话绑定到你的身份上。
+              还不是好友的话请走群里那条 —— 机器人目前不方便频繁通过好友申请。
             </p>
           </div>
         </details>
       )}
-    </div>
-  );
-}
-
-function Step({ index, title, detail }: { index: number; title: string; detail: string }) {
-  return (
-    <div className="inset-row flex gap-3.5 p-4">
-      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-[13px] font-semibold text-[var(--color-accent-ink)]">
-        {index}
-      </span>
-      <div className="space-y-1">
-        <p className="text-[17px] leading-snug">{title}</p>
-        <p className="text-[13px] leading-relaxed text-[var(--color-ink-secondary)]">{detail}</p>
-      </div>
     </div>
   );
 }

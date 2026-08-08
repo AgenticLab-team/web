@@ -3,8 +3,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { PasskeySetup } from "@/components/passkey/PasskeySetup";
+import { ToastProvider } from "@/components/ui/Toast";
 import { listPasskeys } from "@/lib/auth/passkey";
 import { getCurrentUser } from "@/lib/auth/session";
+import { resolveDisplayName } from "@/lib/users/display-name";
 
 export const metadata: Metadata = { title: "欢迎" };
 export const dynamic = "force-dynamic";
@@ -21,9 +23,15 @@ export default async function OnboardingPage() {
   if (!user) redirect("/login");
 
   const passkeys = listPasskeys(user.id);
-  const name = user.siteNickname ?? user.wxNickname ?? "你";
+  const name = resolveDisplayName([user.siteNickname, user.wxNickname], {
+    wxId: user.wxId,
+    fallback: "你",
+  });
 
   return (
+    // 这个页面在 (app) 布局之外，必须自带 ToastProvider ——
+    // 否则 useToast 静默退化，Passkey 添加/移除的提示一个都弹不出来
+    <ToastProvider>
     <main className="mx-auto flex min-h-dvh w-full max-w-[26rem] flex-col justify-center px-6 py-12">
       <header className="mb-8 space-y-2">
         <p className="t-subhead text-[var(--accent)]">绑定成功</p>
@@ -43,5 +51,6 @@ export default async function OnboardingPage() {
         {passkeys.length ? "进入社区" : "以后再说"}
       </Link>
     </main>
+    </ToastProvider>
   );
 }

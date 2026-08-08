@@ -10,7 +10,9 @@ import { boards, postRevisions, postViews, posts, replies, users } from "@/lib/d
 import { renderMarkdown } from "@/lib/markdown";
 import { can } from "@/lib/rbac/can";
 import { getSettingInt } from "@/lib/settings/store";
+import { resolveDisplayName } from "@/lib/users/display-name";
 
+import { recountBoardPosts } from "./board-stats";
 import { buildViewerContext } from "./context";
 import { autoSubscribe, notifyNewReply } from "./notify";
 import { getPost } from "./queries";
@@ -157,13 +159,10 @@ export async function createPost(input: {
       .returning({ id: posts.id })
       .get();
 
-    tx.update(boards)
-      .set({
-        postCount: sql`${boards.postCount} + 1`,
-        lastPostAt: Date.now(),
-      })
-      .where(eq(boards.id, board.id))
-      .run();
+    // 计数统一走重算，不再手写 +1 —— 「+1」是第二份真相，
+    // 群聊转帖那条路当年就是忘了抄这一句，沉淀版因此常年显示 0
+    recountBoardPosts(board.id, tx);
+    tx.update(boards).set({ lastPostAt: Date.now() }).where(eq(boards.id, board.id)).run();
 
     return row;
   });
@@ -273,7 +272,10 @@ export async function createReply(input: {
     replyAuthorId: user.id,
     replyAuthorName: input.anonymous
       ? "匿名"
-      : (user.siteNickname ?? user.wxNickname ?? "有人"),
+      : resolveDisplayName([user.siteNickname, user.wxNickname], {
+          wxId: user.wxId,
+          fallback: "有人",
+        }),
     floor: created.floor,
     mentions: rendered.mentions,
   });

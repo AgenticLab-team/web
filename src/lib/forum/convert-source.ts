@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { messages, people } from "@/lib/db/schema";
 import { assertGroupAccess } from "@/lib/queries/visibility";
 import { endOfDayMs, startOfDayMs } from "@/lib/time";
+import { resolveDisplayName } from "@/lib/users/display-name";
 
 export interface PickableMessage {
   id: string;
@@ -58,7 +59,10 @@ export function messagesOfDay(
   return rows.map((row) => ({
     id: row.id,
     senderWxId: row.senderWxId,
-    senderName: profiles.get(row.senderWxId)?.name ?? row.senderName ?? "成员",
+    senderName: resolveDisplayName([profiles.get(row.senderWxId)?.name, row.senderName], {
+      wxId: row.senderWxId,
+      fallback: "成员",
+    }),
     avatarUrl: profiles.get(row.senderWxId)?.avatar ?? null,
     content: row.content,
     type: row.type,

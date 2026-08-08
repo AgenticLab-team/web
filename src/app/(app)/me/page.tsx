@@ -1,6 +1,5 @@
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ChevronRight } from "lucide-react";
@@ -15,6 +14,7 @@ import { dailyStats, groupMembers, people, roles, userRoles } from "@/lib/db/sch
 import { listPasskeys } from "@/lib/auth/passkey";
 import { getMyRank } from "@/lib/queries/leaderboard";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
+import { resolveDisplayName } from "@/lib/users/display-name";
 import { shiftDateKey, todayKey } from "@/lib/time";
 
 export const metadata: Metadata = { title: "我的" };
@@ -26,7 +26,10 @@ export default async function MePage() {
 
   const wxId = user.wxId;
   const profile = wxId ? db.select().from(people).where(eq(people.wxId, wxId)).get() : null;
-  const name = user.siteNickname ?? user.wxNickname ?? profile?.displayName ?? "我";
+  const name = resolveDisplayName([user.siteNickname, user.wxNickname, profile?.displayName], {
+    wxId,
+    fallback: "我",
+  });
 
   const heldRoles = db
     .select({ name: roles.name, color: roles.color, priority: roles.priority })
@@ -230,12 +233,17 @@ export default async function MePage() {
 
       <Section>
         <Group>
-          <Link
-            href="/api/auth/logout"
-            className="inset-row flex items-center justify-center px-4 py-3 transition-colors hover:bg-[var(--fill)]"
-          >
-            <span className="t-body text-[var(--danger)]">退出登录</span>
-          </Link>
+          {/* 必须是表单 POST，不能做成指向退出接口的 Link：
+              Link 在生产环境会被自动预取，预取的 GET 就把会话撤销了 ——
+              这正是「一刷新就掉登录」的根因，见 tests/logout.test.ts */}
+          <form action="/api/auth/logout" method="post">
+            <button
+              type="submit"
+              className="inset-row flex w-full items-center justify-center px-4 py-3 transition-colors hover:bg-[var(--fill)]"
+            >
+              <span className="t-body text-[var(--danger)]">退出登录</span>
+            </button>
+          </form>
         </Group>
       </Section>
     </>

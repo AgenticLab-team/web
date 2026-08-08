@@ -6,3 +6,4 @@ export * from "./system";
 export * from "./forum";
 export * from "./points";
 export * from "./moderation";
+export * from "./titles";

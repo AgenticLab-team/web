@@ -1,0 +1,233 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+
+import { PageHeader } from "@/components/shell/PageHeader";
+import { Empty } from "@/components/ui/primitives";
+import { dailyCapPressure, economySnapshot, topEarners } from "@/lib/admin/economy";
+import { requireAdmin } from "@/lib/admin/guard";
+import { resolveDisplayName } from "@/lib/users/display-name";
+import { todayKey } from "@/lib/time";
+
+export const metadata: Metadata = { title: "积分经济" };
+export const dynamic = "force-dynamic";
+
+/**
+ * 积分经济看板。
+ *
+ * 通胀是测出来的，不是感觉出来的。等到能凭感觉察觉的时候，
+ * 存量已经大到收不回来了 —— 积分只能发不能收，
+ * 唯一能调的是**未来的发行速度**。所以这一页的重点不是好看，
+ * 是让「该收紧了」这件事**提前几周**被看见。
+ *
+ * 页面顶部是结论一句话，不是一堆数字。管理员看不懂的指标等于没有。
+ */
+
+const VERDICT_TONE: Record<string, string> = {
+  healthy: "var(--success)",
+  watch: "var(--warning)",
+  inflating: "var(--danger)",
+  deflating: "var(--warning)",
+};
+
+const VERDICT_LABEL: Record<string, string> = {
+  healthy: "健康",
+  watch: "留意",
+  inflating: "发行过快",
+  deflating: "回收过快",
+};
+
+export default async function AdminPointsPage() {
+  await requireAdmin("points.rules.manage");
+
+  const snap = economySnapshot(30);
+  const earners = topEarners(30, 8);
+  const pressure = dailyCapPressure(todayKey());
+
+  const tone = VERDICT_TONE[snap.inflation.verdict] ?? "var(--ink-tertiary)";
+  const maxDaily = Math.max(1, ...snap.daily.map((d) => Math.max(d.minted, d.burned)));
+
+  return (
+    <>
+      <PageHeader title="积分经济" subtitle={`近 ${snap.windowDays} 天`} />
+
+      {/* 结论先行。数字在下面，先说该不该做点什么 */}
+      <div
+        className="mb-5 rounded-[var(--radius-card)] p-4 hairline"
+        style={{ background: `color-mix(in srgb, ${tone} 8%, var(--surface))` }}
+      >
+        <p className="t-caption2 font-medium uppercase tracking-[0.06em]" style={{ color: tone }}>
+          {VERDICT_LABEL[snap.inflation.verdict] ?? snap.inflation.verdict}
+        </p>
+        <p className="t-body mt-1 leading-relaxed">{snap.inflation.message}</p>
+      </div>
+
+      <div className="mb-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <Tile label="流通总量" value={snap.circulating} hint={`${snap.holders} 人持有`} />
+        <Tile
+          label="近 30 天发行"
+          value={snap.inflation.minted}
+          hint={`净增 ${snap.inflation.net >= 0 ? "+" : ""}${snap.inflation.net}`}
+        />
+        <Tile
+          label="近 30 天回收"
+          value={snap.inflation.burned}
+          hint={`覆盖 ${Math.round(snap.inflation.sinkCoverage * 100)}%`}
+        />
+        <Tile
+          label="累计发行"
+          value={snap.lifetimeMinted}
+          hint="只增不减，用于等级"
+        />
+      </div>
+
+      <Card title="每日发行上限的松紧">
+        <p className="t-subhead">
+          今天有 <strong className="tabular">{pressure.atCap}</strong> 人撞到上限
+          {pressure.active > 0 && `（当日有收入的共 ${pressure.active} 人）`}，
+          上限是 <span className="tabular">{pressure.cap}</span> 分。
+        </p>
+        <p className="t-caption mt-1.5 leading-relaxed text-[var(--ink-tertiary)]">
+          {pressure.active === 0
+            ? "今天还没有人拿到积分。"
+            : pressure.atCap / pressure.active > 0.4
+              ? "撞顶的人偏多 —— 上限压得太死，会让认真参与的人觉得白干。"
+              : pressure.atCap === 0
+                ? "没有人撞顶 —— 上限目前形同虚设，它挡不住任何刷分行为。"
+                : "少量撞顶属于正常，说明上限起作用了但没有伤及多数人。"}
+        </p>
+      </Card>
+
+      <Card title="分配集中度">
+        <div className="flex items-baseline gap-4">
+          <span className="tabular t-title3">{Math.round(snap.distribution.topShare * 100)}%</span>
+          <span className="t-caption text-[var(--ink-tertiary)]">
+            前 10% 的人握有的比例
+          </span>
+        </div>
+        <p className="t-caption mt-1.5 leading-relaxed text-[var(--ink-tertiary)]">
+          中位数 {Math.round(snap.distribution.median)} · 均值{" "}
+          {Math.round(snap.distribution.mean)}。
+          两者差得越远，说明积分越集中在少数人手里 ——
+          那时候榜单和商店对多数人就没有意义了。
+        </p>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card title="积分从哪来">
+          <Bars rows={snap.sources} tone="var(--accent)" empty="这段时间没有发行" />
+        </Card>
+        <Card title="积分到哪去">
+          <Bars rows={snap.sinks} tone="var(--warning)" empty="这段时间没有任何回收" />
+          {snap.sinks.length === 0 && (
+            <p className="t-caption mt-2 leading-relaxed text-[var(--ink-tertiary)]">
+              一个回收口都没有的话，积分只会越攒越多，
+              最终所有价格都要重定 —— 而重定价格等于宣布之前攒的都不算数。
+            </p>
+          )}
+        </Card>
+      </div>
+
+      <Card title={`每日发行与回收（近 ${snap.windowDays} 天）`}>
+        {snap.daily.length === 0 ? (
+          <Empty title="还没有流水" />
+        ) : (
+          <div className="flex h-24 items-end gap-0.5" role="img" aria-label="每日发行与回收趋势">
+            {snap.daily.map((d) => (
+              <div key={d.date} className="flex flex-1 flex-col justify-end gap-0.5" title={`${d.date} 发行 ${d.minted} / 回收 ${d.burned}`}>
+                <div
+                  className="rounded-t-[2px] bg-[var(--accent)]"
+                  style={{ height: `${(d.minted / maxDaily) * 70}px` }}
+                />
+                <div
+                  className="rounded-b-[2px] bg-[var(--warning)] opacity-70"
+                  style={{ height: `${(d.burned / maxDaily) * 70}px` }}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card title="发行最多的人">
+        {earners.length === 0 ? (
+          <Empty title="还没有数据" />
+        ) : (
+          <ul className="space-y-1.5">
+            {earners.map((e) => (
+              <li key={e.userId} className="flex items-baseline gap-2">
+                <Link href={`/admin/users/${e.userId}`} className="t-subhead min-w-0 flex-1 truncate">
+                  {resolveDisplayName([e.name, e.wxName], { wxId: e.wxId, fallback: e.userId })}
+                </Link>
+                <span className="tabular t-subhead text-[var(--ink-secondary)]">{e.earned}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="t-caption mt-2 leading-relaxed text-[var(--ink-tertiary)]">
+          排在最前的人不一定有问题 —— 他们可能只是最活跃的。
+          但**异常刷分一定会先出现在这里**，所以定期扫一眼比事后追查便宜得多。
+        </p>
+      </Card>
+
+      <p className="t-caption px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">
+        所有发行参数（每日上限、互动权重与折算、连胜上限、手续费比例）都在
+        系统设置里，改动会进 setting_history 可回滚。
+        调参前先看这一页 —— 凭感觉调的结果通常是「先发太多，再一刀砍死」。
+      </p>
+    </>
+  );
+}
+
+function Tile({ label, value, hint }: { label: string; value: number; hint?: string }) {
+  return (
+    <div className="rounded-[var(--radius-card)] bg-[var(--surface)] px-3 py-2.5 hairline">
+      <p className="tabular t-title3 leading-none">{value.toLocaleString("zh-CN")}</p>
+      <p className="t-caption mt-1 text-[var(--ink-tertiary)]">{label}</p>
+      {hint && <p className="t-caption2 mt-0.5 text-[var(--ink-quaternary)]">{hint}</p>}
+    </div>
+  );
+}
+
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-4 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
+      <h2 className="t-caption2 mb-2.5 font-medium uppercase tracking-[0.06em] text-[var(--ink-quaternary)]">
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+function Bars({
+  rows,
+  tone,
+  empty,
+}: {
+  rows: { key: string; label: string; amount: number; share: number }[];
+  tone: string;
+  empty: string;
+}) {
+  if (rows.length === 0) return <Empty title={empty} />;
+
+  return (
+    <ul className="space-y-2">
+      {rows.map((row) => (
+        <li key={row.key}>
+          <div className="mb-1 flex items-baseline justify-between">
+            <span className="t-caption text-[var(--ink-secondary)]">{row.label}</span>
+            <span className="tabular t-caption text-[var(--ink-tertiary)]">
+              {row.amount.toLocaleString("zh-CN")} · {Math.round(row.share * 100)}%
+            </span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-[var(--fill)]">
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${row.share * 100}%`, background: tone }}
+            />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}

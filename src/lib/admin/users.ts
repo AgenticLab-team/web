@@ -3,6 +3,7 @@ import "server-only";
 import { and, desc, eq, gt, inArray, isNull, like, or, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import { resolveDisplayName } from "@/lib/users/display-name";
 import {
   checkins,
   credentials,
@@ -148,11 +149,10 @@ export function listUsers(query: UserQuery = {}): { rows: UserRow[]; total: numb
     rows: rows.map((row) => ({
       id: row.id,
       wxId: row.wxId,
-      name:
-        row.siteNickname ??
-        row.wxNickname ??
-        (row.wxId ? profiles.get(row.wxId)?.name : null) ??
-        row.id,
+      name: resolveDisplayName(
+        [row.siteNickname, row.wxNickname, row.wxId ? profiles.get(row.wxId)?.name : null],
+        { wxId: row.wxId },
+      ),
       avatarUrl: row.wxAvatarUrl ?? (row.wxId ? (profiles.get(row.wxId)?.avatar ?? null) : null),
       kind: row.kind,
       status: row.status,
@@ -225,7 +225,9 @@ export function getUserDetail(userId: string): UserDetail | null {
 
   return {
     user,
-    name: user.siteNickname ?? user.wxNickname ?? profile?.displayName ?? user.id,
+    name: resolveDisplayName([user.siteNickname, user.wxNickname, profile?.displayName], {
+      wxId: user.wxId,
+    }),
     avatarUrl: user.wxAvatarUrl ?? profile?.avatarUrl ?? null,
     roles: held,
     permissions: [...effectivePermissions(user)].map(([key, source]) => ({ key, source })),

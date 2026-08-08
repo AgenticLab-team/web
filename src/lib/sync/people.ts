@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { groupMembers, messages, people, users } from "@/lib/db/schema";
 import { normalizeAvatarUrl } from "@/lib/avatar";
 import { nekobot } from "@/lib/nekobot/client";
+import { FALLBACK_DISPLAY_NAME, resolveDisplayName } from "@/lib/users/display-name";
 
 import { runSyncJob, type SyncOptions, type SyncResult } from "./job";
 
@@ -16,7 +17,8 @@ import { runSyncJob, type SyncOptions, type SyncResult } from "./job";
  *   1. 群昵称（group_members.display_name）—— 群成员列表里真实显示的名字
  *   2. 最近一条消息的发送者名 —— 注意是「最近」不是 max()，
  *      SQL 的 max() 按字典序比大小，会让 "wxid_examplemember01" 赢过 "jmr"
- *   3. wx_id 兜底
+ *   3. 占位「未命名成员」兜底 —— **不能兜底成 wx_id**，
+ *      displayName 会原样渲染到页面上，wx_id 漏出去就是隐私事故
  *
  * 上游 /users/{wx_id} 的 name 不参与 —— 实测它对部分账号直接返回 wx_id。
  */
@@ -99,7 +101,9 @@ export async function syncPeople(options: SyncOptions = {}): Promise<SyncResult>
     let written = 0;
     db.transaction((tx) => {
       for (const wxId of everyone) {
-        const name = nicknames.get(wxId) ?? fallbackNames.get(wxId) ?? wxId;
+        // 走统一的解析函数：消息里的 sender_name 对部分账号就是 wx_id，
+        // 不过滤的话脏数据会直接写进 displayName
+        const name = resolveDisplayName([nicknames.get(wxId), fallbackNames.get(wxId)], { wxId });
         const stat = statsMap.get(wxId);
         const avatar = avatars.get(wxId);
 
@@ -149,7 +153,13 @@ export async function syncPeople(options: SyncOptions = {}): Promise<SyncResult>
       const registered = db.select().from(users).all();
       for (const user of registered) {
         if (!user.wxId) continue;
-        const name = nicknames.get(user.wxId) ?? fallbackNames.get(user.wxId);
+        // 空串兜底再转成 undefined：取不到可展示的名字就干脆不更新，
+        // 而不是把 wx_id 形态的脏值写进 wxNickname
+        const name =
+          resolveDisplayName([nicknames.get(user.wxId), fallbackNames.get(user.wxId)], {
+            wxId: user.wxId,
+            fallback: "",
+          }) || undefined;
         const avatar = avatars.get(user.wxId);
         if (!name && !avatar) continue;
         if (name === user.wxNickname && (!avatar || avatar === user.wxAvatarUrl)) continue;
@@ -195,7 +205,8 @@ export function displayNamesOf(wxIds: string[]): Map<string, string> {
   if (wxIds.length === 0) return new Map();
   const rows = db.select({ wxId: people.wxId, name: people.displayName }).from(people).all();
   const all = new Map(rows.map((r) => [r.wxId, r.name]));
-  return new Map(wxIds.map((id) => [id, all.get(id) ?? id]));
+  // 查不到的人给占位而不是回传 wx_id —— 这个函数的返回值就是拿去展示的
+  return new Map(wxIds.map((id) => [id, resolveDisplayName([all.get(id)], { wxId: id })]));
 }
 
 export function peopleByIds(wxIds: string[]) {
@@ -206,7 +217,7 @@ export function peopleByIds(wxIds: string[]) {
       id,
       map.get(id) ?? {
         wxId: id,
-        displayName: id,
+        displayName: FALLBACK_DISPLAY_NAME,
         avatarUrl: null,
         avatarSource: null,
         messages: 0,

@@ -11,18 +11,20 @@ import { getSetting, getSettingInt } from "@/lib/settings/store";
 /**
  * 三通道绑定。
  *
- * 机器人**不能频繁通过好友申请**（微信风控高危），所以：
- *   friend_request — 只读 /friend-requests 提取理由里的验证码，**从不调用 accept**。
- *                    实测该接口不通过好友也返回 wx_id、昵称、头像与活跃度，够用了。
- *   direct_message — 已是好友的人私聊机器人发验证码。
- *   group_message  — 兜底：在任意含机器人的群里发「登录 123456」。
- *                    前两条走不通时，15 秒后前端显示这个入口。
+ * **2026-08 起主通道改为群消息**：机器人加好友已经触发微信风控，
+ * 好友申请这条路实际走不通了，不能再让它当第一步。现在是：
  *
- * ⚠️ 群通道的验证码是公开可见的。攻击者可以在自己浏览器生成码、
- * 诱导受害者发到群里，从而把自己的会话绑定成受害者身份。防御手段：
+ *   group_message  — 主通道：在任意含机器人的群里发「登录 123456」。
+ *   direct_message — 备用：已经是好友的人私聊机器人发验证码。
+ *   friend_request — 仍然保留匹配（只读 /friend-requests 提取理由里的验证码，
+ *                    **从不调用 accept**），但不再引导用户走这条路。
+ *
+ * ⚠️ 群通道的验证码在群里是公开可见的，这是主通道之后最要紧的风险：
  *   1. 必须带前缀词（「登录 123456」而非裸数字），降低被诱导代发的概率
- *   2. TTL 只有 5 分钟、一次性、绑定后展示明确确认页
- *   3. 生成频率限流
+ *   2. **同一个码按时间正序匹配，先发的人赢** —— 见 doPoll 里的说明。
+ *      后发的人赢的话，看到码再发一遍就能抢走别人的会话
+ *   3. TTL 只有 5 分钟、一次性、绑定后展示明确确认页
+ *   4. 生成频率限流
  */
 
 function randomCode(): string {
@@ -166,8 +168,19 @@ async function doPoll(): Promise<void> {
   ]);
 
   if (messagesResult.status === "fulfilled") {
-    for (const msg of messagesResult.value.items) {
-      matchMessage(msg, byCode, prefix);
+    for (const [code, match] of resolveMessageMatches(
+      messagesResult.value.items,
+      [...byCode.keys()],
+      prefix,
+    )) {
+      claim(byCode.get(code)!.id, {
+        channel: match.isGroup ? "group_message" : "direct_message",
+        wxId: match.senderWxId,
+        convId: match.convId,
+        source: match.content,
+        nickname: match.senderName,
+      });
+      byCode.delete(code);
     }
   }
 
@@ -187,28 +200,63 @@ async function doPoll(): Promise<void> {
   }
 }
 
-function matchMessage(
-  msg: UpstreamMessage,
-  byCode: Map<string, typeof bindCodes.$inferSelect>,
+export interface BindMatch {
+  senderWxId: string;
+  senderName: string;
+  convId: string;
+  content: string;
+  createTime: number;
+  isGroup: boolean;
+}
+
+/**
+ * 从一批消息里挑出每个待验证码的归属者。纯函数，与数据库无关。
+ *
+ * 两条规则都是安全性的，不是功能性的：
+ *
+ * 1. **先发的人赢。** 上游按 order: "desc" 返回，照原顺序遍历等于
+ *    「后发的人赢」—— 群里的验证码是公开可见的，别人看到后原样再发一遍
+ *    就能把这个会话抢到自己名下。按时间正序之后，攻击者必须**抢在**
+ *    本人发出之前发送，而那要求他先知道码，前提不成立。
+ *
+ * 2. **群消息必须带前缀词。** 裸数字不接受，否则群里任何一串六位数字
+ *    （电话尾号、金额、日期）都可能把某个人的会话绑给发言者。
+ *    私聊没有这个问题，是一对一的，不需要前缀。
+ */
+export function resolveMessageMatches(
+  items: readonly UpstreamMessage[],
+  codes: readonly string[],
   prefix: string,
-) {
-  if (msg.type !== "text") return;
-  const found = [...byCode.keys()].find((code) => msg.content.includes(code));
-  if (!found) return;
+): Map<string, BindMatch> {
+  const winners = new Map<string, BindMatch>();
+  if (codes.length === 0) return winners;
 
-  const isGroup = msg.conv_id.endsWith("@chatroom");
+  const ordered = [...items].sort((a, b) => a.create_time - b.create_time);
 
-  // 群通道必须带前缀词。裸数字不接受 —— 见文件头的劫持风险说明
-  if (isGroup && !msg.content.includes(prefix)) return;
+  for (const msg of ordered) {
+    if (msg.type !== "text") continue;
 
-  claim(byCode.get(found)!.id, {
-    channel: isGroup ? "group_message" : "direct_message",
-    wxId: msg.sender_wx_id,
-    convId: msg.conv_id,
-    source: msg.content,
-    nickname: msg.sender_name,
-  });
-  byCode.delete(found);
+    const isGroup = msg.conv_id.endsWith("@chatroom");
+    if (isGroup && !msg.content.includes(prefix)) continue;
+
+    for (const code of codes) {
+      if (winners.has(code)) continue;
+      if (!msg.content.includes(code)) continue;
+      winners.set(code, {
+        senderWxId: msg.sender_wx_id,
+        senderName: msg.sender_name,
+        convId: msg.conv_id,
+        content: msg.content,
+        createTime: msg.create_time,
+        isGroup,
+      });
+      // 一条消息只认领一个码 —— 一条消息里出现多个待验证码，
+      // 正常人不会这么发，只可能是有人在试图批量抢会话
+      break;
+    }
+  }
+
+  return winners;
 }
 
 function claim(

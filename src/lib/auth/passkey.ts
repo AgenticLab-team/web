@@ -15,6 +15,7 @@ import { and, eq, gt, isNull, lt } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { credentials, loginAttempts, users, webauthnChallenges } from "@/lib/db/schema";
 import { env } from "@/lib/env";
+import { resolveDisplayName } from "@/lib/users/display-name";
 
 /**
  * Passkey（WebAuthn）。
@@ -104,8 +105,15 @@ export async function buildRegistrationOptions(userId: string, ip?: string) {
     // userID 必须是字节串且稳定；用账号 id 而不是微信 id，
     // 这样将来解绑重绑微信也不会让已有的 Passkey 失效
     userID: new TextEncoder().encode(user.id),
-    userName: user.wxNickname ?? user.siteNickname ?? user.id,
-    userDisplayName: user.siteNickname ?? user.wxNickname ?? "Agentic Lab 成员",
+    // 这两个名字会存进用户的钥匙串/密码管理器，wx_id 不能漏进去；
+    // userName 兜底用账号 id（不是 wx_id），保证多账号时在选择器里能区分
+    userName:
+      resolveDisplayName([user.siteNickname, user.wxNickname], { wxId: user.wxId, fallback: "" }) ||
+      user.id,
+    userDisplayName: resolveDisplayName([user.siteNickname, user.wxNickname], {
+      wxId: user.wxId,
+      fallback: "Agentic Lab 成员",
+    }),
     attestationType: "none",
     // 已有的凭证要排除，否则同一把钥匙会被重复注册
     excludeCredentials: existing
@@ -115,7 +123,10 @@ export async function buildRegistrationOptions(userId: string, ip?: string) {
         transports: (c.transports as AuthenticatorTransportLike[] | null) ?? undefined,
       })),
     authenticatorSelection: {
-      residentKey: "preferred",
+      // 必须是 required：登录端走的是 discoverable credential（不传 allowCredentials），
+      // preferred 会让不支持 resident key 的认证器「注册成功但永远无法登录」——
+      // 用户看到添加成功，回头却发现这把钥匙用不了，而且没有任何报错
+      residentKey: "required",
       userVerification: "preferred",
     },
   });

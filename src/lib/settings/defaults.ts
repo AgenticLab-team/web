@@ -135,11 +135,97 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
     label: "高质量消息加分每日上限",
   },
   {
+    key: "points.checkin.min_forum_units",
+    value: "3",
+    type: "int",
+    category: "points",
+    label: "打卡所需的当日论坛活跃度",
+    description:
+      "与群聊门槛二选一满足即可。只认群聊的话，主要在论坛写长文的人反而打不了卡 —— 而他们沉淀的内容最多",
+    min: 0,
+    max: 100,
+  },
+  {
     key: "points.streak.cap",
     value: "30",
     type: "int",
     category: "points",
     label: "连胜奖励上限",
+  },
+
+  // ── 发行闸门（防通胀）──────────────────────────────────────
+  //
+  // 这一组的作用是**控制发行总量**。积分只发不收的话，一年后
+  // 商店价格变成笑话、新人永远追不上老人、积分不再代表任何东西。
+  // 调这些数之前先看 /admin/points 的通胀体检。
+  {
+    key: "points.economy.daily_mint_cap",
+    value: "60",
+    type: "int",
+    category: "points",
+    label: "每人每日发行上限",
+    description:
+      "所有来源共享这一个预算：打卡、高质量加分、连胜、互动结算都从这里出。各来源各自封顶的话，每加一个玩法就等于给通胀开一个新口子",
+    min: 0,
+    max: 10_000,
+  },
+  {
+    key: "points.economy.inflation_warn_percent",
+    value: "8",
+    type: "int",
+    category: "points",
+    label: "月净增占流通量的告警比例（%）",
+    description: "超过这个值后台会标红。看比例不看绝对值 —— 社区变大发行自然变多，那不是通胀",
+    min: 1,
+    max: 100,
+  },
+  {
+    key: "points.interaction.full_units",
+    value: "10",
+    type: "int",
+    category: "points",
+    label: "互动结算全额段的单位数",
+    description: "前多少个加权单位按全额计分，超出部分打折",
+    min: 0,
+    max: 1000,
+  },
+  {
+    key: "points.interaction.decay_percent",
+    value: "50",
+    type: "int",
+    category: "points",
+    label: "互动结算超出部分的折算比例（%）",
+    description: "两段式递减而不是几何衰减 —— 后者更平滑但没法用一句话跟用户讲清楚",
+    min: 0,
+    max: 100,
+  },
+  {
+    key: "points.interaction.points_per_unit",
+    value: "1",
+    type: "int",
+    category: "points",
+    label: "每单位互动折算的积分",
+    min: 0,
+    max: 100,
+  },
+  {
+    key: "points.interaction.daily_cap",
+    value: "20",
+    type: "int",
+    category: "points",
+    label: "互动结算每日上限",
+    min: 0,
+    max: 1000,
+  },
+  {
+    key: "points.transfer.fee_percent",
+    value: "5",
+    type: "int",
+    category: "points",
+    label: "转赠手续费比例（%）",
+    description: "直接销毁，不进任何人的口袋 —— 进了就不是回收了",
+    min: 0,
+    max: 50,
   },
   {
     key: "points.makeup_card.cost",

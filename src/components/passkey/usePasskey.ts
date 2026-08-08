@@ -8,26 +8,8 @@ import {
 } from "@simplewebauthn/browser";
 import { useCallback, useEffect, useState } from "react";
 
-/**
- * 把浏览器抛出的 WebAuthn 异常翻译成人话。
- *
- * 原始错误是 `NotAllowedError: The operation either timed out or was not allowed`
- * 这种，用户看了完全不知道发生了什么、更不知道该怎么办。
- */
-function humanize(err: unknown): string {
-  if (!(err instanceof Error)) return "操作失败，请重试";
-  const name = err.name;
-
-  if (name === "NotAllowedError") return "已取消，或者等待超时了";
-  if (name === "InvalidStateError") return "这台设备已经注册过 Passkey 了";
-  if (name === "NotSupportedError") return "这个浏览器不支持 Passkey";
-  if (name === "SecurityError") {
-    // rpID 与访问域名不一致时报这个，是配置问题不是用户问题
-    return "安全校验失败，请确认访问的是正式域名（不能用 IP 直接访问）";
-  }
-  if (name === "AbortError") return "操作被中断";
-  return err.message || "操作失败，请重试";
-}
+// 错误翻译与反馈文案在 feedback.ts —— 那边是纯逻辑，测试测的就是那一份
+import { humanize } from "./feedback";
 
 export type PasskeySupport = "unknown" | "unsupported" | "supported" | "platform";
 

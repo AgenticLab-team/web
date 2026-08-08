@@ -20,6 +20,7 @@
     "backfill": "tsx --conditions=react-server --env-file=.env.local scripts/backfill.ts",
     "backup": "tsx --conditions=react-server --env-file=.env.local scripts/backup.ts",
     "health": "tsx --conditions=react-server --env-file=.env.local scripts/health.ts",
+    "recount-boards": "tsx --conditions=react-server --env-file=.env.local scripts/recount-boards.ts",
     "test": "tsx --conditions=react-server --test tests/*.test.ts",
     "deploy": "bash scripts/deploy.sh"
   },

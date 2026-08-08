@@ -8,6 +8,7 @@ import { buildMatchExpression, desegment } from "@/lib/db/fts";
 import { groups, messages, people } from "@/lib/db/schema";
 import { visibleGroupIds } from "@/lib/queries/visibility";
 import { endOfDayMs, startOfDayMs } from "@/lib/time";
+import { resolveDisplayName } from "@/lib/users/display-name";
 
 /**
  * 群消息检索。
@@ -165,7 +166,11 @@ export function searchMessages(user: CurrentUser | null, options: SearchOptions)
       convId: row.conv_id,
       groupName: groupNames.get(row.conv_id) ?? "群聊",
       senderWxId: row.sender_wx_id,
-      senderName: profiles.get(row.sender_wx_id)?.name ?? row.sender_name ?? "成员",
+      // people.displayName 和消息里的 sender_name 都可能是 wx_id 形态的脏值，统一过滤
+      senderName: resolveDisplayName([profiles.get(row.sender_wx_id)?.name, row.sender_name], {
+        wxId: row.sender_wx_id,
+        fallback: "成员",
+      }),
       avatarUrl: profiles.get(row.sender_wx_id)?.avatar ?? null,
       content: row.content,
       type: row.type,
@@ -240,7 +245,10 @@ export function messageContext(
     messages: all.map((m) => ({
       id: m.id,
       senderWxId: m.senderWxId,
-      senderName: profiles.get(m.senderWxId)?.name ?? m.senderName ?? "成员",
+      senderName: resolveDisplayName([profiles.get(m.senderWxId)?.name, m.senderName], {
+        wxId: m.senderWxId,
+        fallback: "成员",
+      }),
       avatarUrl: profiles.get(m.senderWxId)?.avatar ?? null,
       content: m.content,
       type: m.type,

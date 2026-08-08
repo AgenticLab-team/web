@@ -10,6 +10,7 @@ import { moderationActions, posts, replies, reports } from "@/lib/db/schema";
 import { severityForReason } from "@/lib/moderation/rules";
 import { can } from "@/lib/rbac/can";
 
+import { recountBoardPosts } from "./board-stats";
 import { buildViewerContext } from "./context";
 import { notify } from "./notify";
 import { removeFromIndex } from "./search";
@@ -134,6 +135,10 @@ export async function moderatePost(input: {
   }
 
   db.update(posts).set(patch).where(eq(posts.id, post.id)).run();
+
+  // 状态变了就重算版块计数：删除/隐藏/恢复都会改变「版块里有几篇帖子」。
+  // 以前只加不减，删 10 篇之后版块列表还挂着虚高的数字
+  if (patch.status !== undefined) recountBoardPosts(post.boardId);
 
   // 删除或隐藏后要从检索索引里摘掉，否则还能被搜到标题
   if (input.action === "delete" || input.action === "hide") removeFromIndex(post.id);

@@ -120,10 +120,11 @@ export const ADMIN_NAV: AdminNavSection[] = [
       {
         key: "points",
         href: "/admin/points",
-        label: "积分与等级",
+        label: "积分经济",
         icon: "coins",
         permission: "points.rules.manage",
-        ready: false,
+        description: "发行、回收、通胀体检",
+        ready: true,
       },
       {
         key: "groups",

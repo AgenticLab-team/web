@@ -29,6 +29,8 @@ export const users = sqliteTable(
       .default("pending"),
 
     level: integer("level").notNull().default(1),
+    /** 当前佩戴的称号。可以持有多个，但只展示一个 —— 挂满一排等于都没挂 */
+    activeTitleId: text("active_title_id"),
     /** 冗余缓存列，真值是 points_ledger 之和；后台可重算比对 */
     points: integer("points").notNull().default(0),
     /** 累计获得（只增不减），用于等级计算 */

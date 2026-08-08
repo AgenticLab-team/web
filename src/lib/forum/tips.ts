@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { replies, tips } from "@/lib/db/schema";
 import { transferPoints } from "@/lib/points/ledger";
+import { resolveDisplayName } from "@/lib/users/display-name";
 
 import { buildViewerContext } from "./context";
 import { notify } from "./notify";
@@ -77,11 +78,13 @@ export async function sendTip(input: {
     userId: toUserId,
     type: "reaction",
     groupKey: `tip:${input.targetId}`,
-    title: `${user.siteNickname ?? user.wxNickname ?? "有人"}打赏了你 ${input.points} 分`,
+    title: `${resolveDisplayName([user.siteNickname, user.wxNickname], { wxId: user.wxId, fallback: "有人" })}打赏了你 ${input.points} 分`,
     body: input.note || post.title,
     link: `/forum/p/${postId}`,
     actorId: user.id,
-    actorName: user.siteNickname ?? user.wxNickname ?? undefined,
+    actorName:
+      resolveDisplayName([user.siteNickname, user.wxNickname], { wxId: user.wxId, fallback: "" }) ||
+      undefined,
   });
 
   revalidatePath(`/forum/p/${postId}`);

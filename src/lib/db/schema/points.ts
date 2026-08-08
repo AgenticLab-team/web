@@ -55,6 +55,8 @@ export const checkins = sqliteTable(
     basePoints: integer("base_points").notNull(),
     qualityBonus: integer("quality_bonus").notNull().default(0),
     streakBonus: integer("streak_bonus").notNull().default(0),
+    /** 当天互动结算的附加分（发帖/回复/点赞，两段式递减后封顶） */
+    interactionBonus: integer("interaction_bonus").notNull().default(0),
 
     /** 记下当天的实际数据，事后有争议时可对账 */
     qualityRaw: integer("quality_raw").notNull().default(0),

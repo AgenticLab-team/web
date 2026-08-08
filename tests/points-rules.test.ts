@@ -20,11 +20,22 @@ import {
 
 const config: PointsConfig = {
   checkinMinQuality: 3,
+  checkinMinForum: 3,
   checkinBase: 10,
   qualityBonusPer: 5,
   qualityBonusStep: 5,
   qualityBonusDailyCap: 20,
   streakCap: 30,
+
+  // 发行侧闸门。测试里给一个很大的上限，
+  // 免得每条断言都要先算「有没有撞顶」—— 撞顶单独测
+  dailyMintCap: 10_000,
+  interactionFullUnits: 10,
+  interactionDecayRatio: 0.5,
+  interactionPointsPerUnit: 1,
+  interactionCap: 20,
+  transferFeeRatio: 0.05,
+  inflationWarnRatio: 0.08,
 };
 
 const base = {
@@ -32,6 +43,9 @@ const base = {
   yesterday: "2026-08-08",
   streakBefore: 0,
   lastCheckinDate: null as string | null,
+  forumUnitsToday: 0,
+  interactions: {},
+  mintedToday: 0,
 };
 
 describe("打卡门槛", () => {

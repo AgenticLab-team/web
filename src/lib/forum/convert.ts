@@ -18,8 +18,10 @@ import {
 } from "@/lib/db/schema";
 import { renderMarkdown } from "@/lib/markdown";
 import { assertGroupAccess } from "@/lib/queries/visibility";
+import { resolveDisplayName } from "@/lib/users/display-name";
 import { can } from "@/lib/rbac/can";
 
+import { recountBoardPosts } from "./board-stats";
 import { notify } from "./notify";
 import { indexPost } from "./search";
 
@@ -93,7 +95,11 @@ export async function convertMessagesToPost(input: {
 
   const transcript = rows
     .map((row) => {
-      const who = names.get(row.senderWxId) ?? row.senderName ?? "成员";
+      // 转出去的帖子是公开可见的，发言人名字里的 wx_id 必须在这里就滤掉
+      const who = resolveDisplayName([names.get(row.senderWxId), row.senderName], {
+        wxId: row.senderWxId,
+        fallback: "成员",
+      });
       const when = new Date(row.ts).toLocaleString("zh-CN", { hour12: false });
       // 引用块里的内容按原样保留，Markdown 消毒在渲染时统一处理
       const body = row.content.split("\n").map((line) => `> ${line}`).join("\n");
@@ -143,6 +149,11 @@ export async function convertMessagesToPost(input: {
         consentLog: authors.map((wxId) => ({ wxId, status: "pending" as const })),
       })
       .run();
+
+    // 这里曾是「群聊沉淀显示 0」的根因：转帖入库却从不更新版块计数。
+    // 沉淀版的帖子只能从这条路进来，漏掉这一步 = 这个版的计数永远是 0
+    recountBoardPosts(board.id, tx);
+    tx.update(boards).set({ lastPostAt: Date.now() }).where(eq(boards.id, board.id)).run();
 
     return post;
   });

@@ -20,6 +20,7 @@ import {
 import { db } from "@/lib/db";
 import { moderationActions, roles, userNotes, userRoles, users } from "@/lib/db/schema";
 import { grantPoints } from "@/lib/points/ledger";
+import { resolveDisplayName } from "@/lib/users/display-name";
 import { invalidatePermissionCache } from "@/lib/rbac/can";
 import { getSettingInt } from "@/lib/settings/store";
 
@@ -76,7 +77,10 @@ export async function adjustPoints(input: {
     action: "points.adjust",
     targetType: "user",
     targetId: input.userId,
-    targetLabel: target.siteNickname ?? target.wxNickname ?? input.userId,
+    targetLabel: resolveDisplayName([target.siteNickname, target.wxNickname], {
+      wxId: target.wxId,
+      fallback: input.userId,
+    }),
     before: { points: target.points },
     after: { points: result.balance, delta: input.delta },
     reason,
@@ -130,7 +134,10 @@ export async function setUserStatus(input: {
     action: "user.suspend",
     targetType: "user",
     targetId: input.userId,
-    targetLabel: target.siteNickname ?? target.wxNickname ?? input.userId,
+    targetLabel: resolveDisplayName([target.siteNickname, target.wxNickname], {
+      wxId: target.wxId,
+      fallback: input.userId,
+    }),
     before: { status: target.status },
     after: { status: input.status },
     reason,

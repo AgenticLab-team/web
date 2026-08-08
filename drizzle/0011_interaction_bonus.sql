@@ -1,0 +1,1 @@
+ALTER TABLE `checkins` ADD `interaction_bonus` integer DEFAULT 0 NOT NULL;

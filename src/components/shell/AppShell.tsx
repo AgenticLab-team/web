@@ -6,6 +6,7 @@ import { people, roles, userRoles } from "@/lib/db/schema";
 import { navItemVisible, tabBarItems, visibleSections, type NavItem } from "@/lib/nav";
 import { unreadCount } from "@/lib/forum/notify";
 import { can } from "@/lib/rbac/can";
+import { resolveDisplayName } from "@/lib/users/display-name";
 
 import { Shortcuts } from "./Shortcuts";
 import { Sidebar, type ShellUser } from "./Sidebar";
@@ -48,7 +49,10 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       .get();
 
     shellUser = {
-      name: user.siteNickname ?? user.wxNickname ?? profile?.displayName ?? "我",
+      name: resolveDisplayName([user.siteNickname, user.wxNickname, profile?.displayName], {
+        wxId: user.wxId,
+        fallback: "我",
+      }),
       wxId: user.wxId ?? user.id,
       avatarUrl: user.wxAvatarUrl ?? profile?.avatarUrl ?? null,
       level: user.level,

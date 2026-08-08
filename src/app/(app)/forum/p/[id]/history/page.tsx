@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { Empty, Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { resolveDisplayName } from "@/lib/users/display-name";
 import { postRevisions, users } from "@/lib/db/schema";
 import { collapseUnchanged, diffLines, diffStats } from "@/lib/diff";
 import { buildViewerContext } from "@/lib/forum/context";
@@ -43,11 +44,11 @@ export default async function HistoryPage({ params }: { params: Promise<{ id: st
   const editors = new Map(
     editorIds.length
       ? db
-          .select({ id: users.id, name: users.siteNickname, wx: users.wxNickname })
+          .select({ id: users.id, wxId: users.wxId, name: users.siteNickname, wx: users.wxNickname })
           .from(users)
           .where(inArray(users.id, editorIds))
           .all()
-          .map((u) => [u.id, u.name ?? u.wx ?? "成员"])
+          .map((u) => [u.id, resolveDisplayName([u.name, u.wx], { wxId: u.wxId, fallback: "成员" })])
       : [],
   );
 

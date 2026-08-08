@@ -78,6 +78,20 @@
       "when": 1786206451964,
       "tag": "0010_checkins",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1786210557942,
+      "tag": "0011_interaction_bonus",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1786211115536,
+      "tag": "0012_titles",
+      "breakpoints": true
     }
   ]
 }

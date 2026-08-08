@@ -5,6 +5,7 @@ import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { boards, people, posts, replies, users } from "@/lib/db/schema";
 import type { Visibility } from "@/lib/db/schema/forum";
+import { resolveDisplayName } from "@/lib/users/display-name";
 
 import { canSeePost, type PostVisibilityInfo, type ViewerContext } from "./visibility";
 
@@ -56,7 +57,8 @@ function coarseVisibilityFilter(viewer: ViewerContext) {
   return and(...conditions);
 }
 
-function toVisibilityInfo(row: typeof posts.$inferSelect): PostVisibilityInfo {
+/** 导出给首页摘要复用 —— 可见性字段的映射只能有一处 */
+export function toVisibilityInfo(row: typeof posts.$inferSelect): PostVisibilityInfo {
   return {
     visibility: row.visibility,
     visibilityRoleId: row.visibilityRoleId,
@@ -163,7 +165,11 @@ function hydrateAuthors(rows: { post: typeof posts.$inferSelect; board: typeof b
       // 匿名帖不暴露作者，连头像都不给 —— 头像同样能认出人
       authorName: post.anonymous
         ? "匿名"
-        : (author?.siteNickname ?? author?.wxNickname ?? profile?.name ?? "成员"),
+        : // people.displayName 的存量数据里混着 wx_id，必须走统一解析过滤
+          resolveDisplayName([author?.siteNickname, author?.wxNickname, profile?.name], {
+            wxId: author?.wxId,
+            fallback: "成员",
+          }),
       authorAvatar: post.anonymous ? null : (author?.avatar ?? profile?.avatar ?? null),
       anonymous: post.anonymous,
       boardId: board.id,
@@ -218,6 +224,7 @@ export function listReplies(viewer: ViewerContext, postId: string) {
     db
       .select({
         id: users.id,
+        wxId: users.wxId,
         siteNickname: users.siteNickname,
         wxNickname: users.wxNickname,
         avatar: users.wxAvatarUrl,
@@ -235,7 +242,12 @@ export function listReplies(viewer: ViewerContext, postId: string) {
       floor: r.floor,
       contentHtml: r.contentHtml,
       authorId: r.authorId,
-      authorName: r.anonymous ? "匿名" : (author?.siteNickname ?? author?.wxNickname ?? "成员"),
+      authorName: r.anonymous
+        ? "匿名"
+        : resolveDisplayName([author?.siteNickname, author?.wxNickname], {
+            wxId: author?.wxId,
+            fallback: "成员",
+          }),
       authorAvatar: r.anonymous ? null : (author?.avatar ?? null),
       accepted: r.accepted,
       collapsed: r.collapsed,

@@ -4,6 +4,9 @@ import { Check, Fingerprint, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { useToast } from "@/components/ui/Toast";
+
+import { registerSuccessFeedback, revokeFeedback } from "./feedback";
 import { usePasskeyRegister, usePasskeySupport } from "./usePasskey";
 
 export interface PasskeyItem {
@@ -23,24 +26,37 @@ export interface PasskeyItem {
  */
 export function PasskeySetup({ items }: { items: PasskeyItem[] }) {
   const router = useRouter();
+  const toast = useToast();
   const support = usePasskeySupport();
   const [justAdded, setJustAdded] = useState(false);
   const { busy, error, register } = usePasskeyRegister(() => {
     setJustAdded(true);
+    // 按钮变绿 + Toast 双通道：按钮状态盯着屏幕才看得到，
+    // Toast 还会被读屏软件播报（Provider 里有 aria-live）
+    toast.show(registerSuccessFeedback());
     router.refresh();
     setTimeout(() => setJustAdded(false), 2600);
   });
   const [removing, setRemoving] = useState<string | null>(null);
 
-  const remove = async (id: string) => {
+  const remove = async (id: string, name: string) => {
     setRemoving(id);
-    await fetch("/api/auth/passkey/revoke", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-    setRemoving(null);
-    router.refresh();
+    try {
+      const res = await fetch("/api/auth/passkey/revoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const body = await res.json().catch(() => ({}));
+      // 失败必须让用户知道 —— 静默失败会让人以为钥匙删掉了，其实还能登录
+      toast.show(revokeFeedback(name, { ok: res.ok, serverError: body.error }));
+      if (res.ok) router.refresh();
+    } catch {
+      toast.show(revokeFeedback(name, { ok: false, serverError: "网络异常，请重试" }));
+    } finally {
+      // 以前网络一断这里就永远停在 removing 状态，按钮再也点不了
+      setRemoving(null);
+    }
   };
 
   if (support === "unsupported") {
@@ -78,7 +94,7 @@ export function PasskeySetup({ items }: { items: PasskeyItem[] }) {
                 type="button"
                 aria-label={`移除 ${item.name}`}
                 disabled={removing === item.id}
-                onClick={() => void remove(item.id)}
+                onClick={() => void remove(item.id, item.name)}
                 className="shrink-0 rounded-[0.5rem] p-2 text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--danger)] disabled:opacity-40"
               >
                 <Trash2 className="h-4 w-4" strokeWidth={1.9} aria-hidden />
