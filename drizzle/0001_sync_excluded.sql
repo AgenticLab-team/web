@@ -1,0 +1,1 @@
+ALTER TABLE `groups` ADD `sync_excluded` integer DEFAULT false NOT NULL;

@@ -1,0 +1,281 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+
+interface StartResponse {
+  code: string;
+  expiresAt: number;
+  fallbackAfterSeconds: number;
+  groupPrefix: string;
+}
+
+type Phase =
+  | { kind: "loading" }
+  | { kind: "waiting"; data: StartResponse }
+  | { kind: "not_member"; wxId: string }
+  | { kind: "expired" }
+  | { kind: "error"; message: string };
+
+const BOT_NAME = "群猫娘";
+
+export function BindFlow() {
+  const router = useRouter();
+  const [phase, setPhase] = useState<Phase>({ kind: "loading" });
+  const [remaining, setRemaining] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  const [showFallback, setShowFallback] = useState(false);
+  const [upstreamDown, setUpstreamDown] = useState(false);
+  const [copied, setCopied] = useState<"code" | "group" | null>(null);
+  const startedAt = useRef(Date.now());
+
+  const copy = useCallback(async (text: string, which: "code" | "group") => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Safari 在非安全上下文会拒绝 clipboard API，退回选中文本
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      area.remove();
+    }
+    setCopied(which);
+    setTimeout(() => setCopied(null), 1600);
+  }, []);
+
+  const start = useCallback(async () => {
+    setPhase({ kind: "loading" });
+    setShowFallback(false);
+    setElapsed(0);
+    startedAt.current = Date.now();
+    try {
+      const res = await fetch("/api/auth/bind/start", { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setPhase({ kind: "error", message: body.error ?? "无法开始绑定" });
+        return;
+      }
+      setPhase({ kind: "waiting", data: await res.json() });
+    } catch {
+      setPhase({ kind: "error", message: "网络异常，请重试" });
+    }
+  }, []);
+
+  useEffect(() => {
+    void start();
+  }, [start]);
+
+  // 倒计时，以及「遇到问题」入口的出现时机
+  useEffect(() => {
+    if (phase.kind !== "waiting") return;
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((phase.data.expiresAt - Date.now()) / 1000));
+      setRemaining(left);
+      const since = Math.floor((Date.now() - startedAt.current) / 1000);
+      setElapsed(since);
+      if (since >= phase.data.fallbackAfterSeconds) setShowFallback(true);
+      if (left === 0) setPhase({ kind: "expired" });
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [phase]);
+
+  // 轮询绑定结果
+  useEffect(() => {
+    if (phase.kind !== "waiting") return;
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const res = await fetch("/api/auth/bind/status");
+        if (cancelled) return;
+        const body = await res.json();
+        if (body.state === "upstream_down") {
+          setUpstreamDown(true);
+          return;
+        }
+        setUpstreamDown(false);
+        if (body.state === "bound") {
+          router.replace(body.next ?? "/");
+        } else if (body.state === "not_member") {
+          setPhase({ kind: "not_member", wxId: body.wxId });
+        } else if (body.state === "expired") {
+          setPhase({ kind: "expired" });
+        }
+      } catch {
+        /* 网络抖动不打断流程，下一轮继续 */
+      }
+    };
+
+    const id = setInterval(poll, 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [phase, router]);
+
+  if (phase.kind === "loading") {
+    return (
+      <div className="h-64 animate-pulse rounded-[var(--radius-card)] bg-[var(--color-fill)]" />
+    );
+  }
+
+  if (phase.kind === "error" || phase.kind === "expired") {
+    const expired = phase.kind === "expired";
+    return (
+      <div className="animate-rise space-y-6 text-center">
+        <p className="text-[17px] text-[var(--color-ink-secondary)]">
+          {expired ? "验证码已过期" : phase.message}
+        </p>
+        <button
+          onClick={() => void start()}
+          className="w-full rounded-[var(--radius-control)] bg-[var(--color-accent)] px-6 py-3.5 text-[17px] font-medium text-[var(--color-accent-ink)] transition active:scale-[0.98]"
+        >
+          重新获取
+        </button>
+      </div>
+    );
+  }
+
+  if (phase.kind === "not_member") {
+    return (
+      <div className="animate-rise space-y-5 text-center">
+        <div className="text-[44px]">🚪</div>
+        <h2 className="text-[22px] font-semibold tracking-tight">你还不是社群成员</h2>
+        <p className="text-[15px] leading-relaxed text-[var(--color-ink-secondary)]">
+          我们认出了你的微信，但你还不在任何一个已接入的群里。
+          <br />
+          现阶段只有群成员可以登录。
+        </p>
+        <button
+          onClick={() => void start()}
+          className="w-full rounded-[var(--radius-control)] bg-[var(--color-fill)] px-6 py-3.5 text-[17px] font-medium transition active:scale-[0.98]"
+        >
+          换个账号试试
+        </button>
+      </div>
+    );
+  }
+
+  const { code, groupPrefix } = phase.data;
+  const minutes = Math.floor(remaining / 60);
+  const seconds = String(remaining % 60).padStart(2, "0");
+
+  return (
+    <div className="animate-rise space-y-7">
+      <div className="space-y-3 text-center">
+        <p className="text-[13px] font-medium uppercase tracking-[0.08em] text-[var(--color-ink-tertiary)]">
+          你的验证码
+        </p>
+        <button
+          type="button"
+          onClick={() => void copy(code, "code")}
+          aria-label={`复制验证码 ${code.split("").join(" ")}`}
+          className="tabular mx-auto flex justify-center gap-2.5 rounded-[var(--radius-card)] p-1 transition active:scale-[0.97]"
+        >
+          {code.split("").map((digit, i) => (
+            <span
+              key={i}
+              className="flex h-14 w-11 items-center justify-center rounded-[var(--radius-control)] bg-[var(--color-surface)] text-[28px] font-semibold shadow-[var(--shadow-hairline)]"
+            >
+              {digit}
+            </span>
+          ))}
+        </button>
+        <p className="tabular text-[13px] text-[var(--color-ink-tertiary)]">
+          {copied === "code" ? (
+            <span className="text-[var(--color-success)]">已复制</span>
+          ) : (
+            <>
+              轻点复制 · {minutes}:{seconds} 后失效
+            </>
+          )}
+        </p>
+      </div>
+
+      <div className="inset-group">
+        <Step
+          index={1}
+          title={`添加 ${BOT_NAME} 为好友`}
+          detail="在「申请理由」里填上这 6 位数字。不需要等对方通过。"
+        />
+        <Step
+          index={2}
+          title="或者，如果已经是好友"
+          detail={`直接私聊 ${BOT_NAME} 发送这 6 位数字。`}
+        />
+      </div>
+
+      <StatusLine upstreamDown={upstreamDown} elapsed={elapsed} />
+
+      {/* 兜底通道 15 秒后才出现 —— 不能一上来就引导所有人往群里发验证码 */}
+      {showFallback && (
+        <details className="animate-rise">
+          <summary className="cursor-pointer list-none text-center text-[15px] text-[var(--color-accent)] transition active:opacity-60">
+            遇到问题？
+          </summary>
+          <div className="mt-4 space-y-3 rounded-[var(--radius-card)] bg-[var(--color-accent-soft)] p-4">
+            <p className="text-[15px] leading-relaxed">
+              在<strong>任意一个有 {BOT_NAME} 的群</strong>里发送：
+            </p>
+            <button
+              type="button"
+              onClick={() => void copy(`${groupPrefix} ${code}`, "group")}
+              className="tabular flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--color-surface)] px-4 py-3 text-[19px] font-medium shadow-[var(--shadow-hairline)] transition active:scale-[0.98]"
+            >
+              <span>
+                {groupPrefix} {code}
+              </span>
+              <span className="text-[13px] font-normal text-[var(--color-ink-tertiary)]">
+                {copied === "group" ? "已复制" : "轻点复制"}
+              </span>
+            </button>
+            <p className="text-[13px] leading-relaxed text-[var(--color-ink-secondary)]">
+              必须带上「{groupPrefix}」两个字。
+              <br />
+              <strong>不要替别人发送验证码</strong> —— 那会把对方的登录会话绑定到你的身份上。
+            </p>
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function Step({ index, title, detail }: { index: number; title: string; detail: string }) {
+  return (
+    <div className="inset-row flex gap-3.5 p-4">
+      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-[13px] font-semibold text-[var(--color-accent-ink)]">
+        {index}
+      </span>
+      <div className="space-y-1">
+        <p className="text-[17px] leading-snug">{title}</p>
+        <p className="text-[13px] leading-relaxed text-[var(--color-ink-secondary)]">{detail}</p>
+      </div>
+    </div>
+  );
+}
+
+function StatusLine({ upstreamDown, elapsed }: { upstreamDown: boolean; elapsed: number }) {
+  if (upstreamDown) {
+    return (
+      <p className="text-center text-[13px] text-[var(--color-warning)]">
+        与机器人的连接暂时中断，正在重试…
+      </p>
+    );
+  }
+  return (
+    <p className="flex items-center justify-center gap-2 text-[13px] text-[var(--color-ink-secondary)]">
+      <span className="relative flex h-2 w-2">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-accent)] opacity-60" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-accent)]" />
+      </span>
+      正在等待验证{elapsed > 30 ? "（可能需要几秒）" : ""}
+    </p>
+  );
+}

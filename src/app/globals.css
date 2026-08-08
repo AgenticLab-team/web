@@ -1,0 +1,188 @@
+@import "tailwindcss";
+
+/*
+ * 设计系统：Apple HIG 的克制 + 材质感。
+ * 原则：一个主色 + 大面积中性色；1px 发丝线代替重投影；
+ *      spring 动效而非线性缓动；暗色模式是独立配色不是反色滤镜。
+ */
+
+@theme {
+  /* SF 家族优先，中文回落苹方。数字必须等宽，否则榜单和积分会跳动 */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, "Cascadia Code", monospace;
+
+  /* 8pt 网格 */
+  --spacing: 0.25rem;
+
+  --radius-card: 0.875rem;
+  --radius-sheet: 1.25rem;
+  --radius-control: 0.625rem;
+
+  /* 阴影极轻，靠层次而非投影表达深度 */
+  --shadow-hairline: 0 0 0 0.5px var(--color-separator);
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.06);
+  --shadow-sheet: 0 -1px 0 var(--color-separator), 0 -8px 40px rgb(0 0 0 / 0.12);
+
+  --ease-spring: linear(
+    0, 0.006, 0.025 2.8%, 0.101 6.1%, 0.539 18.9%, 0.721 25.3%, 0.849 31.5%, 0.937 38.1%,
+    0.968 41.8%, 0.991 45.7%, 1.006 50.1%, 1.015 55%, 1.017 63.9%, 1.001
+  );
+}
+
+:root {
+  color-scheme: light;
+
+  --color-canvas: #f2f2f7;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-fill: rgb(120 120 128 / 0.12);
+  --color-fill-strong: rgb(120 120 128 / 0.2);
+
+  --color-ink: #000000;
+  --color-ink-secondary: rgb(60 60 67 / 0.6);
+  --color-ink-tertiary: rgb(60 60 67 / 0.3);
+
+  --color-separator: rgb(60 60 67 / 0.13);
+  --color-separator-opaque: #c6c6c8;
+
+  --color-accent: #0a5c4a;
+  --color-accent-ink: #ffffff;
+  --color-accent-soft: rgb(10 92 74 / 0.08);
+
+  --color-danger: #c0392b;
+  --color-warning: #b7791f;
+  --color-success: #1a7f5a;
+
+  --blur-chrome: saturate(180%) blur(20px);
+  --chrome-bg: rgb(249 249 249 / 0.82);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --color-canvas: #000000;
+    --color-surface: #1c1c1e;
+    --color-surface-raised: #2c2c2e;
+    --color-fill: rgb(120 120 128 / 0.24);
+    --color-fill-strong: rgb(120 120 128 / 0.36);
+
+    --color-ink: #ffffff;
+    --color-ink-secondary: rgb(235 235 245 / 0.6);
+    --color-ink-tertiary: rgb(235 235 245 / 0.3);
+
+    --color-separator: rgb(84 84 88 / 0.65);
+    --color-separator-opaque: #38383a;
+
+    --color-accent: #4ade9f;
+    --color-accent-ink: #06281f;
+    --color-accent-soft: rgb(74 222 159 / 0.12);
+
+    --color-danger: #ff6b5d;
+    --color-warning: #ffd166;
+    --color-success: #4ade9f;
+
+    --chrome-bg: rgb(28 28 30 / 0.82);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-canvas: #000000;
+  --color-surface: #1c1c1e;
+  --color-surface-raised: #2c2c2e;
+  --color-fill: rgb(120 120 128 / 0.24);
+  --color-fill-strong: rgb(120 120 128 / 0.36);
+
+  --color-ink: #ffffff;
+  --color-ink-secondary: rgb(235 235 245 / 0.6);
+  --color-ink-tertiary: rgb(235 235 245 / 0.3);
+
+  --color-separator: rgb(84 84 88 / 0.65);
+  --color-separator-opaque: #38383a;
+
+  --color-accent: #4ade9f;
+  --color-accent-ink: #06281f;
+  --color-accent-soft: rgb(74 222 159 / 0.12);
+
+  --color-danger: #ff6b5d;
+  --color-warning: #ffd166;
+  --color-success: #4ade9f;
+
+  --chrome-bg: rgb(28 28 30 / 0.82);
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  /* 尊重系统字号设置（Dynamic Type） */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "tnum" 1, "cv01" 1;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior-y: none;
+}
+
+/* 数字一律等宽，避免榜单和倒计时抖动 */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* iOS 设置页那种分组列表 —— 层级表达最干净的形式 */
+.inset-group {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+
+.inset-row + .inset-row {
+  border-top: 0.5px solid var(--color-separator);
+}
+
+.chrome {
+  background: var(--chrome-bg);
+  backdrop-filter: var(--blur-chrome);
+  -webkit-backdrop-filter: var(--blur-chrome);
+}
+
+.hairline {
+  border: 0.5px solid var(--color-separator);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-rise {
+  animation: rise 0.5s var(--ease-spring) both;
+}

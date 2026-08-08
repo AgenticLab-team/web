@@ -1,0 +1,226 @@
+import "server-only";
+
+import { env } from "@/lib/env";
+import type {
+  ActivityResponse,
+  Conversation,
+  FriendRequestsResponse,
+  GroupMember,
+  LeaderboardResponse,
+  MessageQuery,
+  MessagesResponse,
+  Overview,
+  UpstreamMessage,
+  UserGroupsResponse,
+  UserProfile,
+  UserSearchResult,
+  WhoAmI,
+} from "./types";
+
+/**
+ * 上游不可用与上游拒绝要分开处理：
+ * 隧道断了应该降级到本地缓存，参数写错了应该直接报错。
+ */
+export class NekoBotError extends Error {
+  constructor(
+    message: string,
+    readonly kind: "unreachable" | "timeout" | "http" | "malformed",
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = "NekoBotError";
+  }
+
+  /** 上游侧问题，本地缓存可以顶上 */
+  get isUpstreamDown() {
+    return this.kind === "unreachable" || this.kind === "timeout" || (this.status ?? 0) >= 500;
+  }
+}
+
+type QueryValue = string | number | boolean | undefined | null;
+
+function buildQuery(params: Record<string, QueryValue>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    search.set(key, String(value));
+  }
+  const qs = search.toString();
+  return qs ? `?${qs}` : "";
+}
+
+const RETRYABLE_ATTEMPTS = 3;
+
+/**
+ * 各端点的 limit 上限（实测得来，文档未写）。
+ * 超过会直接 422，而不是被截断 —— 曾经把 friend-requests 传成 500，
+ * 整个请求失败，头像同步静默地一个都没拿到。
+ */
+const LIMIT_CEILING: Record<string, number> = {
+  "/friend-requests": 200,
+  "/messages": 500,
+  "/conversations": 500,
+  "/users/search": 200,
+};
+
+function clampLimit(path: string, limit: number | undefined): number | undefined {
+  if (limit === undefined) return undefined;
+  const key = Object.keys(LIMIT_CEILING).find((p) => path.startsWith(p));
+  const ceiling = key ? LIMIT_CEILING[key] : undefined;
+  return ceiling ? Math.min(limit, ceiling) : limit;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  let lastError: NekoBotError | undefined;
+
+  for (let attempt = 1; attempt <= RETRYABLE_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), env.nekobot.timeoutMs);
+
+    try {
+      const response = await fetch(`${env.nekobot.baseUrl}${path}`, {
+        ...init,
+        signal: controller.signal,
+        headers: {
+          "X-API-Key": env.nekobot.apiKey,
+          Accept: "application/json",
+          ...init?.headers,
+        },
+        // 上游数据由同步任务落库，这里永远取实时值
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => "");
+        const error = new NekoBotError(
+          `上游返回 ${response.status}: ${body.slice(0, 200)}`,
+          "http",
+          response.status,
+        );
+        // 4xx 是我们自己的问题，重试没有意义
+        if (response.status < 500) throw error;
+        lastError = error;
+      } else {
+        try {
+          return (await response.json()) as T;
+        } catch {
+          throw new NekoBotError("上游返回的不是合法 JSON", "malformed");
+        }
+      }
+    } catch (err) {
+      if (err instanceof NekoBotError) {
+        if (!err.isUpstreamDown) throw err;
+        lastError = err;
+      } else if (err instanceof Error && err.name === "AbortError") {
+        lastError = new NekoBotError(`上游超时（${env.nekobot.timeoutMs}ms）`, "timeout");
+      } else {
+        lastError = new NekoBotError(
+          `连接上游失败：${err instanceof Error ? err.message : String(err)}`,
+          "unreachable",
+        );
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (attempt < RETRYABLE_ATTEMPTS) {
+      await sleep(300 * 2 ** (attempt - 1));
+    }
+  }
+
+  throw lastError ?? new NekoBotError("上游请求失败", "unreachable");
+}
+
+export const nekobot = {
+  whoami: () => request<WhoAmI>("/whoami"),
+
+  overview: () => request<Overview>("/stats/overview"),
+
+  conversations: (params: {
+    groups_only?: boolean;
+    bound_only?: boolean;
+    keyword?: string;
+    limit?: number;
+  } = {}) =>
+    request<Conversation[]>(
+      `/conversations${buildQuery({ ...params, limit: clampLimit("/conversations", params.limit) })}`,
+    ),
+
+  leaderboard: (
+    convId: string,
+    params: {
+      days?: number;
+      start_ms?: number;
+      end_ms?: number;
+      quality_min?: number;
+      limit?: number;
+      order?: "messages" | "quality_messages" | string;
+    } = {},
+  ) =>
+    request<LeaderboardResponse>(
+      `/groups/${encodeURIComponent(convId)}/leaderboard${buildQuery(params)}`,
+    ),
+
+  activity: (convId: string, params: { days?: number; by?: "hour" | "day" } = {}) =>
+    request<ActivityResponse>(
+      `/groups/${encodeURIComponent(convId)}/activity${buildQuery(params)}`,
+    ),
+
+  members: (convId: string, params: { limit?: number } = {}) =>
+    request<GroupMember[]>(`/groups/${encodeURIComponent(convId)}/members${buildQuery(params)}`),
+
+  searchUsers: (q: string, limit = 20) =>
+    request<UserSearchResult[]>(
+      `/users/search${buildQuery({ q, limit: clampLimit("/users/search", limit) })}`,
+    ),
+
+  userProfile: (wxId: string, params: { quality_min?: number; samples?: number } = {}) =>
+    request<UserProfile>(`/users/${encodeURIComponent(wxId)}${buildQuery(params)}`),
+
+  userGroups: (wxId: string, params: { quality_min?: number; days?: number } = {}) =>
+    request<UserGroupsResponse>(
+      `/users/${encodeURIComponent(wxId)}/groups${buildQuery(params)}`,
+    ),
+
+  messages: (query: MessageQuery = {}) =>
+    request<MessagesResponse>(
+      `/messages${buildQuery({ ...query, limit: clampLimit("/messages", query.limit) })}`,
+    ),
+
+  friendRequests: (params: { pending_only?: boolean; limit?: number } = {}) =>
+    request<FriendRequestsResponse>(
+      `/friend-requests${buildQuery({ ...params, limit: clampLimit("/friend-requests", params.limit) })}`,
+    ),
+
+  /**
+   * 通过好友申请。
+   *
+   * ⚠️ 微信对频繁通过好友有风控。绑定流程**不需要**调用它 ——
+   * /friend-requests 不通过也能拿到 wx_id、昵称、头像和活跃度。
+   * 只在管理员后台手动、限速地使用。
+   */
+  acceptFriendRequest: (wxId: string) =>
+    request<unknown>(`/friend-requests/${encodeURIComponent(wxId)}/accept`, { method: "POST" }),
+
+  /**
+   * 分页拉取消息。上游单次有 limit 上限，这里按页迭代。
+   * 用于同步任务，不要在请求链路里直接调用。
+   */
+  async *iterateMessages(
+    query: Omit<MessageQuery, "limit" | "offset">,
+    pageSize = 500,
+  ): AsyncGenerator<UpstreamMessage[]> {
+    let offset = 0;
+    for (;;) {
+      const page = await this.messages({ ...query, limit: pageSize, offset });
+      if (page.items.length === 0) return;
+      yield page.items;
+      offset += page.items.length;
+      if (offset >= page.total || page.items.length < pageSize) return;
+    }
+  },
+};
