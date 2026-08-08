@@ -19,7 +19,7 @@ type Phase =
 
 const BOT_NAME = "群猫娘";
 
-export function BindFlow() {
+export function BindFlow({ next }: { next?: string } = {}) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
   const [remaining, setRemaining] = useState(0);
@@ -101,7 +101,7 @@ export function BindFlow() {
         }
         setUpstreamDown(false);
         if (body.state === "bound") {
-          router.replace(body.next ?? "/");
+          router.replace(body.next ?? next ?? "/");
         } else if (body.state === "not_member") {
           setPhase({ kind: "not_member", wxId: body.wxId });
         } else if (body.state === "expired") {

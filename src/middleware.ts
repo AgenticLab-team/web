@@ -1,0 +1,40 @@
+import { NextResponse, type NextRequest } from "next/server";
+
+/**
+ * 登录门禁。
+ *
+ * 为什么需要它：页面里的 `redirect("/login")` 在有 loading.tsx 的路由下
+ * 会变成**流式响应里的客户端跳转** —— 状态码在重定向确定前就发出去了，
+ * 于是 curl 看到的是 200 + 一个空壳，而不是 307。
+ * 内容没泄露，但多渲染了一遍外壳，也不利于爬虫与监控判断。
+ *
+ * 中间件在渲染开始前就拦下，既快又干净。
+ *
+ * **它只看 cookie 在不在，不做真正的鉴权** ——
+ * 会话是否有效、有没有权限，仍然由页面里的 getCurrentUser 与 can() 判定。
+ * 把授权判断放进中间件是危险的：middleware 拿不到数据库，
+ * 只能靠 cookie 自称，等于让客户端自证身份。
+ */
+
+const SESSION_COOKIE = "al_session";
+
+/** 未登录一律拦下的路径前缀 */
+const PROTECTED = ["/me", "/notifications", "/forum/new", "/forum/convert", "/onboarding"];
+
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  if (!PROTECTED.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+    return NextResponse.next();
+  }
+
+  if (request.cookies.has(SESSION_COOKIE)) return NextResponse.next();
+
+  const login = new URL("/login", request.url);
+  // 登录后回到原来想去的地方，而不是一律扔回首页
+  login.searchParams.set("next", pathname);
+  return NextResponse.redirect(login, 307);
+}
+
+export const config = {
+  matcher: ["/me/:path*", "/notifications/:path*", "/forum/new", "/forum/convert", "/onboarding"],
+};

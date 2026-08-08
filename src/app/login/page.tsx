@@ -8,9 +8,17 @@ import { getCurrentUser } from "@/lib/auth/session";
 export const metadata: Metadata = { title: "登录" };
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
   const user = await getCurrentUser();
-  if (user) redirect("/");
+  const { next } = await searchParams;
+  // 只接受站内相对路径 —— 允许绝对地址就成了开放重定向，
+  // 攻击者可以拿登录链接把人导到钓鱼站
+  const target = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  if (user) redirect(target);
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[26rem] flex-col justify-center px-6 py-12">
@@ -32,7 +40,7 @@ export default async function LoginPage() {
         <span className="h-px flex-1 bg-[var(--separator)]" />
       </div>
 
-      <BindFlow />
+      <BindFlow next={target} />
 
       <footer className="t-caption mt-10 text-center leading-relaxed text-[var(--ink-tertiary)]">
         首次登录后可以设置 Passkey，下次一步进入。

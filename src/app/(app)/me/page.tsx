@@ -119,6 +119,22 @@ export default async function MePage() {
         </div>
       </Section>
 
+      <Section title="积分">
+        <Group>
+          <Row href="/me/points">
+            <span className="t-body flex-1">积分与等级</span>
+            <span className="tabular t-footnote text-[var(--ink-tertiary)]">
+              {user.points} 分 · L{user.level}
+            </span>
+            <ChevronRight
+              className="h-4 w-4 shrink-0 text-[var(--ink-quaternary)]"
+              strokeWidth={2}
+              aria-hidden
+            />
+          </Row>
+        </Group>
+      </Section>
+
       <Section title="今日">
         <div className="grid grid-cols-3 gap-2.5">
           <StatTile

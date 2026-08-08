@@ -71,6 +71,13 @@
       "when": 1786205464388,
       "tag": "0009_polls_tips",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1786206451964,
+      "tag": "0010_checkins",
+      "breakpoints": true
     }
   ]
 }

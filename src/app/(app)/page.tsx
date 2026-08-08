@@ -2,11 +2,13 @@ import { and, inArray, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import { LeaderboardList } from "@/components/LeaderboardList";
+import { CheckinCard } from "@/components/points/CheckinCard";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Group, Row, Section, StatTile } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { messages, people } from "@/lib/db/schema";
+import { checkinStatus } from "@/lib/points/checkin";
 import { getLeaderboard, getMyRank } from "@/lib/queries/leaderboard";
 import { allSyncedGroupIds, visibleGroupsFor } from "@/lib/queries/visibility";
 import { startOfDayMs, todayKey } from "@/lib/time";
@@ -24,6 +26,8 @@ export default async function HomePage() {
   // 群列表是隐私，只给自己所在的群
   const myGroups = visibleGroupsFor(user);
   const myRank = user?.wxId ? getMyRank(user.wxId, { period: "week", convIds: allIds }) : null;
+
+  const checkin = user ? checkinStatus(user) : null;
 
   const scope = inArray(messages.convId, allIds);
   const totals = db
@@ -59,6 +63,20 @@ export default async function HomePage() {
           )
         }
       />
+
+      {checkin && user && (
+        <Section>
+          <CheckinCard
+            canCheckin={checkin.canCheckin}
+            checkedToday={checkin.checkedToday}
+            message={checkin.verdict.ok ? "" : checkin.verdict.message}
+            need={checkin.verdict.ok ? 0 : (checkin.verdict.reason === "not_enough" ? checkin.verdict.need : 0)}
+            have={checkin.quality.counted}
+            streak={user.streakCurrent}
+            streakBest={user.streakBest}
+          />
+        </Section>
+      )}
 
       {myRank && (
         <Section>
