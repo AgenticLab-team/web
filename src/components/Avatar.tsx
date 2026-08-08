@@ -21,7 +21,7 @@ const PALETTE = [
 ];
 
 /** 稳定哈希：同一个 wx_id 永远得到同一个颜色，跨页面不跳变 */
-function paletteFor(seed: string) {
+export function paletteFor(seed: string) {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
     hash = (hash * 31 + seed.charCodeAt(i)) | 0;
@@ -30,7 +30,7 @@ function paletteFor(seed: string) {
 }
 
 /** 取首个有意义的字符：中文取首字，英文取首字母，emoji 昵称取整个 emoji */
-function initialOf(name: string): string {
+export function initialOf(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) return "?";
   // 用 Intl.Segmenter 正确处理 emoji 与组合字符

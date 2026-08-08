@@ -38,6 +38,17 @@ export function shiftDateKey(date: string, days: number): string {
   return new Date(base + days * 86_400_000).toISOString().slice(0, 10);
 }
 
+/** YYYY-MM-DD（东八区）对应的毫秒起点。东八区 00:00 等于 UTC 前一天 16:00 */
+export function startOfDayMs(date: string): number {
+  const [y, m, d] = date.split("-").map(Number);
+  return Date.UTC(y, m - 1, d) - 8 * 3_600_000;
+}
+
+/** 该日的毫秒结束点（不含） */
+export function endOfDayMs(date: string): number {
+  return startOfDayMs(date) + 86_400_000;
+}
+
 export function daysBetween(from: string, to: string): number {
   const parse = (s: string) => {
     const [y, m, d] = s.split("-").map(Number);

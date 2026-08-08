@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { buildMatchExpression, desegment, segmentForIndex } from "@/lib/db/fts";
 import { isQualityMessage } from "@/lib/quality";
-import { dateKey, daysBetween, hourOf, shiftDateKey } from "@/lib/time";
+import { dateKey, daysBetween, endOfDayMs, hourOf, shiftDateKey, startOfDayMs } from "@/lib/time";
 
 describe("高质量消息判定", () => {
   // 这条规则是 calibrate.ts 反推出来的，与上游榜单 10/10 吻合。
@@ -84,5 +84,22 @@ describe("社群时区边界", () => {
   it("天数差计算正确", () => {
     assert.equal(daysBetween("2026-08-01", "2026-08-08"), 7);
     assert.equal(daysBetween("2026-08-08", "2026-08-08"), 0);
+  });
+
+  it("日起点是东八区零点，不是 UTC 零点", () => {
+    const start = startOfDayMs("2026-08-08");
+    assert.equal(dateKey(start), "2026-08-08");
+    // 再往前 1 毫秒必须落到前一天，否则「今日消息数」会多算 8 小时的量
+    assert.equal(dateKey(start - 1), "2026-08-07");
+  });
+
+  it("日结束点不含次日零点", () => {
+    const end = endOfDayMs("2026-08-08");
+    assert.equal(dateKey(end - 1), "2026-08-08");
+    assert.equal(dateKey(end), "2026-08-09");
+  });
+
+  it("起止点正好差一天", () => {
+    assert.equal(endOfDayMs("2026-08-08") - startOfDayMs("2026-08-08"), 86_400_000);
   });
 });
