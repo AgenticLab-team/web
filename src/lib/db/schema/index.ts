@@ -10,3 +10,4 @@ export * from "./titles";
 export * from "./escalation";
 export * from "./broadcast";
 export * from "./invites";
+export * from "./activities";
