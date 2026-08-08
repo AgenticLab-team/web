@@ -53,7 +53,7 @@ export default async function AdminDashboard() {
           「累计消息 41,622」看着漂亮但没人会因为它做任何事 */}
       <Section title="待处理">
         <div className="grid grid-cols-3 gap-2.5">
-          <PendingTile label="举报" value={pending.reports} href="/admin/moderation" />
+          <PendingTile label="举报" value={pending.reports} href="/admin/reports" />
           <PendingTile label="申诉" value={pending.appeals} href="/admin/appeals" />
           <PendingTile label="积分异常" value={pending.anomalies} href="/admin/points" />
         </div>

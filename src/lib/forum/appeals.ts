@@ -7,6 +7,7 @@ import { audit } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { appeals, moderationActions } from "@/lib/db/schema";
+import { checkHandleAppeal } from "@/lib/moderation/rules";
 import { can } from "@/lib/rbac/can";
 
 import { notify } from "./notify";
@@ -17,6 +18,10 @@ import { notify } from "./notify";
  * **有处罚就必须有申诉**。只罚不给申诉，管理只会积累怨气 ——
  * 被误伤的人无处说理，最后要么退群要么在群里吵，
  * 两种结果都比多做一个申诉入口贵得多。
+ *
+ * 与之配套的是**不能复核自己下的处罚**（见 moderation/rules.ts）。
+ * 由原处罚人来判，等于让他给自己的判断打分，结果几乎注定是驳回 ——
+ * 那这个入口只是让人多绕一圈再绝望一次，还不如没有。
  */
 
 export interface AppealResult {
@@ -67,11 +72,25 @@ export async function handleAppeal(input: {
   if (!verdict.allowed) return { ok: false, error: verdict.reason };
 
   const response = input.response.trim();
-  if (!response) return { ok: false, error: "必须给出答复，不能只点通过或驳回" };
 
   const appeal = db.select().from(appeals).where(eq(appeals.id, input.appealId)).get();
   if (!appeal) return { ok: false, error: "申诉不存在" };
-  if (appeal.status !== "open") return { ok: false, error: "这条申诉已经处理过了" };
+
+  const action = db
+    .select()
+    .from(moderationActions)
+    .where(eq(moderationActions.id, appeal.actionId))
+    .get();
+  if (!action) return { ok: false, error: "找不到对应的处罚记录" };
+
+  const check = checkHandleAppeal({
+    actorId: user.id,
+    punisherId: action.actorId,
+    appealantId: appeal.userId,
+    status: appeal.status,
+    response: input.response,
+  });
+  if (!check.ok) return { ok: false, error: check.error };
 
   db.transaction((tx) => {
     tx.update(appeals)

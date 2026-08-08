@@ -46,9 +46,18 @@ export interface AuditEntry {
 
 const ACTION_LABELS = new Map(PERMISSIONS.map((p) => [p.key as string, p.label]));
 
+/**
+ * 有些动作比权限点更细 —— 一个 moderation.queue 权限点下面
+ * 有认领和处置两种动作，审计日志里必须分得清是哪一种。
+ */
+const EXTRA_LABELS: Record<string, string> = {
+  "moderation.report.assign": "认领举报",
+  "moderation.report.handle": "处置举报",
+};
+
 /** 动作名与权限点同名时直接用权限点的中文名 */
 export function labelForAction(action: string): string {
-  return ACTION_LABELS.get(action) ?? action;
+  return EXTRA_LABELS[action] ?? ACTION_LABELS.get(action) ?? action;
 }
 
 export function queryAuditLogs(filter: AuditFilter = {}): { entries: AuditEntry[]; total: number } {

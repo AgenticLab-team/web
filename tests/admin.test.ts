@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import { ADMIN_NAV, ALL_ADMIN_ITEMS, visibleAdminNav } from "@/lib/admin/nav";
@@ -39,6 +40,30 @@ describe("后台导航的权限声明", () => {
   it("所有 href 都在 /admin 之下", () => {
     for (const item of ALL_ADMIN_ITEMS) {
       assert.ok(item.href.startsWith("/admin"), `${item.key} 的路径不在后台下：${item.href}`);
+    }
+  });
+
+  it("**标了 ready 的入口必须真的有页面**", () => {
+    /*
+     * ready 是给人看的标记，但页面在不在是文件系统说了算。
+     * 两者脱节的表现是点进去 404 —— 而后台是最不该出现死链的地方，
+     * 管理员会以为是自己权限不够。
+     */
+    for (const item of ALL_ADMIN_ITEMS) {
+      if (!item.ready) continue;
+      const route = item.href.replace(/^\/admin/, "");
+      const page = new URL(`../src/app/(app)/admin${route}/page.tsx`, import.meta.url);
+      assert.ok(existsSync(page), `${item.key} 标了 ready，但 ${item.href} 没有页面文件`);
+    }
+  });
+
+  it("已实现的页面不该还标着未完成", () => {
+    // 反向也要查：页面做好了却忘了翻 ready，入口就一直藏着
+    for (const item of ALL_ADMIN_ITEMS) {
+      if (item.ready) continue;
+      const route = item.href.replace(/^\/admin/, "");
+      const page = new URL(`../src/app/(app)/admin${route}/page.tsx`, import.meta.url);
+      assert.ok(!existsSync(page), `${item.href} 已经有页面了，但 ready 还是 false`);
     }
   });
 });

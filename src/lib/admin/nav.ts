@@ -87,11 +87,12 @@ export const ADMIN_NAV: AdminNavSection[] = [
     items: [
       {
         key: "moderation",
-        href: "/admin/moderation",
-        label: "举报与审核",
+        href: "/admin/reports",
+        label: "举报队列",
         icon: "flag",
         permission: "moderation.queue",
-        ready: false,
+        description: "按目标归组，超时的排最前",
+        ready: true,
       },
       {
         key: "appeals",
@@ -99,7 +100,8 @@ export const ADMIN_NAV: AdminNavSection[] = [
         label: "申诉处理",
         icon: "scale",
         permission: "moderation.appeal",
-        ready: false,
+        description: "原处罚理由与申诉说法并排",
+        ready: true,
       },
       {
         key: "boards",

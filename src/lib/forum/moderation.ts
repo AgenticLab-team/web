@@ -7,6 +7,7 @@ import { audit } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { moderationActions, posts, replies, reports } from "@/lib/db/schema";
+import { severityForReason } from "@/lib/moderation/rules";
 import { can } from "@/lib/rbac/can";
 
 import { buildViewerContext } from "./context";
@@ -286,8 +287,7 @@ export async function submitReport(input: {
     .get();
   if (existing) return { ok: true };
 
-  // 涉法涉黄进紧急队列，其余按普通处理
-  const severity = input.reasonCode === "illegal" || input.reasonCode === "porn" ? 2 : 0;
+  const severity = severityForReason(input.reasonCode);
 
   let targetUserId: string | undefined;
   if (input.targetType === "post") {
