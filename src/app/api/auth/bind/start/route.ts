@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { startBind } from "@/lib/auth/bind";
+import { RateLimitError, startBind } from "@/lib/auth/bind";
 import { getSettingBool } from "@/lib/settings/store";
 
 export async function POST(request: Request) {
@@ -13,7 +13,18 @@ export async function POST(request: Request) {
     request.headers.get("x-real-ip") ??
     undefined;
 
-  const result = startBind({ ip });
+  let result;
+  try {
+    result = startBind({ ip });
+  } catch (err) {
+    if (err instanceof RateLimitError) {
+      return NextResponse.json(
+        { error: err.message },
+        { status: 429, headers: { "Retry-After": String(err.retryAfterSeconds) } },
+      );
+    }
+    throw err;
+  }
 
   // nonce 是这次绑定会话的凭据，随 httpOnly cookie 下发，前端拿不到也改不了
   const response = NextResponse.json({

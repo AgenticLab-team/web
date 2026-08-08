@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, gt, inArray, lt } from "drizzle-orm";
+import { and, count, eq, gt, inArray, lt } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { bindCodes, groupMembers, groups, messages, users } from "@/lib/db/schema";
@@ -39,9 +39,42 @@ export interface StartBindResult {
   groupPrefix: string;
 }
 
+export class RateLimitError extends Error {
+  constructor(
+    message: string,
+    readonly retryAfterSeconds: number,
+  ) {
+    super(message);
+    this.name = "RateLimitError";
+  }
+}
+
 export function startBind(opts: { ip?: string }): StartBindResult {
   const ttl = getSettingInt("auth.bind_code.ttl_seconds", 300) * 1000;
   const now = Date.now();
+
+  // 这个接口在公网上裸奔，不限流就能被刷爆验证码表，
+  // 也会把大量待验证码塞进轮询窗口，拖慢所有人的绑定。
+  //
+  // 但阈值不能按「每人」的直觉来定：国内运营商大量使用 NAT，
+  // 一个学校或公司出口后面可能有几十个群友共用一个出口 IP。
+  // 所以用「短窗口防爆刷 + 宽松日限」，而不是一刀切的低日限。
+  if (opts.ip) {
+    const burstLimit = getSettingInt("auth.bind_code.burst_limit", 5);
+    const burstWindow = getSettingInt("auth.bind_code.burst_window_seconds", 600) * 1000;
+    const burst = countIssued(opts.ip, now - burstWindow);
+    if (burst >= burstLimit) {
+      throw new RateLimitError(
+        `请求过于频繁，请 ${Math.ceil(burstWindow / 60000)} 分钟后再试`,
+        Math.ceil(burstWindow / 1000),
+      );
+    }
+
+    const dailyLimit = getSettingInt("auth.bind_code.daily_limit", 30);
+    if (countIssued(opts.ip, now - 86_400_000) >= dailyLimit) {
+      throw new RateLimitError(`24 小时内最多获取 ${dailyLimit} 次验证码，请稍后再试`, 3600);
+    }
+  }
 
   // 过期的码先标记掉，避免旧码一直参与匹配
   db.update(bindCodes)
@@ -84,6 +117,16 @@ export function startBind(opts: { ip?: string }): StartBindResult {
     fallbackAfterSeconds: getSettingInt("auth.bind_code.fallback_after_seconds", 15),
     groupPrefix: getSetting("auth.bind_code.group_prefix", "登录"),
   };
+}
+
+function countIssued(ip: string, since: number): number {
+  return (
+    db
+      .select({ n: count() })
+      .from(bindCodes)
+      .where(and(eq(bindCodes.issuedIp, ip), gt(bindCodes.createdAt, since)))
+      .get()?.n ?? 0
+  );
 }
 
 // 所有待验证的码共用一次上游查询，避免每个前端轮询都打一次上游
