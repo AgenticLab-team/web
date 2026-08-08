@@ -32,11 +32,11 @@ function quotePhrase(value: string): string {
  */
 export function buildMatchExpression(query: string): string | null {
   const terms = query
+    // 先剔除 FTS5 语法字符**再**切分。顺序反过来会把 `鉴权"OR"1` 拼成
+    // 单个短语 `"鉴 权  OR 1"`，永远匹配不到任何东西。
+    .replace(/["*():^-]/g, " ")
     .trim()
     .split(/\s+/)
-    .filter(Boolean)
-    // FTS5 的语法字符会让表达式解析失败，直接剔除
-    .map((term) => term.replace(/["*():^-]/g, " ").trim())
     .filter(Boolean);
 
   if (terms.length === 0) return null;
