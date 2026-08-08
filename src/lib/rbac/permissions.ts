@@ -39,6 +39,13 @@ export const PERMISSIONS = [
     dangerLevel: 2,
   },
   { key: "forum.board.manage", category: "forum", label: "管理版块", dangerLevel: 1 },
+  {
+    key: "forum.tag.manage",
+    category: "forum",
+    label: "管理标签",
+    description: "合并、重命名、锁定、清理。合并不可撤销",
+    dangerLevel: 1,
+  },
 
   // ── 群消息 ──────────────────────────────────────────────────
   {
