@@ -1,10 +1,16 @@
 import type { Metadata, Viewport } from "next";
 
+import { env } from "@/lib/env";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 import "./globals.css";
 
 export const metadata: Metadata = {
+  /*
+   * 不设 metadataBase 的话，og:image 会被解析成 http://localhost:3000/...
+   * —— 分享到微信里预览图直接挂掉，而且本地开发时完全看不出来。
+   */
+  metadataBase: new URL(env.site.url),
   title: {
     default: "Agentic Lab",
     template: "%s · Agentic Lab",

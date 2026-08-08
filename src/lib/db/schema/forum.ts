@@ -413,3 +413,73 @@ export const notificationPrefs = sqliteTable("notification_prefs", {
   channels: text("channels", { mode: "json" }),
   updatedAt: now("updated_at"),
 });
+
+/**
+ * 投票。
+ *
+ * hideUntilVoted 是关键选项：先看到结果会影响判断（从众效应），
+ * 想收集真实意见就该先投再看。
+ */
+export const polls = sqliteTable(
+  "forum_polls",
+  {
+    id: ulidPk(),
+    postId: text("post_id").notNull().unique(),
+    question: text("question"),
+    multi: integer("multi", { mode: "boolean" }).notNull().default(false),
+    anonymous: integer("anonymous", { mode: "boolean" }).notNull().default(true),
+    hideUntilVoted: integer("hide_until_voted", { mode: "boolean" }).notNull().default(false),
+    closesAt: integer("closes_at"),
+    createdAt: now("created_at"),
+  },
+  (t) => [index("forum_polls_post_idx").on(t.postId)],
+);
+
+export const pollOptions = sqliteTable(
+  "forum_poll_options",
+  {
+    id: ulidPk(),
+    pollId: text("poll_id").notNull(),
+    text: text("text").notNull(),
+    sort: integer("sort").notNull().default(0),
+    votes: integer("votes").notNull().default(0),
+  },
+  (t) => [index("forum_poll_options_poll_idx").on(t.pollId, t.sort)],
+);
+
+export const pollVotes = sqliteTable(
+  "forum_poll_votes",
+  {
+    id: ulidPk(),
+    pollId: text("poll_id").notNull(),
+    optionId: text("option_id").notNull(),
+    userId: text("user_id").notNull(),
+    createdAt: now("created_at"),
+  },
+  (t) => [
+    uniqueIndex("forum_poll_votes_unique_idx").on(t.pollId, t.optionId, t.userId),
+    index("forum_poll_votes_user_idx").on(t.pollId, t.userId),
+  ],
+);
+
+/** 打赏。给积分一个真正的消耗出口，否则等级只是虚数 */
+export const tips = sqliteTable(
+  "forum_tips",
+  {
+    id: ulidPk(),
+    targetType: text("target_type", { enum: ["post", "reply"] }).notNull(),
+    targetId: text("target_id").notNull(),
+    postId: text("post_id").notNull(),
+    fromUserId: text("from_user_id").notNull(),
+    toUserId: text("to_user_id").notNull(),
+    points: integer("points").notNull(),
+    note: text("note"),
+    /** 关联的积分流水，退款时用来冲正 */
+    ledgerId: text("ledger_id"),
+    createdAt: now("created_at"),
+  },
+  (t) => [
+    index("forum_tips_target_idx").on(t.targetType, t.targetId),
+    index("forum_tips_to_idx").on(t.toUserId, t.createdAt),
+  ],
+);

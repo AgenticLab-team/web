@@ -7,6 +7,8 @@ import { Avatar } from "@/components/Avatar";
 import { AcceptButton } from "@/components/forum/AcceptButton";
 import { BountyBadge } from "@/components/forum/BountyBadge";
 import { ConsentPanel } from "@/components/forum/ConsentPanel";
+import { PollWidget } from "@/components/forum/PollWidget";
+import { TipButton } from "@/components/forum/TipButton";
 import { PostActions } from "@/components/forum/PostActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { ReactionBar } from "@/components/forum/ReactionBar";
@@ -17,6 +19,8 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
 import { getPost, listReplies } from "@/lib/forum/queries";
 import { consentSummary } from "@/lib/forum/convert-queries";
+import { pollOfPost } from "@/lib/forum/polls-queries";
+import { tipsOfTargets } from "@/lib/forum/tips-queries";
 import { isSubscribed } from "@/lib/forum/notify";
 import { isBookmarked, reactionStates } from "@/lib/forum/social-queries";
 import { isIndexable } from "@/lib/forum/visibility";
@@ -77,6 +81,11 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const subscribed = user ? isSubscribed(user.id, post.id) : false;
   const isAsker = user?.id === post.authorId;
   const consent = consentSummary(post.id, user?.wxId ?? null);
+  const poll = pollOfPost(post.id, user?.id ?? null);
+  const tipTotals = tipsOfTargets([
+    { type: "post", id: post.id },
+    ...replies.map((r) => ({ type: "reply" as const, id: r.id })),
+  ]);
   const isQuestion = post.type === "question";
 
   const note = VISIBILITY_NOTE[post.visibility];
@@ -140,6 +149,8 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           dangerouslySetInnerHTML={{ __html: post.contentHtml }}
         />
 
+        {poll && <PollWidget poll={poll} canVote={Boolean(user)} />}
+
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
           <ReactionBar
             targetType="post"
@@ -147,6 +158,14 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             initial={reactionMap.get(post.id) ?? []}
             canReact={Boolean(user)}
           />
+          {user && post.authorId !== user.id && (
+            <TipButton
+              targetType="post"
+              targetId={post.id}
+              balance={user.points}
+              received={tipTotals.get(post.id) ?? 0}
+            />
+          )}
           <span className="flex items-center gap-1">
             <PostActions
               postId={post.id}
@@ -212,13 +231,23 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                 />
 
                 <div className="mt-2 flex items-center justify-between gap-3">
-                  <ReactionBar
-                    targetType="reply"
-                    targetId={reply.id}
-                    initial={reactionMap.get(reply.id) ?? []}
-                    canReact={Boolean(user)}
-                    compact
-                  />
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <ReactionBar
+                      targetType="reply"
+                      targetId={reply.id}
+                      initial={reactionMap.get(reply.id) ?? []}
+                      canReact={Boolean(user)}
+                      compact
+                    />
+                    {user && !reply.isMine && (
+                      <TipButton
+                        targetType="reply"
+                        targetId={reply.id}
+                        balance={user.points}
+                        received={tipTotals.get(reply.id) ?? 0}
+                      />
+                    )}
+                  </span>
                   <span className="tabular t-caption shrink-0 text-[var(--ink-quaternary)]">
                     {relativeTime(reply.createdAt)}
                   </span>
