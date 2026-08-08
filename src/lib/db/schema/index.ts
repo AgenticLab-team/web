@@ -7,3 +7,4 @@ export * from "./forum";
 export * from "./points";
 export * from "./moderation";
 export * from "./titles";
+export * from "./escalation";

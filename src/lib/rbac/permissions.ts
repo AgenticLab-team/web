@@ -40,6 +40,13 @@ export const PERMISSIONS = [
   },
   { key: "forum.board.manage", category: "forum", label: "管理版块", dangerLevel: 1 },
   {
+    key: "forum.visibility.review",
+    category: "forum",
+    label: "审核可见性提升",
+    description: "群聊转帖想让更多人看到时走这里。通过后扩散不可逆",
+    dangerLevel: 2,
+  },
+  {
     key: "forum.tag.manage",
     category: "forum",
     label: "管理标签",

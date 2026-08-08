@@ -104,6 +104,15 @@ export const ADMIN_NAV: AdminNavSection[] = [
         ready: true,
       },
       {
+        key: "escalation",
+        href: "/admin/escalation",
+        label: "可见性提升",
+        icon: "eye",
+        permission: "forum.visibility.review",
+        description: "群聊转帖想让更多人看到",
+        ready: true,
+      },
+      {
         key: "words",
         href: "/admin/words",
         label: "敏感词",

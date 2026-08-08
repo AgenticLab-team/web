@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 
 import { BoardEditor } from "@/components/admin/BoardEditor";
+import { BoardModerators } from "@/components/admin/BoardModerators";
 import { TagManager } from "@/components/admin/TagManager";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Empty, Section } from "@/components/ui/primitives";
 import { VISIBILITY_OPTIONS, visibilityLabel } from "@/lib/admin/board-rules";
 import { capImpact, listBoardsForAdmin, listTagsForAdmin, orphanTags } from "@/lib/admin/boards";
 import { requireAdmin } from "@/lib/admin/guard";
+import { moderatorCandidates, moderatorsOf } from "@/lib/admin/moderators";
 import { VISIBILITY_LEVELS } from "@/lib/db/schema/forum";
 
 export const metadata: Metadata = { title: "版块与标签" };
@@ -102,6 +104,15 @@ export default async function AdminBoardsPage() {
                     )}
                   />
                 </header>
+
+                {admin.has("role.grant") && (
+                  <BoardModerators
+                    boardId={board.id}
+                    boardName={board.name}
+                    moderators={moderatorsOf(board.id)}
+                    candidates={moderatorCandidates(board.id)}
+                  />
+                )}
               </article>
             ))}
           </div>
