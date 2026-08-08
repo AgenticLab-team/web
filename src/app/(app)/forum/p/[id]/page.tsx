@@ -9,6 +9,7 @@ import { BountyBadge } from "@/components/forum/BountyBadge";
 import { PostActions } from "@/components/forum/PostActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { ReactionBar } from "@/components/forum/ReactionBar";
+import { ReportButton } from "@/components/forum/ReportButton";
 import { ReplyForm } from "@/components/forum/ReplyForm";
 import { Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -96,7 +97,17 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             <p className="t-subhead leading-tight">{post.authorName}</p>
             <p className="tabular t-caption text-[var(--ink-tertiary)]">
               {relativeTime(post.createdAt)}
-              {post.raw.editCount > 0 && ` · 编辑过 ${post.raw.editCount} 次`}
+              {post.raw.editCount > 0 && (
+                <>
+                  {" · "}
+                  <Link
+                    href={`/forum/p/${post.id}/history`}
+                    className="text-[var(--accent)] underline decoration-[var(--accent)]/30 underline-offset-2"
+                  >
+                    编辑过 {post.raw.editCount} 次
+                  </Link>
+                </>
+              )}
               {post.viewCount > 0 && ` · ${post.viewCount} 次浏览`}
             </p>
           </div>
@@ -131,12 +142,17 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             initial={reactionMap.get(post.id) ?? []}
             canReact={Boolean(user)}
           />
-          <PostActions
-            postId={post.id}
-            bookmarked={bookmarked}
-            subscribed={subscribed}
-            canAct={Boolean(user)}
-          />
+          <span className="flex items-center gap-1">
+            <PostActions
+              postId={post.id}
+              bookmarked={bookmarked}
+              subscribed={subscribed}
+              canAct={Boolean(user)}
+            />
+            {user && post.authorId !== user.id && (
+              <ReportButton targetType="post" targetId={post.id} />
+            )}
+          </span>
         </div>
       </article>
 

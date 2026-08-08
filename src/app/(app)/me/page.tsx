@@ -192,6 +192,14 @@ export default async function MePage() {
               aria-hidden
             />
           </Row>
+          <Row href="/me/moderation">
+            <span className="t-body flex-1">处罚与申诉</span>
+            <ChevronRight
+              className="h-4 w-4 shrink-0 text-[var(--ink-quaternary)]"
+              strokeWidth={2}
+              aria-hidden
+            />
+          </Row>
           <Row>
             <span className="t-body flex-1">微信 ID</span>
             <span className="t-footnote font-mono text-[var(--ink-tertiary)]">{wxId}</span>

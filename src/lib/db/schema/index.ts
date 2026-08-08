@@ -5,3 +5,4 @@ export * from "./upstream";
 export * from "./system";
 export * from "./forum";
 export * from "./points";
+export * from "./moderation";

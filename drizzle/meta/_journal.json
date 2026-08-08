@@ -57,6 +57,13 @@
       "when": 1786204351081,
       "tag": "0007_points_ledger",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1786204762215,
+      "tag": "0008_moderation",
+      "breakpoints": true
     }
   ]
 }
