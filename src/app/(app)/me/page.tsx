@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -9,8 +9,9 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { Empty, Group, Row, Section, StatTile } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { dailyStats, groupMembers, groups, people, roles, userRoles } from "@/lib/db/schema";
+import { dailyStats, groupMembers, people, roles, userRoles } from "@/lib/db/schema";
 import { getMyRank } from "@/lib/queries/leaderboard";
+import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { shiftDateKey, todayKey } from "@/lib/time";
 
 export const metadata: Metadata = { title: "我的" };
@@ -32,37 +33,55 @@ export default async function MePage() {
     .orderBy(desc(roles.priority))
     .all();
 
-  const myGroups = wxId
-    ? db
-        .select({ name: groups.name, messages: groupMembers.messages, convId: groups.convId })
-        .from(groupMembers)
-        .innerJoin(groups, eq(groups.convId, groupMembers.convId))
-        .where(and(eq(groupMembers.wxId, wxId), isNull(groupMembers.leftAt)))
-        .orderBy(desc(groupMembers.messages))
-        .all()
-    : [];
+  // 走统一的可见性收口，而不是自己再拼一遍成员查询 ——
+  // 两处各写一遍，早晚有一处忘了过滤已退群的记录
+  const myGroups = visibleGroupsFor(user);
+  const convIds = myGroups.map((g) => g.convId);
 
-  const weekRank = wxId ? getMyRank(wxId, { period: "week" }) : null;
+  const myMessageCounts = new Map(
+    wxId
+      ? db
+          .select({ convId: groupMembers.convId, messages: groupMembers.messages })
+          .from(groupMembers)
+          .where(and(eq(groupMembers.wxId, wxId), isNull(groupMembers.leftAt)))
+          .all()
+          .map((r) => [r.convId, r.messages])
+      : [],
+  );
+
+  const weekRank = wxId && convIds.length ? getMyRank(wxId, { period: "week", convIds }) : null;
   const today = todayKey();
 
-  const todayStat = wxId
+  const todayStat = wxId && convIds.length
     ? db
         .select({
           messages: sql<number>`coalesce(sum(${dailyStats.messages}), 0)`,
           quality: sql<number>`coalesce(sum(${dailyStats.qualityMessages}), 0)`,
         })
         .from(dailyStats)
-        .where(and(eq(dailyStats.wxId, wxId), eq(dailyStats.date, today)))
+        .where(
+          and(
+            eq(dailyStats.wxId, wxId),
+            eq(dailyStats.date, today),
+            inArray(dailyStats.convId, convIds),
+          ),
+        )
         .get()
     : null;
 
   // 近 12 周的活跃日历，用来做贡献热力条
   const since = shiftDateKey(today, -83);
-  const activeDays = wxId
+  const activeDays = wxId && convIds.length
     ? db
         .select({ date: dailyStats.date, quality: sql<number>`sum(${dailyStats.qualityMessages})` })
         .from(dailyStats)
-        .where(and(eq(dailyStats.wxId, wxId), sql`${dailyStats.date} >= ${since}`))
+        .where(
+          and(
+            eq(dailyStats.wxId, wxId),
+            sql`${dailyStats.date} >= ${since}`,
+            inArray(dailyStats.convId, convIds),
+          ),
+        )
         .groupBy(dailyStats.date)
         .all()
     : [];
@@ -138,7 +157,7 @@ export default async function MePage() {
               <Row key={g.convId}>
                 <span className="t-body min-w-0 flex-1 truncate">{g.name}</span>
                 <span className="tabular t-footnote text-[var(--ink-tertiary)]">
-                  {g.messages} 条
+                  {myMessageCounts.get(g.convId) ?? 0} 条
                 </span>
               </Row>
             ))}

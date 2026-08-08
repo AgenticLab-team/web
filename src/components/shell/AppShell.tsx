@@ -3,7 +3,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { people, roles, userRoles } from "@/lib/db/schema";
-import { tabBarItems, visibleSections, type NavItem } from "@/lib/nav";
+import { navItemVisible, tabBarItems, visibleSections, type NavItem } from "@/lib/nav";
 import { can } from "@/lib/rbac/can";
 
 import { Sidebar, type ShellUser } from "./Sidebar";
@@ -18,11 +18,11 @@ import { TabBar } from "./TabBar";
 export async function AppShell({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
 
-  const visible = (item: NavItem) => {
-    if (!item.ready) return false;
-    if (!item.permission) return true;
-    return can(user, item.permission).allowed;
-  };
+  const visible = (item: NavItem) =>
+    navItemVisible(item, {
+      loggedIn: Boolean(user),
+      hasPermission: (permission) => can(user, permission).allowed,
+    });
 
   const sections = visibleSections(visible);
   const tabs = tabBarItems(visible);

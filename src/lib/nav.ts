@@ -13,6 +13,8 @@ export interface NavItem {
   icon: string;
   /** 需要此权限才显示；不填则所有人可见 */
   permission?: PermissionKey;
+  /** 需要登录才显示。访客看到自己用不了的入口只会点进去撞空状态 */
+  requiresAuth?: boolean;
   /** 出现在移动端底部 Tab Bar 里（最多 5 个，超了就装不下） */
   inTabBar?: boolean;
   /** 尚未实现的入口先不显示，但保留定义，免得漏掉 */
@@ -35,6 +37,9 @@ export const NAV: NavSection[] = [
         href: "/leaderboard",
         label: "排行",
         icon: "trophy",
+        // 榜单只统计自己所在的群，访客没有可见范围
+        permission: "group.stats.read",
+        requiresAuth: true,
         inTabBar: true,
         ready: true,
       },
@@ -69,7 +74,15 @@ export const NAV: NavSection[] = [
   {
     key: "personal",
     items: [
-      { key: "me", href: "/me", label: "我的", icon: "user-round", inTabBar: true, ready: true },
+      {
+        key: "me",
+        href: "/me",
+        label: "我的",
+        icon: "user-round",
+        requiresAuth: true,
+        inTabBar: true,
+        ready: true,
+      },
       {
         key: "admin",
         href: "/admin",
@@ -83,6 +96,24 @@ export const NAV: NavSection[] = [
 ];
 
 export const ALL_NAV_ITEMS: NavItem[] = NAV.flatMap((section) => section.items);
+
+export interface NavContext {
+  loggedIn: boolean;
+  /** 权限判定。服务端传 can()，测试可以传桩 */
+  hasPermission: (permission: PermissionKey) => boolean;
+}
+
+/**
+ * 导航项是否可见。**唯一实现** ——
+ * AppShell 与测试都调这个，不各写一遍。
+ * 同一段逻辑写两遍必然分叉，而分叉出来的那一份通常是漏了某个条件的。
+ */
+export function navItemVisible(item: NavItem, ctx: NavContext): boolean {
+  if (!item.ready) return false;
+  if (item.requiresAuth && !ctx.loggedIn) return false;
+  if (!item.permission) return true;
+  return ctx.hasPermission(item.permission);
+}
 
 /** Tab Bar 最多容得下 5 个，多了每个都太窄，点不准 */
 export const TAB_BAR_MAX = 5;
