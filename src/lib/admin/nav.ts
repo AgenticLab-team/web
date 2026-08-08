@@ -104,6 +104,15 @@ export const ADMIN_NAV: AdminNavSection[] = [
         ready: true,
       },
       {
+        key: "posts",
+        href: "/admin/posts",
+        label: "内容管理",
+        icon: "file-text",
+        permission: "forum.post.delete.any",
+        description: "搜索、筛选、批量处置",
+        ready: true,
+      },
+      {
         key: "escalation",
         href: "/admin/escalation",
         label: "可见性提升",
