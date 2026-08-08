@@ -4,6 +4,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
+import { AcceptButton } from "@/components/forum/AcceptButton";
+import { BountyBadge } from "@/components/forum/BountyBadge";
 import { PostActions } from "@/components/forum/PostActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { ReactionBar } from "@/components/forum/ReactionBar";
@@ -70,6 +72,8 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   );
   const bookmarked = user ? isBookmarked(user.id, post.id) : false;
   const subscribed = user ? isSubscribed(user.id, post.id) : false;
+  const isAsker = user?.id === post.authorId;
+  const isQuestion = post.type === "question";
 
   const note = VISIBILITY_NOTE[post.visibility];
 
@@ -97,6 +101,17 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             </p>
           </div>
         </div>
+
+        {isQuestion && (
+          <div className="mb-4">
+            <BountyBadge
+              postId={post.id}
+              amount={post.raw.bountyPoints}
+              canAdd={Boolean(isAsker && !post.raw.solvedReplyId)}
+              balance={user?.points ?? 0}
+            />
+          </div>
+        )}
 
         {note && (
           <p className="t-footnote mb-4 rounded-[var(--radius-control)] bg-[var(--accent-soft)] px-3 py-2 text-[var(--accent)]">
@@ -148,6 +163,14 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                     </span>
                   )}
                   <span className="flex-1" />
+                  {isQuestion && isAsker && !reply.isMine && (
+                    <AcceptButton
+                      postId={post.id}
+                      replyId={reply.id}
+                      accepted={reply.accepted}
+                      hasAccepted={Boolean(post.raw.solvedReplyId)}
+                    />
+                  )}
                   <a
                     href={`#f${reply.floor}`}
                     className="tabular t-caption text-[var(--ink-quaternary)] transition hover:text-[var(--ink-tertiary)]"

@@ -14,6 +14,7 @@ import { getSettingInt } from "@/lib/settings/store";
 import { buildViewerContext } from "./context";
 import { autoSubscribe, notifyNewReply } from "./notify";
 import { getPost } from "./queries";
+import { indexPost, indexReply } from "./search";
 import { canSeePost, normalizePostVisibility } from "./visibility";
 
 /**
@@ -167,6 +168,8 @@ export async function createPost(input: {
     return row;
   });
 
+  indexPost(created.id, title, content);
+
   // 发帖后自动订阅自己的帖子，有人回复才收得到通知
   autoSubscribe(user.id, created.id);
 
@@ -260,6 +263,7 @@ export async function createReply(input: {
     return row;
   });
 
+  indexReply(input.postId, created.id, content);
   autoSubscribe(user.id, input.postId);
 
   notifyNewReply({
@@ -343,6 +347,8 @@ export async function editPost(input: {
       .where(eq(posts.id, existing.id))
       .run();
   });
+
+  indexPost(existing.id, title, content);
 
   audit({ actorId: user.id }, {
     action: isAuthor ? "forum.post.edit.own" : "forum.post.edit.any",

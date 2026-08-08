@@ -1,4 +1,4 @@
-import { PenLine } from "lucide-react";
+import { PenLine, Search } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -24,7 +24,15 @@ export default async function ForumPage() {
         title="论坛"
         subtitle="群聊留不住的东西，放在这里"
         action={
-          user ? (
+          <span className="flex shrink-0 items-center gap-2">
+            <Link
+              href="/forum/search"
+              aria-label="搜索"
+              className="rounded-[var(--radius-control)] bg-[var(--fill)] p-2 text-[var(--ink-secondary)] transition active:scale-[0.95]"
+            >
+              <Search className="h-4 w-4" strokeWidth={2} aria-hidden />
+            </Link>
+            {user ? (
             <Link
               href="/forum/new"
               className="t-subhead flex shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--accent)] px-3.5 py-2 font-medium text-[var(--accent-ink)] transition active:scale-[0.97]"
@@ -32,7 +40,8 @@ export default async function ForumPage() {
               <PenLine className="h-4 w-4" strokeWidth={2} aria-hidden />
               发帖
             </Link>
-          ) : null
+            ) : null}
+          </span>
         }
       />
 
