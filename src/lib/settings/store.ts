@@ -2,6 +2,8 @@ import "server-only";
 
 import { eq } from "drizzle-orm";
 
+import { validateSettingValue } from "./validate";
+
 import { db } from "@/lib/db";
 import { auditLogs, featureFlags, settingHistory, settings } from "@/lib/db/schema";
 
@@ -51,9 +53,31 @@ export interface UpdateSettingContext {
  * 修改配置 = 写 settings + 写 setting_history + 写 audit_logs。
  * 三处齐全才算完成 —— 这是 SCHEMA.md 里「一切留痕」那条规则的落地。
  */
-export function updateSetting(key: string, value: string, ctx: UpdateSettingContext) {
+export function updateSetting(key: string, rawValue: string, ctx: UpdateSettingContext) {
   const current = db.select().from(settings).where(eq(settings.key, key)).get();
   if (!current) throw new Error(`未知配置项 ${key}`);
+
+  /*
+   * **写入侧校验，不靠读取侧兜底。**
+   *
+   * 读取侧遇到非法值会退回代码默认值，听起来很稳，
+   * 实际上制造了最难查的一类 bug：后台显示的和实际生效的不是一回事。
+   * 把上限填成 "6O"（字母 O）会保存成功、页面显示 6O，
+   * 而系统一直在用 60 —— 没有任何地方报错。
+   */
+  const verdict = validateSettingValue(
+    {
+      key,
+      type: current.type,
+      minValue: current.minValue,
+      maxValue: current.maxValue,
+      label: current.label,
+    },
+    rawValue,
+  );
+  if (!verdict.ok) throw new Error(`${current.label ?? key}：${verdict.error}`);
+
+  const value = verdict.normalized!;
   if (current.value === value) return current;
 
   db.transaction((tx) => {

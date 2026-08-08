@@ -184,7 +184,8 @@ export const ADMIN_NAV: AdminNavSection[] = [
         label: "系统设置",
         icon: "sliders",
         permission: "system.settings",
-        ready: false,
+        description: "变更历史与回滚",
+        ready: true,
       },
       {
         key: "approvals",
@@ -192,7 +193,8 @@ export const ADMIN_NAV: AdminNavSection[] = [
         label: "危险操作复核",
         icon: "shield-check",
         permission: "system.approval",
-        ready: false,
+        description: "改错了不会有人立刻发现的那些操作",
+        ready: true,
       },
       {
         key: "modules",
