@@ -38,12 +38,29 @@ npm run db:generate        # 改 schema 后生成迁移
 ## 部署流程
 
 ```bash
-rsync -az --delete \
-  --exclude node_modules --exclude .next --exclude data --exclude .env.local --exclude .git \
-  ./ ubuntu@agenticlab.sh:~/agenticlab/
-
-ssh ubuntu@agenticlab.sh 'cd ~/agenticlab && npm install && npm run bootstrap && npm run build && sudo systemctl restart agenticlab'
+npm run deploy
 ```
+
+它按顺序做：本地类型检查 → 本地测试 → 同步 → 服务器依赖与迁移 →
+服务器测试 → 服务器构建 → 重启 → 探活。任何一步失败都会停下，
+**构建失败绝不会重启服务**。
+
+### 为什么要写成脚本
+
+早先是手敲一串命令用 `&&` 串起来，中间接了 `grep` 过滤输出。
+结果 `npm run build | grep error` 在构建失败时 **grep 反而返回成功**
+（管道的退出码是最后一个命令的），于是失败的构建照样触发了重启，
+线上直接 502 —— 而且当时以为「构建成功了」。
+
+写成脚本后又踩了两个坑，都记在脚本注释里：
+
+1. **过滤按路径不按错误文本**。原本过滤 `not assignable` 是为了滤掉
+   `.next` 里的生成类型噪音，结果把真实的类型错误一起滤掉了。
+2. **`if` 条件里不要用管道**。开了 `pipefail` 之后，`tsc` 发现错误
+   会返回非零，整条管道跟着非零，于是 `if ... | grep -q` 判定为假，
+   反而跳过了报错分支。改成先落文件再判断。
+
+这两个坑的共同点是：**检查看起来在跑，其实什么都没拦住**。
 
 > 服务器 npm 用腾讯云镜像，但 lockfile 里是 npmjs 的地址。
 > 靠 `npm config set replace-registry-host always` 在安装时改写主机名，两边共用一份 lockfile。

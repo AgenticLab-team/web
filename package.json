@@ -20,7 +20,8 @@
     "backfill": "tsx --conditions=react-server --env-file=.env.local scripts/backfill.ts",
     "backup": "tsx --conditions=react-server --env-file=.env.local scripts/backup.ts",
     "health": "tsx --conditions=react-server --env-file=.env.local scripts/health.ts",
-    "test": "tsx --conditions=react-server --test tests/*.test.ts"
+    "test": "tsx --conditions=react-server --test tests/*.test.ts",
+    "deploy": "bash scripts/deploy.sh"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",
