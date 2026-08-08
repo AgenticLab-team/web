@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Empty, Group, Row, Section, StatTile } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -143,6 +144,15 @@ export default async function MePage() {
             ))}
           </Group>
         )}
+      </Section>
+
+      <Section title="外观">
+        <div className="inset-group p-3">
+          <ThemeToggle />
+        </div>
+        <p className="t-caption mt-2 px-1 text-[var(--ink-tertiary)]">
+          「自动」跟随系统设置。
+        </p>
       </Section>
 
       <Section title="账号">

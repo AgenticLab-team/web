@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { activeNavKey, type NavSection } from "@/lib/nav";
 
 import { NavIcon } from "./icons";
@@ -68,7 +69,8 @@ export function Sidebar({ sections, user }: { sections: NavSection[]; user: Shel
         ))}
       </nav>
 
-      <div className="shrink-0 p-3">
+      <div className="shrink-0 space-y-2 p-3">
+        <ThemeToggle />
         {user ? (
           <Link
             href="/me"
