@@ -1,15 +1,46 @@
 "use client";
 
 import { Monitor, Moon, Sun } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
-import { THEME_STORAGE_KEY, type ThemeChoice } from "@/lib/theme";
+import { THEME_STORAGE_KEY, readThemeChoice, type ThemeChoice } from "@/lib/theme";
 
 const OPTIONS: { value: ThemeChoice; label: string; Icon: typeof Sun }[] = [
   { value: "system", label: "自动", Icon: Monitor },
   { value: "light", label: "浅色", Icon: Sun },
   { value: "dark", label: "深色", Icon: Moon },
 ];
+
+/**
+ * 配色偏好存在 localStorage 里，那是 React 之外的状态。
+ *
+ * 原先用 useEffect + setState 在挂载后读一次，有两个毛病：
+ * 一次多余的级联渲染，以及**多标签页不同步** ——
+ * 在一个标签里切成深色，另一个标签还是浅色，直到刷新。
+ *
+ * useSyncExternalStore 就是为这种情况准备的：
+ * 服务端快照固定是「自动」，客户端读真实值，写入时通知所有订阅者。
+ */
+const listeners = new Set<() => void>();
+
+function subscribe(callback: () => void) {
+  listeners.add(callback);
+  // storage 事件只在**别的**标签页写入时触发，正好用来做跨标签同步
+  window.addEventListener("storage", callback);
+  return () => {
+    listeners.delete(callback);
+    window.removeEventListener("storage", callback);
+  };
+}
+
+function getSnapshot(): ThemeChoice {
+  return readThemeChoice(localStorage.getItem(THEME_STORAGE_KEY));
+}
+
+/** 服务端渲染时没有 localStorage，一律按「自动」渲染 */
+function getServerSnapshot(): ThemeChoice {
+  return "system";
+}
 
 function applyTheme(choice: ThemeChoice) {
   const root = document.documentElement;
@@ -20,25 +51,14 @@ function applyTheme(choice: ThemeChoice) {
     root.setAttribute("data-theme", choice);
     localStorage.setItem(THEME_STORAGE_KEY, choice);
   }
+  // 同一个标签页内 storage 事件不会触发，得自己通知
+  for (const listener of listeners) listener();
 }
 
 export function ThemeToggle({ compact = false }: { compact?: boolean }) {
-  const [choice, setChoice] = useState<ThemeChoice>("system");
-  const [mounted, setMounted] = useState(false);
+  const active = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  useEffect(() => {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    setChoice(stored === "light" || stored === "dark" ? stored : "system");
-    setMounted(true);
-  }, []);
-
-  const select = (next: ThemeChoice) => {
-    setChoice(next);
-    applyTheme(next);
-  };
-
-  // 未挂载前不渲染选中态，否则服务端渲染的默认值与本地存储不一致会造成闪动
-  const active = mounted ? choice : null;
+  const select = (next: ThemeChoice) => applyTheme(next);
 
   return (
     <div

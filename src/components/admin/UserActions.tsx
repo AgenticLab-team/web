@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { useToast } from "@/components/ui/Toast";
+import { grantTitle, revokeTitle } from "@/lib/titles/actions";
 import {
   addUserNote,
   adjustPoints,
@@ -29,8 +30,11 @@ interface Props {
   canGrantRole: boolean;
   canRevokeSessions: boolean;
   canNote: boolean;
+  canGrantTitle: boolean;
   assignableRoles: { key: string; name: string }[];
   heldRoles: { id: string; key: string; name: string }[];
+  grantableTitles: { key: string; name: string; icon: string | null; remaining: number | null }[];
+  heldTitles: { userTitleId: string; name: string; icon: string | null }[];
 }
 
 export function UserActions(props: Props) {
@@ -41,6 +45,7 @@ export function UserActions(props: Props) {
     props.canSuspend && { key: "status", label: "状态与封禁" },
     props.canGrantRole && { key: "role", label: "身份组" },
     props.canRevokeSessions && { key: "session", label: "下线设备" },
+    props.canGrantTitle && { key: "title", label: "称号" },
     props.canNote && { key: "note", label: "写备注" },
   ].filter(Boolean) as { key: string; label: string }[];
 
@@ -81,6 +86,13 @@ export function UserActions(props: Props) {
         />
       )}
       {open === "session" && <SessionPanel userId={props.userId} />}
+      {open === "title" && (
+        <TitlePanel
+          userId={props.userId}
+          grantable={props.grantableTitles}
+          held={props.heldTitles}
+        />
+      )}
       {open === "note" && <NotePanel userId={props.userId} />}
     </div>
   );
@@ -307,6 +319,84 @@ function NotePanel({ userId }: { userId: string }) {
       >
         保存备注
       </button>
+    </Panel>
+  );
+}
+
+/**
+ * 称号面板。
+ *
+ * 授予下拉里直接标出**剩余名额**。稀有称号发出去就收不回来
+ * （收回比不发更伤人），所以剩几个必须在点之前就看见，
+ * 而不是点完弹一句「名额已满」。
+ */
+function TitlePanel({
+  userId,
+  grantable,
+  held,
+}: {
+  userId: string;
+  grantable: { key: string; name: string; icon: string | null; remaining: number | null }[];
+  held: { userTitleId: string; name: string; icon: string | null }[];
+}) {
+  const { pending, run } = useAction();
+  const [titleKey, setTitleKey] = useState(grantable[0]?.key ?? "");
+  const [reason, setReason] = useState("");
+
+  return (
+    <Panel>
+      {held.length > 0 && (
+        <div className="space-y-1.5">
+          {held.map((t) => (
+            <div key={t.userTitleId} className="flex items-center gap-2">
+              <span className="t-subhead flex-1">
+                {t.icon} {t.name}
+              </span>
+              <button
+                type="button"
+                disabled={pending || !reason.trim()}
+                onClick={() =>
+                  run(() => revokeTitle({ userTitleId: t.userTitleId, reason }), "已收回")
+                }
+                className="t-caption rounded-[var(--radius-control)] bg-[var(--fill)] px-2.5 py-1 text-[var(--ink-secondary)] disabled:opacity-40"
+              >
+                收回
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {grantable.length > 0 && (
+        <div className="flex gap-2">
+          <select
+            value={titleKey}
+            onChange={(e) => setTitleKey(e.target.value)}
+            className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none"
+          >
+            {grantable.map((t) => (
+              <option key={t.key} value={t.key}>
+                {t.icon} {t.name}
+                {t.remaining !== null && `（剩 ${t.remaining} 个名额）`}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <ReasonInput value={reason} onChange={setReason} placeholder="理由（必填，会通知本人）" />
+
+      <button
+        type="button"
+        disabled={pending || !titleKey || !reason.trim()}
+        onClick={() => run(() => grantTitle({ userId, titleKey, reason }), "已授予并通知本人")}
+        className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
+      >
+        授予称号
+      </button>
+      <p className="t-caption text-[var(--ink-tertiary)]">
+        授予会通知本人 —— 悄悄发一个称号等于没发，没人会主动去个人页翻有没有新东西。
+      </p>
     </Panel>
   );
 }

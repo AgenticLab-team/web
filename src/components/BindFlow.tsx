@@ -27,7 +27,9 @@ export function BindFlow({ next }: { next?: string } = {}) {
   const [showFallback, setShowFallback] = useState(false);
   const [upstreamDown, setUpstreamDown] = useState(false);
   const [copied, setCopied] = useState<"code" | "group" | null>(null);
-  const startedAt = useRef(Date.now());
+  // 渲染期间不能调 Date.now()：那是不纯的，同一次渲染重跑会得到不同结果。
+  // 真正的起始时间在下面的 effect 里落
+  const startedAt = useRef(0);
 
   const copy = useCallback(async (text: string, which: "code" | "group") => {
     try {
@@ -47,27 +49,41 @@ export function BindFlow({ next }: { next?: string } = {}) {
     setTimeout(() => setCopied(null), 1600);
   }, []);
 
-  const start = useCallback(async () => {
-    setPhase({ kind: "loading" });
-    setShowFallback(false);
-    setElapsed(0);
-    startedAt.current = Date.now();
+  /*
+   * 只负责取码，不碰 state —— 这样首次加载的 effect 里就没有同步 setState，
+   * 也就不会触发级联渲染。重试按钮那条路才需要先把界面重置回 loading。
+   */
+  const requestCode = useCallback(async (): Promise<Phase> => {
     try {
       const res = await fetch("/api/auth/bind/start", { method: "POST" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setPhase({ kind: "error", message: body.error ?? "无法开始绑定" });
-        return;
+        return { kind: "error", message: body.error ?? "无法开始绑定" };
       }
-      setPhase({ kind: "waiting", data: await res.json() });
+      return { kind: "waiting", data: await res.json() };
     } catch {
-      setPhase({ kind: "error", message: "网络异常，请重试" });
+      return { kind: "error", message: "网络异常，请重试" };
     }
   }, []);
 
+  const start = useCallback(() => {
+    setPhase({ kind: "loading" });
+    setShowFallback(false);
+    setElapsed(0);
+    startedAt.current = Date.now();
+    void requestCode().then(setPhase);
+  }, [requestCode]);
+
   useEffect(() => {
-    void start();
-  }, [start]);
+    let cancelled = false;
+    startedAt.current = Date.now();
+    void requestCode().then((next) => {
+      if (!cancelled) setPhase(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [requestCode]);
 
   // 倒计时，以及「遇到问题」入口的出现时机
   useEffect(() => {
@@ -117,7 +133,7 @@ export function BindFlow({ next }: { next?: string } = {}) {
       cancelled = true;
       clearInterval(id);
     };
-  }, [phase, router]);
+  }, [phase, router, next]);
 
   if (phase.kind === "loading") {
     return (
@@ -133,7 +149,7 @@ export function BindFlow({ next }: { next?: string } = {}) {
           {expired ? "验证码已过期" : phase.message}
         </p>
         <button
-          onClick={() => void start()}
+          onClick={start}
           className="w-full rounded-[var(--radius-control)] bg-[var(--color-accent)] px-6 py-3.5 text-[17px] font-medium text-[var(--color-accent-ink)] transition active:scale-[0.98]"
         >
           重新获取
@@ -153,7 +169,7 @@ export function BindFlow({ next }: { next?: string } = {}) {
           现阶段只有群成员可以登录。
         </p>
         <button
-          onClick={() => void start()}
+          onClick={start}
           className="w-full rounded-[var(--radius-control)] bg-[var(--color-fill)] px-6 py-3.5 text-[17px] font-medium transition active:scale-[0.98]"
         >
           换个账号试试

@@ -11,7 +11,6 @@ import { severityForReason } from "@/lib/moderation/rules";
 import { can } from "@/lib/rbac/can";
 
 import { recountBoardPosts } from "./board-stats";
-import { buildViewerContext } from "./context";
 import { notify } from "./notify";
 import { removeFromIndex } from "./search";
 

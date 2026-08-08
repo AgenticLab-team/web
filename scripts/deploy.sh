@@ -33,6 +33,20 @@ if grep -v '^\.next/' /tmp/al-tsc.log | grep -q 'error TS'; then
   fail "类型检查未通过"
 fi
 
+# lint 以前不在这条流水线里，于是它悄悄烂了很久 ——
+# 攒到 6 个 error（渲染期读 ref、effect 里同步 setState）才被发现，
+# 而其中有些是真会出问题的写法，不只是风格问题。
+#
+# 只挡 error，warning 放行：把 warning 也做成硬失败的话，
+# 加一个临时的 console.log 都要先去改配置，最后大家会去掉整个检查。
+# 注意是 [1-9] 开头：eslint 在只有 warning 时会打印「0 errors」，
+# 写成 [0-9]+ 的话每次都会误判失败 —— 又一个「看起来在检查」的坑。
+npx eslint src > /tmp/al-lint.log 2>&1 || true
+if grep -qE '[1-9][0-9]* error' /tmp/al-lint.log; then
+  tail -30 /tmp/al-lint.log
+  fail "lint 未通过"
+fi
+
 npm test > /tmp/al-test.log 2>&1 || { tail -20 /tmp/al-test.log; fail "本地测试未通过"; }
 grep -E '^. (tests|pass|fail)' /tmp/al-test.log | tail -3
 

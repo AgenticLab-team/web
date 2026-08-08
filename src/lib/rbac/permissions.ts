@@ -56,6 +56,13 @@ export const PERMISSIONS = [
   { key: "user.list", category: "user", label: "查看用户列表" },
   { key: "user.detail.read", category: "user", label: "查看用户详情" },
   { key: "user.note.write", category: "user", label: "给用户写备注" },
+  {
+    key: "user.title.grant",
+    category: "user",
+    label: "授予与收回称号",
+    description: "稀有称号有名额上限，发出去就收不回了（收回比不发更伤人）",
+    dangerLevel: 1,
+  },
   { key: "user.bind.approve", category: "user", label: "审批绑定申请", dangerLevel: 1 },
   { key: "user.bind.manual", category: "user", label: "手动绑定用户", dangerLevel: 2 },
   { key: "user.session.revoke", category: "user", label: "远程下线用户", dangerLevel: 1 },

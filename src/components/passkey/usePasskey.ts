@@ -17,14 +17,31 @@ export function usePasskeySupport(): PasskeySupport {
   const [support, setSupport] = useState<PasskeySupport>("unknown");
 
   useEffect(() => {
-    if (!browserSupportsWebAuthn()) {
-      setSupport("unsupported");
-      return;
-    }
-    // 有平台认证器（指纹/面容）才值得把 Passkey 作为主推项
-    platformAuthenticatorIsAvailable()
-      .then((available) => setSupport(available ? "platform" : "supported"))
-      .catch(() => setSupport("supported"));
+    let cancelled = false;
+
+    /*
+     * 探测统一走异步分支，包括「浏览器根本不支持」这一种。
+     * 同步 setState 会触发一次级联渲染，而且 React 的 lint 规则会报错 ——
+     * 更重要的是：卸载后再 setState 会在开发模式下刷警告，
+     * 所以这里也带上 cancelled 守卫。
+     */
+    const detect = async (): Promise<PasskeySupport> => {
+      if (!browserSupportsWebAuthn()) return "unsupported";
+      try {
+        // 有平台认证器（指纹/面容）才值得把 Passkey 作为主推项
+        return (await platformAuthenticatorIsAvailable()) ? "platform" : "supported";
+      } catch {
+        return "supported";
+      }
+    };
+
+    void detect().then((result) => {
+      if (!cancelled) setSupport(result);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return support;

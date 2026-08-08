@@ -7,6 +7,7 @@ import { ChevronRight } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { TitleShelf } from "@/components/titles/TitleShelf";
 import { Empty, Group, Row, Section, StatTile } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -14,6 +15,8 @@ import { dailyStats, groupMembers, people, roles, userRoles } from "@/lib/db/sch
 import { listPasskeys } from "@/lib/auth/passkey";
 import { getMyRank } from "@/lib/queries/leaderboard";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
+import { equippedTitle, titlesOf } from "@/lib/titles/queries";
+import { rarityColor } from "@/lib/titles/rules";
 import { resolveDisplayName } from "@/lib/users/display-name";
 import { shiftDateKey, todayKey } from "@/lib/time";
 
@@ -95,6 +98,9 @@ export default async function MePage() {
     : [];
   const byDate = new Map(activeDays.map((d) => [d.date, Number(d.quality)]));
 
+  const ownedTitles = titlesOf(user.id);
+  const equipped = equippedTitle(user.id);
+
   return (
     <>
       <PageHeader title="我的" />
@@ -103,7 +109,20 @@ export default async function MePage() {
         <div className="inset-group animate-rise flex items-center gap-4 p-5">
           <Avatar wxId={wxId ?? user.id} name={name} src={user.wxAvatarUrl ?? profile?.avatarUrl} size={60} />
           <div className="min-w-0 flex-1">
-            <p className="t-title3 truncate">{name}</p>
+            <p className="t-title3 flex items-center gap-1.5 truncate">
+              <span className="truncate">{name}</span>
+              {equipped && (
+                <span
+                  className="t-caption shrink-0 rounded-[var(--radius-pill)] px-1.5 py-0.5 font-medium"
+                  style={{
+                    background: `color-mix(in srgb, ${rarityColor(equipped.rarity)} 14%, transparent)`,
+                    color: rarityColor(equipped.rarity),
+                  }}
+                >
+                  {equipped.icon} {equipped.name}
+                </span>
+              )}
+            </p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {heldRoles.map((role) => (
                 <span
@@ -120,6 +139,10 @@ export default async function MePage() {
             </div>
           </div>
         </div>
+      </Section>
+
+      <Section title="称号">
+        <TitleShelf titles={ownedTitles} />
       </Section>
 
       <Section title="积分">

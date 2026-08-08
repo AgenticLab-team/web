@@ -11,6 +11,7 @@ import { Group, Row, Section, StatTile } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { getUserDetail } from "@/lib/admin/users";
 import { describeDevice } from "@/lib/auth/devices";
+import { holderCount, listTitles, titlesOf } from "@/lib/titles/queries";
 import { db } from "@/lib/db";
 import { roles } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -45,6 +46,23 @@ export default async function AdminUserDetail({ params }: { params: Promise<{ id
     .all();
 
   const { user } = detail;
+
+  const owned = titlesOf(id);
+  const heldTitles = owned
+    .filter((t) => t.revokedAt === null)
+    .map((t) => ({ userTitleId: t.userTitleId, name: t.name, icon: t.icon }));
+
+  // 剩余名额要在下拉里就标出来 —— 稀有称号发出去收不回，
+  // 不能等点完了才说「名额已满」
+  const ownedKeys = new Set(owned.filter((t) => t.revokedAt === null).map((t) => t.key));
+  const grantableTitles = listTitles()
+    .filter((t) => !ownedKeys.has(t.key))
+    .map((t) => ({
+      key: t.key,
+      name: t.name,
+      icon: t.icon,
+      remaining: t.limitCount === null ? null : Math.max(0, t.limitCount - holderCount(t.id)),
+    }));
 
   return (
     <>
@@ -98,6 +116,9 @@ export default async function AdminUserDetail({ params }: { params: Promise<{ id
           canGrantRole={admin.has("role.grant")}
           canRevokeSessions={admin.has("user.session.revoke")}
           canNote={admin.has("user.note.write")}
+          canGrantTitle={admin.has("user.title.grant")}
+          grantableTitles={grantableTitles}
+          heldTitles={heldTitles}
           assignableRoles={assignable}
           heldRoles={detail.roles.map((r) => ({ id: r.id, key: r.key, name: r.name }))}
         />

@@ -44,8 +44,17 @@ export default async function AdminDashboard() {
     <>
       <PageHeader
         title="仪表盘"
+        /*
+         * 组件异常要比待办数字更靠前地说出来。
+         * 「没有待处理事项」在同步已经停摆两小时的时候是**误导** ——
+         * 队列空着可能只是因为数据根本没进来。
+         */
         subtitle={
-          totalPending > 0 ? `${totalPending} 件待处理` : "没有待处理事项"
+          unhealthy.length > 0
+            ? `${unhealthy.length} 个组件异常${totalPending > 0 ? ` · ${totalPending} 件待处理` : ""}`
+            : totalPending > 0
+              ? `${totalPending} 件待处理`
+              : "没有待处理事项"
         }
       />
 

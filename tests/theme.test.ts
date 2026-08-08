@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { THEME_INIT_SCRIPT, THEME_STORAGE_KEY } from "@/lib/theme";
+import { THEME_INIT_SCRIPT, THEME_STORAGE_KEY, readThemeChoice } from "@/lib/theme";
 
 describe("配色初始化脚本", () => {
   it("是可执行的合法 JS", () => {
@@ -38,6 +38,40 @@ describe("配色初始化脚本", () => {
     assert.equal(run("system"), null);
     // 存了脏数据也不能写进 DOM 属性
     assert.equal(run('"><script>alert(1)</script>'), null);
+  });
+
+  it("**内联脚本与 readThemeChoice 结论必须一致**", () => {
+    /*
+     * 脚本要内联进 <head>，没法调用 TS 函数，所以这段判定不可避免地存在两份。
+     * 两份一旦脱节，用户会看到「切换器显示浅色但页面是深色」——
+     * 而那种 bug 只在特定的存储值下出现，肉眼几乎不可能发现。
+     * 这里逐个取值把两边钉在一起。
+     */
+    const runScript = (stored: string | null) => {
+      let attr: string | null = null;
+      const doc = {
+        documentElement: {
+          setAttribute: (_: string, v: string) => {
+            attr = v;
+          },
+        },
+      };
+      new Function("document", "localStorage", THEME_INIT_SCRIPT)(doc, {
+        getItem: () => stored,
+      });
+      return attr;
+    };
+
+    for (const stored of [null, "", "system", "light", "dark", "DARK", "auto", "{}"]) {
+      const fromFunction = readThemeChoice(stored);
+      // 脚本不设属性 ⇔ 函数返回 system
+      const scriptAttr = runScript(stored);
+      assert.equal(
+        scriptAttr,
+        fromFunction === "system" ? null : fromFunction,
+        `存储值 ${JSON.stringify(stored)} 两边判定不一致`,
+      );
+    }
   });
 
   it("localStorage 不可用时不抛错", () => {

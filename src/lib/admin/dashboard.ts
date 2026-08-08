@@ -18,7 +18,6 @@ import {
   sessions,
   storageSnapshots,
   syncJobs,
-  systemHealth,
   users,
 } from "@/lib/db/schema";
 import { shiftDateKey, startOfDayMs, todayKey } from "@/lib/time";

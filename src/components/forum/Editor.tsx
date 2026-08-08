@@ -14,6 +14,35 @@ import { previewMarkdown } from "@/lib/forum/preview";
  *   3. 快捷键跟系统一致 —— ⌘B/⌘I/⌘K/⌘Enter
  */
 
+/**
+ * 工具栏按钮定义成**纯数据**，放在组件外面。
+ *
+ * 原先每次渲染都现场造一个带闭包的数组，闭包里读 ref ——
+ * React 的规则不允许在渲染期间访问 ref（并发渲染下渲染可能被丢弃重来，
+ * 那时读到的 ref 是上一次的）。改成数据 + 一个 dispatch 函数之后，
+ * 闭包只在事件处理里产生，顺带也不用每次渲染重建六个函数。
+ */
+type ToolAction =
+  | { kind: "wrap"; before: string; after?: string; placeholder?: string }
+  | { kind: "prefix"; prefix: string };
+
+const TOOLS: { icon: typeof Bold; label: string; action: ToolAction }[] = [
+  { icon: Bold, label: "粗体 ⌘B", action: { kind: "wrap", before: "**" } },
+  { icon: Italic, label: "斜体 ⌘I", action: { kind: "wrap", before: "*" } },
+  {
+    icon: Link2,
+    label: "链接 ⌘K",
+    action: { kind: "wrap", before: "[", after: "](https://)", placeholder: "链接文字" },
+  },
+  {
+    icon: Code,
+    label: "代码块",
+    action: { kind: "wrap", before: "\n```\n", after: "\n```\n", placeholder: "code" },
+  },
+  { icon: Quote, label: "引用", action: { kind: "prefix", prefix: "> " } },
+  { icon: List, label: "列表", action: { kind: "prefix", prefix: "- " } },
+];
+
 interface EditorProps {
   name: string;
   defaultValue?: string;
@@ -50,16 +79,33 @@ export function Editor({
   const [restored, setRestored] = useState(false);
   const dirty = useRef(false);
 
-  // 恢复草稿
+  /*
+   * 恢复草稿。
+   *
+   * 不能在 effect 体里同步 setState（会触发级联渲染），所以推到下一个任务里。
+   * 顺带解决了一个更实际的问题：恢复前**再确认一次输入框还是空的** ——
+   * 用户如果在这一瞬间已经开始打字了，把草稿盖上去会直接吞掉他刚写的东西，
+   * 而那正是这个功能最想避免的事。
+   */
   useEffect(() => {
     if (!draftKey || defaultValue) return;
+
     const saved = localStorage.getItem(`draft:${draftKey}`);
-    if (saved && saved.trim()) {
+    if (!saved || !saved.trim()) return;
+
+    let hideTimer: ReturnType<typeof setTimeout> | undefined;
+    const restoreTimer = setTimeout(() => {
+      if (ref.current && ref.current.value !== "") return;
       setValue(saved);
       setRestored(true);
-      setTimeout(() => setRestored(false), 4000);
-    }
-  }, [draftKey, defaultValue]);
+      hideTimer = setTimeout(() => setRestored(false), 4000);
+    }, 0);
+
+    return () => {
+      clearTimeout(restoreTimer);
+      if (hideTimer) clearTimeout(hideTimer);
+    };
+  }, [draftKey, defaultValue, setValue]);
 
   // 每 3 秒存一次草稿
   useEffect(() => {
@@ -136,25 +182,21 @@ export function Editor({
     else if (e.key === "Enter") { e.preventDefault(); onSubmit?.(); }
   };
 
-  const tools = [
-    { icon: Bold, label: "粗体 ⌘B", run: () => wrap("**") },
-    { icon: Italic, label: "斜体 ⌘I", run: () => wrap("*") },
-    { icon: Link2, label: "链接 ⌘K", run: () => wrap("[", "](https://)", "链接文字") },
-    { icon: Code, label: "代码块", run: () => wrap("\n```\n", "\n```\n", "code") },
-    { icon: Quote, label: "引用", run: () => prefixLines("> ") },
-    { icon: List, label: "列表", run: () => prefixLines("- ") },
-  ];
+  const runTool = (action: ToolAction) => {
+    if (action.kind === "wrap") wrap(action.before, action.after, action.placeholder);
+    else prefixLines(action.prefix);
+  };
 
   return (
     <div className="overflow-hidden rounded-[var(--radius-card)] bg-[var(--surface)] hairline">
       <div className="flex items-center gap-0.5 border-b border-[var(--separator)] px-2 py-1.5">
-        {tools.map((tool) => (
+        {TOOLS.map((tool) => (
           <button
             key={tool.label}
             type="button"
             title={tool.label}
             aria-label={tool.label}
-            onClick={tool.run}
+            onClick={() => runTool(tool.action)}
             className="rounded-[0.375rem] p-1.5 text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--ink)]"
           >
             <tool.icon className="h-4 w-4" strokeWidth={1.9} aria-hidden />
