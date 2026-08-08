@@ -460,6 +460,15 @@ body {
 .prose-forum-compact > * + * { margin-top: 0.75em; }
 .prose-forum-compact h1, .prose-forum-compact h2, .prose-forum-compact h3 { margin-top: 1.1em; }
 
+/* 检索片段里的高亮。不用背景块 —— 一行里几处高亮会显得很花，
+   下划线更克制，也不影响行高 */
+.search-snippet mark {
+  background: transparent;
+  color: var(--accent);
+  font-weight: 600;
+  border-bottom: 1.5px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;

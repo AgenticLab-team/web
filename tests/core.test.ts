@@ -103,3 +103,32 @@ describe("社群时区边界", () => {
     assert.equal(endOfDayMs("2026-08-08") - startOfDayMs("2026-08-08"), 86_400_000);
   });
 });
+
+describe("检索片段的空格还原", () => {
+  it("相邻汉字之间的切分空格被去掉", () => {
+    assert.equal(desegment("鉴 权 方 案"), "鉴权方案");
+  });
+
+  it("**跨过高亮标签也能还原**", () => {
+    // FTS5 的 snippet 会插入 <mark>，空格前面变成 > 而不是汉字，
+    // 只看相邻字符就还原不掉，页面上会看到多余空格
+    assert.equal(
+      desegment("二 号 群 里 也 在 聊 <mark>鉴 权</mark> 这 个 话 题"),
+      "二号群里也在聊<mark>鉴权</mark>这个话题",
+    );
+  });
+
+  it("英文词之间的空格保留", () => {
+    assert.equal(desegment("hello world"), "hello world");
+  });
+
+  it("中英混排时英文前的空格保留", () => {
+    // 「用 MCP」里的空格是作者写的，不是切分产生的 —— 但索引里两者
+    // 无法区分，取舍上宁可粘连中文、保住英文可读性
+    assert.equal(desegment("这 是 MCP"), "这是MCP");
+  });
+
+  it("省略号等标记不受影响", () => {
+    assert.ok(desegment("…前 面 内 容").includes("…"));
+  });
+});

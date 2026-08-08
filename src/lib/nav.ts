@@ -47,9 +47,11 @@ export const NAV: NavSection[] = [
         href: "/search",
         label: "检索",
         icon: "search",
+        // 只有社群成员有可搜范围，访客搜出来必然为空
         permission: "group.messages.read",
+        requiresAuth: true,
         inTabBar: true,
-        ready: false,
+        ready: true,
       },
       {
         key: "forum",

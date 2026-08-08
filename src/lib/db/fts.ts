@@ -50,7 +50,17 @@ export function buildMatchExpression(query: string): string | null {
   return phrases.join(" ");
 }
 
-/** 生成检索片段时用，把切开的空格还原掉 */
+/**
+ * 把切开的空格还原掉，用于展示检索片段。
+ *
+ * 必须能**跨过高亮标签**：FTS5 的 snippet 会插入 `<mark>`，
+ * 于是「鉴权</mark> 这个」里那个空格前面是 `>` 而不是汉字，
+ * 只看相邻字符的话还原不掉，页面上会看到多余空格。
+ */
+const CJK_CLASS = "\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u3040-\u30ff";
+const TAG = "(?:</?[a-zA-Z][a-zA-Z0-9]*>)*";
+const DESEGMENT = new RegExp(`(?<=[${CJK_CLASS}]${TAG}) (?=${TAG}\\S)`, "g");
+
 export function desegment(text: string): string {
-  return text.replace(/(?<=[㐀-䶿一-鿿豈-﫿぀-ヿ]) (?=\S)/g, "");
+  return text.replace(DESEGMENT, "");
 }
