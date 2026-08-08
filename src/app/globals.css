@@ -255,6 +255,11 @@ body {
   to   { opacity: 1; }
 }
 
+@keyframes toast-progress {
+  from { width: 100%; }
+  to   { width: 0%; }
+}
+
 .animate-rise { animation: rise 0.55s var(--ease-spring) both; }
 .animate-fade { animation: fade 0.35s var(--ease-out-quart) both; }
 
@@ -274,6 +279,30 @@ body {
 }
 
 /* ── 无障碍 ───────────────────────────────────────────── */
+/* 视觉隐藏但屏幕阅读器可读。不能用 display:none —— 那样读屏也读不到 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.focus\:not-sr-only:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: inherit;
+  margin: inherit;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

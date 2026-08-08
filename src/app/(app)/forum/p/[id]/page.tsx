@@ -14,6 +14,7 @@ import { relativeTime } from "@/components/forum/PostList";
 import { ReactionBar } from "@/components/forum/ReactionBar";
 import { ReportButton } from "@/components/forum/ReportButton";
 import { ReplyForm } from "@/components/forum/ReplyForm";
+import { ReplyRow } from "@/components/forum/ReplyRow";
 import { Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
@@ -184,8 +185,8 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
         {replies.length > 0 && (
           <div className="inset-group mb-4">
             {replies.map((reply) => (
+              <ReplyRow key={reply.id} replyId={reply.id} isMine={reply.isMine}>
               <div
-                key={reply.id}
                 id={`f${reply.floor}`}
                 className="inset-row scroll-mt-16 px-4 py-3.5"
               >
@@ -253,6 +254,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                   </span>
                 </div>
               </div>
+              </ReplyRow>
             ))}
           </div>
         )}

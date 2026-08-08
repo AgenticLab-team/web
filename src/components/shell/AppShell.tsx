@@ -7,6 +7,7 @@ import { navItemVisible, tabBarItems, visibleSections, type NavItem } from "@/li
 import { unreadCount } from "@/lib/forum/notify";
 import { can } from "@/lib/rbac/can";
 
+import { Shortcuts } from "./Shortcuts";
 import { Sidebar, type ShellUser } from "./Sidebar";
 import { TabBar } from "./TabBar";
 
@@ -59,10 +60,18 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-dvh">
+      {/* 跳到正文：键盘用户不必每次都 Tab 过整个侧边栏 */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-[var(--radius-control)] focus:bg-[var(--accent)] focus:px-4 focus:py-2 focus:text-[var(--accent-ink)]"
+      >
+        跳到正文
+      </a>
       <Sidebar sections={sections} user={shellUser} badges={badges} />
 
       <div className="lg:pl-[var(--sidebar-width)]">
         <main
+          id="main"
           className="mx-auto w-full max-w-[52rem] px-4 sm:px-6"
           // 给底部 Tab Bar 让出空间，含 Home Indicator 的安全区
           style={{
@@ -74,6 +83,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <TabBar items={tabs} badges={badges} />
+      <Shortcuts />
     </div>
   );
 }
