@@ -75,6 +75,14 @@ export const NAV: NavSection[] = [
     key: "personal",
     items: [
       {
+        key: "notifications",
+        href: "/notifications",
+        label: "通知",
+        icon: "bell",
+        requiresAuth: true,
+        ready: true,
+      },
+      {
         key: "me",
         href: "/me",
         label: "我的",

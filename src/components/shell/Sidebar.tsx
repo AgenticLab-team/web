@@ -19,7 +19,15 @@ export interface ShellUser {
   roleColor: string | null;
 }
 
-export function Sidebar({ sections, user }: { sections: NavSection[]; user: ShellUser | null }) {
+export function Sidebar({
+  sections,
+  user,
+  badges = {},
+}: {
+  sections: NavSection[];
+  user: ShellUser | null;
+  badges?: Record<string, number>;
+}) {
   const pathname = usePathname();
   const active = activeNavKey(pathname);
 
@@ -59,7 +67,12 @@ export function Sidebar({ sections, user }: { sections: NavSection[]; user: Shel
                         className="h-[1.125rem] w-[1.125rem] shrink-0"
                         strokeWidth={isActive ? 2.1 : 1.75}
                       />
-                      <span className="t-subhead font-medium">{item.label}</span>
+                      <span className="t-subhead flex-1 font-medium">{item.label}</span>
+                      {badges[item.key] > 0 && (
+                        <span className="tabular flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[0.6875rem] font-semibold text-[var(--accent-ink)]">
+                          {badges[item.key] > 99 ? "99+" : badges[item.key]}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 );

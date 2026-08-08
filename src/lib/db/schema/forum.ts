@@ -309,3 +309,107 @@ export const visibilityAudit = sqliteTable(
   },
   (t) => [index("forum_visibility_audit_target_idx").on(t.targetType, t.targetId)],
 );
+
+export const bookmarkFolders = sqliteTable(
+  "forum_bookmark_folders",
+  {
+    id: ulidPk(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    sort: integer("sort").notNull().default(0),
+    createdAt: now("created_at"),
+  },
+  (t) => [index("forum_bookmark_folders_user_idx").on(t.userId)],
+);
+
+export const bookmarks = sqliteTable(
+  "forum_bookmarks",
+  {
+    id: ulidPk(),
+    userId: text("user_id").notNull(),
+    postId: text("post_id").notNull(),
+    folderId: text("folder_id"),
+    note: text("note"),
+    createdAt: now("created_at"),
+  },
+  (t) => [
+    uniqueIndex("forum_bookmarks_unique_idx").on(t.userId, t.postId),
+    index("forum_bookmarks_user_idx").on(t.userId, t.createdAt),
+  ],
+);
+
+/** 订阅：帖子 / 版块 / 标签 / 人。有新动静就通知 */
+export const subscriptions = sqliteTable(
+  "forum_subscriptions",
+  {
+    id: ulidPk(),
+    userId: text("user_id").notNull(),
+    targetType: text("target_type", { enum: ["post", "board", "tag", "user"] }).notNull(),
+    targetId: text("target_id").notNull(),
+    /** 自动订阅（发帖/回帖后）与手动订阅要能区分，退订逻辑不同 */
+    auto: integer("auto", { mode: "boolean" }).notNull().default(false),
+    createdAt: now("created_at"),
+    mutedAt: integer("muted_at"),
+  },
+  (t) => [
+    uniqueIndex("forum_subscriptions_unique_idx").on(t.userId, t.targetType, t.targetId),
+    index("forum_subscriptions_target_idx").on(t.targetType, t.targetId),
+  ],
+);
+
+export const NOTIFICATION_TYPES = [
+  "mention",
+  "reply_to_post",
+  "reply_to_reply",
+  "subscribed_reply",
+  "reaction",
+  "featured",
+  "accepted",
+  "moderation",
+  "system",
+] as const;
+
+/**
+ * 通知。
+ *
+ * 关键在**聚合**：同一帖子的多条回复合并成「3 人回复了你的帖子」。
+ * 不聚合的话，一个热帖能瞬间刷出几十条通知，用户直接关掉通知了事。
+ * 聚合键 groupKey 相同的未读通知会被合并，count 累加。
+ */
+export const notifications = sqliteTable(
+  "notifications",
+  {
+    id: ulidPk(),
+    userId: text("user_id").notNull(),
+    type: text("type", { enum: NOTIFICATION_TYPES }).notNull(),
+    /** 聚合键：同键的未读通知合并成一条 */
+    groupKey: text("group_key").notNull(),
+    count: integer("count").notNull().default(1),
+
+    title: text("title").notNull(),
+    body: text("body"),
+    link: text("link"),
+    /** 最近一个触发者，用于「张三等 3 人」 */
+    actorId: text("actor_id"),
+    actorName: text("actor_name"),
+
+    refType: text("ref_type"),
+    refId: text("ref_id"),
+
+    readAt: integer("read_at"),
+    createdAt: now("created_at"),
+    updatedAt: now("updated_at"),
+  },
+  (t) => [
+    index("notifications_user_idx").on(t.userId, t.readAt, t.updatedAt),
+    index("notifications_group_idx").on(t.userId, t.groupKey, t.readAt),
+  ],
+);
+
+/** 每类通知的渠道开关 */
+export const notificationPrefs = sqliteTable("notification_prefs", {
+  userId: text("user_id").primaryKey(),
+  /** JSON：{ [type]: { site: boolean, email: boolean } } */
+  channels: text("channels", { mode: "json" }),
+  updatedAt: now("updated_at"),
+});

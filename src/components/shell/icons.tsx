@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bell,
   Calendar,
   Home,
   Link as LinkIcon,
@@ -20,6 +21,7 @@ import {
  */
 const ICONS: Record<string, LucideIcon> = {
   home: Home,
+  bell: Bell,
   trophy: Trophy,
   search: Search,
   "messages-square": MessagesSquare,

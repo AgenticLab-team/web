@@ -15,7 +15,13 @@ import { NavIcon } from "./icons";
  *     最后一行会被横条压住，点不到；
  *   - 每个 tab 的可点区域必须撑满整格高度，不能只有图标那一小块。
  */
-export function TabBar({ items }: { items: NavItem[] }) {
+export function TabBar({
+  items,
+  badges = {},
+}: {
+  items: NavItem[];
+  badges?: Record<string, number>;
+}) {
   const pathname = usePathname();
   const active = activeNavKey(pathname);
 
@@ -45,11 +51,19 @@ export function TabBar({ items }: { items: NavItem[] }) {
                   isActive ? "text-[var(--accent)]" : "text-[var(--ink-tertiary)]"
                 }`}
               >
-                <NavIcon
-                  name={item.icon}
-                  className="h-[1.375rem] w-[1.375rem]"
-                  strokeWidth={isActive ? 2.2 : 1.75}
-                />
+                <span className="relative">
+                  <NavIcon
+                    name={item.icon}
+                    className="h-[1.375rem] w-[1.375rem]"
+                    strokeWidth={isActive ? 2.2 : 1.75}
+                  />
+                  {badges[item.key] > 0 && (
+                    <span
+                      className="absolute -right-1.5 -top-0.5 h-[0.4375rem] w-[0.4375rem] rounded-full bg-[var(--accent)]"
+                      aria-label={`${badges[item.key]} 条未读`}
+                    />
+                  )}
+                </span>
                 <span className="t-caption2 font-medium leading-none">{item.label}</span>
               </Link>
             </li>

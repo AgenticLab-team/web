@@ -4,12 +4,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
+import { PostActions } from "@/components/forum/PostActions";
 import { relativeTime } from "@/components/forum/PostList";
+import { ReactionBar } from "@/components/forum/ReactionBar";
 import { ReplyForm } from "@/components/forum/ReplyForm";
 import { Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
 import { getPost, listReplies } from "@/lib/forum/queries";
+import { isSubscribed } from "@/lib/forum/notify";
+import { isBookmarked, reactionStates } from "@/lib/forum/social-queries";
 import { isIndexable } from "@/lib/forum/visibility";
 import { recordView } from "@/lib/forum/actions";
 
@@ -59,6 +63,14 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const replies = listReplies(viewer, id);
   await recordView(id);
 
+  // 一次查完整页的反应状态。逐条查的话，50 楼的帖子就是 200 次查询
+  const reactionMap = reactionStates(
+    [{ type: "post" as const, id: post.id }, ...replies.map((r) => ({ type: "reply" as const, id: r.id }))],
+    user?.id ?? null,
+  );
+  const bookmarked = user ? isBookmarked(user.id, post.id) : false;
+  const subscribed = user ? isSubscribed(user.id, post.id) : false;
+
   const note = VISIBILITY_NOTE[post.visibility];
 
   return (
@@ -96,6 +108,21 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           className="prose-forum"
           dangerouslySetInnerHTML={{ __html: post.contentHtml }}
         />
+
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+          <ReactionBar
+            targetType="post"
+            targetId={post.id}
+            initial={reactionMap.get(post.id) ?? []}
+            canReact={Boolean(user)}
+          />
+          <PostActions
+            postId={post.id}
+            bookmarked={bookmarked}
+            subscribed={subscribed}
+            canAct={Boolean(user)}
+          />
+        </div>
       </article>
 
       <Section title={replies.length ? `${replies.length} 条回复` : "回复"} className="mt-9">
@@ -140,9 +167,18 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                   dangerouslySetInnerHTML={{ __html: reply.contentHtml }}
                 />
 
-                <p className="tabular t-caption mt-2 text-[var(--ink-quaternary)]">
-                  {relativeTime(reply.createdAt)}
-                </p>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <ReactionBar
+                    targetType="reply"
+                    targetId={reply.id}
+                    initial={reactionMap.get(reply.id) ?? []}
+                    canReact={Boolean(user)}
+                    compact
+                  />
+                  <span className="tabular t-caption shrink-0 text-[var(--ink-quaternary)]">
+                    {relativeTime(reply.createdAt)}
+                  </span>
+                </div>
               </div>
             ))}
           </div>

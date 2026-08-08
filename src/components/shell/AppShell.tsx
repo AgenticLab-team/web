@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { people, roles, userRoles } from "@/lib/db/schema";
 import { navItemVisible, tabBarItems, visibleSections, type NavItem } from "@/lib/nav";
+import { unreadCount } from "@/lib/forum/notify";
 import { can } from "@/lib/rbac/can";
 
 import { Sidebar, type ShellUser } from "./Sidebar";
@@ -26,6 +27,9 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   const sections = visibleSections(visible);
   const tabs = tabBarItems(visible);
+
+  const badges: Record<string, number> = {};
+  if (user) badges.notifications = unreadCount(user.id);
 
   let shellUser: ShellUser | null = null;
   if (user) {
@@ -55,7 +59,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-dvh">
-      <Sidebar sections={sections} user={shellUser} />
+      <Sidebar sections={sections} user={shellUser} badges={badges} />
 
       <div className="lg:pl-[var(--sidebar-width)]">
         <main
@@ -69,7 +73,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      <TabBar items={tabs} />
+      <TabBar items={tabs} badges={badges} />
     </div>
   );
 }

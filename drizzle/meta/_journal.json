@@ -43,6 +43,13 @@
       "when": 1786203063055,
       "tag": "0005_forum",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1786203979584,
+      "tag": "0006_forum_social",
+      "breakpoints": true
     }
   ]
 }

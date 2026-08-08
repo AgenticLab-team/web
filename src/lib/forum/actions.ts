@@ -12,6 +12,7 @@ import { can } from "@/lib/rbac/can";
 import { getSettingInt } from "@/lib/settings/store";
 
 import { buildViewerContext } from "./context";
+import { autoSubscribe, notifyNewReply } from "./notify";
 import { getPost } from "./queries";
 import { canSeePost, normalizePostVisibility } from "./visibility";
 
@@ -166,6 +167,9 @@ export async function createPost(input: {
     return row;
   });
 
+  // 发帖后自动订阅自己的帖子，有人回复才收得到通知
+  autoSubscribe(user.id, created.id);
+
   audit({ actorId: user.id }, {
     action: "forum.post.create",
     targetType: "post",
@@ -242,7 +246,7 @@ export async function createReply(input: {
         quotedExcerpt,
         anonymous: Boolean(input.anonymous),
       })
-      .returning({ id: replies.id })
+      .returning({ id: replies.id, floor: replies.floor })
       .get();
 
     tx.update(posts)
@@ -254,6 +258,20 @@ export async function createReply(input: {
       .run();
 
     return row;
+  });
+
+  autoSubscribe(user.id, input.postId);
+
+  notifyNewReply({
+    postId: input.postId,
+    postTitle: post.title,
+    postAuthorId: post.authorId,
+    replyAuthorId: user.id,
+    replyAuthorName: input.anonymous
+      ? "匿名"
+      : (user.siteNickname ?? user.wxNickname ?? "有人"),
+    floor: created.floor,
+    mentions: rendered.mentions,
   });
 
   revalidatePath(`/forum/p/${input.postId}`);
