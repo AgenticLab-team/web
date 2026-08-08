@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { AcceptButton } from "@/components/forum/AcceptButton";
 import { BountyBadge } from "@/components/forum/BountyBadge";
+import { ConsentPanel } from "@/components/forum/ConsentPanel";
 import { PostActions } from "@/components/forum/PostActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { ReactionBar } from "@/components/forum/ReactionBar";
@@ -15,6 +16,7 @@ import { Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
 import { getPost, listReplies } from "@/lib/forum/queries";
+import { consentSummary } from "@/lib/forum/convert-queries";
 import { isSubscribed } from "@/lib/forum/notify";
 import { isBookmarked, reactionStates } from "@/lib/forum/social-queries";
 import { isIndexable } from "@/lib/forum/visibility";
@@ -74,6 +76,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const bookmarked = user ? isBookmarked(user.id, post.id) : false;
   const subscribed = user ? isSubscribed(user.id, post.id) : false;
   const isAsker = user?.id === post.authorId;
+  const consent = consentSummary(post.id, user?.wxId ?? null);
   const isQuestion = post.type === "question";
 
   const note = VISIBILITY_NOTE[post.visibility];
@@ -112,6 +115,8 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             </p>
           </div>
         </div>
+
+        <ConsentPanel postId={post.id} summary={consent} canModerate={viewer.canModerate} />
 
         {isQuestion && (
           <div className="mb-4">

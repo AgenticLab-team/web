@@ -1,4 +1,4 @@
-import { PenLine, Search } from "lucide-react";
+import { Archive, PenLine, Search } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -64,6 +64,26 @@ export default async function ForumPage() {
           ))}
         </Group>
       </Section>
+
+      {user && (
+        <Section title="从群聊沉淀">
+          <Group>
+            <Row href="/forum/convert">
+              <Archive
+                className="h-[1.125rem] w-[1.125rem] shrink-0 text-[var(--accent)]"
+                strokeWidth={1.9}
+                aria-hidden
+              />
+              <div className="min-w-0 flex-1">
+                <p className="t-body leading-tight">把群里聊出来的东西整理成帖子</p>
+                <p className="t-caption mt-0.5 text-[var(--ink-tertiary)]">
+                  只有原群成员可见，公开需每位原作者同意
+                </p>
+              </div>
+            </Row>
+          </Group>
+        </Section>
+      )}
 
       <Section title="最新讨论">
         <PostList posts={recent} showBoard />
