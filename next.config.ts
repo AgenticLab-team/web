@@ -7,8 +7,13 @@ const nextConfig: NextConfig = {
   },
   serverExternalPackages: ["better-sqlite3"],
   images: {
-    // 微信头像域名。只放行这一个，避免变成任意图片代理
-    remotePatterns: [{ protocol: "http", hostname: "wx.qlogo.cn" }],
+    // 微信头像的两个域名。只放行这些，避免变成任意图片代理。
+    // 存库时会统一升级成 https（见 src/lib/avatar.ts），这里只留 https。
+    remotePatterns: [
+      { protocol: "https", hostname: "wx.qlogo.cn" },
+      { protocol: "https", hostname: "mmhead.hk.wechat.com" },
+      { protocol: "https", hostname: "wework.qpic.cn" },
+    ],
   },
 };
 

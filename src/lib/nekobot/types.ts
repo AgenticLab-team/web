@@ -30,8 +30,8 @@ export interface LeaderboardEntry {
   rank: number;
   wx_id: string;
   name: string;
-  /** 实测常为空字符串，头像要从 friend-requests 或用户画像取 */
   avatar: string;
+  avatar_full: string;
   messages: number;
   quality_messages: number;
   quality_ratio: number;
@@ -60,7 +60,12 @@ export interface ActivityResponse {
 
 export interface GroupMember {
   wx_id: string;
+  /** 微信昵称 */
+  name: string;
+  /** 群内备注名，优先展示 */
   group_nickname: string;
+  avatar: string;
+  avatar_full: string;
   messages: number;
   left: boolean;
 }
@@ -137,6 +142,8 @@ export interface UserSearchResult {
   wx_id: string;
   name: string;
   messages: number;
+  avatar: string;
+  avatar_full: string;
 }
 
 export interface UserGroupStat {
@@ -168,6 +175,7 @@ export interface UserProfile {
   nickname: string;
   remark: string;
   avatar: string;
+  avatar_full: string;
   quality_min: number;
   summary: {
     groups: number;

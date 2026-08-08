@@ -48,7 +48,11 @@ export const groupMembers = sqliteTable(
   {
     convId: text("conv_id").notNull(),
     wxId: text("wx_id").notNull(),
+    /** 群内备注名，优先展示 */
     displayName: text("display_name"),
+    /** 微信昵称，群内没设备注名时用这个 */
+    wxName: text("wx_name"),
+    avatarUrl: text("avatar_url"),
     messages: integer("messages").notNull().default(0),
     joinedAt: integer("joined_at"),
     leftAt: integer("left_at"),
@@ -201,7 +205,9 @@ export const people = sqliteTable(
     displayName: text("display_name").notNull(),
     /** 目前只有 friend-requests 拿得到头像，多数人为空，由前端生成占位 */
     avatarUrl: text("avatar_url"),
-    avatarSource: text("avatar_source", { enum: ["friend_request", "profile", "upload"] }),
+    avatarSource: text("avatar_source", {
+      enum: ["group_member", "leaderboard", "friend_request", "profile", "upload"],
+    }),
     messages: integer("messages").notNull().default(0),
     qualityMessages: integer("quality_messages").notNull().default(0),
     groupCount: integer("group_count").notNull().default(0),

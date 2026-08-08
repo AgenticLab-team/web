@@ -4,6 +4,7 @@ import { eq, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { groupMembers, messages, people, users } from "@/lib/db/schema";
+import { normalizeAvatarUrl } from "@/lib/avatar";
 import { nekobot } from "@/lib/nekobot/client";
 
 import { runSyncJob, type SyncOptions, type SyncResult } from "./job";
@@ -19,16 +20,23 @@ import { runSyncJob, type SyncOptions, type SyncResult } from "./job";
  *
  * 上游 /users/{wx_id} 的 name 不参与 —— 实测它对部分账号直接返回 wx_id。
  */
+const usable = (value: string | null | undefined, wxId: string) =>
+  value && value.trim() && value !== wxId ? value.trim() : null;
+
 export async function syncPeople(options: SyncOptions = {}): Promise<SyncResult> {
   return runSyncJob("avatars", { ...options, scope: "people" }, async () => {
     const now = Date.now();
 
-    // 群昵称：同一个人可能在多个群有不同昵称，取最近同步到的那个
+    // 群成员名册：同一个人可能在多个群有不同备注名，取最近同步到的那个。
+    // 群内备注名优先于微信昵称 —— 那是群里实际显示给大家看的名字。
     const nicknames = new Map<string, string>();
+    const memberAvatars = new Map<string, string>();
     const memberRows = db
       .select({
         wxId: groupMembers.wxId,
-        name: groupMembers.displayName,
+        displayName: groupMembers.displayName,
+        wxName: groupMembers.wxName,
+        avatarUrl: groupMembers.avatarUrl,
         syncedAt: groupMembers.syncedAt,
       })
       .from(groupMembers)
@@ -36,9 +44,9 @@ export async function syncPeople(options: SyncOptions = {}): Promise<SyncResult>
       .orderBy(groupMembers.syncedAt)
       .all();
     for (const row of memberRows) {
-      if (row.name && row.name.trim() && row.name !== row.wxId) {
-        nicknames.set(row.wxId, row.name.trim());
-      }
+      const name = usable(row.displayName, row.wxId) ?? usable(row.wxName, row.wxId);
+      if (name) nicknames.set(row.wxId, name);
+      if (row.avatarUrl) memberAvatars.set(row.wxId, row.avatarUrl);
     }
 
     // 每人最近一条消息的发送者名。用窗口函数拿「最新」而不是 max()
@@ -75,7 +83,18 @@ export async function syncPeople(options: SyncOptions = {}): Promise<SyncResult>
     ]);
 
     const statsMap = new Map(stats.map((s) => [s.wxId, s]));
-    const avatars = await harvestAvatars();
+    // 群成员名册是头像的主来源，覆盖全部在群成员；
+    // 好友申请只覆盖二十几个人，现在退化成补漏用的
+    const avatars = new Map(memberAvatars);
+    let fromFriendRequests = 0;
+    for (const [wxId, url] of await harvestAvatars()) {
+      // 只补那些确实在社群里的人。发过好友申请但不在任何同步群里的
+      // 属于外来者，不该进 people 表
+      if (!avatars.has(wxId) && everyone.has(wxId)) {
+        avatars.set(wxId, url);
+        fromFriendRequests++;
+      }
+    }
 
     let written = 0;
     db.transaction((tx) => {
@@ -89,7 +108,11 @@ export async function syncPeople(options: SyncOptions = {}): Promise<SyncResult>
             wxId,
             displayName: name,
             avatarUrl: avatar ?? null,
-            avatarSource: avatar ? "friend_request" : null,
+            avatarSource: avatar
+              ? memberAvatars.has(wxId)
+                ? "group_member"
+                : "friend_request"
+              : null,
             messages: stat?.messages ?? 0,
             qualityMessages: Number(stat?.quality ?? 0),
             groupCount: stat?.groups ?? 0,
@@ -102,7 +125,14 @@ export async function syncPeople(options: SyncOptions = {}): Promise<SyncResult>
             set: {
               displayName: name,
               // 已有头像就别用 null 覆盖掉
-              ...(avatar ? { avatarUrl: avatar, avatarSource: "friend_request" as const } : {}),
+              ...(avatar
+                ? {
+                    avatarUrl: avatar,
+                    avatarSource: (memberAvatars.has(wxId)
+                      ? "group_member"
+                      : "friend_request") as "group_member" | "friend_request",
+                  }
+                : {}),
               messages: stat?.messages ?? 0,
               qualityMessages: Number(stat?.quality ?? 0),
               groupCount: stat?.groups ?? 0,
@@ -137,16 +167,13 @@ export async function syncPeople(options: SyncOptions = {}): Promise<SyncResult>
     return {
       fetched: everyone.size,
       written,
-      note: `头像 ${avatars.size} 个（仅好友申请可得）`,
+      note: `头像 ${avatars.size} 个（群名册 ${memberAvatars.size} + 好友申请补 ${fromFriendRequests}）`,
     };
   });
 }
 
-/**
- * 头像只有 /friend-requests 拿得到（实测 24/24 条都带 avatar_full 940x940，
- * 而排行榜与用户画像的 avatar 字段 0/25 有值）。
- * 没发过好友申请的人拿不到头像，前端用昵称首字生成占位。
- */
+/** 好友申请里的头像。上游给 members 补上头像字段后，这里只用于补漏 —— 
+ * 覆盖那些发过好友申请但已不在任何同步群里的人。 */
 async function harvestAvatars(): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   const requests = await nekobot.friendRequests({ limit: 200 }).catch((err) => {
@@ -157,7 +184,7 @@ async function harvestAvatars(): Promise<Map<string, string>> {
   if (!requests) return result;
 
   for (const request of requests.items) {
-    const avatar = request.avatar_full || request.avatar;
+    const avatar = normalizeAvatarUrl(request.avatar_full || request.avatar);
     if (avatar) result.set(request.wx_id, avatar);
   }
   return result;

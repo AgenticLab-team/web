@@ -4,6 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { groupMemberEvents, groupMembers, groups } from "@/lib/db/schema";
+import { normalizeAvatarUrl } from "@/lib/avatar";
 import { nekobot } from "@/lib/nekobot/client";
 
 import { runSyncJob, type SyncOptions, type SyncResult } from "./job";
@@ -58,11 +59,15 @@ export async function syncGroupMembers(
             .run();
         }
 
+        const avatar = normalizeAvatarUrl(member.avatar_full || member.avatar);
+
         tx.insert(groupMembers)
           .values({
             convId,
             wxId: member.wx_id,
             displayName: member.group_nickname,
+            wxName: member.name,
+            avatarUrl: avatar,
             messages: member.messages,
             joinedAt: prior?.joinedAt ?? now,
             leftAt: member.left ? (prior?.leftAt ?? now) : null,
@@ -72,6 +77,9 @@ export async function syncGroupMembers(
             target: [groupMembers.convId, groupMembers.wxId],
             set: {
               displayName: member.group_nickname,
+              wxName: member.name,
+              // 拿不到新头像时保留旧的，不要用 null 覆盖
+              ...(avatar ? { avatarUrl: avatar } : {}),
               messages: member.messages,
               leftAt: member.left ? (prior?.leftAt ?? now) : null,
               syncedAt: now,
