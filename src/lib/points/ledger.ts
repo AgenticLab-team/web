@@ -35,6 +35,8 @@ export interface GrantResult {
   /** 已经记过账时为 true，不算失败 */
   duplicate?: boolean;
   balance?: number;
+  /** 这一笔的流水 id。冲正需要它 —— 拿不到就没法回滚 */
+  ledgerId?: string;
   error?: string;
 }
 
@@ -50,7 +52,9 @@ export function grantPoints(input: GrantInput): GrantResult {
       .from(pointsLedger)
       .where(eq(pointsLedger.idempotencyKey, input.idempotencyKey))
       .get();
-    if (seen) return { ok: true, duplicate: true, balance: seen.balanceAfter };
+    if (seen) {
+      return { ok: true, duplicate: true, balance: seen.balanceAfter, ledgerId: seen.id };
+    }
   }
 
   try {
@@ -62,7 +66,8 @@ export function grantPoints(input: GrantInput): GrantResult {
       // 扣分不能扣成负数 —— 余额为负会让所有基于余额的判断都失效
       if (balance < 0) return { ok: false, error: "积分不足" };
 
-      tx.insert(pointsLedger)
+      const row = tx
+        .insert(pointsLedger)
         .values({
           userId: input.userId,
           delta: input.delta,
@@ -74,7 +79,8 @@ export function grantPoints(input: GrantInput): GrantResult {
           operatorId: input.operatorId,
           idempotencyKey: input.idempotencyKey,
         })
-        .run();
+        .returning({ id: pointsLedger.id })
+        .get();
 
       tx.update(users)
         .set({
@@ -86,7 +92,7 @@ export function grantPoints(input: GrantInput): GrantResult {
         .where(eq(users.id, input.userId))
         .run();
 
-      return { ok: true, balance };
+      return { ok: true, balance, ledgerId: row.id };
     });
   } catch (err) {
     // 幂等键的唯一约束可能在并发下才撞上
@@ -95,6 +101,16 @@ export function grantPoints(input: GrantInput): GrantResult {
     }
     throw err;
   }
+}
+
+/**
+ * 按幂等键找回那一笔流水。
+ *
+ * 冲正需要流水 id，而调用方手里往往只有当初用的幂等键 ——
+ * 让每个调用方自己存一份 id 会多出一列、多一个可能不同步的地方。
+ */
+export function findLedgerByIdempotencyKey(key: string) {
+  return db.select().from(pointsLedger).where(eq(pointsLedger.idempotencyKey, key)).get() ?? null;
 }
 
 /** 冲正。写一条反向流水，不动原记录 */

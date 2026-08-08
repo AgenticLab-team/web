@@ -19,6 +19,8 @@ import { visibleGroupIds } from "@/lib/queries/visibility";
 import { getSettingBool, getSettingInt } from "@/lib/settings/store";
 import { endOfDayMs, shiftDateKey, startOfDayMs, todayKey } from "@/lib/time";
 
+import { settleInviteReward } from "@/lib/invites/settle";
+
 import { INTERACTION_WEIGHTS } from "./economy";
 import { grantPoints } from "./ledger";
 import {
@@ -339,6 +341,14 @@ export function performCheckin(user: CurrentUser, ip?: string): CheckinResult {
   });
 
   flagAnomalyIfNeeded(user, status.quality.counted);
+
+  /*
+   * 邀请奖励在这里结算，不是在注册时。
+   * 注册即给的话，拉一堆僵尸号就能刷分 —— 而打卡本身要求
+   * 群里发言或论坛活跃达标，也就是说只有真的参与了社区的人
+   * 才会让邀请人拿到奖励。这条门槛是复用现成的反作弊，不是新造一套。
+   */
+  settleInviteReward(user.id);
 
   const levelAfter = levelOf(user.pointsTotal + total).level;
 

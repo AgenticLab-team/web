@@ -153,6 +153,18 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
     label: "连胜奖励上限",
   },
 
+  {
+    key: "invite.reward_points",
+    value: "50",
+    type: "int",
+    category: "points",
+    label: "邀请奖励积分",
+    description:
+      "在被邀请人**完成首次打卡**时发放，不是注册时 —— 注册即给的话，拉一堆僵尸号就能刷分。被邀请人被封时会自动冲正",
+    min: 0,
+    max: 1000,
+  },
+
   // ── 发行闸门（防通胀）──────────────────────────────────────
   //
   // 这一组的作用是**控制发行总量**。积分只发不收的话，一年后

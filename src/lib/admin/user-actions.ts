@@ -19,6 +19,7 @@ import {
 } from "@/lib/admin/rules";
 import { db } from "@/lib/db";
 import { moderationActions, roles, userNotes, userRoles, users } from "@/lib/db/schema";
+import { revertInviteReward } from "@/lib/invites/settle";
 import { grantPoints } from "@/lib/points/ledger";
 import { resolveDisplayName } from "@/lib/users/display-name";
 import { invalidatePermissionCache } from "@/lib/rbac/can";
@@ -117,6 +118,16 @@ export async function setUserStatus(input: {
   // 封禁要立即生效，不能等会话自然过期
   if (shouldRevokeSessions(input.status)) {
     revokeAllSessions(input.userId, "ban", admin.user.id);
+  }
+
+  /*
+   * 封禁时回滚邀请奖励。
+   * 被封 = 这次邀请没带来真实的人。不回滚的话「刷号被抓也不亏」，
+   * 那等于在鼓励刷。判定在 invites/rules 里（暂停不回滚 ——
+   * 暂停是可逆的，封禁才是定论）。
+   */
+  if (input.status === "banned") {
+    revertInviteReward(input.userId, `账号被封禁：${reason}`);
   }
 
   db.insert(moderationActions)
