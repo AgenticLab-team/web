@@ -307,6 +307,52 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
     label: "每群每周推送次数硬上限",
   },
 
+  // ── 论坛 ────────────────────────────────────────────────────
+  {
+    key: "forum.newbie_no_link_days",
+    value: "3",
+    type: "int",
+    category: "forum",
+    label: "新人多少天内不能发外链",
+    description: "防广告最有效的一条 —— 广告号的特征就是刚进来就甩链接。设 0 关闭",
+    min: 0,
+    max: 90,
+  },
+  {
+    key: "forum.rate_window_seconds",
+    value: "600",
+    type: "int",
+    category: "forum",
+    label: "发帖回帖频率统计窗口（秒）",
+    min: 60,
+    max: 86400,
+  },
+  {
+    key: "forum.max_posts_per_window",
+    value: "3",
+    type: "int",
+    category: "forum",
+    label: "窗口内最多发帖数",
+    min: 1,
+    max: 100,
+  },
+  {
+    key: "forum.max_replies_per_window",
+    value: "15",
+    type: "int",
+    category: "forum",
+    label: "窗口内最多回帖数",
+    min: 1,
+    max: 500,
+  },
+  {
+    key: "forum.collapse_threshold",
+    value: "-3",
+    type: "int",
+    category: "forum",
+    label: "回复被折叠的净反应阈值",
+  },
+
   // ── 站点 ────────────────────────────────────────────────────
   { key: "site.name", value: "Agentic Lab", type: "string", category: "site", label: "站点名称" },
   {

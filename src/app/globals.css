@@ -292,3 +292,148 @@ body {
   }
   ::-webkit-scrollbar-thumb:hover { background-color: var(--ink-tertiary); background-clip: content-box; }
 }
+
+/* ── 论坛正文排版 ─────────────────────────────────────────
+ *
+ * 阅读体验是论坛的门面。几条原则：
+ *   行长控制在 36em 以内 —— 太宽的行，眼睛回到下一行时会找错位置
+ *   段落间距大于行距 —— 否则段落分不出来
+ *   中文行高比英文大 —— 汉字方块字密度高，1.4 会挤
+ */
+.prose-forum {
+  font-size: 1.0625rem;
+  line-height: 1.75;
+  color: var(--ink);
+  overflow-wrap: break-word;
+}
+
+.prose-forum > * + * { margin-top: 1.1em; }
+.prose-forum > *:first-child { margin-top: 0; }
+
+.prose-forum h1, .prose-forum h2, .prose-forum h3,
+.prose-forum h4, .prose-forum h5, .prose-forum h6 {
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  line-height: 1.35;
+  margin-top: 1.8em;
+}
+.prose-forum h1 { font-size: 1.5rem; }
+.prose-forum h2 { font-size: 1.3125rem; }
+.prose-forum h3 { font-size: 1.1875rem; }
+.prose-forum h4, .prose-forum h5, .prose-forum h6 { font-size: 1.0625rem; }
+
+.prose-forum a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  /* 下划线避开字母下伸部，读起来干净很多 */
+  text-underline-offset: 0.2em;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  transition: text-decoration-color 0.15s;
+}
+.prose-forum a:hover { text-decoration-color: var(--accent); }
+
+.prose-forum strong { font-weight: 600; }
+.prose-forum em { font-style: italic; }
+.prose-forum del { color: var(--ink-tertiary); }
+
+.prose-forum ul, .prose-forum ol { padding-left: 1.4em; }
+.prose-forum ul { list-style: disc; }
+.prose-forum ol { list-style: decimal; }
+.prose-forum li + li { margin-top: 0.35em; }
+.prose-forum li::marker { color: var(--ink-tertiary); }
+
+.prose-forum blockquote {
+  border-left: 2px solid var(--separator);
+  padding-left: 1em;
+  color: var(--ink-secondary);
+}
+
+.prose-forum hr {
+  border: 0;
+  border-top: 0.5px solid var(--separator);
+  margin: 2em 0;
+}
+
+/* 行内代码：不用边框，靠底色区分，读起来不割裂 */
+.prose-forum code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--fill);
+  padding: 0.15em 0.36em;
+  border-radius: 0.3125rem;
+}
+
+.prose-forum pre {
+  background: var(--surface-sunken);
+  border-radius: var(--radius-control);
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  /* 长代码横向滚动，绝不让整个页面跟着横向滚 */
+  max-width: 100%;
+}
+.prose-forum pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* shiki 的双主题：跟随当前配色切换，不闪 */
+.prose-forum .shiki,
+.prose-forum .shiki span {
+  color: var(--shiki-light);
+  background-color: var(--shiki-light-bg);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .prose-forum .shiki,
+  :root:not([data-theme="light"]) .prose-forum .shiki span {
+    color: var(--shiki-dark);
+    background-color: var(--shiki-dark-bg);
+  }
+}
+:root[data-theme="dark"] .prose-forum .shiki,
+:root[data-theme="dark"] .prose-forum .shiki span {
+  color: var(--shiki-dark);
+  background-color: var(--shiki-dark-bg);
+}
+
+.prose-forum img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-control);
+}
+
+.prose-forum table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  display: block;
+  overflow-x: auto;
+}
+.prose-forum th, .prose-forum td {
+  border: 0.5px solid var(--separator);
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+.prose-forum th { background: var(--fill); font-weight: 600; }
+
+.prose-forum details {
+  background: var(--fill);
+  border-radius: var(--radius-control);
+  padding: 0.6em 0.9em;
+}
+.prose-forum summary { cursor: pointer; font-weight: 500; }
+
+/* 回复区的正文更紧凑：楼层多的时候松散排版会让页面长得离谱 */
+.prose-forum-compact { font-size: 1rem; line-height: 1.65; }
+.prose-forum-compact > * + * { margin-top: 0.75em; }
+.prose-forum-compact h1, .prose-forum-compact h2, .prose-forum-compact h3 { margin-top: 1.1em; }
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

@@ -17,7 +17,7 @@ async function main() {
   console.log("→ 灌入种子数据");
   const seed = seedDatabase();
   console.log(
-    `  权限点 ${seed.permissions} · 新建角色 ${seed.roles} · 角色权限 ${seed.rolePermissions} · 新增配置 ${seed.settings} · 新增开关 ${seed.flags}`,
+    `  权限点 ${seed.permissions} · 新建角色 ${seed.roles} · 角色权限 ${seed.rolePermissions} · 新增配置 ${seed.settings} · 新增开关 ${seed.flags} · 新建版块 ${seed.boards}`,
   );
 
   console.log("→ 同步群列表");

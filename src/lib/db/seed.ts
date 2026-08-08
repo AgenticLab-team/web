@@ -12,6 +12,7 @@ import {
 } from "./schema";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { BUILTIN_ROLES, resolveRolePermissions } from "@/lib/rbac/roles";
+import { seedBoards } from "@/lib/forum/seed-boards";
 import { DEFAULT_FLAGS, DEFAULT_SETTINGS } from "@/lib/settings/defaults";
 
 export interface SeedReport {
@@ -20,6 +21,7 @@ export interface SeedReport {
   rolePermissions: number;
   settings: number;
   flags: number;
+  boards: number;
 }
 
 /**
@@ -33,6 +35,7 @@ export function seedDatabase(): SeedReport {
     rolePermissions: 0,
     settings: 0,
     flags: 0,
+    boards: 0,
   };
 
   db.transaction((tx) => {
@@ -150,6 +153,8 @@ export function seedDatabase(): SeedReport {
       if (result.changes > 0) report.flags++;
     }
   });
+
+  report.boards = seedBoards();
 
   return report;
 }

@@ -56,8 +56,9 @@ export const NAV: NavSection[] = [
         href: "/forum",
         label: "论坛",
         icon: "messages-square",
-        permission: "forum.view",
-        ready: false,
+        // 公开版块对访客开放，具体帖子的可见性在查询层收口
+        inTabBar: true,
+        ready: true,
       },
     ],
   },

@@ -75,7 +75,11 @@ describe("导航可见性", () => {
   it("需要登录的项对访客隐藏", () => {
     const keys = tabBarItems(asGuest).map((i) => i.key);
     assert.ok(!keys.includes("me"), "访客不该看到「我的」");
-    assert.deepEqual(keys, ["home", "leaderboard"], "访客能看首页和总榜，其余隐藏");
+    assert.deepEqual(
+      keys,
+      ["home", "leaderboard", "forum"],
+      "访客能看首页、总榜和论坛公开版块，其余隐藏",
+    );
   });
 
   it("总榜对访客开放", () => {
