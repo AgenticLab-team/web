@@ -104,6 +104,15 @@ export const ADMIN_NAV: AdminNavSection[] = [
         ready: true,
       },
       {
+        key: "words",
+        href: "/admin/words",
+        label: "敏感词",
+        icon: "filter",
+        permission: "moderation.words",
+        description: "三档处置，带预览器",
+        ready: true,
+      },
+      {
         key: "boards",
         href: "/admin/boards",
         label: "版块与标签",

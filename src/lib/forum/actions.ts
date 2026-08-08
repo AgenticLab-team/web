@@ -12,6 +12,8 @@ import { can } from "@/lib/rbac/can";
 import { getSettingInt } from "@/lib/settings/store";
 import { resolveDisplayName } from "@/lib/users/display-name";
 
+import { checkContent, fileForReview } from "@/lib/moderation/word-gate";
+
 import { recountBoardPosts } from "./board-stats";
 import { buildViewerContext } from "./context";
 import { autoSubscribe, notifyNewReply } from "./notify";
@@ -131,7 +133,24 @@ export async function createPost(input: {
   }
   if (tooFrequent(user.id, "post")) return fail("发帖太频繁了，歇一会儿");
 
-  const rendered = await renderMarkdown(content, { resolveMention: mentionResolver() });
+  /*
+   * ④ 敏感词。
+   *
+   * 标题和正文**分开扫**。拼成一段再扫看着省事，但替换档会改写文本，
+   * 拼接后再按原长度切回来，只要标题里发生过替换，切点就错了 ——
+   * 结果是正文开头被啃掉几个字。
+   * 只扫正文同样不行：把词放标题里就绕过去了。
+   */
+  const titleGate = checkContent(title);
+  if (!titleGate.allowed) return fail(titleGate.message!);
+  const contentGate = checkContent(content);
+  if (!contentGate.allowed) return fail(contentGate.message!);
+
+  const safeTitle = titleGate.content;
+  const safeContent = contentGate.content;
+  const needsReview = titleGate.needsReview || contentGate.needsReview;
+
+  const rendered = await renderMarkdown(safeContent, { resolveMention: mentionResolver() });
 
   const normalized = normalizePostVisibility({
     requested: input.visibility ?? board.defaultVisibility,
@@ -144,8 +163,8 @@ export async function createPost(input: {
       .values({
         boardId: board.id,
         authorId: user.id,
-        title,
-        content,
+        title: safeTitle,
+        content: safeContent,
         contentHtml: rendered.html,
         excerpt: rendered.excerpt,
         type: input.type ?? "discussion",
@@ -167,7 +186,18 @@ export async function createPost(input: {
     return row;
   });
 
-  indexPost(created.id, title, content);
+  indexPost(created.id, safeTitle, safeContent);
+
+  // 送审档照常发布，只是进队列。先扣下再审的话，误伤一次就是
+  // 有人的内容凭空消失几小时，而子串匹配的误伤率注定不低
+  if (needsReview) {
+    fileForReview({
+      targetType: "post",
+      targetId: created.id,
+      targetUserId: user.id,
+      scan: titleGate.needsReview ? titleGate.scan : contentGate.scan,
+    });
+  }
 
   // 发帖后自动订阅自己的帖子，有人回复才收得到通知
   autoSubscribe(user.id, created.id);
@@ -213,7 +243,11 @@ export async function createReply(input: {
   }
   if (tooFrequent(user.id, "reply")) return fail("回复太频繁了，歇一会儿");
 
-  const rendered = await renderMarkdown(content, { resolveMention: mentionResolver() });
+  const gate = checkContent(content);
+  if (!gate.allowed) return fail(gate.message!);
+  const safeReply = gate.content;
+
+  const rendered = await renderMarkdown(safeReply, { resolveMention: mentionResolver() });
 
   const created = db.transaction((tx) => {
     /*
@@ -241,7 +275,7 @@ export async function createReply(input: {
       .values({
         postId: input.postId,
         authorId: user.id,
-        content,
+        content: safeReply,
         contentHtml: rendered.html,
         floor: maxFloor + 1,
         quotedReplyId: input.quotedReplyId,
@@ -262,8 +296,17 @@ export async function createReply(input: {
     return row;
   });
 
-  indexReply(input.postId, created.id, content);
+  indexReply(input.postId, created.id, safeReply);
   autoSubscribe(user.id, input.postId);
+
+  if (gate.needsReview) {
+    fileForReview({
+      targetType: "reply",
+      targetId: created.id,
+      targetUserId: user.id,
+      scan: gate.scan,
+    });
+  }
 
   notifyNewReply({
     postId: input.postId,
@@ -322,7 +365,16 @@ export async function editPost(input: {
   if (content.length < 2) return fail("正文不能为空");
   if (title === existing.title && content === existing.content) return { ok: true, postId: existing.id };
 
-  const rendered = await renderMarkdown(content, { resolveMention: mentionResolver() });
+  // 编辑是最明显的绕过口：先发一篇干净的，再编辑把词加进去
+  const titleGate = checkContent(title);
+  if (!titleGate.allowed) return fail(titleGate.message!);
+  const contentGate = checkContent(content);
+  if (!contentGate.allowed) return fail(contentGate.message!);
+
+  const safeTitle = titleGate.content;
+  const safeContent = contentGate.content;
+
+  const rendered = await renderMarkdown(safeContent, { resolveMention: mentionResolver() });
 
   db.transaction((tx) => {
     // 先存旧版本再改 —— 顺序反了就丢了改动前的样子
@@ -338,8 +390,8 @@ export async function editPost(input: {
 
     tx.update(posts)
       .set({
-        title,
-        content,
+        title: safeTitle,
+        content: safeContent,
         contentHtml: rendered.html,
         excerpt: rendered.excerpt,
         editCount: sql`${posts.editCount} + 1`,
@@ -350,7 +402,16 @@ export async function editPost(input: {
       .run();
   });
 
-  indexPost(existing.id, title, content);
+  indexPost(existing.id, safeTitle, safeContent);
+
+  if (titleGate.needsReview || contentGate.needsReview) {
+    fileForReview({
+      targetType: "post",
+      targetId: existing.id,
+      targetUserId: existing.authorId,
+      scan: titleGate.needsReview ? titleGate.scan : contentGate.scan,
+    });
+  }
 
   audit({ actorId: user.id }, {
     action: isAuthor ? "forum.post.edit.own" : "forum.post.edit.any",

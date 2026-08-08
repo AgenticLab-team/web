@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  Coins, Flag, Gauge, LayoutList, Megaphone, MessageSquare, Puzzle,
+  Coins, Filter, Flag, Gauge, LayoutList, Megaphone, MessageSquare, Puzzle,
   Scale, ScrollText, Shield, ShieldCheck, Sliders, Ticket, Users,
   type LucideIcon,
 } from "lucide-react";
@@ -25,6 +25,7 @@ const ICONS: Record<string, LucideIcon> = {
   sliders: Sliders,
   "shield-check": ShieldCheck,
   puzzle: Puzzle,
+  filter: Filter,
 };
 
 /**

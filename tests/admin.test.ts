@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import { ADMIN_NAV, ALL_ADMIN_ITEMS, visibleAdminNav } from "@/lib/admin/nav";
@@ -54,6 +54,29 @@ describe("后台导航的权限声明", () => {
       const route = item.href.replace(/^\/admin/, "");
       const page = new URL(`../src/app/(app)/admin${route}/page.tsx`, import.meta.url);
       assert.ok(existsSync(page), `${item.key} 标了 ready，但 ${item.href} 没有页面文件`);
+    }
+  });
+
+  it("**每个入口声明的图标都要在 ICONS 里注册**", () => {
+    /*
+     * 没注册的图标会静默回退成默认那个仪表盘图标 —— 不报错、不崩，
+     * 只是导航里出现两个一模一样的图标，而谁也说不清哪个是哪个。
+     * ICONS 在 "use client" 组件里，测试直接 import 会把 lucide 拖进来，
+     * 所以读源码断言。
+     */
+    const source = readFileSync(
+      new URL("../src/components/admin/AdminNav.tsx", import.meta.url),
+      "utf8",
+    );
+    const registered = new Set(
+      [...source.matchAll(/^\s+"?([a-z-]+)"?:\s+[A-Z]\w+,$/gm)].map((m) => m[1]),
+    );
+
+    for (const item of ALL_ADMIN_ITEMS) {
+      assert.ok(
+        registered.has(item.icon),
+        `${item.key} 用的图标 ${item.icon} 没在 AdminNav 的 ICONS 里注册，会静默回退`,
+      );
     }
   });
 
