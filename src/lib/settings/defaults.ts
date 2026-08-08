@@ -48,7 +48,7 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
   },
   {
     key: "auth.bind_code.daily_limit",
-    value: "30",
+    value: "10",
     type: "int",
     category: "auth",
     label: "同一 IP 每日可生成验证码次数",

@@ -217,3 +217,30 @@ export const userNotes = sqliteTable(
   },
   (t) => [index("user_notes_user_idx").on(t.userId)],
 );
+
+/**
+ * WebAuthn 挑战值。
+ *
+ * 注册与验证是两次独立请求，挑战值必须服务端留存 ——
+ * 放在 cookie 里等于让客户端自己保管自己的考题。
+ *
+ * TTL 很短（默认 5 分钟），用完即焚：同一个挑战值被复用就是重放攻击的入口。
+ */
+export const webauthnChallenges = sqliteTable(
+  "webauthn_challenges",
+  {
+    id: ulidPk(),
+    challenge: text("challenge").notNull(),
+    kind: text("kind", { enum: ["registration", "authentication"] }).notNull(),
+    /** 注册时是目标用户；无用户名登录时为空 */
+    userId: text("user_id"),
+    ip: text("ip"),
+    createdAt: now("created_at"),
+    expiresAt: integer("expires_at").notNull(),
+    consumedAt: integer("consumed_at"),
+  },
+  (t) => [
+    index("webauthn_challenges_challenge_idx").on(t.challenge),
+    index("webauthn_challenges_expires_idx").on(t.expiresAt),
+  ],
+);

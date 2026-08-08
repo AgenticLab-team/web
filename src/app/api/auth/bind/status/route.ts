@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { checkBindStatus } from "@/lib/auth/bind";
 import { createSession, setSessionCookie } from "@/lib/auth/session";
+import { db } from "@/lib/db";
+import { loginAttempts } from "@/lib/db/schema";
 import { NekoBotError } from "@/lib/nekobot/client";
 
 export async function GET(request: Request) {
@@ -28,10 +30,20 @@ export async function GET(request: Request) {
       request.headers.get("x-real-ip") ??
       undefined;
 
-    const token = createSession(status.userId, {
-      ip,
-      userAgent: request.headers.get("user-agent") ?? undefined,
-    });
+    const userAgent = request.headers.get("user-agent") ?? undefined;
+
+    // 记进登录历史，否则安全页只看得到 Passkey 登录，漏掉一半
+    db.insert(loginAttempts)
+      .values({
+        userId: status.userId,
+        method: "bind_code",
+        success: true,
+        ip,
+        userAgent,
+      })
+      .run();
+
+    const token = createSession(status.userId, { ip, userAgent });
     await setSessionCookie(token);
 
     const response = NextResponse.json({

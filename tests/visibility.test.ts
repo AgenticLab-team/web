@@ -166,3 +166,29 @@ describe("排行榜按可见群收口", () => {
     assert.equal(rank.quality, 5);
   });
 });
+
+describe("总榜公开但群身份不外泄", () => {
+  it("allSyncedGroupIds 只返回已接入的群", () => {
+    const ids = vis.allSyncedGroupIds().sort();
+    assert.deepEqual(ids, [G1, G2].sort(), "未接入的群不该出现在总榜聚合里");
+  });
+
+  it("访客能用总榜范围拿到排名", () => {
+    // 与「群列表私密」不冲突：公开的是「谁贡献最多」，不是「有哪些群」
+    const entries = board.getLeaderboard({ convIds: vis.allSyncedGroupIds(), period: "all" });
+    assert.ok(entries.length > 0, "总榜对所有人开放");
+  });
+
+  it("总榜里不含任何群标识", () => {
+    const entries = board.getLeaderboard({ convIds: vis.allSyncedGroupIds(), period: "all" });
+    for (const entry of entries) {
+      assert.ok(!("convId" in entry), "榜单条目不该带群 id");
+      assert.ok(!("groupName" in entry), "榜单条目不该带群名");
+    }
+  });
+
+  it("访客仍然拿不到群列表", () => {
+    // 这一条与总榜公开是两回事，必须同时成立
+    assert.deepEqual(vis.visibleGroupsFor(null), []);
+  });
+});

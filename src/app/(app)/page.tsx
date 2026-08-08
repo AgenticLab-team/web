@@ -6,33 +6,30 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { Group, Row, Section, StatTile } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { messages } from "@/lib/db/schema";
+import { messages, people } from "@/lib/db/schema";
 import { getLeaderboard, getMyRank } from "@/lib/queries/leaderboard";
-import { visibleGroupsFor } from "@/lib/queries/visibility";
+import { allSyncedGroupIds, visibleGroupsFor } from "@/lib/queries/visibility";
 import { startOfDayMs, todayKey } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const user = await getCurrentUser();
-  const groups = visibleGroupsFor(user);
 
-  // 一个群都看不到的人（访客、以及已退出全部群的成员）看不到任何群相关内容
-  if (groups.length === 0) {
-    return <Landing loggedIn={Boolean(user)} />;
-  }
+  // 总榜对所有人开放 —— 贡献排名是荣誉。
+  // 但群的身份不外泄：下面只用 id 做聚合，不渲染任何群名。
+  const allIds = allSyncedGroupIds();
+  const board = getLeaderboard({ period: "week", convIds: allIds, limit: 8 });
 
-  const convIds = groups.map((g) => g.convId);
-  const board = getLeaderboard({ period: "week", convIds, limit: 8 });
-  const myRank = user?.wxId ? getMyRank(user.wxId, { period: "week", convIds }) : null;
+  // 群列表是隐私，只给自己所在的群
+  const myGroups = visibleGroupsFor(user);
+  const myRank = user?.wxId ? getMyRank(user.wxId, { period: "week", convIds: allIds }) : null;
 
-  // 统计也只覆盖可见的群 —— 全站聚合会把他看不到的群的数据算进去
-  const scope = inArray(messages.convId, convIds);
+  const scope = inArray(messages.convId, allIds);
   const totals = db
     .select({
       messages: sql<number>`count(*)`,
       quality: sql<number>`sum(${messages.isQuality})`,
-      people: sql<number>`count(distinct ${messages.senderWxId})`,
     })
     .from(messages)
     .where(scope)
@@ -44,11 +41,23 @@ export default async function HomePage() {
     .where(and(scope, sql`${messages.ts} >= ${startOfDayMs(todayKey())}`))
     .get();
 
+  const memberCount = db.select({ n: sql<number>`count(*)` }).from(people).get();
+
   return (
     <>
       <PageHeader
         title="Agentic Lab"
-        subtitle={`你在 ${groups.length} 个群 · ${totals?.people ?? 0} 位同群成员`}
+        subtitle={`${(memberCount?.n ?? 0).toLocaleString("zh-CN")} 位成员的 AI Agent 社区`}
+        action={
+          user ? null : (
+            <Link
+              href="/login"
+              className="t-subhead shrink-0 rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] transition active:scale-[0.97]"
+            >
+              登录
+            </Link>
+          )
+        }
       />
 
       {myRank && (
@@ -64,7 +73,7 @@ export default async function HomePage() {
         </Section>
       )}
 
-      <Section title="你所在群的动态">
+      <Section title="社区脉搏">
         <div className="animate-rise grid grid-cols-3 gap-2.5">
           <StatTile label="今日消息" value={todayCount?.n ?? 0} />
           <StatTile label="累计消息" value={totals?.messages ?? 0} />
@@ -88,55 +97,43 @@ export default async function HomePage() {
       >
         <LeaderboardList entries={board} highlightWxId={user?.wxId} />
         <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
-          只统计<strong className="font-medium">你所在的群</strong>，
-          按高质量消息排名（≥15 字的文本或引用回复）。
+          按<strong className="font-medium">高质量消息</strong>排名（≥15 字的文本或引用回复）。
+          按总条数排会让复读机上榜。
         </p>
       </Section>
 
-      <Section title="我在的群">
-        <Group>
-          {groups.map((group) => (
-            <Row key={group.convId}>
-              <span className="t-body min-w-0 flex-1 truncate">{group.name}</span>
-              <span className="tabular t-footnote text-[var(--ink-tertiary)]">
-                {group.messageCount.toLocaleString("zh-CN")}
-              </span>
-            </Row>
-          ))}
-        </Group>
-      </Section>
-    </>
-  );
-}
+      {/* 群列表是隐私：只有自己所在的群才列出来，访客一个都看不到 */}
+      {myGroups.length > 0 && (
+        <Section title="我在的群">
+          <Group>
+            {myGroups.map((group) => (
+              <Row key={group.convId}>
+                <span className="t-body min-w-0 flex-1 truncate">{group.name}</span>
+                <span className="tabular t-footnote text-[var(--ink-tertiary)]">
+                  {group.messageCount.toLocaleString("zh-CN")}
+                </span>
+              </Row>
+            ))}
+          </Group>
+        </Section>
+      )}
 
-/**
- * 访客与无群成员看到的落地页。
- *
- * 刻意不透露任何社群结构：不给群名、不给群数量、不给成员名字与排名。
- * 群列表本身就是隐私 —— 有哪些群、群里有谁、谁最活跃，
- * 都是只有群里的人才该知道的事。
- */
-function Landing({ loggedIn }: { loggedIn: boolean }) {
-  return (
-    <>
-      <PageHeader title="Agentic Lab" subtitle="群聊之外的家" />
-
-      <div className="animate-rise inset-group px-6 py-10 text-center">
-        <p className="t-title3 mb-3">{loggedIn ? "你还不在任何已接入的群" : "这里是社群内部空间"}</p>
-        <p className="t-subhead mx-auto max-w-sm leading-relaxed text-[var(--ink-secondary)]">
-          {loggedIn
-            ? "群成员身份是访问的前提。等你加入群并有发言记录后，下一轮同步就会恢复访问。"
-            : "群聊数据、成员排名与讨论内容只对社群成员开放。用微信身份登录即可进入。"}
-        </p>
-        {!loggedIn && (
-          <Link
-            href="/login"
-            className="t-body mt-7 inline-flex rounded-[var(--radius-control)] bg-[var(--accent)] px-6 py-3 font-medium text-[var(--accent-ink)] transition active:scale-[0.98]"
-          >
-            登录
-          </Link>
-        )}
-      </div>
+      {!user && (
+        <Section>
+          <div className="inset-group px-6 py-8 text-center">
+            <p className="t-callout mb-1.5">群聊内容与分群数据仅对成员开放</p>
+            <p className="t-footnote mx-auto max-w-xs leading-relaxed text-[var(--ink-secondary)]">
+              登录后可以看到自己所在群的动态、检索历史消息，并参与社区讨论。
+            </p>
+            <Link
+              href="/login"
+              className="t-subhead mt-5 inline-flex rounded-[var(--radius-control)] bg-[var(--accent)] px-5 py-2.5 font-medium text-[var(--accent-ink)] transition active:scale-[0.98]"
+            >
+              用微信身份登录
+            </Link>
+          </div>
+        </Section>
+      )}
     </>
   );
 }

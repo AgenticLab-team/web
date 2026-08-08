@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { ChevronRight } from "lucide-react";
+
 import { Avatar } from "@/components/Avatar";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -10,6 +12,7 @@ import { Empty, Group, Row, Section, StatTile } from "@/components/ui/primitives
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { dailyStats, groupMembers, people, roles, userRoles } from "@/lib/db/schema";
+import { listPasskeys } from "@/lib/auth/passkey";
 import { getMyRank } from "@/lib/queries/leaderboard";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { shiftDateKey, todayKey } from "@/lib/time";
@@ -48,6 +51,8 @@ export default async function MePage() {
           .map((r) => [r.convId, r.messages])
       : [],
   );
+
+  const passkeyCount = listPasskeys(user.id).length;
 
   const weekRank = wxId && convIds.length ? getMyRank(wxId, { period: "week", convIds }) : null;
   const today = todayKey();
@@ -176,18 +181,27 @@ export default async function MePage() {
 
       <Section title="账号">
         <Group>
+          <Row href="/me/security">
+            <span className="t-body flex-1">登录与安全</span>
+            <span className="t-footnote text-[var(--ink-tertiary)]">
+              {passkeyCount ? `${passkeyCount} 个 Passkey` : "未设置 Passkey"}
+            </span>
+            <ChevronRight
+              className="h-4 w-4 shrink-0 text-[var(--ink-quaternary)]"
+              strokeWidth={2}
+              aria-hidden
+            />
+          </Row>
           <Row>
             <span className="t-body flex-1">微信 ID</span>
             <span className="t-footnote font-mono text-[var(--ink-tertiary)]">{wxId}</span>
           </Row>
-          <Row>
-            <span className="t-body flex-1">登录方式</span>
-            <span className="t-footnote text-[var(--ink-tertiary)]">微信验证码</span>
-          </Row>
         </Group>
-        <p className="t-caption mt-2 px-1 text-[var(--ink-tertiary)]">
-          Passkey 一键登录即将上线，之后不必每次都回微信取验证码。
-        </p>
+        {passkeyCount === 0 && (
+          <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+            设置 Passkey 后用指纹或面容一步登录，不必每次回微信取验证码。
+          </p>
+        )}
       </Section>
 
       <Section>

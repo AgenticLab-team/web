@@ -29,6 +29,13 @@
       "when": 1786199932235,
       "tag": "0003_member_avatars",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1786202398641,
+      "tag": "0004_webauthn_challenges",
+      "breakpoints": true
     }
   ]
 }

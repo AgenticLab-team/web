@@ -37,9 +37,8 @@ export const NAV: NavSection[] = [
         href: "/leaderboard",
         label: "排行",
         icon: "trophy",
-        // 榜单只统计自己所在的群，访客没有可见范围
-        permission: "group.stats.read",
-        requiresAuth: true,
+        // 全站总榜对所有人开放 —— 贡献排名是荣誉。
+        // 分群榜单在页面内部按可见性收口，不靠隐藏入口来保护
         inTabBar: true,
         ready: true,
       },

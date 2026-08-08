@@ -69,17 +69,21 @@ export function assertGroupAccess(
 }
 
 /**
- * 访客能看到的全局统计。
- * 只给不涉及群身份的聚合量（社区总人数），不给群数量 ——
- * 群的数量本身也是社群结构信息。
+ * 全部已接入的群 id，用于**全站总榜**。
+ *
+ * 这里刻意与上面的可见性分开：总榜对所有人开放（贡献排名是荣誉），
+ * 但**群的身份始终不外泄** —— 调用方只拿到 id 用于聚合，
+ * 绝不能把群名或「这个人在哪些群」渲染给没权限的人。
+ *
+ * 换句话说：可以公开「谁贡献最多」，不可以公开「有哪些群、谁在哪个群」。
  */
-export function publicCommunityShape() {
-  const total = db
+export function allSyncedGroupIds(): string[] {
+  return db
     .select({ convId: groups.convId })
     .from(groups)
     .where(eq(groups.syncEnabled, true))
-    .all();
-  return { hasGroups: total.length > 0 };
+    .all()
+    .map((g) => g.convId);
 }
 
 /** 批量校验，用于「我在哪些群」这类列表 */

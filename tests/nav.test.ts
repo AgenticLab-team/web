@@ -75,8 +75,13 @@ describe("导航可见性", () => {
   it("需要登录的项对访客隐藏", () => {
     const keys = tabBarItems(asGuest).map((i) => i.key);
     assert.ok(!keys.includes("me"), "访客不该看到「我的」");
-    assert.ok(!keys.includes("leaderboard"), "访客不该看到「排行」——榜单按所在群统计");
-    assert.deepEqual(keys, ["home"], "访客只剩首页");
+    assert.deepEqual(keys, ["home", "leaderboard"], "访客能看首页和总榜，其余隐藏");
+  });
+
+  it("总榜对访客开放", () => {
+    // 贡献排名是荣誉，公开；分群数据在页面内部收口，不靠隐藏入口保护
+    const board = ALL_NAV_ITEMS.find((i) => i.key === "leaderboard")!;
+    assert.equal(navItemVisible(board, { loggedIn: false, hasPermission: () => false }), true);
   });
 
   it("登录用户能看到需要登录的项", () => {
@@ -101,7 +106,7 @@ describe("导航可见性", () => {
   it("访客看到的分组里不含任何群相关入口", () => {
     const sections = visibleSections(asGuest);
     const keys = sections.flatMap((s) => s.items.map((i) => i.key));
-    for (const forbidden of ["search", "leaderboard", "me", "admin"]) {
+    for (const forbidden of ["search", "me", "admin"]) {
       assert.ok(!keys.includes(forbidden), `访客不该看到 ${forbidden}`);
     }
   });
