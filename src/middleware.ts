@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { isProtectedPath } from "@/lib/auth/routes";
+
 /**
  * 登录门禁。
  *
@@ -14,18 +16,14 @@ import { NextResponse, type NextRequest } from "next/server";
  * 会话是否有效、有没有权限，仍然由页面里的 getCurrentUser 与 can() 判定。
  * 把授权判断放进中间件是危险的：middleware 拿不到数据库，
  * 只能靠 cookie 自称，等于让客户端自证身份。
+ * 后台页另有 requireAdmin 逐权限点把关，这里拦下只是为了少渲染一次外壳。
  */
 
 const SESSION_COOKIE = "al_session";
 
-/** 未登录一律拦下的路径前缀 */
-const PROTECTED = ["/me", "/notifications", "/forum/new", "/forum/convert", "/onboarding"];
-
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (!PROTECTED.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
-    return NextResponse.next();
-  }
+  if (!isProtectedPath(pathname)) return NextResponse.next();
 
   if (request.cookies.has(SESSION_COOKIE)) return NextResponse.next();
 
@@ -35,6 +33,18 @@ export function middleware(request: NextRequest) {
   return NextResponse.redirect(login, 307);
 }
 
+/*
+ * matcher 必须与 PROTECTED_PREFIXES 覆盖同一批路径。
+ * 它是构建期常量，不能用变量拼 —— 所以只能手写，
+ * 由 tests/middleware.test.ts 断言两者不脱节。
+ */
 export const config = {
-  matcher: ["/me/:path*", "/notifications/:path*", "/forum/new", "/forum/convert", "/onboarding"],
+  matcher: [
+    "/me/:path*",
+    "/admin/:path*",
+    "/notifications/:path*",
+    "/forum/new",
+    "/forum/convert",
+    "/onboarding",
+  ],
 };

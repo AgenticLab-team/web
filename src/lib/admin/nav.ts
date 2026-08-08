@@ -60,7 +60,7 @@ export const ADMIN_NAV: AdminNavSection[] = [
         icon: "users",
         permission: "user.list",
         description: "档案、积分、封禁、绑定审批",
-        ready: false,
+        ready: true,
       },
       {
         key: "roles",
@@ -68,8 +68,8 @@ export const ADMIN_NAV: AdminNavSection[] = [
         label: "身份组与权限",
         icon: "shield",
         permission: "role.read",
-        description: "权限矩阵、以某身份预览、权限反查",
-        ready: false,
+        description: "权限矩阵、权限反查",
+        ready: true,
       },
       {
         key: "invites",

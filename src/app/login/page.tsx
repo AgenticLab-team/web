@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { BindFlow } from "@/components/BindFlow";
 import { PasskeyLoginButton } from "@/components/passkey/PasskeyLoginButton";
+import { safeRedirect } from "@/lib/auth/routes";
 import { getCurrentUser } from "@/lib/auth/session";
 
 export const metadata: Metadata = { title: "登录" };
@@ -15,9 +16,7 @@ export default async function LoginPage({
 }) {
   const user = await getCurrentUser();
   const { next } = await searchParams;
-  // 只接受站内相对路径 —— 允许绝对地址就成了开放重定向，
-  // 攻击者可以拿登录链接把人导到钓鱼站
-  const target = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  const target = safeRedirect(next);
   if (user) redirect(target);
 
   return (
