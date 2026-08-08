@@ -12,10 +12,61 @@ import { syncConversations } from "@/lib/sync/conversations";
 import { syncPeople } from "@/lib/sync/people";
 import { syncAllMembers } from "@/lib/sync/members";
 import { syncAllGroups, syncGroupMessages } from "@/lib/sync/messages";
+import { claimPending, collapseJobs, completeJob } from "@/lib/sync/queue";
 
 const keyword = process.argv[2];
 
+/**
+ * 先处理后台排队的手动触发。
+ *
+ * 没有这一步的话，后台的「立即同步」按钮就是个谎：排进去的 pending
+ * 永远不会被执行，而且「有任务在跑就不能再触发」的判定会把 pending
+ * 也算进去 —— 点一次之后所有触发都被永久挡住。
+ */
+async function drainQueue() {
+  const claimed = claimPending();
+  if (claimed.length === 0) return;
+
+  const targets = collapseJobs(claimed);
+  console.log(`→ 后台排队的任务：${claimed.length} 条，去重后 ${targets.size} 个目标`);
+
+  for (const [key, jobs] of targets) {
+    const [kind, scope] = key.split(":");
+    try {
+      let result = { fetched: 0, written: 0 };
+      if (kind === "messages") {
+        result = scope
+          ? await syncGroupMessages(scope, { triggeredBy: "admin" })
+          : await syncAllGroups({ triggeredBy: "admin" });
+      } else if (kind === "conversations") {
+        result = await syncConversations({ triggeredBy: "admin" });
+      } else if (kind === "members") {
+        result = await syncAllMembers({ triggeredBy: "admin" });
+      } else if (kind === "avatars") {
+        result = await syncPeople({ triggeredBy: "admin" });
+      } else {
+        // 认不出的 kind 要如实失败，不能悄悄标成成功
+        for (const job of jobs) {
+          completeJob(job.id, { fetched: 0, written: 0, error: `不支持的同步类型：${kind}` });
+        }
+        console.warn(`  ⚠ 不支持的同步类型：${kind}`);
+        continue;
+      }
+
+      // 折叠掉的那几条也要一起收尾，否则它们会永远挂在 running
+      for (const job of jobs) completeJob(job.id, result);
+      console.log(`  ${key}：拉取 ${result.fetched}，新增 ${result.written}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      for (const job of jobs) completeJob(job.id, { fetched: 0, written: 0, error: message });
+      console.error(`  ✗ ${key}：${message}`);
+    }
+  }
+}
+
 async function main() {
+  await drainQueue();
+
   console.log("→ 刷新群列表");
   const convs = await syncConversations({ triggeredBy: "admin" });
   console.log(`  ${convs.written} 个群`);

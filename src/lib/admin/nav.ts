@@ -160,7 +160,8 @@ export const ADMIN_NAV: AdminNavSection[] = [
         label: "群与数据源",
         icon: "message-square",
         permission: "group.manage",
-        ready: false,
+        description: "接入状态、同步健康、每群配置",
+        ready: true,
       },
       {
         key: "broadcast",
