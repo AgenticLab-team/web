@@ -198,6 +198,15 @@ export const ADMIN_NAV: AdminNavSection[] = [
         ready: true,
       },
       {
+        key: "activities",
+        href: "/admin/activities",
+        label: "活动",
+        icon: "gift",
+        permission: "activity.manage",
+        description: "资格规则、名额、审批与履约",
+        ready: true,
+      },
+      {
         key: "modules",
         href: "/admin/modules",
         label: "模块",

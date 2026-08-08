@@ -68,7 +68,7 @@ export const NAV: NavSection[] = [
     key: "community",
     label: "社区",
     items: [
-      { key: "events", href: "/events", label: "活动", icon: "calendar", ready: false },
+      { key: "events", href: "/activities", label: "活动", icon: "calendar", ready: true },
       { key: "members", href: "/members", label: "成员", icon: "users", ready: false },
       { key: "links", href: "/links", label: "资源库", icon: "link", ready: false },
     ],

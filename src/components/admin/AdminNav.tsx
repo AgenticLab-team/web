@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  Coins, Eye, FileText, Filter, Flag, Gauge, LayoutList, Megaphone, MessageSquare, Puzzle,
+  Coins, Eye, FileText, Filter, Flag, Gauge, Gift, LayoutList, Megaphone, MessageSquare, Puzzle,
   Scale, ScrollText, Shield, ShieldCheck, Sliders, Ticket, Users,
   type LucideIcon,
 } from "lucide-react";
@@ -28,6 +28,7 @@ const ICONS: Record<string, LucideIcon> = {
   filter: Filter,
   eye: Eye,
   "file-text": FileText,
+  gift: Gift,
 };
 
 /**
