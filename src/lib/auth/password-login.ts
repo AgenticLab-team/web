@@ -12,6 +12,9 @@ import {
   needsRehash,
   verifyPassword,
 } from "@/lib/auth/password";
+import { isPrivileged, passwordLoginVerdict } from "@/lib/auth/passkey-policy";
+import { effectivePermissions } from "@/lib/rbac/can";
+import { getSettingBool } from "@/lib/settings/store";
 
 /**
  * 密码兜底登录的服务端部分。
@@ -117,6 +120,23 @@ export function passwordCredentialOf(userId: string) {
   );
 }
 
+/** 这个人有没有绑过 Passkey —— 强制策略要用它区分「去用 Passkey」和「你进不来了」 */
+export function hasPasskey(userId: string): boolean {
+  return (
+    db
+      .select()
+      .from(credentials)
+      .where(
+        and(
+          eq(credentials.userId, userId),
+          eq(credentials.type, "passkey"),
+          isNull(credentials.revokedAt),
+        ),
+      )
+      .all().length > 0
+  );
+}
+
 export function hasPassword(userId: string): boolean {
   return passwordCredentialOf(userId) !== null;
 }
@@ -201,6 +221,40 @@ export function loginWithPassword(input: {
           ? "这个账号目前不能登录，去「处罚与申诉」看看"
           : GENERIC_LOGIN_ERROR,
     };
+  }
+
+  /*
+   * 管理员强制 Passkey。
+   *
+   * ─────────────────────────────────────────
+   * 位置和状态检查一样，必须在密码验完之后
+   * ─────────────────────────────────────────
+   *
+   * 放前面的话，「这个账号有管理权限」会在密码还没验之前就说出来 ——
+   * 等于给了一个「这个微信号是不是管理员」的免密查询接口，
+   * 而那正是攻击者最想先知道的一件事。
+   *
+   * 这个开关在库里躺了很久没人读（默认值还是 true，设置页显示成开着的）。
+   * 一个显示成「开」的安全开关，效果是让人不再去想这件事 ——
+   * 它把「管理员账号只有一道密码」这个事实藏了起来。
+   */
+  const verdict = passwordLoginVerdict({
+    privileged: isPrivileged(effectivePermissions(user).keys()),
+    hasPasskey: hasPasskey(user.id),
+    enforced: getSettingBool("auth.require_passkey_for_admin", true),
+  });
+
+  if (!verdict.allowed) {
+    recordAttempt({
+      userId: user.id,
+      identifier,
+      success: false,
+      reason: `passkey_required:${verdict.code}`,
+      ip: input.ip,
+      userAgent: input.userAgent,
+      now,
+    });
+    return { ok: false, error: verdict.message };
   }
 
   // 参数升级：老哈希在这次登录里顺手换成当前强度

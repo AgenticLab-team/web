@@ -86,6 +86,17 @@ export const DEFAULT_RULES: Record<string, AlertRule> = {
   upstream: { fireAfterMs: 5 * 60_000, renotifyAfterMs: 6 * 3600_000, retryAfterMs: 5 * 60_000 },
   // 数据库挂了整站都挂了，用户会先发现，不用抢那几分钟
   db: { fireAfterMs: 2 * 60_000, renotifyAfterMs: 3600_000, retryAfterMs: 5 * 60_000 },
+  /*
+   * 管理员被强制策略挡在门外。
+   *
+   * 这个不等 —— 它 down 的含义是「某个有管理权限的人现在进不来」，
+   * 而不是「有个指标不好看」。等 10 分钟没有任何意义：
+   * 那 10 分钟里他只会以为是自己记错了密码。
+   *
+   * 但也不重复吵：这不是会自愈的故障，重复提醒改变不了任何事，
+   * 要么给他绑一把 Passkey，要么把开关关掉。
+   */
+  auth: { fireAfterMs: 0, renotifyAfterMs: 24 * 3600_000, retryAfterMs: 10 * 60_000 },
   // 磁盘是慢性问题，报太急只会让人麻木
   disk: { fireAfterMs: 30 * 60_000, renotifyAfterMs: 24 * 3600_000, retryAfterMs: 15 * 60_000 },
   /*
@@ -254,6 +265,7 @@ export const COMPONENT_LABELS: Record<string, string> = {
   disk: "磁盘",
   offsite: "异地备份",
   cron: "定时任务",
+  auth: "管理员登录保护",
   sync: "同步任务",
 };
 

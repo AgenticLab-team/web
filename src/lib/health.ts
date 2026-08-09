@@ -6,6 +6,8 @@ import { resolve } from "node:path";
 
 import { desc, inArray, sql } from "drizzle-orm";
 
+import { passkeyLockoutRisk } from "@/lib/auth/passkey-enforcement";
+import { describeRisk } from "@/lib/auth/passkey-policy";
 import { db, sqlite } from "@/lib/db";
 import { storageSnapshots, systemHealth } from "@/lib/db/schema";
 import { env } from "@/lib/env";
@@ -161,13 +163,47 @@ export function probeOffsite(): HealthReport {
   };
 }
 
+/**
+ * 管理员的第二重保护。
+ *
+ * 这一项探的不是「服务活没活着」，而是**一条安全规则现在是什么状态**。
+ * 放进健康检查是因为它和别的缺口一样，需要一直看得见 ——
+ * 而它比别的缺口更容易被忘掉：它平时什么都不做，
+ * 只在某个管理员某天登不进来的那一刻才被人想起。
+ *
+ * 三档的分法：
+ *   · 开着、没人被挡  → ok
+ *   · **开着、有人被挡** → down：这不是「有个缺口」，是有人现在进不来
+ *   · 没开             → degraded：管理员账号只有一道密码，是个真实的缺口
+ */
+export function probeAuthPolicy(): HealthReport {
+  const risk = passkeyLockoutRisk();
+  return {
+    component: "auth",
+    status: risk.active ? "down" : risk.enforced ? "ok" : "degraded",
+    detail: describeRisk(risk),
+  };
+}
+
 /** 跑一轮完整探测并落库 */
 export async function runHealthChecks(): Promise<HealthReport[]> {
-  const reports = [await probeUpstream(), probeDatabase(), probeDisk(), probeOffsite()];
+  const reports = [
+    await probeUpstream(),
+    probeDatabase(),
+    probeDisk(),
+    probeOffsite(),
+    probeAuthPolicy(),
+  ];
   for (const report of reports) {
     db.insert(systemHealth)
       .values({
-        component: report.component as "upstream_api" | "frp_tunnel" | "db" | "disk" | "offsite",
+        component: report.component as
+          | "upstream_api"
+          | "frp_tunnel"
+          | "db"
+          | "disk"
+          | "offsite"
+          | "auth",
         status: report.status,
         detail: report.detail,
         latencyMs: report.latencyMs,

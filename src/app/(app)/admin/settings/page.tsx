@@ -6,6 +6,8 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { listSettings, modifiedCount, settingHistoryOf } from "@/lib/admin/settings";
+import { passkeyLockoutRisk } from "@/lib/auth/passkey-enforcement";
+import { describeRisk } from "@/lib/auth/passkey-policy";
 
 export const metadata: Metadata = { title: "系统设置" };
 export const dynamic = "force-dynamic";
@@ -27,6 +29,7 @@ export default async function AdminSettingsPage() {
   const history = settingHistoryOf(undefined, 8);
 
   const total = categories.reduce((n, c) => n + c.items.length, 0);
+  const passkeyRisk = passkeyLockoutRisk();
 
   return (
     <>
@@ -65,6 +68,28 @@ export default async function AdminSettingsPage() {
               <SettingItem key={item.key} row={item} />
             ))}
           </div>
+
+          {/*
+            * 「管理员强制 Passkey」这一项要把后果摆出来。
+            *
+            * 一个安全开关最危险的时刻不是它没生效，
+            * 而是它生效了但没人知道会有什么后果 ——
+            * 等某个管理员某天登不进来再去查，那时他已经在门外了。
+            */}
+          {category.category === "auth" && (
+            <div
+              className={`mt-2 rounded-lg border px-3 py-2 ${
+                passkeyRisk.active
+                  ? "border-[#b91c1c]/40 bg-[#b91c1c]/8 text-[#b91c1c]"
+                  : "border-[var(--hairline)] text-[var(--ink-tertiary)]"
+              }`}
+            >
+              <p className="t-caption leading-relaxed">
+                <strong>管理员强制 Passkey：</strong>
+                {describeRisk(passkeyRisk)}
+              </p>
+            </div>
+          )}
         </Section>
       ))}
 
