@@ -3,7 +3,7 @@ import "server-only";
 import { and, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { bookmarks, reactions } from "@/lib/db/schema";
+import { bookmarks, postViews, reactions } from "@/lib/db/schema";
 import { REACTION_KINDS } from "@/lib/db/schema/forum";
 
 import type { ReactionState } from "@/components/forum/ReactionBar";
@@ -64,6 +64,17 @@ export function isBookmarked(userId: string, postId: string): boolean {
       .from(bookmarks)
       .where(and(eq(bookmarks.userId, userId), eq(bookmarks.postId, postId)))
       .get(),
+  );
+}
+
+/** 上次读到第几楼。没记录返回 0，调用方据此决定要不要给「跳回」入口 */
+export function readFloor(userId: string, postId: string): number {
+  return (
+    db
+      .select({ floor: postViews.lastReadFloor })
+      .from(postViews)
+      .where(and(eq(postViews.userId, userId), eq(postViews.postId, postId)))
+      .get()?.floor ?? 0
   );
 }
 

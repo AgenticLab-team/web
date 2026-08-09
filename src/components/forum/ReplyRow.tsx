@@ -8,6 +8,8 @@ import { SwipeRow } from "@/components/ui/SwipeRow";
 import { useToast } from "@/components/ui/Toast";
 import { deleteMyReply, restoreMyReply } from "@/lib/forum/undo";
 
+import { useQuote } from "./QuoteContext";
+
 /**
  * 回复行的手势与操作。
  *
@@ -17,17 +19,20 @@ import { deleteMyReply, restoreMyReply } from "@/lib/forum/undo";
  */
 export function ReplyRow({
   replyId,
+  floor,
+  authorName,
   isMine,
-  onQuote,
   children,
 }: {
   replyId: string;
+  floor: number;
+  authorName: string;
   isMine: boolean;
-  onQuote?: () => void;
   children: React.ReactNode;
 }) {
   const router = useRouter();
   const toast = useToast();
+  const quoteCtx = useQuote();
   const [, startTransition] = useTransition();
   const [removed, setRemoved] = useState(false);
 
@@ -60,8 +65,15 @@ export function ReplyRow({
   if (removed) return null;
 
   const actions = [
-    ...(onQuote
-      ? [{ label: "引用", icon: <Quote className="h-4 w-4" strokeWidth={2} aria-hidden />, run: onQuote }]
+    // 没有 Provider（未登录 / 帖子已锁）就不给引用入口
+    ...(quoteCtx
+      ? [
+          {
+            label: "引用",
+            icon: <Quote className="h-4 w-4" strokeWidth={2} aria-hidden />,
+            run: () => quoteCtx.setQuote({ replyId, floor, authorName }),
+          },
+        ]
       : []),
     ...(isMine
       ? [

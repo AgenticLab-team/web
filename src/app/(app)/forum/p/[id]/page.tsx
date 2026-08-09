@@ -1,4 +1,4 @@
-import { ChevronLeft, MessageSquare } from "lucide-react";
+import { ChevronLeft, Lock, MessageSquare, Pin, Star, Trash2 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -10,20 +10,25 @@ import { ConsentPanel } from "@/components/forum/ConsentPanel";
 import { PollWidget } from "@/components/forum/PollWidget";
 import { TipButton } from "@/components/forum/TipButton";
 import { PostActions } from "@/components/forum/PostActions";
+import { PostManageMenu } from "@/components/forum/PostManageMenu";
 import { relativeTime } from "@/components/forum/PostList";
+import { QuoteButton } from "@/components/forum/QuoteButton";
+import { QuoteProvider } from "@/components/forum/QuoteContext";
 import { ReactionBar } from "@/components/forum/ReactionBar";
 import { ReportButton } from "@/components/forum/ReportButton";
 import { ReplyForm } from "@/components/forum/ReplyForm";
 import { ReplyRow } from "@/components/forum/ReplyRow";
+import { ResumeReading } from "@/components/forum/ResumeReading";
 import { Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
-import { getPost, listReplies } from "@/lib/forum/queries";
+import { postCapabilities } from "@/lib/forum/manage";
+import { getPost, listBoards, listReplies } from "@/lib/forum/queries";
 import { consentSummary } from "@/lib/forum/convert-queries";
 import { pollOfPost } from "@/lib/forum/polls-queries";
 import { tipsOfTargets } from "@/lib/forum/tips-queries";
 import { isSubscribed } from "@/lib/forum/notify";
-import { isBookmarked, reactionStates } from "@/lib/forum/social-queries";
+import { isBookmarked, reactionStates, readFloor } from "@/lib/forum/social-queries";
 import { isIndexable } from "@/lib/forum/visibility";
 import { recordView } from "@/lib/forum/actions";
 
@@ -61,8 +66,15 @@ const VISIBILITY_NOTE: Record<string, string> = {
   unlisted: "这条内容不会被搜索引擎收录",
 };
 
-export default async function PostPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PostPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ only?: string }>;
+}) {
   const { id } = await params;
+  const { only } = await searchParams;
   const user = await getCurrentUser();
   const viewer = buildViewerContext(user);
 
@@ -70,8 +82,12 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   // 看不见与不存在给同样的 404 —— 403 会泄露「这个帖子存在」
   if (!post) notFound();
 
-  const replies = listReplies(viewer, id);
+  const allReplies = listReplies(viewer, id);
   await recordView(id);
+
+  // 只看楼主：走 URL 而不是客户端状态 —— 分享出去的链接也能带着这个视图
+  const onlyAuthor = only === "op";
+  const replies = onlyAuthor ? allReplies.filter((r) => r.authorId === post.authorId) : allReplies;
 
   // 一次查完整页的反应状态。逐条查的话，50 楼的帖子就是 200 次查询
   const reactionMap = reactionStates(
@@ -88,10 +104,25 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
     ...replies.map((r) => ({ type: "reply" as const, id: r.id })),
   ]);
   const isQuestion = post.type === "question";
+  const lastRead = user ? readFloor(user.id, post.id) : 0;
+  const maxFloor = allReplies.length > 0 ? allReplies[allReplies.length - 1].floor : 0;
+
+  // 能力集只决定按钮显不显示；每个 action 在服务端还会用 can() 再判一遍
+  const caps = postCapabilities(user, post.raw);
+  const moveTargets = caps.move
+    ? listBoards(viewer)
+        .filter((b) => b.id !== post.boardId && !b.locked)
+        .map((b) => ({ id: b.id, name: b.name }))
+    : [];
+
+  const status = post.raw.status;
+  const locked = status === "locked";
+  const deleted = status === "deleted";
+  const canReply = Boolean(user) && !locked && !deleted;
 
   const note = VISIBILITY_NOTE[post.visibility];
 
-  return (
+  const body = (
     <>
       <Link
         href={`/forum/${post.boardKey}`}
@@ -102,6 +133,43 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
       </Link>
 
       <article className="animate-rise pt-6">
+        {deleted && (
+          <div className="mb-4 flex items-start gap-2.5 rounded-[var(--radius-control)] bg-[var(--danger)]/10 px-3.5 py-3">
+            <Trash2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--danger)]" strokeWidth={1.9} aria-hidden />
+            <div>
+              <p className="t-subhead font-medium text-[var(--danger)]">这篇帖子已被删除</p>
+              {post.raw.deleteReason && (
+                <p className="t-caption mt-0.5 text-[var(--ink-secondary)]">
+                  理由：{post.raw.deleteReason}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {(post.pinned || post.featured || locked) && (
+          <div className="mb-2.5 flex flex-wrap gap-1.5">
+            {post.pinned && (
+              <span className="t-caption inline-flex items-center gap-1 rounded-[var(--radius-pill)] bg-[var(--accent-soft)] px-2 py-0.5 font-medium text-[var(--accent)]">
+                <Pin className="h-3 w-3" strokeWidth={2} aria-hidden />
+                置顶
+              </span>
+            )}
+            {post.featured && (
+              <span className="t-caption inline-flex items-center gap-1 rounded-[var(--radius-pill)] bg-[var(--warning)]/15 px-2 py-0.5 font-medium text-[var(--warning)]">
+                <Star className="h-3 w-3" strokeWidth={2} aria-hidden />
+                精华
+              </span>
+            )}
+            {locked && (
+              <span className="t-caption inline-flex items-center gap-1 rounded-[var(--radius-pill)] bg-[var(--fill)] px-2 py-0.5 font-medium text-[var(--ink-secondary)]">
+                <Lock className="h-3 w-3" strokeWidth={2} aria-hidden />
+                已锁定
+              </span>
+            )}
+          </div>
+        )}
+
         <h1 className="t-title1 mb-3 leading-snug">{post.title}</h1>
 
         <div className="mb-5 flex items-center gap-2.5">
@@ -177,15 +245,57 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             {user && post.authorId !== user.id && (
               <ReportButton targetType="post" targetId={post.id} />
             )}
+            <PostManageMenu
+              postId={post.id}
+              boardKey={post.boardKey}
+              status={status}
+              pinned={post.raw.pinned}
+              featured={post.featured}
+              caps={caps}
+              boards={moveTargets}
+            />
           </span>
         </div>
       </article>
 
-      <Section title={replies.length ? `${replies.length} 条回复` : "回复"} className="mt-9">
+      <Section
+        title={allReplies.length ? `${allReplies.length} 条回复` : "回复"}
+        className="mt-9"
+      >
+        {allReplies.length > 0 && (
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <Link
+              href={onlyAuthor ? `/forum/p/${post.id}` : `/forum/p/${post.id}?only=op`}
+              className={`t-footnote rounded-[var(--radius-pill)] px-3 py-1 font-medium transition ${
+                onlyAuthor
+                  ? "bg-[var(--accent)] text-[var(--accent-ink)]"
+                  : "bg-[var(--fill)] text-[var(--ink-secondary)]"
+              }`}
+            >
+              只看楼主
+            </Link>
+            {onlyAuthor && (
+              <span className="t-caption text-[var(--ink-tertiary)]">
+                楼主共 {replies.length} 条回复
+              </span>
+            )}
+          </div>
+        )}
+
+        {user && !onlyAuthor && (
+          <ResumeReading postId={post.id} lastReadFloor={lastRead} maxFloor={maxFloor} />
+        )}
+
         {replies.length > 0 && (
           <div className="inset-group mb-4">
             {replies.map((reply) => (
-              <ReplyRow key={reply.id} replyId={reply.id} isMine={reply.isMine}>
+              <ReplyRow
+                key={reply.id}
+                replyId={reply.id}
+                floor={reply.floor}
+                authorName={reply.authorName}
+                isMine={reply.isMine}
+              >
               <div
                 id={`f${reply.floor}`}
                 className="inset-row scroll-mt-16 px-4 py-3.5"
@@ -212,6 +322,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                       hasAccepted={Boolean(post.raw.solvedReplyId)}
                     />
                   )}
+                  <QuoteButton replyId={reply.id} floor={reply.floor} authorName={reply.authorName} />
                   <a
                     href={`#f${reply.floor}`}
                     className="tabular t-caption text-[var(--ink-quaternary)] transition hover:text-[var(--ink-tertiary)]"
@@ -260,7 +371,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
         )}
 
         {user ? (
-          <ReplyForm postId={post.id} locked={post.raw.status === "locked"} />
+          !deleted && <ReplyForm postId={post.id} locked={locked} />
         ) : (
           <div className="inset-group px-6 py-7 text-center">
             <MessageSquare
@@ -280,4 +391,8 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
       </Section>
     </>
   );
+
+  // 引用要在回复列表与回复框之间递状态，Provider 只在能回复时包 ——
+  // 没有 Provider 时引用按钮整个不渲染，不会出现点了没反应的按钮
+  return canReply ? <QuoteProvider>{body}</QuoteProvider> : body;
 }
