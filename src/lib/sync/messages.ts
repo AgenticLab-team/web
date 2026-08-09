@@ -8,6 +8,13 @@ import { dailyStats, groups, messages, syncCursors } from "@/lib/db/schema";
 import { nekobot } from "@/lib/nekobot/client";
 import type { UpstreamMessage } from "@/lib/nekobot/types";
 import { ingestMessages, type IngestMessage } from "@/lib/links/ingest";
+import {
+  insertMentions,
+  loadRoster,
+  notifyMentionedUsers,
+  parseInteractions,
+  type MentionNotifyInput,
+} from "@/lib/messages/interactions";
 import { isQualityMessage } from "@/lib/quality";
 import { scanMessages } from "@/lib/radar/engine";
 import { isModuleEnabled } from "@/lib/modules/state";
@@ -88,6 +95,14 @@ export async function syncGroupMessages(
     let maxTs = cursor?.lastTs ?? 0;
     const buckets = new Map<string, DayBucket>();
 
+    /*
+     * 名册整轮同步取一次。@昵称 必须在**落库这一刻**解析成 wx_id ——
+     * 昵称随时会变，等展示时再解析，同一句话过三个月就指向别人了。
+     * 名册比消息旧几分钟没关系：刚改的昵称对不上时如实标 unknown，
+     * 下一轮回填能纠正；反过来逐条查名册会把同步拖慢一个数量级。
+     */
+    const roster = loadRoster(convId);
+
     for await (const page of nekobot.iterateMessages({
       conv_id: convId,
       start_ms: startMs,
@@ -102,10 +117,17 @@ export async function syncGroupMessages(
        * 全都塞进去的话每轮同步都会做一遍无用功。
        */
       const freshlyWritten: IngestMessage[] = [];
+      const mentionNotifies: MentionNotifyInput[] = [];
 
       db.transaction((tx) => {
         for (const msg of page) {
           const quality = isQualityMessage(msg, qualityMin);
+          const interactions = parseInteractions(
+            msg.content,
+            msg.type,
+            roster,
+            msg.create_time,
+          );
           const result = tx
             .insert(messages)
             .values({
@@ -122,12 +144,39 @@ export async function syncGroupMessages(
               ts: msg.create_time,
               tier: "hot",
               indexed: shouldIndex(msg),
+              replyToId: interactions.replyToId,
             })
             .onConflictDoNothing()
             .run();
 
           if (result.changes === 0) continue;
           written++;
+
+          /*
+           * 提及行必须和消息本体同一个事务：消息靠主键冲突去重，
+           * 一旦「消息写进去了、提及没写」，下一轮同步会把这条消息
+           * 当成已存在直接跳过 —— 漏掉的提及从此没有机会补上
+           * （除非手动重跑回填）。
+           */
+          if (interactions.mentions.length > 0) {
+            insertMentions(
+              tx,
+              { id: msg.msg_svr_id, convId: msg.conv_id, ts: msg.create_time },
+              interactions.mentions,
+            );
+            if (!msg.is_send) {
+              mentionNotifies.push({
+                convId: msg.conv_id,
+                convName: msg.conv_name,
+                messageTs: msg.create_time,
+                senderWxId: msg.sender_wx_id,
+                senderName: msg.sender_name,
+                content: msg.content,
+                mentions: interactions.mentions,
+              });
+            }
+          }
+
           freshlyWritten.push({
             id: msg.msg_svr_id,
             convId: msg.conv_id,
@@ -192,6 +241,15 @@ export async function syncGroupMessages(
           scanMessages(freshlyWritten);
         } catch (error) {
           console.error("关键词雷达扫描失败（不影响消息同步）：", error);
+        }
+      }
+
+      // @提及 通知同理放在事务外：提及行是数据（已随消息落库），通知只是提醒
+      if (mentionNotifies.length > 0) {
+        try {
+          notifyMentionedUsers(mentionNotifies);
+        } catch (error) {
+          console.error("@提及通知失败（不影响消息同步）：", error);
         }
       }
     }

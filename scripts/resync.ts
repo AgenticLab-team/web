@@ -9,7 +9,13 @@
 import { eq, like } from "drizzle-orm";
 
 import { db, sqlite } from "@/lib/db";
-import { dailyStats, groups, messages, syncCursors } from "@/lib/db/schema";
+import {
+  dailyStats,
+  groups,
+  messageMentions,
+  messages,
+  syncCursors,
+} from "@/lib/db/schema";
 import { syncGroupMessages } from "@/lib/sync/messages";
 
 const keyword = process.argv[2];
@@ -22,6 +28,9 @@ if (!keyword) {
 function clearGroup(convId: string) {
   db.transaction((tx) => {
     tx.delete(messages).where(eq(messages.convId, convId)).run();
+    // 提及行跟消息同生共死 —— 留着的话，上游已消失的消息会在
+    // 「被 @ 统计」里留下指向虚空的计数
+    tx.delete(messageMentions).where(eq(messageMentions.convId, convId)).run();
     tx.delete(dailyStats).where(eq(dailyStats.convId, convId)).run();
     tx.delete(syncCursors).where(eq(syncCursors.scope, convId)).run();
   });

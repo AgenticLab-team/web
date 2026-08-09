@@ -4,11 +4,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
+import { MessageText } from "@/components/messages/MessageText";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Empty, Pill } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { messagesOfDay } from "@/lib/forum/convert-source";
+import {
+  mentionsForMessages,
+  replyTargetsFor,
+} from "@/lib/messages/interactions";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
+import { currentNamesFor } from "@/lib/queries/people";
 import { shiftDateKey, todayKey } from "@/lib/time";
 
 export const metadata: Metadata = { title: "按天回看" };
@@ -52,6 +58,21 @@ export default async function ArchivePage({
   if (day_ === null) notFound();
   const rows = day_.rows;
   const dropped = day_.dropped;
+
+  /*
+   * 提及与回复上下文一次取齐。提及里 resolved 的人用**当前**昵称渲染
+   * （落库时存的字面昵称只是证据，昵称随时会变），
+   * 所以还要按 wx_id 再查一遍当前显示名。
+   */
+  const mentionsByMsg = mentionsForMessages(rows.map((r) => r.id));
+  const mentionWxIds = new Set<string>();
+  for (const list of mentionsByMsg.values()) {
+    for (const m of list) if (m.wxId) mentionWxIds.add(m.wxId);
+  }
+  const currentNames = currentNamesFor([...mentionWxIds]);
+  const replyTargets = replyTargetsFor(
+    rows.map((r) => r.replyToId).filter((id): id is string => id !== null),
+  );
 
   const groupName = groups.find((g) => g.convId === convId)?.name ?? "群聊";
   const link = (d: string, g = convId) => `/archive?group=${encodeURIComponent(g)}&date=${d}`;
@@ -113,36 +134,69 @@ export default async function ArchivePage({
         <Empty title="这天没有消息" hint="换个日期看看" />
       ) : (
         <div className="inset-group">
-          {rows.map((message) => (
-            <div key={message.id} className="inset-row flex gap-3 px-4 py-2.5">
-              <Avatar
-                wxId={message.senderWxId}
-                name={message.senderName}
-                src={message.avatarUrl}
-                size={28}
-                className="mt-0.5"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2">
-                  <span className="t-caption font-medium text-[var(--ink-secondary)]">
-                    {message.senderName}
-                  </span>
-                  <span className="tabular t-caption2 text-[var(--ink-quaternary)]">
-                    {new Date(message.ts).toLocaleTimeString("zh-CN", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      hour12: false,
-                    })}
-                  </span>
+          {rows.map((message) => {
+            const replyTarget = message.replyToId
+              ? replyTargets.get(message.replyToId)
+              : undefined;
+            return (
+              <div key={message.id} className="inset-row flex gap-3 px-4 py-2.5">
+                <Avatar
+                  wxId={message.senderWxId}
+                  name={message.senderName}
+                  src={message.avatarUrl}
+                  size={28}
+                  className="mt-0.5"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <Link
+                      href={`/members/${encodeURIComponent(message.senderWxId)}`}
+                      className="t-caption font-medium text-[var(--ink-secondary)] hover:text-[var(--accent)]"
+                    >
+                      {message.senderName}
+                    </Link>
+                    <span className="tabular t-caption2 text-[var(--ink-quaternary)]">
+                      {new Date(message.ts).toLocaleTimeString("zh-CN", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: false,
+                      })}
+                    </span>
+                    {/* 引用目标解析不出时也要承认这是条回复 —— 上游暂不透传引用关系 */}
+                    {message.type === "quote" && !replyTarget && (
+                      <span
+                        className="t-caption2 text-[var(--ink-quaternary)]"
+                        title="这是一条引用回复，但上游未提供被引用的消息"
+                      >
+                        ↩ 回复
+                      </span>
+                    )}
+                  </div>
+                  {replyTarget && (
+                    <div className="mt-1 rounded-[var(--radius-control)] border-l-2 border-[var(--separator)] bg-[var(--fill)] px-2.5 py-1.5">
+                      <p className="t-caption2 truncate text-[var(--ink-tertiary)]">
+                        {replyTarget.senderName ?? "成员"}：
+                        {replyTarget.type === "text" || replyTarget.type === "quote"
+                          ? replyTarget.content
+                          : `[${replyTarget.type}]`}
+                      </p>
+                    </div>
+                  )}
+                  <p className="t-subhead mt-0.5 whitespace-pre-wrap break-words leading-relaxed">
+                    {message.type === "text" || message.type === "quote" ? (
+                      <MessageText
+                        content={message.content}
+                        mentions={mentionsByMsg.get(message.id)}
+                        currentNames={currentNames}
+                      />
+                    ) : (
+                      `[${message.type}]`
+                    )}
+                  </p>
                 </div>
-                <p className="t-subhead mt-0.5 whitespace-pre-wrap break-words leading-relaxed">
-                  {message.type === "text" || message.type === "quote"
-                    ? message.content
-                    : `[${message.type}]`}
-                </p>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

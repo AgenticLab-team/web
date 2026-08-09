@@ -17,6 +17,8 @@ export interface PickableMessage {
   content: string;
   type: string;
   ts: number;
+  /** 被回复消息的 id。上游暂不透传引用关系，现阶段恒为 null（见 lib/messages/reply.ts） */
+  replyToId: string | null;
 }
 
 export interface DayMessages {
@@ -84,6 +86,7 @@ export function messagesOfDay(
     content: row.content,
     type: row.type,
     ts: row.ts,
+    replyToId: row.replyToId,
   })),
   };
 }

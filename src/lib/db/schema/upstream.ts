@@ -107,6 +107,16 @@ export const messages = sqliteTable(
     hasMedia: integer("has_media", { mode: "boolean" }).notNull().default(false),
     ts: integer("ts").notNull(),
 
+    /**
+     * 被回复消息的 id（上游 msg_svr_id）。
+     *
+     * type='quote' 只说明「这是一条回复」；回复的是哪一条，
+     * 上游 /v1/messages 目前不透传（实测见 src/lib/messages/reply.ts），
+     * 所以现存数据这一列全为 NULL —— 这是如实的结果，不是缺陷。
+     * 不加外键：被引用的消息可能早于接入时间或已被存储裁剪。
+     */
+    replyToId: text("reply_to_id"),
+
     tier: text("tier", { enum: ["hot", "warm", "cold"] })
       .notNull()
       .default("hot"),
@@ -118,6 +128,55 @@ export const messages = sqliteTable(
     index("messages_sender_ts_idx").on(t.senderWxId, t.ts),
     index("messages_ts_idx").on(t.ts),
     index("messages_tier_idx").on(t.tier),
+    // 「这条消息被回复了几次」要按目标反查，没有索引就是全表扫
+    index("messages_reply_to_idx").on(t.replyToId),
+  ],
+);
+
+/**
+ * 消息里的 @提及，一行一个 @。
+ *
+ * 为什么是独立表而不是 messages 上的 JSON 列：「谁被 @ 了多少次」
+ * 「他最近被 @ 的消息」都要按 wx_id 查，JSON 列做不了索引，
+ * 这两个查询就只能扫全部消息 —— 而它们出现在访问最频的成员页上。
+ *
+ * name 存的是**解析那一刻**@ 后面的字面昵称。昵称随时会变，
+ * 这一列是事后还原「当时写的是什么」的唯一证据；
+ * 展示时的人名用 wx_id 查当前昵称渲染，不用这一列。
+ */
+export const messageMentions = sqliteTable(
+  "message_mentions",
+  {
+    id: ulidPk(),
+    messageId: text("message_id").notNull(),
+    convId: text("conv_id").notNull(),
+    /** 消息时间戳，冗余存一份：按时间段统计被 @ 次数不必回表 join */
+    ts: integer("ts").notNull(),
+
+    /** @ 后面的字面昵称（当时的） */
+    name: text("name").notNull(),
+    /**
+     * resolved  — 唯一确定是谁，wx_id 非空
+     * ambiguous — 多名同名成员，candidates 里列出，绝不选边
+     * unknown   — 名册对不上（改名/退群/手打错），如实承认解析不出
+     * all       — @所有人
+     */
+    status: text("status", { enum: ["resolved", "ambiguous", "unknown", "all"] }).notNull(),
+    wxId: text("wx_id"),
+    /** ambiguous 时的候选 wx_id 列表 */
+    candidates: text("candidates", { mode: "json" }),
+    /** @ 在 content 里的下标。昵称串可能在正文重复出现，渲染按位置定位 */
+    position: integer("position").notNull(),
+    syncedAt: now("synced_at"),
+  },
+  (t) => [
+    /*
+     * 同步与回填可能同时跑（和 keyword_hits 一样的竞态）：
+     * 先查再写会两边都插进去，被 @ 次数悄悄翻倍 —— 靠唯一索引兜底。
+     */
+    uniqueIndex("message_mentions_msg_pos_idx").on(t.messageId, t.position),
+    index("message_mentions_wx_ts_idx").on(t.wxId, t.ts),
+    index("message_mentions_conv_ts_idx").on(t.convId, t.ts),
   ],
 );
 

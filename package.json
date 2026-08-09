@@ -18,6 +18,7 @@
     "grant": "tsx --conditions=react-server --env-file=.env.local scripts/grant.ts",
     "whois": "tsx --conditions=react-server --env-file=.env.local scripts/whois.ts",
     "backfill": "tsx --conditions=react-server --env-file=.env.local scripts/backfill.ts",
+    "backfill-interactions": "tsx --conditions=react-server --env-file=.env.local scripts/backfill-interactions.ts",
     "backup": "tsx --conditions=react-server --env-file=.env.local scripts/backup.ts",
     "health": "tsx --conditions=react-server --env-file=.env.local scripts/health.ts",
     "prune": "tsx --conditions=react-server --env-file=.env.local scripts/prune.ts",

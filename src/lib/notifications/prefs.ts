@@ -129,7 +129,7 @@ export const TYPE_META: TypeMeta[] = [
   {
     type: "mention",
     label: "有人 @ 我",
-    hint: "别人在帖子或回复里点名提到你",
+    hint: "别人在帖子、回复或群聊里点名提到你",
     section: "interaction",
   },
   {
