@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, TextQuote } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 
@@ -18,17 +18,24 @@ import type { ContextMessage, MessageHit } from "@/lib/search/messages";
  * 所以每条都能**就地展开**前后文，而不是跳走再跳回来：
  * 跳转会丢失滚动位置，翻十条结果就要翻十次页。
  */
-export function MessageHitList({ hits }: { hits: MessageHit[] }) {
+export function MessageHitList({
+  hits,
+  canQuote = false,
+}: {
+  hits: MessageHit[];
+  /** 论坛开着时才给「引用」—— 关掉的话那个入口点进去是个 404 */
+  canQuote?: boolean;
+}) {
   return (
     <div className="inset-group">
       {hits.map((hit) => (
-        <HitRow key={hit.id} hit={hit} />
+        <HitRow key={hit.id} hit={hit} canQuote={canQuote} />
       ))}
     </div>
   );
 }
 
-function HitRow({ hit }: { hit: MessageHit }) {
+function HitRow({ hit, canQuote }: { hit: MessageHit; canQuote: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const [context, setContext] = useState<ContextMessage[] | null>(null);
   const [pending, startTransition] = useTransition();
@@ -135,13 +142,35 @@ function HitRow({ hit }: { hit: MessageHit }) {
             * 只能去回看页。以前从搜索结果没有任何路能过去 ——
             * 人得自己记住日期，再去按天翻，再在几千条里找回这一条。
             */}
-          <Link
-            href={messageLink(hit.id, { convId: hit.convId })}
-            prefetch={false}
-            className="t-caption2 mt-2 inline-block text-[var(--accent)] transition active:opacity-60"
-          >
-            在群聊记录里打开这一条 →
-          </Link>
+          {/*
+            * 两个出口并排。
+            *
+            * 「打开」是去看前后那半小时，「引用」是直接拿它去整理成帖子。
+            * 以前只有前者 —— 想引用一条搜出来的消息，得先跳到回看页、
+            * 在几千条里重新找到它、再点那儿的引用。**三步做一件事**，
+            * 而搜索本来就是为了少走路。
+            */}
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <Link
+              href={messageLink(hit.id, { convId: hit.convId })}
+              prefetch={false}
+              className="t-caption2 inline-block text-[var(--accent)] transition active:opacity-60"
+            >
+              在群聊记录里打开这一条 →
+            </Link>
+
+            {canQuote && (
+              <Link
+                href={messageLink(hit.id, { convId: hit.convId }, "/forum/convert")}
+                prefetch={false}
+                aria-label={`引用 ${hit.senderName} 的这条消息去整理成帖子`}
+                className="tap-target t-caption2 inline-flex items-center gap-1 text-[var(--ink-tertiary)] transition-colors hover:text-[var(--accent)] active:text-[var(--accent)]"
+              >
+                <TextQuote className="h-3 w-3" strokeWidth={2} aria-hidden />
+                引用这一条
+              </Link>
+            )}
+          </div>
         </div>
       )}
     </div>

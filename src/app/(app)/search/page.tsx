@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { MessageHitList } from "@/components/search/MessageHitList";
+import { featureEnabled } from "@/lib/flags/server";
 import { SemanticHits, SemanticNotice } from "@/components/search/SemanticHits";
 import { ChatTabs } from "@/components/shell/ChatTabs";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -175,7 +176,7 @@ export default async function SearchPage({
       ) : result.hits.length === 0 ? (
         <Empty title="没有找到相关内容" hint="换个说法，或者试试更短的词" />
       ) : (
-        <MessageHitList hits={result.hits} />
+        <MessageHitList hits={result.hits} canQuote={featureEnabled("forum", user)} />
       )}
 
       <PageNote>
@@ -201,7 +202,11 @@ async function SemanticResults({ user, query }: { user: CurrentUser | null; quer
     <>
       <SemanticNotice error={result.error} pending={result.pending} />
       {result.hits.length > 0 ? (
-        <SemanticHits hits={result.hits} siteUrl={env.site.url} />
+        <SemanticHits
+          hits={result.hits}
+          siteUrl={env.site.url}
+          canQuote={featureEnabled("forum", user)}
+        />
       ) : (
         !result.error && (
           <Empty

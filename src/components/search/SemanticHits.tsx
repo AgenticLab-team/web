@@ -1,6 +1,8 @@
-import { Sparkles } from "lucide-react";
+import { Sparkles, TextQuote } from "lucide-react";
+import Link from "next/link";
 
 import { ShareSheet } from "@/components/share/ShareSheet";
+import { messageLink } from "@/lib/messages/archive-rules";
 import type { SemanticHit } from "@/lib/search/semantic";
 
 /**
@@ -28,7 +30,16 @@ function time(ms: number) {
   });
 }
 
-export function SemanticHits({ hits, siteUrl }: { hits: SemanticHit[]; siteUrl: string }) {
+export function SemanticHits({
+  hits,
+  siteUrl,
+  canQuote = false,
+}: {
+  hits: SemanticHit[];
+  siteUrl: string;
+  /** 论坛开着时才给「引用」—— 关掉的话那个入口点进去是个 404 */
+  canQuote?: boolean;
+}) {
   return (
     <ul className="space-y-3">
       {hits.map((hit) => (
@@ -74,6 +85,40 @@ export function SemanticHits({ hits, siteUrl }: { hits: SemanticHit[]; siteUrl: 
               </p>
             ))}
           </div>
+
+          {/*
+            * 出口。
+            *
+            * 语义检索一直**没有任何一条路通向那段消息本身** ——
+            * 看到一段觉得有用的对话，只能自己记住群名和时间，
+            * 再去按天回看里翻。而这一页存在的理由就是「找到它」。
+            *
+            * 锚在这一段的**第一条**上：段是模型切出来的，
+            * 而人要读的是从头读。
+            */}
+          {first(hit) && (
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 hairline-t pt-2">
+              <Link
+                href={messageLink(first(hit)!.id, { convId: hit.convId })}
+                prefetch={false}
+                className="t-caption2 text-[var(--accent)] transition active:opacity-60"
+              >
+                在群聊记录里打开这一段 →
+              </Link>
+
+              {canQuote && (
+                <Link
+                  href={messageLink(first(hit)!.id, { convId: hit.convId }, "/forum/convert")}
+                  prefetch={false}
+                  aria-label="引用这一段去整理成帖子"
+                  className="tap-target t-caption2 inline-flex items-center gap-1 text-[var(--ink-tertiary)] transition-colors hover:text-[var(--accent)] active:text-[var(--accent)]"
+                >
+                  <TextQuote className="h-3 w-3" strokeWidth={2} aria-hidden />
+                  引用这一段
+                </Link>
+              )}
+            </div>
+          )}
         </li>
       ))}
     </ul>
@@ -81,6 +126,11 @@ export function SemanticHits({ hits, siteUrl }: { hits: SemanticHit[]; siteUrl: 
 }
 
 /** 语义检索没跑起来时的说明 —— 不能显示成「没搜到」 */
+/** 这一段的第一条 —— 段是模型切出来的，而人要读的是从头读 */
+function first(hit: SemanticHit) {
+  return [...hit.messages].sort((a, b) => a.ts - b.ts)[0];
+}
+
 export function SemanticNotice({ error, pending }: { error: string | null; pending: number }) {
   if (!error && pending === 0) return null;
 

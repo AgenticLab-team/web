@@ -319,6 +319,12 @@ body {
   box-shadow: inset 0 -0.5px 0 var(--separator);
 }
 
+/* 这一组本来只有 b 和 r。手拼 `border-t` 会得到一条 1px 的线，
+ * 和旁边所有 0.5px 的分隔线粗细不一 —— 在高分屏上一眼看得出来。 */
+.hairline-t {
+  box-shadow: inset 0 0.5px 0 var(--separator);
+}
+
 .hairline-r {
   box-shadow: inset -0.5px 0 0 var(--separator);
 }
