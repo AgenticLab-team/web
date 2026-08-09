@@ -13,9 +13,9 @@
 | 数据库 | `/home/ubuntu/agenticlab/data/agenticlab.db`（SQLite + FTS5） |
 | 运行时 | Node 22.23.2（`/usr/local/bin/node`） |
 | 应用 | systemd `agenticlab.service` → 127.0.0.1:3000 |
-| 同步 | systemd `agenticlab-sync.timer`，每 2 分钟 |
+| 同步 | systemd `agenticlab-sync.timer`，每 2 分钟。六步：后台队列 · 群发投递 ·<br>刷新群列表 · 同步消息 · 群成员名册 · 人员名录。**每一步隔开** ——<br>刷新群列表失败不再让消息同步整个停掉 |
 | 健康与告警 | `agenticlab-health.timer`，每 5 分钟。一轮里六步：存储快照 · 自动裁剪 ·<br>置顶到期 · 赛季结算 · 称号结算 · 告警投递。**每一步都是隔开的** ——<br>一步失败不影响其它步，失败会写成 `cron` 组件的健康状态，<br>连续 30 分钟才报警（`journalctl -u agenticlab-health` 看详情）|
-| 备份 | `agenticlab-backup.timer`，每日 04:00（备完顺带推异地）|
+| 备份 | `agenticlab-backup.timer`，每日 04:00。本机快照失败直接退出；<br>**推异地与恢复演练标为非致命** —— 「异地还没配」不该和<br>「本机备份没做成」共用一个红灯 |
 | 每周精选 | `agenticlab-digest.timer`，每周一 09:00 —— **只生成草稿，不发送** |
 | 反代 | nginx，80 → 443 强制跳转 |
 | 证书 | Let's Encrypt，`agenticlab.sh` + `www`，2026-11-06 到期，自动续期 |

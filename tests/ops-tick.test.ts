@@ -314,3 +314,111 @@ describe("**把失败接进告警链路** —— 退出码和日志没有人看"
     assert.match(source, /lastTickHealth\(/);
   });
 });
+
+describe("**「还没配好」和「真的坏了」不该是同一个信号**", () => {
+  it("标了 critical:false 的失败不让这一轮退非零", async () => {
+    const report = await runSteps([
+      { name: "本机备份", run: () => "好了" },
+      {
+        name: "推异地",
+        critical: false,
+        run: () => {
+          throw new Error("没有配置对象存储");
+        },
+      },
+    ] as never);
+
+    assert.equal(report.failed.length, 1, "失败照样要记下来");
+    assert.equal(report.criticalFailed.length, 0);
+    assert.equal(tickFailureReport(report), null, "异地没配好把备份这一轮标红了");
+  });
+
+  it("**它仍然出现在日志里** —— 不算致命不等于不用说", async () => {
+    const report = await runSteps([
+      {
+        name: "推异地",
+        critical: false,
+        run: () => {
+          throw new Error("没配置");
+        },
+      },
+    ] as never);
+    assert.match(summarize(report), /推异地✗/);
+  });
+
+  it("非致命失败的健康状态是 degraded，不是 down", async () => {
+    const report = await runSteps([
+      {
+        name: "推异地",
+        critical: false,
+        run: () => {
+          throw new Error("没配置");
+        },
+      },
+    ] as never);
+    assert.equal(tickHealth(report, null).status, "degraded");
+  });
+
+  it("致命与非致命同时失败时，按致命算", async () => {
+    const report = await runSteps([
+      {
+        name: "本机备份",
+        run: () => {
+          throw new Error("磁盘满了");
+        },
+      },
+      {
+        name: "推异地",
+        critical: false,
+        run: () => {
+          throw new Error("没配置");
+        },
+      },
+    ] as never);
+
+    assert.equal(tickHealth(report, null).status, "down");
+    const failure = tickFailureReport(report)!;
+    assert.match(failure.body, /本机备份/);
+    assert.doesNotMatch(failure.body, /推异地/, "非致命的混进了告警正文");
+  });
+
+  it("默认是致命的 —— 不写 critical 的步骤失败要算数", async () => {
+    const report = await runSteps([
+      {
+        name: "a",
+        run: () => {
+          throw new Error("x");
+        },
+      },
+    ] as never);
+    assert.equal(report.criticalFailed.length, 1);
+  });
+});
+
+describe("另外两个定时任务也隔开了", () => {
+  const sync = readFileSync(new URL("../scripts/sync.ts", import.meta.url), "utf8");
+  const backup = readFileSync(new URL("../scripts/backup.ts", import.meta.url), "utf8");
+
+  it("**同步走 runSteps** —— 它每两分钟一轮，是整站数据的唯一来源", () => {
+    assert.match(sync, /runSteps\(/);
+    for (const name of ["刷新群列表", "同步消息", "群成员名册", "人员名录"]) {
+      assert.ok(sync.includes(`name: "${name}"`), `${name} 不在同步这一轮里`);
+    }
+  });
+
+  it("**刷新群列表失败不该让消息同步也不跑** —— 上游抖一下就会发生", () => {
+    // 两者都在 runSteps 的数组里，就自动隔开了
+    const stepsBlock = sync.slice(sync.indexOf("runSteps("), sync.indexOf("] as never)"));
+    assert.ok(stepsBlock.includes("刷新群列表"));
+    assert.ok(stepsBlock.includes("同步消息"));
+  });
+
+  it("备份把「推异地」标成非致命", () => {
+    const offsiteBlock = backup.slice(backup.indexOf('name: "推异地"'), backup.indexOf('name: "恢复演练"'));
+    assert.match(offsiteBlock, /critical: false/);
+  });
+
+  it("本机备份那一段**不在** runSteps 里 —— 它失败就该直接退出，没有下一步可谈", () => {
+    assert.ok(backup.indexOf("source.backup") < backup.indexOf("runSteps("));
+  });
+});

@@ -82,15 +82,48 @@ async function main() {
 
   if (process.argv.includes("--local")) return;
 
-  // 备完就推异地。磁盘挂了的时候，本机这几份和原库一起没
+  /*
+   * 推异地与恢复演练**不算致命**。
+   *
+   * 「本机备份没做成」和「异地还没配对象存储」不该是同一个信号：
+   * 后者天天都会出现，如果它让备份这一轮整体标红，
+   * 那第一次真的备份失败时，没有人会多看一眼。
+   *
+   * 到这里为止本机那份已经写好、校验过、压缩完了 ——
+   * 后面这两步无论怎样都不该把它抹掉。
+   */
   const { offsiteSummary, restoreDrill, syncOffsite } = await import("@/lib/backup/offsite");
-  const result = await syncOffsite();
-  console.log(`${result.ok ? "✓" : "✗"} 异地  ${result.note}`);
+  const { runSteps, summarize, tickFailureReport } = await import("@/lib/ops/tick");
 
-  // 到期就顺手演练一次 —— 没演练过的备份只是一堆字节
-  if (offsiteSummary().drillDue) {
-    const drill = await restoreDrill();
-    console.log(`${drill.ok ? "✓" : "✗"} 演练  ${drill.note}`);
+  const report = await runSteps([
+    {
+      name: "推异地",
+      critical: false,
+      timeoutMs: 120_000,
+      run: () => syncOffsite(),
+      describe: (r: Awaited<ReturnType<typeof syncOffsite>>) => `${r.ok ? "" : "✗ "}${r.note}`,
+    },
+    {
+      // 到期就顺手演练一次 —— 没演练过的备份只是一堆字节
+      name: "恢复演练",
+      critical: false,
+      timeoutMs: 120_000,
+      run: async () => (offsiteSummary().drillDue ? restoreDrill() : null),
+      describe: (r: Awaited<ReturnType<typeof restoreDrill>> | null) =>
+        r ? `${r.ok ? "" : "✗ "}${r.note}` : "还不到演练时候",
+    },
+  ] as never);
+
+  for (const step of report.steps) {
+    console.log(`${step.ok ? " " : "✗"} ${step.name.padEnd(8)} ${step.ok ? step.note : step.error}`);
+  }
+  console.log(`\n${summarize(report)}`);
+
+  // 只有致命失败才退非零。异地没配好不该让备份这一轮标红
+  const failure = tickFailureReport(report);
+  if (failure) {
+    console.error(`\n⚠ ${failure.title}：${failure.body}`);
+    process.exit(1);
   }
 }
 

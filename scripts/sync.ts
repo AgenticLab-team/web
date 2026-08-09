@@ -4,7 +4,7 @@
  *   npm run sync              同步所有已开启的群
  *   npm run sync -- <关键词>   只同步匹配的群
  */
-import { eq, like } from "drizzle-orm";
+import { like } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { groups } from "@/lib/db/schema";
@@ -14,6 +14,8 @@ import { syncAllMembers } from "@/lib/sync/members";
 import { syncAllGroups, syncGroupMessages } from "@/lib/sync/messages";
 import { claimPending, collapseJobs, completeJob } from "@/lib/sync/queue";
 import { deliverBroadcast, pendingBroadcasts } from "@/lib/broadcast/sender";
+import { runSteps, summarize, tickFailureReport } from "@/lib/ops/tick";
+import type { SyncResult } from "@/lib/sync/job";
 
 const keyword = process.argv[2];
 
@@ -89,45 +91,80 @@ async function drainBroadcasts() {
 }
 
 async function main() {
-  await drainQueue();
-  await drainBroadcasts();
-
-  console.log("→ 刷新群列表");
-  const convs = await syncConversations({ triggeredBy: "admin" });
-  console.log(`  ${convs.written} 个群`);
-
   if (keyword) {
-    const matched = db.select().from(groups).where(like(groups.name, `%${keyword}%`)).all();
-    for (const g of matched) {
-      if (!g.syncEnabled) {
-        console.log(`  跳过（未开启同步）：${g.name}`);
-        continue;
-      }
-      const started = Date.now();
-      const result = await syncGroupMessages(g.convId, { triggeredBy: "admin" });
-      console.log(
-        `  ${g.name}：拉取 ${result.fetched}，新增 ${result.written}（${Date.now() - started}ms）`,
-      );
+    await syncByKeyword();
+    return;
+  }
+
+  /*
+   * 每一步隔开。
+   *
+   * 原来是一串裸 await：刷新群列表失败（上游抖一下就会）之后，
+   * **消息同步就完全不跑了** —— 而这个任务每两分钟一轮、
+   * 是整站数据的唯一来源。一次抖动本不该让数据停在那一刻。
+   *
+   * 单个群的失败在 syncAllGroups 里已经隔开了；这里隔的是这几件事之间。
+   */
+  const report = await runSteps([
+    {
+      name: "后台队列",
+      run: () => drainQueue(),
+      timeoutMs: 90_000,
+    },
+    {
+      name: "群发投递",
+      run: () => drainBroadcasts(),
+      timeoutMs: 90_000,
+    },
+    {
+      name: "刷新群列表",
+      run: () => syncConversations({ triggeredBy: "cron" }),
+      describe: (r: SyncResult) => `${r.written} 个群`,
+    },
+    {
+      name: "同步消息",
+      run: () => syncAllGroups({ triggeredBy: "cron" }),
+      describe: (r: SyncResult) => `拉取 ${r.fetched}，新增 ${r.written}${r.note ? ` ⚠ ${r.note}` : ""}`,
+      timeoutMs: 100_000,
+    },
+    {
+      name: "群成员名册",
+      run: () => syncAllMembers({ triggeredBy: "cron" }),
+      describe: (r: SyncResult) => `${r.written} 名成员${r.note ? ` ⚠ ${r.note}` : ""}`,
+    },
+    {
+      // 昵称会变，本地源每轮都要跟着刷新
+      name: "人员名录",
+      run: () => syncPeople({ triggeredBy: "cron" }),
+      describe: (r: SyncResult) => `${r.fetched} 人${r.note ? ` ⚠ ${r.note}` : ""}`,
+    },
+  ] as never);
+
+  for (const step of report.steps) {
+    console.log(`${step.ok ? " " : "✗"} ${step.name.padEnd(10)} ${step.ok ? step.note : step.error}`);
+  }
+  console.log(`\n${summarize(report)}`);
+
+  const failure = tickFailureReport(report);
+  if (failure) {
+    console.error(`\n⚠ ${failure.title}：${failure.body}`);
+    process.exit(1);
+  }
+}
+
+/** 手动按关键词同步某几个群 —— 人在旁边看着，不需要那套隔离 */
+async function syncByKeyword() {
+  const matched = db.select().from(groups).where(like(groups.name, `%${keyword}%`)).all();
+  for (const g of matched) {
+    if (!g.syncEnabled) {
+      console.log(`  跳过（未开启同步）：${g.name}`);
+      continue;
     }
-  } else {
-    const enabled = db.select().from(groups).where(eq(groups.syncEnabled, true)).all();
-    console.log(`→ 同步 ${enabled.length} 个群的消息`);
     const started = Date.now();
-    const result = await syncAllGroups({ triggeredBy: "admin" });
+    const result = await syncGroupMessages(g.convId, { triggeredBy: "admin" });
     console.log(
-      `  拉取 ${result.fetched}，新增 ${result.written}（${((Date.now() - started) / 1000).toFixed(1)}s）`,
+      `  ${g.name}：拉取 ${result.fetched}，新增 ${result.written}（${Date.now() - started}ms）`,
     );
-    if (result.note) console.warn(`  ⚠ ${result.note}`);
-
-    console.log("→ 同步群成员名册");
-    const members = await syncAllMembers({ triggeredBy: "admin" });
-    console.log(`  ${members.written} 名成员`);
-    if (members.note) console.warn(`  ⚠ ${members.note}`);
-
-    // 昵称会变，本地源每轮都要跟着刷新
-    console.log("→ 刷新人员名录");
-    const ppl = await syncPeople({ triggeredBy: "admin" });
-    console.log(`  ${ppl.fetched} 人，${ppl.note ?? ""}`);
   }
 }
 

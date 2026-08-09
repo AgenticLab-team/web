@@ -33,12 +33,22 @@ export interface StepResult {
   /** 一行给人看的结果 */
   note: string;
   error?: string;
+  /** 这一步失败算不算「这一轮失败了」 */
+  critical: boolean;
 }
 
 export interface TickReport {
   steps: StepResult[];
   totalMs: number;
   failed: StepResult[];
+  /**
+   * 失败里**真正要紧的**那些。
+   *
+   * 「本机备份没做成」和「异地还没配对象存储」不该是同一个信号 ——
+   * 后者天天都会出现，如果它让备份这一轮整体标红，
+   * 那第一次真的备份失败时，没有人会多看一眼。
+   */
+  criticalFailed: StepResult[];
   /** 超过这个时间就该警觉 —— 定时器间隔的一半 */
   slow: boolean;
 }
@@ -54,6 +64,13 @@ export interface StepSpec<T = unknown> {
    * 结果是从那一刻起**所有定时任务都停了**，而且没有任何报错。
    */
   timeoutMs?: number;
+  /**
+   * 这一步失败算不算「这一轮失败了」。默认算。
+   *
+   * 设成 false 的那些仍然会被记下来、在日志里标 ✗，
+   * 只是不会让整轮退非零 —— 用在「本来就还没配好」这类已知缺口上。
+   */
+  critical?: boolean;
 }
 
 export const DEFAULT_STEP_TIMEOUT_MS = 60_000;
@@ -106,6 +123,7 @@ export async function runSteps(
         ok: true,
         ms: now() - stepStart,
         note: step.describe ? step.describe(value as never) : "",
+        critical: step.critical !== false,
       });
     } catch (error) {
       /*
@@ -118,15 +136,18 @@ export async function runSteps(
         ms: now() - stepStart,
         note: "",
         error: error instanceof Error ? error.message : String(error),
+        critical: step.critical !== false,
       });
     }
   }
 
   const totalMs = now() - started;
+  const failed = results.filter((s) => !s.ok);
   return {
     steps: results,
     totalMs,
-    failed: results.filter((s) => !s.ok),
+    failed,
+    criticalFailed: failed.filter((s) => s.critical),
     slow: totalMs > SLOW_TICK_MS,
   };
 }
@@ -138,10 +159,10 @@ export async function runSteps(
  * 那是让人静音整个通道最快的办法。
  */
 export function tickFailureReport(report: TickReport): { title: string; body: string } | null {
-  if (report.failed.length === 0) return null;
+  if (report.criticalFailed.length === 0) return null;
   return {
-    title: `定时任务有 ${report.failed.length} 步失败`,
-    body: report.failed.map((s) => `${s.name}：${s.error}`).join("；"),
+    title: `定时任务有 ${report.criticalFailed.length} 步失败`,
+    body: report.criticalFailed.map((s) => `${s.name}：${s.error}`).join("；"),
   };
 }
 
@@ -168,9 +189,16 @@ export function tickHealth(report: TickReport, probeError: string | null): {
   if (probeError) {
     return { status: "down", detail: `探活整体失败：${probeError}` };
   }
-  if (report.failed.length > 0) {
+  if (report.criticalFailed.length > 0) {
     return {
       status: "down",
+      detail: report.criticalFailed.map((s) => `${s.name}：${s.error}`).join("；").slice(0, 200),
+    };
+  }
+  if (report.failed.length > 0) {
+    // 失败了但不要紧的：记下来，但别让它和真故障共用一个颜色
+    return {
+      status: "degraded",
       detail: report.failed.map((s) => `${s.name}：${s.error}`).join("；").slice(0, 200),
     };
   }
