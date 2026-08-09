@@ -4,12 +4,16 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { useToast } from "@/components/ui/Toast";
-import { applyToActivity, cancelApplication } from "@/lib/activities/actions";
+import {
+  applyToActivity,
+  cancelApplication,
+  resubmitApplication,
+} from "@/lib/activities/actions";
 
 /**
  * 申请表单。
  *
- * 两条：
+ * 三条：
  *
  * ① **不够格时把差距直接写出来**，而不是把按钮灰掉。
  *   「还差 13 条高质量发言」是一个能去做的目标；
@@ -17,6 +21,10 @@ import { applyToActivity, cancelApplication } from "@/lib/activities/actions";
  *
  * ② 名额快满时**如实说还剩几个**。藏着不说的话，
  *   填完提交才发现满了，那种落差比一开始就知道难受得多。
+ *
+ * ③ **撤回之后接着改**，不是从头再来。撤回最常见的原因就是
+ *   「我想换一个域名」，所以上次填的原样带回来，改完再提交 ——
+ *   而且改的是同一条申请，不是新开一条。
  */
 export function ApplyForm({
   activityId,
@@ -26,6 +34,7 @@ export function ApplyForm({
   reasons,
   remaining,
   existing,
+  resume = null,
 }: {
   activityId: string;
   fields: { name: string; label: string; placeholder?: string; hint?: string; required: boolean }[];
@@ -34,11 +43,22 @@ export function ApplyForm({
   reasons: string[];
   remaining: number | null;
   existing: { id: string; summary: string; statusLabel: string; canCancel: boolean } | null;
+  /** 撤回（或被判无效、履约失败）掉的那一份，可以改了重提 */
+  resume?: {
+    id: string;
+    values: Record<string, string>;
+    summary: string;
+    statusLabel: string;
+  } | null;
 }) {
   const router = useRouter();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
-  const [values, setValues] = useState<Record<string, string>>({ tld: tlds[0] ?? "sh" });
+  const [values, setValues] = useState<Record<string, string>>({
+    // 兜底和 domainModule 的默认后缀对齐 —— 两处不一样的话人怎么填都会被拒
+    tld: tlds[0] ?? "icu",
+    ...(resume?.values ?? {}),
+  });
 
   if (existing) {
     return (
@@ -90,7 +110,15 @@ export function ApplyForm({
 
   const submit = () => {
     startTransition(async () => {
-      const result = await applyToActivity({ activityId, payload: values });
+      /*
+       * 有上一份就改上一份，没有才新建。
+       *
+       * 每次都新建的话，一个人在一个活动里会攒下一串申请 ——
+       * 而名额、域名唯一性、每人限额全是按在途申请数的。
+       */
+      const result = resume
+        ? await resubmitApplication({ id: resume.id, payload: values })
+        : await applyToActivity({ activityId, payload: values });
       if (!result.ok) {
         toast.show({ message: result.error ?? "提交失败", kind: "error" });
         return;
@@ -102,6 +130,18 @@ export function ApplyForm({
 
   return (
     <div className="space-y-2.5 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
+      {/*
+        * 上一份为什么还在这儿，说清楚。
+        *
+        * 不说的话，人打开页面看到框里已经填着东西，会以为撤回没成功。
+        */}
+      {resume && (
+        <p className="t-caption rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 leading-relaxed text-[var(--ink-secondary)]">
+          上次那份（<span className="font-mono">{resume.summary}</span>·{resume.statusLabel}）
+          还留着，名额已经还回去了。改成你想要的再提交就行 —— 改的还是这一份，不会多占一个。
+        </p>
+      )}
+
       {/* 名额快满时如实说 —— 填完才发现满了那种落差更难受 */}
       {remaining !== null && remaining <= 10 && (
         <p
@@ -160,7 +200,7 @@ export function ApplyForm({
         onClick={submit}
         className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
       >
-        登记
+        {resume ? "改好了，重新提交" : "登记"}
       </button>
 
       <p className="t-caption leading-relaxed text-[var(--ink-tertiary)]">

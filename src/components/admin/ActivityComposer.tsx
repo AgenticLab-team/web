@@ -34,7 +34,8 @@ export function ActivityComposer({
   const [allowWaitlist, setAllowWaitlist] = useState(true);
   const [hours, setHours] = useState("12");
   const [eligibility, setEligibility] = useState<Rule | null>(null);
-  const [tlds, setTlds] = useState("sh");
+  // 这轮放的是 .icu —— .sh 一个几百块，60 个发不起
+  const [tlds, setTlds] = useState("icu");
 
   if (!open) {
     return (

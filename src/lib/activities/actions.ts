@@ -1,6 +1,6 @@
 "use server";
 
-import { eq, sql } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { requireAdmin, requireWritableAdmin } from "@/lib/admin/guard";
@@ -17,6 +17,7 @@ import { evaluateEligibility, validateRule, type Rule } from "@/lib/activities/e
 import { getActivity } from "@/lib/activities/queries";
 import { claimQuota, releaseQuota } from "@/lib/activities/quota";
 import { getModule, isKnownModule } from "@/lib/activities/registry";
+import { canResubmit } from "@/lib/activities/resubmit-rules";
 import {
   canTransitionActivity,
   canTransitionApplication,
@@ -345,6 +346,152 @@ function nextQueuePosition(activityId: string): number {
   return Number(max?.n ?? 0) + 1;
 }
 
+/**
+ * 撤回之后改一改再提交。
+ *
+ * ─────────────────────────────────────────
+ * 改的是**同一行**，不是新建一行
+ * ─────────────────────────────────────────
+ *
+ * 每重提一次就新建一行的话，一个人在一个活动里会攒下一串申请，
+ * 而名额、域名唯一性、每人限额三道判定全是按「在途的申请」数的 ——
+ * 任何一道判漏，攒下的那串就变成一堆被这个人占住的域名。
+ *
+ * 复用同一行则天然没有这个问题：一个人在一个活动里只有一行，
+ * 它要么在途（占一个名额、占住一个域名），要么作废（什么都不占）。
+ *
+ * ─────────────────────────────────────────
+ * 重提要重新走一遍全部判定
+ * ─────────────────────────────────────────
+ *
+ * 撤回到重提之间隔着时间，中间什么都可能变：活动截止了、名额被抢光了、
+ * 那个域名被别人登记了、这个人已经不够格了。所以资格**重新算**而不是
+ * 吃申请时那份快照 —— 吃快照的话，快照就成了一张永久通行证。
+ */
+export async function resubmitApplication(input: {
+  id: string;
+  payload: Record<string, unknown>;
+}): Promise<ActivityResult> {
+  const user = await getCurrentUser();
+  if (!user) return fail("请先登录");
+
+  const app = db
+    .select()
+    .from(activityApplications)
+    .where(eq(activityApplications.id, input.id))
+    .get();
+  if (!app) return fail("申请不存在");
+
+  const activity = getActivity(app.activityId);
+  if (!activity) return fail("活动不存在");
+
+  const openState = isActivityOpen(activity.status, activity.opensAt, activity.closesAt, Date.now());
+
+  /*
+   * 这个人在这个活动里**另外**还有几条在途的。
+   *
+   * 口径必须和 applyToActivity 里那段完全一样 —— 两处口径不同的话，
+   * 走重提这条路就能绕开每人限额，而那正是「一个人占一堆域名」的入口。
+   */
+  const otherActive = db
+    .select({ id: activityApplications.id })
+    .from(activityApplications)
+    .where(
+      sql`${activityApplications.activityId} = ${app.activityId}
+          AND ${activityApplications.userId} = ${user.id}
+          AND ${activityApplications.id} <> ${app.id}
+          AND ${activityApplications.status} NOT IN ('invalid','rejected','cancelled','expired','failed')`,
+    )
+    .all();
+
+  // 这一行提交过几次。事件表是唯一记全了每次流转的地方
+  const submitCount =
+    db
+      .select({ n: count() })
+      .from(activityEvents)
+      .where(
+        sql`${activityEvents.applicationId} = ${app.id}
+            AND ${activityEvents.toStatus} IN ('submitted','waitlisted')`,
+      )
+      .get()?.n ?? 0;
+
+  const verdict = canResubmit({
+    isOwner: app.userId === user.id,
+    status: app.status,
+    activityOpen: openState.open,
+    activityClosedReason: openState.reason,
+    otherActiveApplications: otherActive.length,
+    perUserLimit: activity.perUserLimit,
+    submitCount,
+  });
+  if (!verdict.ok) return fail(verdict.reason!);
+
+  const activityModule = getModule(activity.moduleKey);
+  if (!activityModule) return fail("这个活动的模块已经不可用了");
+
+  // 资格重新算，不吃快照 —— 理由见上面
+  const stats = computeStatsFor(user.id);
+  if (!stats) return fail("拿不到你的统计数据，请稍后再试");
+  const eligibility = evaluateEligibility((activity.eligibility as Rule | null) ?? null, stats);
+  if (!eligibility.eligible) return fail(eligibility.failures.map((f) => f.message).join("；"));
+
+  const config = (activity.config as Record<string, unknown>) ?? {};
+  const validation = activityModule.validate(input.payload as never, config);
+  if (!validation.ok) return fail(validation.error ?? "填写有误");
+
+  /*
+   * 域名真的换了才重新查一次 RDAP。
+   *
+   * 没换却照查的话，一个人反复撤回—重提就是在拿站点当域名扫描器打注册局，
+   * 而对他自己没有任何新信息。
+   */
+  let availabilityNote: string | undefined;
+  if (
+    activityModule.checkAvailability &&
+    validation.normalizedKey &&
+    validation.normalizedKey !== app.normalizedKey
+  ) {
+    const availability = await activityModule.checkAvailability(validation.normalizedKey, config);
+    if (availability.available === false) {
+      return fail(`${validation.normalizedKey} ${availability.detail} —— 换一个再试`);
+    }
+    if (availability.available === "unknown") {
+      availabilityNote = `没能查到 ${validation.normalizedKey} 的注册状态（${availability.detail}），已经先帮你登记上，注册时会再确认一次`;
+    }
+  }
+
+  /*
+   * 状态、名额、内容在同一次 transition 里落下去。
+   *
+   * 内容单独先写的话，中间失败会留下一条「已撤回但域名已经换了」的记录，
+   * 而那条记录对着的名额和唯一性都还是旧域名的。
+   */
+  const result = await transition({
+    application: app,
+    to: "submitted",
+    actorId: user.id,
+    actorKind: "user",
+    note: "撤回后重新提交",
+    // 名额在这中间被抢光了就进候补，而不是把人卡在「撤回了也回不去」
+    fallbackToWaitlist: activity.allowWaitlist,
+    patch: {
+      payload: input.payload,
+      normalizedKey: validation.normalizedKey ?? null,
+      // 重提那一刻的资格才是这次的依据，旧快照留着会让事后对账对错人
+      eligibilitySnapshot: stats as unknown as Record<string, unknown>,
+    },
+  });
+  if (!result.ok) return result;
+
+  return {
+    ok: true,
+    id: app.id,
+    note: [result.note ?? "已重新提交。等管理员统一处理后会通知你", availabilityNote]
+      .filter(Boolean)
+      .join("；"),
+  };
+}
+
 export async function cancelApplication(input: { id: string }): Promise<ActivityResult> {
   const user = await getCurrentUser();
   if (!user) return fail("请先登录");
@@ -591,13 +738,34 @@ async function transition(input: {
   actorKind: "user" | "admin" | "system" | "module";
   note?: string;
   notifyUser?: boolean;
+  /**
+   * 名额满了就转候补，而不是失败。
+   *
+   * 只有「重新提交」这条路用得上：撤回之后名额可能已经被别人占走了，
+   * 这时候把人卡在「撤回了、也回不去」是最糟的结果。
+   * 审批那条路不该带这个 —— 管理员点「通过」时名额满了就该报错。
+   */
+  fallbackToWaitlist?: boolean;
+  /**
+   * 顺带改的内容。**和状态、名额在同一个事务里落。**
+   *
+   * 单独先写内容的话，中间失败会留下一条「状态还是旧的、内容已经换了」
+   * 的记录，而名额和唯一索引对着的还是旧内容。
+   */
+  patch?: {
+    payload?: Record<string, unknown>;
+    normalizedKey?: string | null;
+    eligibilitySnapshot?: Record<string, unknown>;
+  };
 }): Promise<ActivityResult> {
   const { application: app } = input;
 
   const check = canTransitionApplication(app.status, input.to);
   if (!check.ok) return fail(check.error!);
 
+  let target = input.to;
   const delta = quotaDelta(app.status, input.to);
+  let claimed = false;
 
   if (delta > 0) {
     const claim = claimQuota({
@@ -606,8 +774,16 @@ async function transition(input: {
       reason: `状态变为 ${input.to}`,
       operatorId: input.actorId,
     });
-    // 名额满了就转不成「已通过」—— 这时候该留在候补里
-    if (claim.full) return fail("名额已满，无法通过 —— 请先让其他人释放名额");
+    if (claim.full) {
+      // 名额满了就转不成「已通过」—— 这时候该留在候补里
+      if (!input.fallbackToWaitlist) return fail("名额已满，无法通过 —— 请先让其他人释放名额");
+      const waitlistCheck = canTransitionApplication(app.status, "waitlisted");
+      if (!waitlistCheck.ok) return fail("名额已满 —— 请先让其他人释放名额");
+      // 候补不占名额，所以没有东西要还
+      target = "waitlisted";
+    } else {
+      claimed = true;
+    }
   } else if (delta < 0) {
     releaseQuota({
       activityId: app.activityId,
@@ -617,30 +793,57 @@ async function transition(input: {
     });
   }
 
-  db.transaction((tx) => {
-    tx.update(activityApplications)
-      .set({
-        status: input.to,
-        reviewedBy: input.actorKind === "admin" ? input.actorId : undefined,
-        reviewedAt: input.actorKind === "admin" ? Date.now() : undefined,
-        reviewNote: input.note,
-        updatedAt: Date.now(),
-      })
-      .where(eq(activityApplications.id, app.id))
-      .run();
+  const waitlisted = target === "waitlisted";
 
-    tx.insert(activityEvents)
-      .values({
+  try {
+    db.transaction((tx) => {
+      tx.update(activityApplications)
+        .set({
+          status: target,
+          payload: input.patch?.payload ?? undefined,
+          normalizedKey: input.patch ? (input.patch.normalizedKey ?? null) : undefined,
+          eligibilitySnapshot: input.patch?.eligibilitySnapshot ?? undefined,
+          // 排到队尾。插回原来的位置等于让撤回过的人插队
+          queuePosition: waitlisted ? nextQueuePosition(app.activityId) : undefined,
+          reviewedBy: input.actorKind === "admin" ? input.actorId : undefined,
+          reviewedAt: input.actorKind === "admin" ? Date.now() : undefined,
+          reviewNote: input.note,
+          updatedAt: Date.now(),
+        })
+        .where(eq(activityApplications.id, app.id))
+        .run();
+
+      tx.insert(activityEvents)
+        .values({
+          activityId: app.activityId,
+          applicationId: app.id,
+          fromStatus: app.status,
+          toStatus: target,
+          actorId: input.actorId,
+          actorKind: input.actorKind,
+          note: input.note,
+        })
+        .run();
+    });
+  } catch (error) {
+    /*
+     * 部分唯一索引撞了 = 这个域名已经被别人占着。
+     * **必须把刚占的名额还回去** —— 不还的话每一次撞车都会永久蒸发一个名额，
+     * 而「名额变少了」没有人会来投诉。
+     */
+    if (claimed) {
+      releaseQuota({
         activityId: app.activityId,
         applicationId: app.id,
-        fromStatus: app.status,
-        toStatus: input.to,
-        actorId: input.actorId,
-        actorKind: input.actorKind,
-        note: input.note,
-      })
-      .run();
-  });
+        reason: "状态流转失败，归还名额",
+        operatorId: input.actorId,
+      });
+    }
+    if (error instanceof Error && error.message.includes("UNIQUE")) {
+      return fail("这个已经被别人登记了，换一个吧");
+    }
+    throw error;
+  }
 
   if (input.notifyUser && app.userId !== input.actorId) {
     const activity = getActivity(app.activityId);
@@ -657,5 +860,10 @@ async function transition(input: {
 
   revalidatePath("/admin/activities");
   revalidatePath("/activities");
-  return { ok: true };
+  return {
+    ok: true,
+    note: waitlisted && input.to !== "waitlisted"
+      ? "名额已经满了，你在候补队列里 —— 前面有人放弃时会自动补上"
+      : undefined,
+  };
 }

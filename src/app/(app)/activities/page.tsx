@@ -8,6 +8,7 @@ import { Card, Empty, Section } from "@/components/ui/primitives";
 import { evaluateEligibility, type Rule } from "@/lib/activities/eligibility";
 import { listActivities, listApplications } from "@/lib/activities/queries";
 import { getModule } from "@/lib/activities/registry";
+import { RESUBMITTABLE } from "@/lib/activities/resubmit-rules";
 import { computeStatsFor } from "@/lib/activities/stats";
 import { requireFeature } from "@/lib/flags/server";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -51,7 +52,20 @@ export default async function ActivitiesPage() {
       ) : (
         activities.map((activity) => {
           const activityModule = getModule(activity.moduleKey);
-          const existing = mine.find((m) => m.activityId === activity.id);
+          const ours = mine.filter((m) => m.activityId === activity.id);
+
+          /*
+           * 「在途的那条」和「撤回掉的那条」要分开找。
+           *
+           * 以前这里是 `mine.find(...)`，撤回之后找到的还是那条已撤回的记录，
+           * 于是表单一直显示「你已经登记了 xxx（已撤回）」—— 既撤不了也提交不了，
+           * 撤回一次等于把自己锁死。
+           */
+          const existing = ours.find((m) => !RESUBMITTABLE.has(m.status));
+          // 没有在途的时候，把最近那条作废的捞出来给他接着改
+          const resumable = existing
+            ? null
+            : ours.filter((m) => RESUBMITTABLE.has(m.status)).at(-1) ?? null;
 
           const eligibility = stats
             ? evaluateEligibility((activity.eligibility as Rule | null) ?? null, stats)
@@ -59,7 +73,13 @@ export default async function ActivitiesPage() {
 
           const tlds = Array.isArray(activity.config.tlds)
             ? (activity.config.tlds as string[])
-            : ["sh"];
+            /*
+             * 没配就是 icu —— 和 domainModule.validate 里的默认值对齐。
+             *
+             * 这里以前是 sh：选择器给人 .sh，校验只认 .icu，
+             * 于是一个没配后缀的活动里，人怎么填都会被拒。
+             */
+            : ["icu"];
 
           return (
             <Section key={activity.id} title={activity.title}>
@@ -104,7 +124,7 @@ export default async function ActivitiesPage() {
 
                 {!user ? (
                   <p className="t-caption px-1 text-[var(--ink-tertiary)]">登录后可以参加</p>
-                ) : !activity.open && !existing ? (
+                ) : !activity.open && !existing && !resumable ? (
                   <p className="t-caption px-1 text-[var(--ink-tertiary)]">
                     {activity.openReason ?? "现在不能报名"}
                   </p>
@@ -125,6 +145,24 @@ export default async function ActivitiesPage() {
                             canCancel: ["submitted", "waitlisted", "approved"].includes(
                               existing.status,
                             ),
+                          }
+                        : null
+                    }
+                    /*
+                     * 撤回掉的那一份原样带回表单里。
+                     *
+                     * 让他从空白重填的话，撤回的代价就是把上次想了半天的
+                     * 那个名字再想一遍 —— 而多数人撤回只是想改一两个字母。
+                     */
+                    resume={
+                      resumable
+                        ? {
+                            id: resumable.id,
+                            values: Object.fromEntries(
+                              Object.entries(resumable.payload).map(([k, v]) => [k, String(v ?? "")]),
+                            ),
+                            summary: resumable.summary,
+                            statusLabel: resumable.statusLabel,
                           }
                         : null
                     }

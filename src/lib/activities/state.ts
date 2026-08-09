@@ -27,17 +27,28 @@ const APPLICATION_TRANSITIONS: Record<ApplicationStatus, ApplicationStatus[]> = 
   submitted: ["validating", "invalid", "waitlisted", "approved", "rejected", "cancelled", "expired"],
   validating: ["invalid", "waitlisted", "approved", "rejected"],
   // 判无效之后可以改了重提
-  invalid: ["submitted", "cancelled"],
+  invalid: ["submitted", "waitlisted", "cancelled"],
   waitlisted: ["approved", "rejected", "cancelled", "expired"],
   approved: ["fulfilling", "fulfilled", "failed", "cancelled"],
-  rejected: ["submitted"],
+  rejected: ["submitted", "waitlisted"],
   fulfilling: ["fulfilled", "failed"],
   // 失败之后可以重提（会指向原申请）
-  failed: ["submitted", "cancelled"],
-  // 终态
+  failed: ["submitted", "waitlisted", "cancelled"],
+  /*
+   * 撤回之后可以改了重提 —— 这里以前是终态。
+   *
+   * 终态意味着撤回一次就永远回不来，而撤回最常见的原因恰恰是
+   * 「我想换一个域名」。逼人新建一条的话，一个人在一个活动里会攒下
+   * 一串申请，而名额、唯一性、每人限额全是按在途申请数的 ——
+   * 攒下来的那串迟早变成一堆被占住的域名。改回同一条最省事也最安全。
+   *
+   * 带上 waitlisted：重提那一刻名额可能已经被别人占满了，
+   * 这时该进候补，而不是把人卡在「撤回了、也回不去」的地方。
+   */
+  cancelled: ["submitted", "waitlisted"],
+  // 终态：东西已经给出去了，不再流转
   fulfilled: [],
-  cancelled: [],
-  expired: ["submitted"],
+  expired: ["submitted", "waitlisted"],
 };
 
 export interface TransitionResult {
