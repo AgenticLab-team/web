@@ -100,7 +100,26 @@ export function listPosts(viewer: ViewerContext, options: ListPostsOptions = {})
     coarseVisibilityFilter(viewer),
   ];
   if (options.boardId) conditions.push(eq(posts.boardId, options.boardId));
-  if (options.authorId) conditions.push(eq(posts.authorId, options.authorId));
+  if (options.authorId) {
+    conditions.push(eq(posts.authorId, options.authorId));
+    /*
+     * ─────────────────────────────────────────
+     * 按作者筛的列表里**永远没有匿名帖**
+     * ─────────────────────────────────────────
+     *
+     * 一篇匿名帖出现在「这个人发过的帖」里，匿名当场作废 ——
+     * 而这一条比它听起来更容易漏：查询层已经把名字、头像、
+     * 主页链接都抹了，所以这个列表看起来是干净的，
+     * 只是它出现在**谁的主页上**这件事本身就是答案。
+     *
+     * 连作者自己看也排除。「除了作者本人」这种例外听起来更周到，
+     * 实际是这个仓库反复出错的形状：规则在一条路上成立、
+     * 在另一条路上不成立 —— 而哪天这个列表被做成分享卡片、
+     * OG 图或者导出，那条例外就成了泄露口。
+     * 一条没有例外的规则，才是没法写错的规则。
+     */
+    conditions.push(eq(posts.anonymous, false));
+  }
 
   /*
    * 排序里用的是「现在还置顶着吗」，不是 pinned 这个布尔。

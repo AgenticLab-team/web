@@ -5,6 +5,9 @@ import { notFound } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
 import { FollowButton } from "@/components/forum/FollowButton";
+import { PostList } from "@/components/forum/PostList";
+import { buildViewerContext } from "@/lib/forum/context";
+import { listPosts } from "@/lib/forum/queries";
 import { RepoShowcase } from "@/components/github/RepoShowcase";
 import { publicConnectionOf } from "@/lib/github/link";
 import { showcaseFor } from "@/lib/github/repos";
@@ -64,6 +67,7 @@ export default async function PersonPage({
   const recentMentions = recentMentionsFor(wxId, convIds, 10);
   const groupName = new Map(profile.sharedGroups.map((g) => [g.convId, g.name]));
 
+
   /*
    * 关注按钮只在这个人**有站内账号**时出现。
    *
@@ -72,6 +76,14 @@ export default async function PersonPage({
    * 点了之后永远不会有任何动静。
    */
   const account = db.select({ id: users.id }).from(users).where(eq(users.wxId, wxId)).get();
+  /*
+   * 他发过的帖。
+   *
+   * 走 `listPosts` 而不是自己写一条 —— 那个函数里已经有可见性收口
+   * 和「按作者筛时排除匿名帖」两条，另写一份必然漏掉其中一条。
+   * 空着不显示这一段：一个「还没发过帖」的空区块只是占地方。
+   */
+  const theirPosts = account ? listPosts(buildViewerContext(user), { authorId: account.id, limit: 5 }) : [];
   const canFollowThem = Boolean(account) && account!.id !== user?.id;
   const followingThem =
     canFollowThem && user ? isFollowing(user.id, "user", account!.id) : false;
@@ -120,6 +132,18 @@ export default async function PersonPage({
         <StatTile label="被 @" value={mentionCount} />
         <StatTile label="被回复" value={replyCount} />
       </div>
+
+      {/*
+        * 他发过的帖排在 GitHub 之前：这是站内的东西，
+        * 而 GitHub 是站外的 —— 一个人在这里做过什么，
+        * 比他在别处做过什么更该先看到。
+        */}
+      {theirPosts.length > 0 && (
+        <Section title="发过的帖">
+          {/* 带上版块名 —— 这是跨版块的列表，不带的话人分不出哪篇在哪儿 */}
+          <PostList posts={theirPosts} showBoard />
+        </Section>
+      )}
 
       {githubConn && githubRepos.length > 0 && (
         <Section title="GitHub 项目">
