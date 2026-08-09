@@ -20,7 +20,12 @@ export interface DomainPayload {
   alternate?: string;
 }
 
-/** 域名主体的最小长度。短域名值钱，不该在免费活动里放出去 */
+/**
+ * 域名主体的最小长度。
+ *
+ * 短域名在注册商那里是**溢价域名**，一个 3 字符的 .icu 可能要几百块，
+ * 而普通的一年一块多。这个活动放出去的是普通域名，不是彩票。
+ */
 export const MIN_DOMAIN_LENGTH = 5;
 export const MAX_DOMAIN_LENGTH = 63;
 
@@ -77,6 +82,24 @@ export function checkDomainName(raw: string, allowedTlds: string[], tld: string)
   // xn-- 是 punycode 的保留前缀，普通域名占用它会导致解析歧义
   if (name.length > 4 && name[2] === "-" && name[3] === "-") {
     return { ok: false, error: "第 3、4 位不能同时是连字符（那是国际化域名的保留前缀）" };
+  }
+
+  /*
+   * 只发普通标准域名。
+   *
+   * 纯数字在几乎所有注册局都算溢价 —— 12345.icu 的价格是普通域名的
+   * 几十倍。放进来的结果是：登记成功、进等待列表、管理员真去注册时
+   * 才发现要另外掏钱，然后这个人白等一场。
+   *
+   * 能机械判出来的溢价类别就在这里挡掉；判不出来的（常见英文单词之类）
+   * 只能在履约那一步由人看着价格决定 —— 这一点在活动说明里写清楚，
+   * 而不是让人以为登记了就一定拿得到。
+   */
+  if (/^\d+$/.test(name)) {
+    return { ok: false, error: "纯数字域名属于溢价域名，不在这次放出的范围里" };
+  }
+  if (/^(.)\1+$/.test(name)) {
+    return { ok: false, error: "整串同一个字符属于溢价域名，换一个" };
   }
 
   if (!allowedTlds.includes(tld)) {
@@ -149,7 +172,7 @@ export const domainModule: ActivityModule<DomainPayload> = {
   ],
 
   validate: (payload, config) => {
-    const allowedTlds = Array.isArray(config.tlds) ? (config.tlds as string[]) : ["sh"];
+    const allowedTlds = Array.isArray(config.tlds) ? (config.tlds as string[]) : ["icu"];
     const result = checkDomainName(payload.name, allowedTlds, payload.tld);
     if (!result.ok) return { ok: false, error: result.error };
 

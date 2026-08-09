@@ -227,6 +227,33 @@ export async function applyToActivity(input: {
     return fail(`每人最多申请 ${activity.perUserLimit} 次`);
   }
 
+  /*
+   * 查一次「是不是已经被注册了」。
+   *
+   * 这一步之前**从来没有被调用过** —— 模块里实现了 checkAvailability，
+   * 接口里声明了它，而没有任何地方调它。而活动说明上写着
+   * 「系统会查它是否已被注册」，是一句兑现不了的承诺。
+   *
+   * 放在占名额**之前**：占了名额再发现被注册了，那个名额要走
+   * 一遍释放流程，而释放是有可能漏的。
+   *
+   * 查不到时（RDAP 超时、限流）**放行并说明**，不是拦下 ——
+   * 上游查不通不是用户的错，而拦下来的代价是他以为自己不够格。
+   */
+  let availabilityNote: string | undefined;
+  if (activityModule.checkAvailability && validation.normalizedKey) {
+    const availability = await activityModule.checkAvailability(
+      validation.normalizedKey,
+      (activity.config as Record<string, unknown>) ?? {},
+    );
+    if (availability.available === false) {
+      return fail(`${validation.normalizedKey} ${availability.detail} —— 换一个再试`);
+    }
+    if (availability.available === "unknown") {
+      availabilityNote = `没能查到 ${validation.normalizedKey} 的注册状态（${availability.detail}），已经先帮你登记上，注册时会再确认一次`;
+    }
+  }
+
   const claim = claimQuota({
     activityId: input.activityId,
     applicationId: "pending",
@@ -273,9 +300,14 @@ export async function applyToActivity(input: {
     return {
       ok: true,
       id: row.id,
-      note: waitlisted
-        ? "名额已满，你在候补队列里 —— 前面有人放弃时会自动补上"
-        : "已登记。等管理员统一处理后会通知你",
+      note: [
+        waitlisted
+          ? "名额已满，你在候补队列里 —— 前面有人放弃时会自动补上"
+          : "已登记。等管理员统一处理后会通知你",
+        availabilityNote,
+      ]
+        .filter(Boolean)
+        .join("；"),
     };
   } catch (error) {
     /*
