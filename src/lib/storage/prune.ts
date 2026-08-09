@@ -9,6 +9,7 @@ import { Readable } from "node:stream";
 import { sqlite } from "@/lib/db";
 import { getSettingBool, getSettingInt } from "@/lib/settings/store";
 import { nekobot } from "@/lib/nekobot/client";
+import { pruneApiUsage } from "@/lib/upstream/usage";
 import {
   DEFAULT_TIER_CONFIG,
   EMPTY_PREVIEW,
@@ -271,6 +272,14 @@ export interface PruneResult {
   bytesAfter: number;
   /** 被拒绝执行的部分与原因 —— 空字符串表示全做完了 */
   skipped: string;
+  /**
+   * 清掉的上游调用流水行数。
+   *
+   * 和消息分层是两件事，混在 `dropped` 里会让「丢了多少条正文」
+   * 这个最要紧的数字变得不可信 —— 那个数字是不可逆操作的计数，
+   * 不能掺进任何别的东西。
+   */
+  usageRows: number;
 }
 
 export interface PruneOptions {
@@ -329,6 +338,7 @@ export async function runPrune(options: PruneOptions = {}): Promise<PruneResult>
     bytesBefore,
     bytesAfter: bytesBefore,
     skipped: "",
+    usageRows: 0,
   };
 
   // ③ 丢正文 —— 不可逆，最后做，且要过两道门
@@ -346,6 +356,20 @@ export async function runPrune(options: PruneOptions = {}): Promise<PruneResult>
       result.archived = dropped.archived;
     }
   }
+
+  /*
+   * 顺手裁掉上游调用流水。
+   *
+   * 同步任务每几分钟跑一次，这张表长得比谁都快；而它的价值窗口很短 ——
+   * 没有人会关心三个月前某一次调用的耗时。
+   *
+   * 放在这里而不是单开一个定时器：它和分层裁剪要回答的是同一个问题
+   * （「库为什么这么大」），分开两处的结果是有一处永远没人记得跑。
+   *
+   * 这一步**无条件执行**，不受 reversibleOnly 影响 ——
+   * 删一行运维流水不是不可逆操作，它没有任何东西可丢。
+   */
+  result.usageRows = pruneApiUsage(now);
 
   result.bytesAfter = dbBytes();
   return result;

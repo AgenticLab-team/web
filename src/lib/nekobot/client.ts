@@ -1,6 +1,7 @@
 import "server-only";
 
 import { env } from "@/lib/env";
+import { recordApiCall } from "@/lib/upstream/usage";
 import type {
   SendHistoryEntry,
   SendQuota,
@@ -84,6 +85,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   for (let attempt = 1; attempt <= RETRYABLE_ATTEMPTS; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), env.nekobot.timeoutMs);
+    /*
+     * 记账在**每一次尝试**上，不是每个逻辑调用。
+     *
+     * 一次「重试两次才成功」，上游那侧确实收了三个请求、扣了三次配额、
+     * 报了两次错。按逻辑调用记的话它会显示成一次干净的 200 ——
+     * 而那正好把「上游最近在报错」这件事抹掉了。
+     */
+    const startedAt = Date.now();
+    let logged = false;
+    const log = (status: number | undefined, error?: string) => {
+      if (logged) return;
+      logged = true;
+      recordApiCall({ path, status, latencyMs: Date.now() - startedAt, error });
+    };
 
     try {
       const response = await fetch(`${env.nekobot.baseUrl}${path}`, {
@@ -100,6 +115,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
       if (!response.ok) {
         const body = await response.text().catch(() => "");
+        log(response.status, body.slice(0, 300));
         const error = new NekoBotError(
           `上游返回 ${response.status}: ${body.slice(0, 200)}`,
           "http",
@@ -110,8 +126,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         lastError = error;
       } else {
         try {
-          return (await response.json()) as T;
+          const parsed = (await response.json()) as T;
+          log(response.status);
+          return parsed;
         } catch {
+          // 状态码是 200 但正文不是 JSON —— 记成它真实的样子，别记成成功
+          log(response.status, "上游返回的不是合法 JSON");
           throw new NekoBotError("上游返回的不是合法 JSON", "malformed");
         }
       }
@@ -120,12 +140,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         if (!err.isUpstreamDown) throw err;
         lastError = err;
       } else if (err instanceof Error && err.name === "AbortError") {
+        // 没有状态码 —— 这和 500 是两回事：一个去看隧道，一个去看上游服务
+        log(undefined, `上游超时（${env.nekobot.timeoutMs}ms）`);
         lastError = new NekoBotError(`上游超时（${env.nekobot.timeoutMs}ms）`, "timeout");
       } else {
-        lastError = new NekoBotError(
-          `连接上游失败：${err instanceof Error ? err.message : String(err)}`,
-          "unreachable",
-        );
+        const message = err instanceof Error ? err.message : String(err);
+        log(undefined, `连接上游失败：${message}`);
+        lastError = new NekoBotError(`连接上游失败：${message}`, "unreachable");
       }
     } finally {
       clearTimeout(timer);

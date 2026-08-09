@@ -5,8 +5,10 @@ import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { TruncationNote } from "@/components/ui/Pagination";
 import { Callout, Card, Empty, Group, Row, Section } from "@/components/ui/primitives";
+import { UpstreamUsage } from "@/components/admin/UpstreamUsage";
 import { requireAdmin } from "@/lib/admin/guard";
 import { systemStatus } from "@/lib/admin/dashboard";
+import { usageSummary } from "@/lib/upstream/usage";
 import { alertCount, listAlerts } from "@/lib/alerts/dispatch";
 import {
   DEFAULT_RULES,
@@ -32,6 +34,13 @@ export default async function AdminHealthPage() {
   await requireAdmin("system.dashboard");
 
   const status = systemStatus();
+  /*
+   * 组件那一栏回答的是「此刻通不通」。这一块回答的是
+   * 「最近一天发生过什么」—— 一次十分钟前的 502 潮，
+   * 探测完全看不见，因为它现在是好的。
+   */
+  const USAGE_HOURS = 24;
+  const usage = usageSummary(USAGE_HOURS);
   const alerts = listAlerts(40);
   const alertsTotal = alertCount();
   const firing = alerts.filter((a) => a.state === "firing");
@@ -173,6 +182,8 @@ export default async function AdminHealthPage() {
           单看它会一直显示「正常」。
         </p>
       </Section>
+
+      <UpstreamUsage usage={usage} hours={USAGE_HOURS} />
 
       <Section title="告警怎么发出去">
         <div className="inset-group">

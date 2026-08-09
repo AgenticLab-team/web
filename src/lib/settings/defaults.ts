@@ -386,6 +386,16 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
       "验不过就整步跳过 —— 磁盘占着总比记录没了强",
   },
   {
+    key: "upstream.usage_retention_days",
+    value: "30",
+    type: "int",
+    category: "storage",
+    label: "上游调用流水保留天数",
+    description: "同步每几分钟一次，这张表长得最快；而它的价值窗口很短 —— 要看的是最近有没有在报错",
+    min: 1,
+    max: 365,
+  },
+  {
     key: "storage.media_cache_max_bytes",
     value: "2147483648",
     type: "int",
