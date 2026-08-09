@@ -3,6 +3,7 @@ import { ImageResponse } from "next/og";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
 import { getPost } from "@/lib/forum/queries";
+import { canReadForum } from "@/lib/forum/public-access";
 import { isIndexable } from "@/lib/forum/visibility";
 import { truncateAtBoundary } from "@/lib/text";
 
@@ -25,7 +26,15 @@ export default async function OpengraphImage({ params }: { params: Promise<{ id:
   const viewer = buildViewerContext(user);
   const post = getPost(viewer, id);
 
+  /*
+   * 关了门就不发带标题的预览图。
+   *
+   * 卡片图是**独立路由**，`forum/layout.tsx` 那道门覆盖不到它 ——
+   * 漏掉这一处的话，论坛对访客关着，而每条链接的预览图
+   * 还在往微信、Telegram、抓取器里送标题和摘要。
+   */
   const shareable =
+    canReadForum(user?.id) &&
     post &&
     isIndexable({
       visibility: post.visibility,

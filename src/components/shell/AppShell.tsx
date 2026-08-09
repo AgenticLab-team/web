@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { forumOpenToGuests } from "@/lib/forum/public-access";
 import { db } from "@/lib/db";
 import { people, roles, userRoles } from "@/lib/db/schema";
 import {
@@ -57,6 +58,9 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       hasPermission: (permission) => can(user, permission).allowed,
       // 关掉的功能不出现在导航里；页面那一侧 requireFeature 还会再挡一次
       featureEnabled: (flag) => featureEnabled(flag, user),
+      // 「论坛允许未登录浏览」关掉之后，访客的导航里就不该再挂着它 ——
+      // 挂着的话，点进去弹登录，看起来像网站坏了
+      guestOpen: (key) => (key === "forum" ? forumOpenToGuests() : true),
     });
 
   const sections = visibleSections(visible);

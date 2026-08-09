@@ -16,6 +16,12 @@ export interface NavItem {
   /** 需要登录才显示。访客看到自己用不了的入口只会点进去撞空状态 */
   requiresAuth?: boolean;
   /**
+   * 这个板块「对访客开不开」是可配的，配置项由 `NavContext.guestOpen` 回答。
+   *
+   * 和 `requiresAuth` 的区别：那个是写死的，这个是管理员能改的。
+   */
+  guestOpenKey?: string;
+  /**
    * 一级入口：桌面侧栏直接列出来，不收进「更多」。
    *
    * ─────────────────────────────────────────
@@ -85,7 +91,9 @@ export const NAV: NavSection[] = [
         href: "/forum",
         label: "论坛",
         icon: "messages-square",
-        // 公开版块对访客开放，具体帖子的可见性在查询层收口
+        // 公开版块对访客开放，具体帖子的可见性在查询层收口 ——
+        // 但「对访客开不开」本身是可配的，关掉之后访客这里就不该有入口
+        guestOpenKey: "forum",
         primary: true,
         inTabBar: true,
         ready: true,
@@ -221,6 +229,18 @@ export interface NavContext {
    * 比反过来安全 —— 反过来是一次疏忽让整个导航空掉。
    */
   featureEnabled?: (flag: string) => boolean;
+  /**
+   * 这个入口对**未登录访客**开不开。
+   *
+   * `requiresAuth` 是写死的「必须登录」，而有些板块是不是对外开放
+   * 是**可配的** —— 论坛就是（`site.forum_public`）。
+   * 配成关的时候，导航里还挂着一个点进去就弹登录的入口，
+   * 不算泄露，但它把「这里没你的份」讲成了「网站坏了」。
+   *
+   * 和 featureEnabled 一样：不传就当开着。忘了传的后果是
+   * 导航照常显示、页面那一侧仍然会拦，比反过来安全。
+   */
+  guestOpen?: (key: string) => boolean;
 }
 
 /**
@@ -231,6 +251,10 @@ export interface NavContext {
 export function navItemVisible(item: NavItem, ctx: NavContext): boolean {
   if (!item.ready) return false;
   if (item.requiresAuth && !ctx.loggedIn) return false;
+  // 可配的对外开放：关掉之后，访客的导航里就不该再挂着它
+  if (item.guestOpenKey && !ctx.loggedIn && ctx.guestOpen && !ctx.guestOpen(item.guestOpenKey)) {
+    return false;
+  }
   // 功能关掉了就不出现在导航里 —— 页面那一侧还会再挡一次
   if (item.flag && ctx.featureEnabled && !ctx.featureEnabled(item.flag)) return false;
   if (!item.permission) return true;
