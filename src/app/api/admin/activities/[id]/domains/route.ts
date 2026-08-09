@@ -31,13 +31,23 @@ import { todayKey } from "@/lib/time";
  * 后台有哪些能力本身也是信息 —— 这条和 `guard.ts` 里
  * 「没权限跳走而不是显示空白页」是同一条规矩。
  */
-export async function GET(request: Request, ctx: RouteContext<"/api/admin/activities/[id]/domains">) {
+export async function GET(
+  request: Request,
+  /*
+   * 写成 `RouteContext<"/api/admin/...">` 会挂：那个全局辅助类型是从
+   * **构建产物里生成的路由表**上取的，而一条刚写出来、还没构建过的
+   * 路由不在那张表里 —— 于是 `tsc --noEmit` 报「不满足 AppRouteHandlerRoutes」，
+   * 先有蛋后有鸡。部署流水线里 tsc 跑在构建之前，所以这个坑
+   * 恰好会在最不该出事的时候出事。手写这个类型，和构建顺序无关。
+   */
+  { params }: { params: Promise<{ id: string }> },
+) {
   const user = await getCurrentUser();
   if (!user || !can(user, "activity.fulfill").allowed) {
     return new Response("Not Found", { status: 404 });
   }
 
-  const { id } = await ctx.params;
+  const { id } = await params;
   const scopeParam = new URL(request.url).searchParams.get("scope");
   const scope = isExportScope(scopeParam) ? scopeParam : "pending";
 
