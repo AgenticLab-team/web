@@ -1,12 +1,14 @@
 import { Archive, Search as SearchIcon, Sparkles, User } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { MessageHitList } from "@/components/search/MessageHitList";
 import { SemanticHits, SemanticNotice } from "@/components/search/SemanticHits";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Empty, Pill } from "@/components/ui/primitives";
-import { getCurrentUser } from "@/lib/auth/session";
+import { CardListSkeleton } from "@/components/ui/Skeleton";
+import { getCurrentUser, type CurrentUser } from "@/lib/auth/session";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { myMessageCount, searchMessages } from "@/lib/search/messages";
 import { semanticSearch } from "@/lib/search/semantic";
@@ -42,15 +44,6 @@ export default async function SearchPage({
   const onlyMine = params.mine === "1";
 
   const semantic = params.mode === "semantic";
-
-  /*
-   * 两条路都走同一个可见性收口，但**只跑要用的那一条**。
-   *
-   * 语义检索每次都要打一次嵌入接口（几百毫秒），
-   * 关键词检索是本地 FTS（几毫秒）—— 为了「万一用户切过去」
-   * 而两条都跑，等于给每次关键词搜索都加上一次网络往返。
-   */
-  const semanticResult = semantic && query ? await semanticSearch(user, query, 12) : null;
 
   const result = searchMessages(user, {
     query,
@@ -183,22 +176,15 @@ export default async function SearchPage({
           }
         />
       ) : semantic ? (
-        <>
-          <SemanticNotice
-            error={semanticResult?.error ?? null}
-            pending={semanticResult?.pending ?? 0}
-          />
-          {semanticResult && semanticResult.hits.length > 0 ? (
-            <SemanticHits hits={semanticResult.hits} siteUrl={env.site.url} />
-          ) : (
-            !semanticResult?.error && (
-              <Empty
-                title="没找到意思接近的对话"
-                hint="换个说法试试，或者切回「按关键词」"
-              />
-            )
-          )}
-        </>
+        /*
+         * 语义检索要打一次嵌入接口（几百毫秒，超时上限 20 秒）。
+         * 以前整页 render 等它 —— 嵌入服务一抖，搜索页就整个卡住。
+         * 挂进 Suspense 之后，搜索框和筛选先到，结果流式补上；
+         * key 用 query：换词重搜必须重新挂起，否则会拿旧结果充数。
+         */
+        <Suspense key={query} fallback={<CardListSkeleton cards={3} avatar={false} />}>
+          <SemanticResults user={user} query={query} />
+        </Suspense>
       ) : result.hits.length === 0 ? (
         <Empty title="没有找到相关内容" hint="换个说法，或者试试更短的词" />
       ) : (
@@ -216,6 +202,27 @@ export default async function SearchPage({
           <>点开任意一条可以就地看前后文 —— 群聊的意思大半在上下文里。</>
         )}
       </p>
+    </>
+  );
+}
+
+/** 语义检索结果。单独成组件是为了能挂在 Suspense 里流式送达 —— 见调用处 */
+async function SemanticResults({ user, query }: { user: CurrentUser | null; query: string }) {
+  const result = await semanticSearch(user, query, 12);
+
+  return (
+    <>
+      <SemanticNotice error={result.error} pending={result.pending} />
+      {result.hits.length > 0 ? (
+        <SemanticHits hits={result.hits} siteUrl={env.site.url} />
+      ) : (
+        !result.error && (
+          <Empty
+            title="没找到意思接近的对话"
+            hint="换个说法试试，或者切回「按关键词」"
+          />
+        )
+      )}
     </>
   );
 }

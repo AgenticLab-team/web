@@ -339,7 +339,18 @@ describe("界面", () => {
   });
 
   it("**只跑要用的那一条** —— 为「万一切过去」而两条都跑，等于给每次关键词搜索加一次网络往返", () => {
-    assert.match(page, /semantic && query \? await semanticSearch/);
+    /*
+     * 嵌入调用如今住在 SemanticResults 里，而这个组件只挂在
+     * semantic 分支的 Suspense 下 —— 关键词搜索的渲染树里根本没有它，
+     * 所以「只跑要用的那一条」仍然成立，只是从三元表达式变成了组件边界。
+     */
+    const calls = page.match(/await semanticSearch/g) ?? [];
+    assert.equal(calls.length, 1, "semanticSearch 只该在一处 await");
+    assert.ok(
+      page.indexOf("await semanticSearch") > page.indexOf("async function SemanticResults"),
+      "嵌入调用要留在 SemanticResults 里，不能回到页面顶层",
+    );
+    assert.match(page, /semantic \? \([\s\S]{0,600}?<SemanticResults/);
   });
 
   it("**一条结果是一整段对话** —— 挑一句出来单独看往往毫无意义", () => {

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 import type { AdminNavSection } from "@/lib/admin/nav";
 
@@ -37,6 +38,38 @@ const ICONS: Record<string, LucideIcon> = {
   "hard-drive": HardDrive,
   "cloud-upload": CloudUpload,
 };
+
+/**
+ * 出现意图（悬停/聚焦）才预取的链接。
+ *
+ * 这个侧栏一进后台就有 24 条链接同时在视口里，默认策略会把
+ * 24 个动态路由挨个预取一遍 —— 每个都要在服务器上过一次
+ * requireAdmin + 渲染，而机器只有 2 核。管理员一次通常只去一两个页，
+ * 视口预取在这里买到的几乎全是白跑。
+ *
+ * 悬停仍然预取（prefetch={null} 恢复默认），点击前那几百毫秒
+ * 足够把外壳拉回来 —— 感知上和全量预取分不出来。
+ */
+function HoverPrefetchLink({
+  href,
+  children,
+  ...rest
+}: React.ComponentProps<typeof Link>) {
+  const [intent, setIntent] = useState(false);
+
+  return (
+    <Link
+      {...rest}
+      href={href}
+      prefetch={intent ? null : false}
+      onMouseEnter={() => setIntent(true)}
+      onFocus={() => setIntent(true)}
+      onTouchStart={() => setIntent(true)}
+    >
+      {children}
+    </Link>
+  );
+}
 
 /**
  * 后台导航。
@@ -80,7 +113,7 @@ export function AdminNav({ sections }: { sections: AdminNavSection[] }) {
 
               return (
                 <li key={item.key}>
-                  <Link
+                  <HoverPrefetchLink
                     href={item.href}
                     aria-current={active ? "page" : undefined}
                     className={`flex items-center gap-2.5 rounded-[var(--radius-control)] px-3 py-2 transition-colors ${
@@ -95,7 +128,7 @@ export function AdminNav({ sections }: { sections: AdminNavSection[] }) {
                       aria-hidden
                     />
                     <span className="t-subhead flex-1 font-medium">{item.label}</span>
-                  </Link>
+                  </HoverPrefetchLink>
                 </li>
               );
             })}
