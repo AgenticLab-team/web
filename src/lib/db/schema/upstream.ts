@@ -85,7 +85,7 @@ export const groupMemberEvents = sqliteTable(
 );
 
 /**
- * 消息本地镜像。分层保留见 PLAN.md §7.3：
+ * 消息本地镜像。分层保留见 docs/archive/PLAN-2026-08-08.md §7.3：
  * hot(90d) 全量+全索引 / warm(1y) 全量正文仅索引高质量 / cold 仅高质量
  */
 export const messages = sqliteTable(

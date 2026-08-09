@@ -80,7 +80,7 @@ export function leaderboardHiddenWxIds(viewer: CurrentUser | null): string[] {
    *
    * ⚠ 界面上**还没有**把「别人看不到的那几行」标出来 ——
    * 不标的话管理员会以为公开的榜就长这样，然后照着一个只有他
-   * 自己看得到的名次去发公告、发奖。记在 BUILD_PLAN 里了。
+   * 自己看得到的名次去发公告、发奖。记在 ROADMAP.md 里了。
    */
   if (bypassesPrivacy(viewer)) return [];
 

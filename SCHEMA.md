@@ -1,5 +1,9 @@
 # 数据模型与后台设计
 
+> **读者**：要理解数据建模决定的人
+> **性质**：⚠ **部分过时**：建模决定仍然成立，**逐表字段清单已经跟不上 schema 源码**（`invites` 已经和真实表名撞车）。字段以 `src/lib/db/schema/` 为准
+> **最后核对**：2026-08-10
+
 目标：**后台不是"加个 admin 页面"，是完整的第二套产品。**
 每一个后台功能都必须有完整落盘 —— 谁做的、什么时候、改了什么、改前是什么、为什么改。
 
@@ -236,7 +240,7 @@ group_member_events: id, conv_id, wx_id, event(join|leave|rename|promote),
 ```
 > 每日同步比对产生 events。**退群要自动收回该群消息可见权** —— 这条逻辑靠 events 驱动。
 
-### `messages` — 本地镜像（分层保留，见 PLAN.md §7.3）
+### `messages` — 本地镜像（分层保留，见 docs/archive/PLAN-2026-08-08.md §7.3）
 ```
 id TEXT PK, upstream_id, conv_id, sender_wx_id, sender_name,
 content TEXT, msg_type, length INTEGER, is_quality INTEGER,
