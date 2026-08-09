@@ -152,7 +152,7 @@ export async function executePruneTask(input: {
 }
 
 export async function cancelPruneTask(taskId: string): Promise<PruneActionResult> {
-  await requireAdmin("system.settings");
+  const admin = await requireAdmin("system.settings");
   const task = db.select().from(adminTasks).where(eq(adminTasks.id, taskId)).get();
   if (!task || task.status !== "awaiting_confirm") return fail("任务不在等待确认状态");
 
@@ -160,6 +160,20 @@ export async function cancelPruneTask(taskId: string): Promise<PruneActionResult
     .set({ status: "cancelled", finishedAt: Date.now() })
     .where(eq(adminTasks.id, taskId))
     .run();
+
+  // 取消也要留痕：「谁把这次裁剪拦下来了」和「谁执行了」一样值得查
+  audit(
+    { actorId: admin.user.id },
+    {
+      action: "storage.prune",
+      targetType: "storage",
+      targetId: taskId,
+      before: task.preview,
+      after: { status: "cancelled" },
+      reason: "取消了这次裁剪",
+    },
+  );
+
   revalidatePath("/admin/storage");
   return { ok: true };
 }

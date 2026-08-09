@@ -389,6 +389,23 @@ export async function fulfillApplication(input: {
       })
       .where(eq(activityApplications.id, input.id))
       .run();
+
+    /*
+     * 履约是这条链路上唯一「东西真的给出去了」的一步。
+     * 活动事件表里记了状态流转，但那是给申请人看的时间线；
+     * 事后追问「这个域名是谁批的、凭什么」时，要查的是审计日志。
+     */
+    audit(
+      { actorId: admin.user.id },
+      {
+        action: "activity.fulfill",
+        targetType: "activity_application",
+        targetId: input.id,
+        before: { status: app.status },
+        after: { status: input.success ? "fulfilled" : "failed" },
+        reason: input.note.trim(),
+      },
+    );
   }
 
   return result;

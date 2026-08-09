@@ -83,6 +83,28 @@ export async function saveDraft(input: {
       return fail("只有草稿和被驳回的能改");
     }
     db.update(broadcasts).set(values).where(eq(broadcasts.id, input.id)).run();
+
+    /*
+     * 改草稿也要记。
+     *
+     * 群发是这个站上唯一会打扰到一千六百人的动作，
+     * 而**改动会让已经冻结的内容哈希作废、需要重新复核** ——
+     * 「复核过的东西怎么变了」这个问题必须答得上来。
+     */
+    audit(
+      { actorId: admin.user.id },
+      {
+        action: input.channel === "wechat" ? "broadcast.wechat" : "announce.site",
+        targetType: "broadcast",
+        targetId: input.id,
+        targetLabel: values.title ?? values.content.slice(0, 30),
+        before: { content: existing.content, status: existing.status },
+        after: { content: values.content, status: "draft" },
+        reason: "修改草稿",
+      },
+    );
+
+    revalidatePath("/admin/broadcast");
     return { ok: true, id: input.id };
   }
 
@@ -91,6 +113,18 @@ export async function saveDraft(input: {
     .values({ ...values, createdBy: admin.user.id })
     .returning({ id: broadcasts.id })
     .get();
+
+  audit(
+    { actorId: admin.user.id },
+    {
+      action: input.channel === "wechat" ? "broadcast.wechat" : "announce.site",
+      targetType: "broadcast",
+      targetId: row.id,
+      targetLabel: values.title ?? values.content.slice(0, 30),
+      after: { channel: input.channel, targets: values.targetConvIds },
+      reason: "新建草稿",
+    },
+  );
 
   revalidatePath("/admin/broadcast");
   return { ok: true, id: row.id };

@@ -223,13 +223,27 @@ export async function withdrawApproval(input: { id: string }): Promise<ApprovalR
 
   db.update(approvals).set({ status: "rejected", approveNote: "发起人撤回" }).where(eq(approvals.id, input.id)).run();
 
+  // 撤回和被驳回在表里都是 rejected —— 不记的话事后分不清是谁的决定
+  audit(
+    { actorId: admin.user.id },
+    {
+      action: "system.approval",
+      targetType: "approval",
+      targetId: input.id,
+      targetLabel: row.action,
+      before: { status: row.status },
+      after: { status: "rejected" },
+      reason: "发起人撤回",
+    },
+  );
+
   revalidatePath("/admin/approvals");
   return { ok: true };
 }
 
 /** 把过期的标出来。不标的话它们会一直挂在待办里，看起来永远有活没干完 */
 export async function sweepExpired(): Promise<ApprovalResult> {
-  await requireAdmin("system.approval");
+  const admin = await requireAdmin("system.approval");
 
   const now = Date.now();
   const expired = db
@@ -242,6 +256,26 @@ export async function sweepExpired(): Promise<ApprovalResult> {
 
   for (const row of expired) {
     db.update(approvals).set({ status: "expired" }).where(eq(approvals.id, row.id)).run();
+  }
+
+  /*
+   * 记一条汇总，不是每行一条。
+   *
+   * 一次清扫可能刷掉几十条，逐行记会把审计日志淹掉，
+   * 而被淹掉的日志和没有日志是一回事。但**完全不记也不行**：
+   * 一个待复核的危险操作被判过期，意味着它最终没有发生 ——
+   * 事后追问「那件事为什么没做成」时，这条是唯一的答案。
+   */
+  if (expired.length > 0) {
+    audit(
+      { actorId: admin.user.id },
+      {
+        action: "system.approval",
+        targetType: "approval",
+        targetLabel: `清扫过期复核 ${expired.length} 条`,
+        after: { expired: expired.map((r) => r.id) },
+      },
+    );
   }
 
   revalidatePath("/admin/approvals");
