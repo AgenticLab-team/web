@@ -14,6 +14,10 @@ import { syncAllMembers } from "@/lib/sync/members";
 import { syncAllGroups, syncGroupMessages } from "@/lib/sync/messages";
 import { claimPending, collapseJobs, completeJob } from "@/lib/sync/queue";
 import { deliverBroadcast, pendingBroadcasts } from "@/lib/broadcast/sender";
+import {
+  processMemberEvents,
+  type MemberEventReport,
+} from "@/lib/sync/member-events";
 import { runSteps, summarize, tickFailureReport } from "@/lib/ops/tick";
 import type { SyncResult } from "@/lib/sync/job";
 
@@ -131,6 +135,20 @@ async function main() {
       name: "群成员名册",
       run: () => syncAllMembers({ triggeredBy: "cron" }),
       describe: (r: SyncResult) => `${r.written} 名成员${r.note ? ` ⚠ ${r.note}` : ""}`,
+    },
+    {
+      /*
+       * 名册同步完再消费进出群事件 —— 顺序不能反：
+       * 反过来的话这一轮新产生的退群事件要等下一轮才处理，
+       * 而那意味着一个已经退群的人还多握着两分钟的群管理权限。
+       */
+      name: "进出群结算",
+      run: async () => processMemberEvents(),
+      describe: (r: MemberEventReport) =>
+        r.processed === 0
+          ? "无变动"
+          : `处理 ${r.processed} 条 · 收回身份组 ${r.revoked}` +
+            (r.leftEverything > 0 ? ` ⚠ ${r.leftEverything} 人已不在任何群` : ""),
     },
     {
       // 昵称会变，本地源每轮都要跟着刷新

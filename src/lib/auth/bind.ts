@@ -430,14 +430,28 @@ async function isCommunityMember(wxId: string): Promise<boolean | "unknown"> {
 
   if (syncedGroups.length === 0) return false;
 
-  const localMember = db
-    .select({ convId: groupMembers.convId })
+  const rosterRows = db
+    .select({ convId: groupMembers.convId, leftAt: groupMembers.leftAt })
     .from(groupMembers)
     .where(and(eq(groupMembers.wxId, wxId), inArray(groupMembers.convId, syncedGroups)))
-    .get();
-  if (localMember) return true;
+    .all();
 
-  // 在已同步群里发过言，本身就是成员的充分证据
+  // 还在任一群里 —— 最直接的证据
+  if (rosterRows.some((r) => r.leftAt === null)) return true;
+
+  /*
+   * **名册里有他、而且每一条都标着已退群** —— 这是「他不是成员」的
+   * 正面证据，比下面那条「他发过言」强。
+   *
+   * 原来这里不看 `left_at`，于是一个退光了所有群的人照样能绑定新账号；
+   * 而且就算看了，如果还接着往下走「发过言就算成员」那条，
+   * 结论仍然是 true —— 退过群的人一定发过言。
+   * 所以这里必须直接返回，不能只是不返回 true。
+   */
+  if (rosterRows.length > 0) return false;
+
+  // 名册里根本没有他（多半是名册还没同步过）——
+  // 这时候「在已同步群里发过言」仍然是成员的充分证据
   const spoke = db
     .select({ id: messages.id })
     .from(messages)

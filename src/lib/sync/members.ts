@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { groupMemberEvents, groupMembers, groups } from "@/lib/db/schema";
 import { normalizeAvatarUrl } from "@/lib/avatar";
 import { nekobot } from "@/lib/nekobot/client";
+import { checkRoster } from "@/lib/sync/roster-rules";
 
 import { runSyncJob, type SyncOptions, type SyncResult } from "./job";
 
@@ -20,7 +21,8 @@ export async function syncGroupMembers(
   options: SyncOptions = {},
 ): Promise<SyncResult> {
   return runSyncJob("members", { ...options, scope: convId }, async () => {
-    const upstream = await nekobot.members(convId, { limit: 2000 });
+    const ROSTER_LIMIT = 2000;
+    const upstream = await nekobot.members(convId, { limit: ROSTER_LIMIT });
     const now = Date.now();
 
     const existing = db
@@ -29,6 +31,29 @@ export async function syncGroupMembers(
       .where(eq(groupMembers.convId, convId))
       .all();
     const existingMap = new Map(existing.map((m) => [m.wxId, m]));
+
+    /*
+     * 先判一次这份名册可不可信。
+     *
+     * 下面那句「上游名册里消失的人视为退群」在上游正常时是对的，
+     * 在上游不正常时是灾难性的：一次空响应就会把**整个群的人
+     * 全部标成退群**，而 `visibleGroupsFor` 要求 left_at IS NULL ——
+     * 于是这个群的聊天记录对所有成员同时消失，
+     * 症状是「网站坏了」，没有任何地方会告诉你是名册同步干的。
+     *
+     * 判据见 roster-rules.ts。拦下来的**只是缺席推断**：
+     * 名册里出现的人照常更新，上游明确标了 left 的也照常算 ——
+     * 那些是上游说出来的事实，不是我们推断出来的。
+     */
+    const knownActive = existing.filter((m) => !m.leftAt).length;
+    const upstreamIds = new Set(upstream.map((m) => m.wx_id));
+    const missing = existing.filter((m) => !m.leftAt && !upstreamIds.has(m.wxId)).length;
+    const verdict = checkRoster({
+      fetched: upstream.length,
+      limit: ROSTER_LIMIT,
+      knownActive,
+      missing,
+    });
 
     let written = 0;
 
@@ -91,8 +116,8 @@ export async function syncGroupMembers(
         existingMap.delete(member.wx_id);
       }
 
-      // 上游名册里消失的人视为退群
-      for (const [wxId, prior] of existingMap) {
+      // 上游名册里消失的人视为退群 —— 只在这份名册可信时
+      for (const [wxId, prior] of verdict.trust ? existingMap : []) {
         if (prior.leftAt) continue;
         tx.update(groupMembers)
           .set({ leftAt: now, syncedAt: now })
@@ -109,7 +134,12 @@ export async function syncGroupMembers(
       .where(eq(groups.convId, convId))
       .run();
 
-    return { fetched: upstream.length, written };
+    return {
+      fetched: upstream.length,
+      written,
+      // 不可信时要**说出来**：静默跳过等于同步一直在假装成功
+      note: verdict.trust ? undefined : verdict.message,
+    };
   });
 }
 
