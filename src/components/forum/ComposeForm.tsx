@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
 import { Editor } from "@/components/forum/Editor";
+import { useToast } from "@/components/ui/Toast";
 import { createPost } from "@/lib/forum/actions";
 import { pickDraft, type DraftSnapshot } from "@/lib/forum/draft-rules";
 
@@ -40,6 +41,7 @@ export function ComposeForm({
   serverDrafts?: Record<string, DraftSnapshot>;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [boardKey, setBoardKey] = useState(defaultBoard ?? boards[0]?.key ?? "");
@@ -141,6 +143,15 @@ export function ComposeForm({
         setError(result.error ?? "发布失败");
         return;
       }
+      /*
+       * 「发出去了，但有话要说」—— 新人发外链会被降权，得跟人说一声。
+       *
+       * 走 toast 而不是留在这一页上：这一页马上就跳走了。
+       * ToastProvider 挂在 (app) 布局上，跳过去之后那句话还在。
+       * 时间给足 —— 3.2 秒读不完，而这句话正是这条规则的全部意义。
+       */
+      if (result.note) toast.show({ message: result.note, kind: "info", durationMs: 12_000 });
+
       // 发出去了就把两边的草稿都清掉 —— 留着的话下次点发帖会把
       // 已经发表过的内容当草稿恢复出来，而人会以为上次没发成功
       clearLocalDraft(`new:${boardKey}`);

@@ -36,6 +36,14 @@ export function ReplyForm({
   const quoteCtx = useQuote();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  /*
+   * 「发出去了，但有话要说」。
+   *
+   * 和 error 分开：新人发外链现在是**放行 + 降权 + 说明**，
+   * 用红色的报错框装那句说明的话，人读到的还是「我被拦了」，
+   * 而这条规则唯一有教育意义的就是那句「再等等就好」。
+   */
+  const [notice, setNotice] = useState<string | null>(null);
   const [content, setContent] = useState("");
   const [key, setKey] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -90,6 +98,7 @@ export function ReplyForm({
         setError(result.error ?? "回复失败");
         return;
       }
+      setNotice(result.note ?? null);
       clearLocalDraft(`reply:${postId}`);
       setRestoreInto(null);
       setContent("");
@@ -144,6 +153,16 @@ export function ReplyForm({
       {error && (
         <p className="t-footnote text-[var(--danger)]" role="alert">
           {error}
+        </p>
+      )}
+
+      {/* 不是报错，所以不用 danger 色也不用 alert —— 它是一句解释 */}
+      {notice && (
+        <p
+          className="t-footnote rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 leading-relaxed text-[var(--ink-secondary)]"
+          role="status"
+        >
+          {notice}
         </p>
       )}
 

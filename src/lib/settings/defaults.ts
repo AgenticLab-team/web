@@ -526,8 +526,10 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
     value: "3",
     type: "int",
     category: "forum",
-    label: "新人多少天内不能发外链",
-    description: "防广告最有效的一条 —— 广告号的特征就是刚进来就甩链接。设 0 关闭",
+    label: "新人多少天内发外链会被降权",
+    description:
+      "不再直接拦下来：内容照发，链接拆成 example[.]com 这样点不动的形式，并告诉他满几天之后就不会这样了。" +
+      "拦截只教会人「这里不让说话」，被拦一次多半就不发第二次了。设 0 关闭",
     min: 0,
     max: 90,
   },

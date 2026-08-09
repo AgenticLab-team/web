@@ -12,6 +12,12 @@ import { can } from "@/lib/rbac/can";
 import { getSettingInt } from "@/lib/settings/store";
 import { resolveDisplayName } from "@/lib/users/display-name";
 
+import {
+  countExternalLinks,
+  isNewbie,
+  newbieLinkNotice,
+} from "@/lib/moderation/link-defang-rules";
+import { siteHosts } from "@/lib/moderation/site-hosts";
 import { checkContent, fileForReview } from "@/lib/moderation/word-gate";
 
 import { recountBoardPosts } from "./board-stats";
@@ -38,6 +44,13 @@ export interface ActionResult {
   error?: string;
   postId?: string;
   replyId?: string;
+  /**
+   * 成功了、但有话要说。
+   *
+   * 新人发外链现在不拦了，改成降权 + 说明 —— 而「说明」如果没有一条
+   * 能送到人眼前的路，这条规则就退化成了「我的链接怎么坏了」。
+   */
+  note?: string;
 }
 
 const fail = (error: string): ActionResult => ({ ok: false, error });
@@ -62,16 +75,27 @@ function mentionResolver() {
 }
 
 /**
- * 新人不能发外链。
- * 这是防广告最有效的一条 —— 广告号的特征就是刚进群就甩链接。
+ * 新人发外链：**不拦，降权 + 说一句**。
+ *
+ * 以前这里直接返回「不让发」。拦截只教会人「这里不让说话」——
+ * 一个新人被拦一次多半就不发第二次了，而我们要挡的是广告号，
+ * 不是第一天来的人。
+ *
+ * 现在内容照常落库（**存原文**），链接的可点性在渲染那一层拆掉
+ * （见 forum/queries.ts 与 link-defang-rules.ts），这里只负责
+ * 把那句说明带回给发帖的人。
+ *
+ * 返回 null 表示没什么要说的。
  */
-function violatesNewbieLinkRule(user: { firstBoundAt: number | null }, content: string): boolean {
+function newbieLinkNote(
+  user: { firstBoundAt: number | null },
+  content: string,
+  what: "帖子" | "回复",
+): string | null {
   const days = getSettingInt("forum.newbie_no_link_days", 3);
-  if (days <= 0) return false;
-  const boundAt = user.firstBoundAt;
-  if (!boundAt) return true;
-  if (Date.now() - boundAt > days * 86_400_000) return false;
-  return /https?:\/\//i.test(content);
+  if (!isNewbie(user.firstBoundAt, days, Date.now())) return null;
+  if (countExternalLinks(content, { siteHosts: siteHosts() }) === 0) return null;
+  return newbieLinkNotice(days, what);
 }
 
 function tooFrequent(userId: string, table: "post" | "reply"): boolean {
@@ -150,11 +174,14 @@ export async function createPost(input: {
   if (title.length > 120) return fail("标题不能超过 120 字");
   if (content.length < 2) return fail("正文不能为空");
 
-  // ③ 反滥用
-  if (violatesNewbieLinkRule(user, content)) {
-    const days = getSettingInt("forum.newbie_no_link_days", 3);
-    return fail(`加入不满 ${days} 天暂时不能发外链，等等再来`);
-  }
+  /*
+   * ③ 反滥用。
+   *
+   * 新人的外链**不再拦**：算出那句要带回去的说明，内容照常往下走。
+   * 频率仍然拦 —— 「发得太快」和「发了链接」不是一回事，
+   * 前者不管新老都该挡。
+   */
+  const linkNote = newbieLinkNote(user, content, "帖子");
   if (tooFrequent(user.id, "post")) return fail("发帖太频繁了，歇一会儿");
 
   /*
@@ -330,7 +357,7 @@ export async function createPost(input: {
 
   revalidatePath("/forum");
   revalidatePath(`/forum/${board.key}`);
-  return { ok: true, postId: created.id };
+  return { ok: true, postId: created.id, note: linkNote ?? undefined };
 }
 
 export async function createReply(input: {
@@ -355,10 +382,8 @@ export async function createReply(input: {
 
   const content = input.content.trim();
   if (content.length < 1) return fail("回复不能为空");
-  if (violatesNewbieLinkRule(user, content)) {
-    const days = getSettingInt("forum.newbie_no_link_days", 3);
-    return fail(`加入不满 ${days} 天暂时不能发外链`);
-  }
+  // 和发帖同一条路：外链不拦，只带一句说明回去
+  const linkNote = newbieLinkNote(user, content, "回复");
   if (tooFrequent(user.id, "reply")) return fail("回复太频繁了，歇一会儿");
 
   const gate = checkContent(content);
@@ -460,7 +485,7 @@ export async function createReply(input: {
   });
 
   revalidatePath(`/forum/p/${input.postId}`);
-  return { ok: true, replyId: created.id };
+  return { ok: true, replyId: created.id, note: linkNote ?? undefined };
 }
 
 export async function editPost(input: {

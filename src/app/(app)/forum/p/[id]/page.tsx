@@ -291,6 +291,19 @@ export default async function PostPage({
           dangerouslySetInnerHTML={{ __html: post.contentHtml }}
         />
 
+        {/*
+          * 链接被降权了就跟作者说一声，**只跟作者说**。
+          *
+          * 别人看到「这人是新号」没有任何用处，只是在示众；
+          * 而作者不知道的话，他看到的就是「我的链接坏了」——
+          * 那比当初直接拦下来更让人摸不着头脑。
+          */}
+        {post.linkNotice && user?.id === post.authorId && (
+          <p className="t-footnote mt-4 rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 text-[var(--ink-secondary)]">
+            {post.linkNotice}
+          </p>
+        )}
+
         {poll && <PollWidget poll={poll} canVote={Boolean(user)} />}
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
@@ -500,6 +513,13 @@ export default async function PostPage({
                   className="prose-forum prose-forum-compact"
                   dangerouslySetInnerHTML={{ __html: reply.contentHtml }}
                 />
+
+                {/* 同正文：链接被降权只跟发的人说，别人看到只是示众 */}
+                {reply.linkNotice && reply.isMine && (
+                  <p className="t-caption2 mt-1.5 text-[var(--ink-tertiary)]">
+                    {reply.linkNotice}
+                  </p>
+                )}
 
                 {/*
                   * 改过就标出来。回复是对话的一部分 ——

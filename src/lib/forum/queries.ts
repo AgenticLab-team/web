@@ -5,6 +5,9 @@ import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { boards, people, posts, replies, users } from "@/lib/db/schema";
 import type { Visibility } from "@/lib/db/schema/forum";
+import { defangHtml, defangedAuthorHint, isNewbie } from "@/lib/moderation/link-defang-rules";
+import { siteHosts } from "@/lib/moderation/site-hosts";
+import { getSettingInt } from "@/lib/settings/store";
 import { resolveDisplayName } from "@/lib/users/display-name";
 
 import { isEffectivelyPinned } from "./pin";
@@ -208,6 +211,32 @@ function hydrateAuthors(rows: { post: typeof posts.$inferSelect; board: typeof b
   });
 }
 
+/**
+ * 新人外链降权：**在这一层做，不在写入那一层做**。
+ *
+ * 库里存的永远是原文（`content` 和渲染好的 `contentHtml` 都是原样），
+ * 拆点只发生在读出来的这一瞬间。这样「满没满 N 天」变化时，
+ * 老帖子里的链接会自己好起来 —— 写入时拆的话，人满 3 天之后回头看，
+ * 自己的链接永远是残废的，而那正是「再等等就好」这句承诺的反面。
+ *
+ * 代价是每一条渲染路径都要经过这里。目前 `contentHtml` 只有两个
+ * 出口（单帖正文、楼层），都在这个文件里；新开渲染路径的话必须
+ * 一起走这一步，否则就是一个绕过口。别的出口（列表页的 excerpt、
+ * 搜索、群聊同步）都是纯文本，本来就点不动，不在这条链路上。
+ */
+function defangFor(
+  html: string,
+  firstBoundAt: number | null | undefined,
+  now: number,
+): { html: string; notice: string | null } {
+  const days = getSettingInt("forum.newbie_no_link_days", 3);
+  if (!isNewbie(firstBoundAt, days, now)) return { html, notice: null };
+
+  const result = defangHtml(html, { siteHosts: siteHosts() });
+  // 没拆到东西就别摆那句解释 —— 新人发的干净帖子不该被扣一顶帽子
+  return { html: result.html, notice: result.count > 0 ? defangedAuthorHint(days) : null };
+}
+
 /** 取单帖。看不见时返回 null，调用方渲染 404 —— 403 会泄露存在性 */
 export function getPost(viewer: ViewerContext, postId: string) {
   const row = db
@@ -222,7 +251,24 @@ export function getPost(viewer: ViewerContext, postId: string) {
   if (!verdict.visible) return null;
 
   const [summary] = hydrateAuthors([row]);
-  return { ...summary, contentHtml: row.post.contentHtml, content: row.post.content, board: row.board, raw: row.post };
+
+  // 时钟在这里读一次 —— 页面组件里读是渲染期副作用，React 编译器会拦
+  const author = db
+    .select({ firstBoundAt: users.firstBoundAt })
+    .from(users)
+    .where(eq(users.id, row.post.authorId))
+    .get();
+  const defanged = defangFor(row.post.contentHtml, author?.firstBoundAt, Date.now());
+
+  return {
+    ...summary,
+    contentHtml: defanged.html,
+    /** 正文里的链接被降权了 —— 作者自己看时要解释一句，否则只会以为站坏了 */
+    linkNotice: defanged.notice,
+    content: row.post.content,
+    board: row.board,
+    raw: row.post,
+  };
 }
 
 export function listReplies(viewer: ViewerContext, postId: string) {
@@ -256,6 +302,8 @@ export function listReplies(viewer: ViewerContext, postId: string) {
         siteNickname: users.siteNickname,
         wxNickname: users.wxNickname,
         avatar: users.wxAvatarUrl,
+        // 新人外链降权要用；和上面的 now 一样，判定在这一层做完
+        firstBoundAt: users.firstBoundAt,
       })
       .from(users)
       .where(inArray(users.id, authorIds))
@@ -265,10 +313,13 @@ export function listReplies(viewer: ViewerContext, postId: string) {
 
   return rows.map((r) => {
     const author = authors.get(r.authorId);
+    const defanged = defangFor(r.contentHtml, author?.firstBoundAt, now);
     return {
       id: r.id,
       floor: r.floor,
-      contentHtml: r.contentHtml,
+      contentHtml: defanged.html,
+      /** 这一楼的链接被降权了。只有作者自己看得到那句解释 */
+      linkNotice: defanged.notice,
       authorId: r.authorId,
       authorName: r.anonymous
         ? "匿名"
