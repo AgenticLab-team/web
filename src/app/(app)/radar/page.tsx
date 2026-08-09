@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { RadarManager } from "@/components/radar/RadarManager";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, Section } from "@/components/ui/primitives";
+import { requireFeature } from "@/lib/flags/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { MAX_HITS_PER_DAY, MAX_KEYWORDS_PER_USER } from "@/lib/radar/match";
@@ -26,6 +27,8 @@ export const dynamic = "force-dynamic";
  */
 export default async function RadarPage() {
   const user = await getCurrentUser();
+  // 功能开关：关掉之后这一页 404 —— 只藏导航的话，地址栏敲一下照样进得去
+  requireFeature("keyword_radar", user);
   if (!user) redirect("/login?next=/radar");
 
   const subs = mySubs(user.id);

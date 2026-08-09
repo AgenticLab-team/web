@@ -5,14 +5,13 @@ import { eq } from "drizzle-orm";
 import { validateSettingValue } from "./validate";
 
 import { db } from "@/lib/db";
-import { auditLogs, featureFlags, settingHistory, settings } from "@/lib/db/schema";
+import { auditLogs, settingHistory, settings } from "@/lib/db/schema";
 
 /**
  * 配置读取走进程内缓存 —— 积分结算、同步、权限判定每秒会读很多次，
  * 每次打库没必要。写入时清缓存。
  */
 let cache: Map<string, string> | null = null;
-let flagCache: Map<string, boolean> | null = null;
 
 function load(): Map<string, string> {
   if (cache) return cache;
@@ -23,7 +22,6 @@ function load(): Map<string, string> {
 
 export function invalidateSettingsCache() {
   cache = null;
-  flagCache = null;
 }
 
 export function getSetting(key: string, fallback = ""): string {
@@ -116,17 +114,10 @@ export function updateSetting(key: string, rawValue: string, ctx: UpdateSettingC
   return { ...current, value };
 }
 
-function loadFlags(): Map<string, boolean> {
-  if (flagCache) return flagCache;
-  const rows = db
-    .select({ key: featureFlags.key, enabled: featureFlags.enabled })
-    .from(featureFlags)
-    .all();
-  flagCache = new Map(rows.map((r) => [r.key, r.enabled]));
-  return flagCache;
-}
-
-/** 功能开关。出问题时先关模块，而不是回滚整站 */
-export function isFeatureEnabled(key: string): boolean {
-  return loadFlags().get(key) ?? false;
-}
+/*
+ * 功能开关的判定挪到了 lib/flags/。
+ *
+ * 原来这里有一份 `isFeatureEnabled`，**全站零调用点**，
+ * 而且 `?? false` 会让一张空表把整站功能全关掉。
+ * 留着两份判定的话，早晚有一处被改、另一处没改。
+ */

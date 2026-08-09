@@ -5,6 +5,7 @@ import Link from "next/link";
 import { PostList } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Group, Row, Section } from "@/components/ui/primitives";
+import { requireFeature } from "@/lib/flags/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
 import { listBoards, listPosts } from "@/lib/forum/queries";
@@ -14,6 +15,8 @@ export const dynamic = "force-dynamic";
 
 export default async function ForumPage() {
   const user = await getCurrentUser();
+  // 功能开关：关掉之后这一页 404 —— 只藏导航的话，地址栏敲一下照样进得去
+  requireFeature("forum", user);
   const viewer = buildViewerContext(user);
   const boards = listBoards(viewer);
   const recent = listPosts(viewer, { sort: "recent", limit: 15 });

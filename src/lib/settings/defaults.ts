@@ -557,6 +557,15 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
 ];
 
 /** 功能开关：出问题时先关模块，而不是回滚整站 */
+/**
+ * 种子里的开关初值。
+ *
+ * `keyword_radar` 和 `shop` 原来写着 false，而那两个页面一直是活的、
+ * 也一直挂在导航里 —— **库里的值是陈旧的，不是真相**。
+ * 接线那一刻如果照着它来，两个在用的功能会当场消失。
+ *
+ * 真正的清单在 lib/flags/registry.ts；这里只管新库的初值。
+ */
 export const DEFAULT_FLAGS: readonly {
   key: string;
   enabled: boolean;
@@ -566,8 +575,8 @@ export const DEFAULT_FLAGS: readonly {
   { key: "forum", enabled: true, description: "论坛" },
   { key: "message_search", enabled: true, description: "群消息检索" },
   { key: "link_library", enabled: true, description: "链接资源库" },
-  { key: "keyword_radar", enabled: false, description: "关键词雷达订阅" },
-  { key: "shop", enabled: false, description: "积分商店" },
+  { key: "keyword_radar", enabled: true, description: "关键词雷达订阅" },
+  { key: "shop", enabled: true, description: "积分商店" },
   { key: "events", enabled: true, description: "活动系统" },
   { key: "temp_mailbox", enabled: false, description: "临时邮箱" },
   { key: "rag_qa", enabled: false, description: "群聊 RAG 问答" },

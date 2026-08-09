@@ -4,6 +4,7 @@ import { relativeTime } from "@/components/forum/PostList";
 import { ShopGrid } from "@/components/shop/ShopGrid";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Callout, PageNote, Section } from "@/components/ui/primitives";
+import { requireFeature } from "@/lib/flags/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { listItems, listOrders, ownedCounts, unusedMakeupCards , pinnablePosts } from "@/lib/shop/queries";
 
@@ -21,6 +22,8 @@ export const dynamic = "force-dynamic";
  */
 export default async function ShopPage() {
   const user = await getCurrentUser();
+  // 功能开关：关掉之后这一页 404 —— 只藏导航的话，地址栏敲一下照样进得去
+  requireFeature("shop", user);
 
   const items = listItems();
   const owned = user ? ownedCounts(user.id) : new Map<string, number>();

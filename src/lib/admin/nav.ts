@@ -225,6 +225,15 @@ export const ADMIN_NAV: AdminNavSection[] = [
     label: "系统",
     items: [
       {
+        key: "flags",
+        href: "/admin/flags",
+        label: "功能开关",
+        icon: "toggle-left",
+        permission: "system.settings",
+        description: "出问题时先关模块，而不是回滚整站",
+        ready: true,
+      },
+      {
         key: "settings",
         href: "/admin/settings",
         label: "系统设置",

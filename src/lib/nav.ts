@@ -19,6 +19,14 @@ export interface NavItem {
   inTabBar?: boolean;
   /** 尚未实现的入口先不显示，但保留定义，免得漏掉 */
   ready?: boolean;
+  /**
+   * 受哪个功能开关管。
+   *
+   * 关掉之后这一项从导航里消失 —— 而**页面本身也要 404**
+   * （见 lib/flags/server.ts 的 requireFeature）：
+   * 只藏导航的话，地址栏敲一下照样进得去，那不是开关，是把门牌摘了。
+   */
+  flag?: string;
 }
 
 export interface NavSection {
@@ -46,6 +54,7 @@ export const NAV: NavSection[] = [
       },
       {
         key: "search",
+        flag: "message_search",
         href: "/search",
         label: "检索",
         icon: "search",
@@ -57,6 +66,7 @@ export const NAV: NavSection[] = [
       },
       {
         key: "forum",
+        flag: "forum",
         href: "/forum",
         label: "论坛",
         icon: "messages-square",
@@ -70,18 +80,42 @@ export const NAV: NavSection[] = [
     key: "community",
     label: "社区",
     items: [
-      { key: "events", href: "/activities", label: "活动", icon: "calendar", ready: true },
+      {
+        key: "events",
+        flag: "events",
+        href: "/activities",
+        label: "活动",
+        icon: "calendar",
+        ready: true,
+      },
       { key: "members", href: "/members", label: "成员", icon: "users", requiresAuth: true, ready: true },
-      { key: "links", href: "/links", label: "资源库", icon: "link", requiresAuth: true, ready: true },
+      {
+        key: "links",
+        flag: "link_library",
+        href: "/links",
+        label: "资源库",
+        icon: "link",
+        requiresAuth: true,
+        ready: true,
+      },
       {
         key: "radar",
+        flag: "keyword_radar",
         href: "/radar",
         label: "关键词雷达",
         icon: "radar",
         requiresAuth: true,
         ready: true,
       },
-      { key: "shop", href: "/shop", label: "商店", icon: "gift", requiresAuth: true, ready: true },
+      {
+        key: "shop",
+        flag: "shop",
+        href: "/shop",
+        label: "商店",
+        icon: "gift",
+        requiresAuth: true,
+        ready: true,
+      },
     ],
   },
   {
@@ -147,6 +181,14 @@ export interface NavContext {
   loggedIn: boolean;
   /** 权限判定。服务端传 can()，测试可以传桩 */
   hasPermission: (permission: PermissionKey) => boolean;
+  /**
+   * 功能开关。传桩即可 —— 这一层不碰数据库。
+   *
+   * 不传就当全开：测试和早期调用点不必为了一个开关去建整套上下文，
+   * 而「忘了传」的后果是导航照常显示（页面那一侧仍然会 404），
+   * 比反过来安全 —— 反过来是一次疏忽让整个导航空掉。
+   */
+  featureEnabled?: (flag: string) => boolean;
 }
 
 /**
@@ -157,6 +199,8 @@ export interface NavContext {
 export function navItemVisible(item: NavItem, ctx: NavContext): boolean {
   if (!item.ready) return false;
   if (item.requiresAuth && !ctx.loggedIn) return false;
+  // 功能关掉了就不出现在导航里 —— 页面那一侧还会再挡一次
+  if (item.flag && ctx.featureEnabled && !ctx.featureEnabled(item.flag)) return false;
   if (!item.permission) return true;
   return ctx.hasPermission(item.permission);
 }

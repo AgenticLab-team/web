@@ -15,6 +15,7 @@ import {
   SearchField,
   Section,
 } from "@/components/ui/primitives";
+import { requireFeature } from "@/lib/flags/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { listLinks } from "@/lib/links/queries";
 
@@ -42,6 +43,8 @@ export default async function LinksPage({
   searchParams: Promise<{ d?: string; q?: string; saved?: string; sort?: string }>;
 }) {
   const user = await getCurrentUser();
+  // 功能开关：关掉之后这一页 404 —— 只藏导航的话，地址栏敲一下照样进得去
+  requireFeature("link_library", user);
   if (!user) redirect("/login?next=/links");
 
   const params = await searchParams;

@@ -11,6 +11,7 @@ import {
   type NavItem,
 } from "@/lib/nav";
 import { unreadCount } from "@/lib/forum/notify";
+import { featureEnabled } from "@/lib/flags/server";
 import { can } from "@/lib/rbac/can";
 import { resolveDisplayName } from "@/lib/users/display-name";
 
@@ -33,6 +34,8 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
     navItemVisible(item, {
       loggedIn: Boolean(user),
       hasPermission: (permission) => can(user, permission).allowed,
+      // 关掉的功能不出现在导航里；页面那一侧 requireFeature 还会再挡一次
+      featureEnabled: (flag) => featureEnabled(flag, user),
     });
 
   const sections = visibleSections(visible);

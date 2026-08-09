@@ -1,4 +1,5 @@
 import { Archive, Sparkles, User } from "lucide-react";
+import { requireFeature } from "@/lib/flags/server";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
@@ -45,6 +46,8 @@ export default async function SearchPage({
 }) {
   const params = await searchParams;
   const user = await getCurrentUser();
+  // 功能开关：关掉之后这一页 404 —— 只藏导航的话，地址栏敲一下照样进得去
+  requireFeature("message_search", user);
   const groups = visibleGroupsFor(user);
   const query = (params.q ?? "").trim();
   const onlyMine = params.mine === "1";

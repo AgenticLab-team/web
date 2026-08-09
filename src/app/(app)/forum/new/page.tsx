@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { ComposeForm } from "@/components/forum/ComposeForm";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { BackLink, Empty } from "@/components/ui/primitives";
+import { requireFeature } from "@/lib/flags/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
 import type { DraftSnapshot } from "@/lib/forum/draft-rules";
@@ -20,6 +21,8 @@ export default async function NewPostPage({
   searchParams: Promise<{ board?: string }>;
 }) {
   const user = await getCurrentUser();
+  // 功能开关：关掉之后这一页 404 —— 只藏导航的话，地址栏敲一下照样进得去
+  requireFeature("forum", user);
   if (!user) redirect("/login");
 
   const { board } = await searchParams;

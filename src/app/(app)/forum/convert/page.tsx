@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { MessagePicker } from "@/components/forum/MessagePicker";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { BackLink, Callout, Empty, PageNote, Pill, PillRow, SearchField } from "@/components/ui/primitives";
+import { requireFeature } from "@/lib/flags/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { messagesOfDay, searchMessagesForConvert } from "@/lib/forum/convert-source";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
@@ -26,6 +27,8 @@ export default async function ConvertPage({
   searchParams: Promise<{ group?: string; date?: string; q?: string }>;
 }) {
   const user = await getCurrentUser();
+  // 功能开关：关掉之后这一页 404 —— 只藏导航的话，地址栏敲一下照样进得去
+  requireFeature("forum", user);
   if (!user) redirect("/login");
 
   const { group, date, q } = await searchParams;

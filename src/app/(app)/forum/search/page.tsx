@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/shell/PageHeader";
 import { BackLink, Empty, Group, PageNote, Row, SearchField } from "@/components/ui/primitives";
+import { requireFeature } from "@/lib/flags/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
 import { searchForum } from "@/lib/forum/search";
@@ -17,6 +18,8 @@ export default async function ForumSearchPage({
 }) {
   const { q } = await searchParams;
   const user = await getCurrentUser();
+  // 功能开关：关掉之后这一页 404 —— 只藏导航的话，地址栏敲一下照样进得去
+  requireFeature("forum", user);
   const viewer = buildViewerContext(user);
   const query = (q ?? "").trim();
   const hits = query ? searchForum(viewer, query, 40) : [];

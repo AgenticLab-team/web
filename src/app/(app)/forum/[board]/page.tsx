@@ -7,6 +7,7 @@ import { FollowButton } from "@/components/forum/FollowButton";
 import { PostList } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { BackLink, Pill, PillRow, Section } from "@/components/ui/primitives";
+import { requireFeature } from "@/lib/flags/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
 import { isFollowing } from "@/lib/forum/follow";
@@ -41,6 +42,8 @@ export default async function BoardPage({
   const { sort } = await searchParams;
 
   const user = await getCurrentUser();
+  // 功能开关：关掉之后这一页 404 —— 只藏导航的话，地址栏敲一下照样进得去
+  requireFeature("forum", user);
   const viewer = buildViewerContext(user);
 
   const board = getBoardByKey(boardKey);

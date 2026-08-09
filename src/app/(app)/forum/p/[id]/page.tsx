@@ -25,6 +25,7 @@ import { ReplyRow } from "@/components/forum/ReplyRow";
 import { ReadingProgress } from "@/components/forum/ReadingProgress";
 import { ResumeReading } from "@/components/forum/ResumeReading";
 import { BackLink, Empty, EmptyAction, Pill, Section } from "@/components/ui/primitives";
+import { requireFeature } from "@/lib/flags/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
 import { postCapabilities } from "@/lib/forum/manage";
@@ -87,6 +88,8 @@ export default async function PostPage({
   const { id } = await params;
   const { only, view } = await searchParams;
   const user = await getCurrentUser();
+  // 功能开关：关掉之后这一页 404 —— 只藏导航的话，地址栏敲一下照样进得去
+  requireFeature("forum", user);
   const viewer = buildViewerContext(user);
 
   const post = getPost(viewer, id);

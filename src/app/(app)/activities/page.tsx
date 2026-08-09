@@ -9,6 +9,7 @@ import { evaluateEligibility, type Rule } from "@/lib/activities/eligibility";
 import { listActivities, listApplications } from "@/lib/activities/queries";
 import { getModule } from "@/lib/activities/registry";
 import { computeStatsFor } from "@/lib/activities/stats";
+import { requireFeature } from "@/lib/flags/server";
 import { getCurrentUser } from "@/lib/auth/session";
 
 export const metadata: Metadata = { title: "活动" };
@@ -26,6 +27,8 @@ export const dynamic = "force-dynamic";
  */
 export default async function ActivitiesPage() {
   const user = await getCurrentUser();
+  // 功能开关：关掉之后这一页 404 —— 只藏导航的话，地址栏敲一下照样进得去
+  requireFeature("events", user);
   const activities = listActivities().filter(
     (a) => a.status !== "draft" && a.status !== "cancelled",
   );
