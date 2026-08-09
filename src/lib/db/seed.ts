@@ -10,7 +10,7 @@ import {
   roles,
   settings,
 } from "./schema";
-import { PERMISSIONS } from "@/lib/rbac/permissions";
+import { PERMISSIONS, RETIRED_PERMISSIONS } from "@/lib/rbac/permissions";
 import { BUILTIN_ROLES, resolveRolePermissions } from "@/lib/rbac/roles";
 import { seedBoards } from "@/lib/forum/seed-boards";
 import { seedTitles } from "@/lib/titles/seed-titles";
@@ -21,6 +21,8 @@ export interface SeedReport {
   permissions: number;
   roles: number;
   rolePermissions: number;
+  /** 这次启动清掉了几个退役的权限点 */
+  permissionsRetired: number;
   settings: number;
   /** 这次启动清掉了几个退役的配置项 —— 数字不为零时值得在日志里看见 */
   settingsRetired: number;
@@ -39,6 +41,7 @@ export function seedDatabase(): SeedReport {
     permissions: 0,
     roles: 0,
     rolePermissions: 0,
+    permissionsRetired: 0,
     settings: 0,
     settingsRetired: 0,
     flags: 0,
@@ -49,6 +52,21 @@ export function seedDatabase(): SeedReport {
 
   db.transaction((tx) => {
     // 权限点字典由代码定义，直接覆盖
+    /*
+     * 先把退役的权限点从库里清掉。
+     *
+     * 权限矩阵那一页读的是库里的 `permissions` 表，不是代码里的清单 ——
+     * 只删清单的话，那个勾照样摆在矩阵上，而且再没有人知道它是死的。
+     *
+     * `role_permissions` 里的授权行也要一起删：留着的话，
+     * 「谁拥有 X」的反查会列出一批人，而 X 已经不存在了。
+     */
+    for (const retired of RETIRED_PERMISSIONS) {
+      tx.delete(rolePermissions).where(eq(rolePermissions.permissionKey, retired.key)).run();
+      const gone = tx.delete(permissionsTable).where(eq(permissionsTable.key, retired.key)).run();
+      if (gone.changes > 0) report.permissionsRetired++;
+    }
+
     for (const def of PERMISSIONS) {
       tx.insert(permissionsTable)
         .values({

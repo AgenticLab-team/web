@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { PERMISSION_LIST } from "@/lib/rbac/permissions";
+import { PERMISSION_LIST, RETIRED_PERMISSIONS } from "@/lib/rbac/permissions";
 
 /**
  * 每个权限点到底管不管用。
@@ -44,6 +44,15 @@ function walk(dir: string, out: string[] = []): string[] {
  */
 const PATTERNS = [
   /(?:can|requireAdmin|requireWritableAdmin|has|hasPermission|requirePermission)\(\s*(?:[a-zA-Z_$][\w$.]*\s*,\s*)?"([a-z0-9_.]+)"/g,
+  /*
+   * 「任一即可」的写法：`requireAdmin(["a", "b"])`。
+   *
+   * 一页上有两种人要看的东西时会用到它。只认单个字面量的话，
+   * 数组里那几个会被报成「从来没被判过」—— 而它们正被判着。
+   */
+  /(?:requireAdmin|requireWritableAdmin)\(\s*\[([^\]]*)\]/g,
+  /** 导航项上的「这个权限点也够进这一页」 */
+  /alsoAllows:\s*\[([^\]]*)\]/g,
   /(?:PERMISSION|Permission)\s*[:=]\s*"([a-z0-9_.]+)"/g,
   /permission:\s*"([a-z0-9_.]+)"/g,
   /\?\?\s*"([a-z0-9_.]+)"\)\s*as\s*"/g,
@@ -55,7 +64,12 @@ function enforcedKeys(): Set<string> {
     if (file.endsWith("rbac/permissions.ts")) continue;
     const body = readFileSync(file, "utf8");
     for (const re of PATTERNS) {
-      for (const m of body.matchAll(re)) found.add(m[1]);
+      for (const m of body.matchAll(re)) {
+        // 数组那两条捕获的是整段内容，里面可能有好几个 key
+        for (const lit of m[1].matchAll(/[a-z0-9_.]+/g)) {
+          if (lit[0].includes(".")) found.add(lit[0]);
+        }
+      }
     }
   }
   return found;
@@ -146,5 +160,141 @@ describe("**管理员打得开他有权限的每一页**", () => {
     const storage = readFileSync(join(root, "src/lib/storage/actions.ts"), "utf8");
     assert.match(flags, /requireWritableAdmin\("system\.flags"\)/);
     assert.match(storage, /requireWritableAdmin\("system\.storage"\)/);
+  });
+});
+
+describe("**退役要退干净**", () => {
+  /*
+   * 从清单里删掉不够 —— 权限矩阵那一页读的是库里的 `permissions` 表。
+   * 只删清单的话，那个勾照样摆在矩阵上，而且再没有人知道它是死的。
+   *
+   * 该退役的**不是「功能还没做」**（那种标 planned 就够了），
+   * 是**已经有别的机制在管同一件事**的：多留一个勾，
+   * 就是给了第三套判断的入口，而三套迟早分叉。
+   */
+  const keys = new Set(PERMISSION_LIST.map((p) => p.key));
+
+  it("退役的不能还留在清单里", () => {
+    for (const r of RETIRED_PERMISSIONS) {
+      assert.equal(keys.has(r.key as never), false, `${r.key} 同时在两张表里`);
+    }
+  });
+
+  it("**退役的不能还有地方在判它**", () => {
+    for (const r of RETIRED_PERMISSIONS) {
+      assert.equal(enforced.has(r.key), false, `${r.key} 已退役，却还有地方在判`);
+    }
+  });
+
+  it("**内建角色里也不能再授它**", () => {
+    /*
+     * 授一个不存在的权限点，在类型上会被 tsc 拦下 ——
+     * 但自定义角色是运行时数据，拦不住。所以 seed 要负责清库，
+     * 这一条盯着内建的那几个。
+     */
+    const roles = readFileSync(join(root, "src/lib/rbac/roles.ts"), "utf8");
+    for (const r of RETIRED_PERMISSIONS) {
+      assert.equal(roles.includes(`"${r.key}"`), false, `内建角色里还在授 ${r.key}`);
+    }
+  });
+
+  it("**seed 会把它从两张表里都删掉**", () => {
+    /*
+     * `role_permissions` 里的授权行也要删：留着的话，
+     * 「谁拥有 X」的反查会列出一批人，而 X 已经不存在了。
+     */
+    const seed = readFileSync(join(root, "src/lib/db/seed.ts"), "utf8");
+    assert.match(seed, /RETIRED_PERMISSIONS/);
+    assert.match(seed, /delete\(rolePermissions\)\.where\(eq\(rolePermissions\.permissionKey/);
+    assert.match(seed, /delete\(permissionsTable\)\.where\(eq\(permissionsTable\.key/);
+  });
+
+  it("每个退役项都写清楚了「谁在管同一件事」", () => {
+    // 说不出替代者的话，这条退役就没法复核 —— 它可能只是被忘了
+    for (const r of RETIRED_PERMISSIONS) {
+      assert.ok(r.why.length > 20, `${r.key} 没说清楚`);
+    }
+  });
+});
+
+describe("**任一即可的写法要被认出来**", () => {
+  it("requireAdmin([...]) 里的权限点算被判过", () => {
+    /*
+     * 一页上有两种人要看的东西时会用到它。只认单个字面量的话，
+     * 数组里那几个会被报成「从来没被判过」—— 而它们正被判着，
+     * 于是所有人开始无视这条测试。
+     */
+    assert.equal(enforced.has("group.stats.read"), true);
+  });
+
+  it("导航项的 alsoAllows 也算", () => {
+    const nav = readFileSync(join(root, "src/lib/admin/nav.ts"), "utf8");
+    assert.match(nav, /alsoAllows: \["group\.stats\.read"\]/);
+  });
+});
+
+describe("**群页：两个权限点各管各的**", () => {
+  const page = readFileSync(join(root, "src/app/(app)/admin/groups/page.tsx"), "utf8");
+
+  it("两个权限点任一即可进", () => {
+    /*
+     * 只认 group.manage 的话，group.stats.read 永远没有用武之地 ——
+     * 授出去了也进不来这一页，于是那个勾等于不存在。
+     */
+    assert.match(page, /requireAdmin\(\["group\.manage", "group\.stats\.read"\]\)/);
+  });
+
+  it("**改群配置要 group.manage**", () => {
+    assert.match(page, /canManage && <GroupConfig/);
+  });
+
+  it("**手动触发要 group.sync.trigger**", () => {
+    assert.match(page, /canTrigger \? <SyncControls/);
+    assert.match(page, /canTrigger && <SyncControls/);
+  });
+
+  it("**只读时说清楚是权限不够，不是页面坏了**", () => {
+    // 一个按钮都没有的页面，不说明白的话看起来就是后者
+    assert.match(page, /!canManage &&/);
+    assert.match(page, /只读/);
+  });
+
+  it("群管理没有跟着丢掉触发同步的能力", () => {
+    // 从 group.manage 里拆出来的时候最容易漏这一步
+    const roles = readFileSync(join(root, "src/lib/rbac/roles.ts"), "utf8");
+    const block = roles.slice(roles.indexOf("const GROUP_ADMIN"), roles.indexOf("const AUDITOR"));
+    assert.match(block, /"group\.sync\.trigger"/);
+  });
+});
+
+describe("**角色里的权限点重复会让站起不来**", async () => {
+  /*
+   * `role_permissions` 上有 (role_id, permission_key) 唯一约束，
+   * 而几个角色是靠 `...MEMBER` 展开再补几条写出来的 ——
+   * 补进一条 MEMBER 里已经有的，seed 直接抛异常。
+   *
+   * **seed 是开机跑的**：一条重复会让整个站起不来，
+   * 而报错只说「UNIQUE constraint failed」，看不出是哪个角色。
+   *
+   * 这不是假想 —— 给群管理补 group.stats.read 的时候真的撞了一次，
+   * 表现是十几个毫不相干的测试一起超时。
+   */
+  const { BUILTIN_ROLES, resolveRolePermissions } = await import("@/lib/rbac/roles");
+
+  for (const role of BUILTIN_ROLES) {
+    it(`${role.key} 解出来没有重复`, () => {
+      const keys = resolveRolePermissions(role);
+      assert.equal(new Set(keys).size, keys.length, `${role.key} 里有重复的权限点`);
+    });
+  }
+
+  it("**授予和拒绝不能是同一个 key**", () => {
+    // 同一行插两次也会撞唯一约束，而且语义上自相矛盾
+    for (const role of BUILTIN_ROLES) {
+      const granted = new Set(resolveRolePermissions(role));
+      for (const denied of role.denies ?? []) {
+        assert.equal(granted.has(denied), false, `${role.key} 既授予又拒绝了 ${denied}`);
+      }
+    }
   });
 });

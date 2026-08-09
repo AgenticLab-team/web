@@ -421,7 +421,8 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
     type: "int",
     category: "storage",
     label: "媒体 LRU 缓存上限（字节）",
-    description: "原图永不长期落盘。默认 2GB",
+    description:
+      "**卡在上游**：/v1/messages 不返回任何媒体地址，库里 2998 条图片消息的正文就是「[图片]」三个字 —— 没有可缓存的东西。等上游透传媒体 URL 之后才谈得上缓存",
     status: "planned",
   },
   {
@@ -430,6 +431,7 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
     type: "int",
     category: "storage",
     label: "缩略图长边像素",
+    description: "同上，卡在上游没有媒体地址",
     status: "planned",
   },
   {

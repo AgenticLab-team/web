@@ -118,7 +118,17 @@ export async function updateGroupConfig(input: {
  * 而游标已经动过了，那一段消息就永远补不回来。
  */
 export async function triggerSync(input: { kind: string; scope?: string }): Promise<GroupActionResult> {
-  const admin = await requireWritableAdmin("group.manage");
+  /*
+   * 单独一个权限点，不再跟着 `group.manage` 走。
+   *
+   * 两件事的风险完全不同：改群配置是**改状态**（排除同步、改名），
+   * 手动触发只是**排一个队** —— 后台同步进程照常按它的规矩执行。
+   *
+   * 合在一起的后果是：想让一个人能在同步卡住时踢一脚，
+   * 就得连带把改群配置的权限给他。绝大多数时候不给，
+   * 于是「同步卡住了找谁」永远只有一个答案。
+   */
+  const admin = await requireWritableAdmin("group.sync.trigger");
 
   const check = checkManualTrigger(runningJobs());
   if (!check.ok) return fail(check.error!);
@@ -134,7 +144,7 @@ export async function triggerSync(input: { kind: string; scope?: string }): Prom
     .run();
 
   audit({ actorId: admin.user.id }, {
-    action: "group.manage",
+    action: "group.sync.trigger",
     targetType: "sync",
     targetId: input.kind,
     after: { triggered: true, scope: input.scope ?? null },
@@ -148,7 +158,8 @@ export async function triggerSync(input: { kind: string; scope?: string }): Prom
 }
 
 export async function retrySyncJob(input: { id: string }): Promise<GroupActionResult> {
-  const admin = await requireWritableAdmin("group.manage");
+  // 重试也是「排一个队」，和手动触发同一件事，归同一个权限点
+  const admin = await requireWritableAdmin("group.sync.trigger");
 
   const job = db.select().from(syncJobs).where(eq(syncJobs.id, input.id)).get();
   if (!job) return fail("任务不存在");
@@ -172,7 +183,7 @@ export async function retrySyncJob(input: { id: string }): Promise<GroupActionRe
     .run();
 
   audit({ actorId: admin.user.id }, {
-    action: "group.manage",
+    action: "group.sync.trigger",
     targetType: "sync",
     targetId: job.id,
     before: { status: job.status, error: job.error },
@@ -185,7 +196,7 @@ export async function retrySyncJob(input: { id: string }): Promise<GroupActionRe
 
 /** 一键重试所有可重试的失败任务 */
 export async function retryAllFailed(): Promise<GroupActionResult> {
-  const admin = await requireWritableAdmin("group.manage");
+  const admin = await requireWritableAdmin("group.sync.trigger");
 
   const running = checkManualTrigger(runningJobs());
   if (!running.ok) return fail(running.error!);
@@ -218,7 +229,7 @@ export async function retryAllFailed(): Promise<GroupActionResult> {
   });
 
   audit({ actorId: admin.user.id }, {
-    action: "group.manage",
+    action: "group.sync.trigger",
     targetType: "sync",
     targetId: "*",
     after: { retriedAll: queued, candidates: jobs.length },

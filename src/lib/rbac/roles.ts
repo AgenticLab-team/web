@@ -15,10 +15,8 @@ export interface RoleDef {
 
 /** 已登录成员的基础能力 */
 const MEMBER: readonly PermissionKey[] = [
-  "forum.view",
   "forum.post.create",
   "forum.reply.create",
-  "forum.react",
   "forum.post.edit.own",
   "forum.post.delete.own",
   "group.messages.read",
@@ -27,15 +25,20 @@ const MEMBER: readonly PermissionKey[] = [
   "activity.apply",
 ];
 
-/** 未登录访客。论坛对外开放，但与群相关的一切都看不到 */
-const GUEST: readonly PermissionKey[] = ["forum.view", "activity.view"];
+/**
+ * 未登录访客。
+ *
+ * 这里**故意不放「浏览论坛」** —— 论坛对访客开不开由
+ * `site.forum_public` 那个配置说了算，不是由权限点。
+ * 两处都能管的话，管理员关掉了开关而这里还给着权限，
+ * 谁也说不清最后哪一个赢。
+ */
+const GUEST: readonly PermissionKey[] = ["activity.view"];
 
 /** 外部用户：可以参与论坛，但永远看不到任何群消息派生内容 */
 const EXTERNAL: readonly PermissionKey[] = [
-  "forum.view",
   "forum.post.create",
   "forum.reply.create",
-  "forum.react",
   "forum.post.edit.own",
   "forum.post.delete.own",
   "activity.view",
@@ -58,6 +61,9 @@ const MODERATOR: readonly PermissionKey[] = [
 const GROUP_ADMIN: readonly PermissionKey[] = [
   ...MEMBER,
   "group.manage",
+  // 手动触发同步从 group.manage 里拆出来之后，群管理不能跟着丢掉它。
+  // 查看群统计不用写：它在 MEMBER 里，而这里 `...MEMBER` 展开过了
+  "group.sync.trigger",
   "user.list",
   "user.detail.read",
   "user.note.write",
@@ -67,7 +73,6 @@ const GROUP_ADMIN: readonly PermissionKey[] = [
 ];
 
 const AUDITOR: readonly PermissionKey[] = [
-  "forum.view",
   "activity.view",
   "user.list",
   "user.detail.read",
@@ -191,6 +196,24 @@ export const BUILTIN_ROLES: readonly RoleDef[] = [
 
 export const BUILTIN_ROLE_KEYS = BUILTIN_ROLES.map((r) => r.key);
 
+/**
+ * 一个角色最终拿到的权限点。
+ *
+ * ─────────────────────────────────────────
+ * 去重是必须的，不是防御性编程
+ * ─────────────────────────────────────────
+ *
+ * 几个角色是靠 `...MEMBER` 展开再补几条写出来的，
+ * 补的时候很容易补进一条 MEMBER 里已经有的 ——
+ * 而 `role_permissions` 上有 (role_id, permission_key) 的唯一约束，
+ * 于是 seed 直接抛异常。
+ *
+ * **seed 是开机跑的**：一条重复的权限点会让整个站起不来，
+ * 而报错信息只说「UNIQUE constraint failed」，看不出是哪个角色。
+ *
+ * 这不是假想 —— 给群管理补 `group.stats.read` 的时候真的撞了一次。
+ */
 export function resolveRolePermissions(role: RoleDef): PermissionKey[] {
-  return role.permissions === "*" ? [...PERMISSION_KEYS] : [...role.permissions];
+  const all = role.permissions === "*" ? PERMISSION_KEYS : role.permissions;
+  return [...new Set(all)];
 }

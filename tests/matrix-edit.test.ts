@@ -450,7 +450,7 @@ describe("接线", () => {
 
 describe("**认不出的东西一律拒绝**", () => {
   const base = {
-    actorPermissions: new Set(["role.manage", "forum.view"]),
+    actorPermissions: new Set(["role.manage", "forum.post.create"]),
     actorPriority: 100,
     rolePriority: new Map([["r1", 90]]),
     keystoneHoldersAfter: 2,
@@ -479,17 +479,47 @@ describe("**认不出的东西一律拒绝**", () => {
     const errors = guardrailErrors({
       ...base,
       changes: [
-        { roleId: "r1", roleName: "管理员", permissionKey: "forum.view", from: "none", to: "granted" },
+        {
+          roleId: "r1",
+          roleName: "管理员",
+          permissionKey: "forum.post.create",
+          from: "none",
+          to: "granted",
+        },
       ],
     });
     assert.deepEqual(errors, []);
+  });
+
+  it("**退役掉的权限点会被拒** —— 它已经不在清单里了", () => {
+    /*
+     * 这一条是退役机制的另一半：seed 把它从库里删掉，
+     * 而这里挡住「再把它加回来」。
+     *
+     * `forum.view` 是真的退役过的 —— 论坛能不能看已经有
+     * `site.forum_public` 和版块的 `visible_to` 两层在管，
+     * 第三个勾只会让人搞不清最后谁说了算。
+     */
+    const errors = guardrailErrors({
+      ...base,
+      changes: [
+        { roleId: "r1", roleName: "管理员", permissionKey: "forum.view", from: "none", to: "granted" },
+      ],
+    });
+    assert.ok(errors.some((e) => e.includes("forum.view")), errors.join("；"));
   });
 
   it("认不出的身份组也拒绝 —— 它可能刚被删掉了", () => {
     const errors = guardrailErrors({
       ...base,
       changes: [
-        { roleId: "nope", roleName: "不存在", permissionKey: "forum.view", from: "none", to: "granted" },
+        {
+          roleId: "nope",
+          roleName: "不存在",
+          permissionKey: "forum.post.create",
+          from: "none",
+          to: "granted",
+        },
       ],
     });
     assert.ok(errors.some((e) => e.includes("找不到")));
@@ -501,7 +531,13 @@ describe("**认不出的东西一律拒绝**", () => {
       ...base,
       actorPriority: 1,
       changes: [
-        { roleId: "nope", roleName: "不存在", permissionKey: "forum.view", from: "none", to: "granted" },
+        {
+          roleId: "nope",
+          roleName: "不存在",
+          permissionKey: "forum.post.create",
+          from: "none",
+          to: "granted",
+        },
       ],
     });
     assert.notDeepEqual(errors, []);

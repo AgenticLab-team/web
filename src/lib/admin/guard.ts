@@ -27,14 +27,26 @@ export interface AdminContext {
 /** 进后台的最低门槛。没有它连仪表盘都看不到 */
 export const ADMIN_ENTRY_PERMISSION: PermissionKey = "system.dashboard";
 
-export async function requireAdmin(permission?: PermissionKey): Promise<AdminContext> {
+export async function requireAdmin(
+  permission?: PermissionKey | readonly PermissionKey[],
+): Promise<AdminContext> {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/admin");
 
   const entry = can(user, ADMIN_ENTRY_PERMISSION);
   if (!entry.allowed) redirect("/");
 
-  if (permission && !can(user, permission).allowed) {
+  /*
+   * 传数组 = **任一即可**。
+   *
+   * 一页上有两种人要看的东西时（群页：配置归 group.manage，
+   * 规模数字归 group.stats.read），只认其中一个的后果是
+   * 另一个权限点**永远没有用武之地** —— 授出去也进不来这一页。
+   *
+   * 页内该藏的东西由 `ctx.has(...)` 各自判，这里只管「进不进得来」。
+   */
+  const needed = permission === undefined ? [] : Array.isArray(permission) ? permission : [permission];
+  if (needed.length > 0 && !needed.some((p) => can(user, p as PermissionKey).allowed)) {
     // 有后台入口但没有这一项的权限，回后台首页而不是登录页
     redirect("/admin");
   }
@@ -60,7 +72,9 @@ export async function requireAdmin(permission?: PermissionKey): Promise<AdminCon
  * 调了 requireAdmin 又做了写操作的，一个都不许漏。漏一个的后果是
  * 管理员以别人的身份写了数据，而审计日志记在被预览的人头上。
  */
-export async function requireWritableAdmin(permission?: PermissionKey): Promise<AdminContext> {
+export async function requireWritableAdmin(
+  permission?: PermissionKey | readonly PermissionKey[],
+): Promise<AdminContext> {
   await assertNotPreviewing();
   return requireAdmin(permission);
 }

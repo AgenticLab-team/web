@@ -47,10 +47,8 @@ export interface PermissionDef {
 
 export const PERMISSIONS = [
   // ── 内容浏览 ────────────────────────────────────────────────
-  { key: "forum.view", category: "forum", label: "浏览论坛", description: "论坛的可见性今天由版块的 visible_to 和功能开关在管，没有单独判它", status: "planned" },
   { key: "forum.post.create", category: "forum", label: "发帖", scopable: true },
   { key: "forum.reply.create", category: "forum", label: "回复", scopable: true },
-  { key: "forum.react", category: "forum", label: "点赞收藏", description: "点赞收藏目前只判登录，没有单独判它", status: "planned" },
   { key: "forum.post.edit.own", category: "forum", label: "编辑自己的帖子" },
   { key: "forum.post.edit.any", category: "forum", label: "编辑任何帖子", scopable: true, dangerLevel: 1 },
   { key: "forum.post.delete.own", category: "forum", label: "删除自己的帖子" },
@@ -90,9 +88,9 @@ export const PERMISSIONS = [
     description: "按 scope 限定到具体的群；无 scope 不生效",
     scopable: true,
   },
-  { key: "group.stats.read", category: "group", label: "查看群统计", scopable: true, description: "群统计页今天由 group.manage 一起管", status: "planned" },
+  { key: "group.stats.read", category: "group", label: "查看群统计", scopable: true, description: "群页凭它也进得来，进去是只读的：看得到规模和同步健康，改不了群配置" },
   { key: "group.manage", category: "group", label: "管理群配置", scopable: true, dangerLevel: 1 },
-  { key: "group.sync.trigger", category: "group", label: "手动触发同步", dangerLevel: 1, description: "手动触发同步今天由 group.manage 一起管", status: "planned" },
+  { key: "group.sync.trigger", category: "group", label: "手动触发同步", dangerLevel: 1, description: "只是排一个队，后台同步进程照常按规矩执行 —— 和改群配置是两件事" },
 
   // ── 用户 ────────────────────────────────────────────────────
   { key: "user.list", category: "user", label: "查看用户列表" },
@@ -198,6 +196,36 @@ export const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key) as PermissionKey[];
  * 那个字面量联合类型用起来很别扭（没有该字段的成员上根本没有这个属性）。
  * 所以留一个类型化的视图给那种用法。
  */
+/**
+ * ─────────────────────────────────────────
+ * 退役的权限点
+ * ─────────────────────────────────────────
+ *
+ * 从清单里删掉**不够** —— 权限矩阵那一页读的是库里的
+ * `permissions` 表，不是这份清单。删了清单不删库，
+ * 那个勾照样摆在矩阵上，而且再没有人知道它是死的。
+ * 更糟的是 `role_permissions` 里可能还留着授权行，
+ * 而它指向一个已经不存在的权限点。
+ *
+ * 所以退役要走这里：seed 会在启动时把这些 key 从两张表里都删掉。
+ *
+ * ── 什么样的该退役 ──
+ *
+ * **不是「功能还没做」** —— 那种标 `status: "planned"` 就够了。
+ * 该退役的是**已经有别的机制在管同一件事**的：多留一个勾，
+ * 就是给了第三套判断的入口，而三套迟早分叉。
+ */
+export const RETIRED_PERMISSIONS: readonly { key: string; why: string }[] = [
+  {
+    key: "forum.view",
+    why: "论坛能不能看已经有两层在管：访客由 `site.forum_public` 决定进不进得来，成员由版块的 `visible_to` 决定看得到哪些版块。再加一个权限点就是第三套判断 —— 而三套一旦分叉，最松的那一套就是漏的那个口",
+  },
+  {
+    key: "forum.react",
+    why: "点赞收藏只判登录。要拦一个人的话，拦的应该是这个人（封禁 / 禁言），不是这个动作 —— 一个只能看不能点赞的账号，既解决不了骚扰，也解释不清是什么状态",
+  },
+] as const;
+
 export const PERMISSION_LIST: readonly PermissionDef[] = PERMISSIONS;
 
 const byKey = new Map(PERMISSIONS.map((p) => [p.key as string, p as PermissionDef]));

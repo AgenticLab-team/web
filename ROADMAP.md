@@ -157,3 +157,18 @@
 - [x] 两个条件同时填 = **取交集**。并集听起来覆盖更广，但它的失败方向是
       「发多了」—— 而这两个维度存在的理由恰恰是发准一点
 - [x] 后台显示的受众数 = 真的看得到的人数（有测试直接钉这条不变式）
+
+## 权限矩阵的诚实化
+
+- [x] **`group.sync.trigger` 接上了** —— 手动触发同步从 `group.manage` 里拆出来。
+      改群配置是改状态，触发同步只是排一个队；合在一起的后果是
+      「想让人在同步卡住时踢一脚，就得连带给他改群配置的权限」
+- [x] **`group.stats.read` 接上了** —— 群页现在两个权限点任一即可进，
+      没有 `group.manage` 的人看到只读视图（并且明确说是权限不够，不是页面坏了）
+- [x] **`forum.view` / `forum.react` 退役** —— 已经有别的机制在管同一件事，
+      多留一个勾就是第三套判断的入口
+- [ ] 剩下的 planned：8 个是「功能没做」（user.delete/merge/export、
+      permission.override、module.install/config、broadcast.email、badge.manage），
+      4 个是「被更粗的权限管着」（moderation.action、activity.view/apply、digest.manage）
+- **媒体缓存卡在上游**：`/v1/messages` 不返回任何媒体地址，
+  库里 2998 条图片消息的正文就是「[图片]」三个字 —— 没有可缓存的东西

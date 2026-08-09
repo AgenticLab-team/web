@@ -50,7 +50,19 @@ const VERDICT_COLORS: Record<string, string> = {
 };
 
 export default async function AdminGroupsPage() {
-  await requireAdmin("group.manage");
+  /*
+   * 两个权限点任一即可进这一页。
+   *
+   * 页面上其实是两种东西：**群的规模数字**（多少人、多少条消息、
+   * 最近有没有动静）和**群的配置**（排除同步、手动触发）。
+   * 前者是审计员该看的，后者是群管理该改的。
+   *
+   * 只认 `group.manage` 的后果是 `group.stats.read` 永远没有用武之地 ——
+   * 授出去了也进不来这一页，于是那个勾等于不存在。
+   */
+  const admin = await requireAdmin(["group.manage", "group.stats.read"]);
+  const canManage = admin.has("group.manage");
+  const canTrigger = admin.has("group.sync.trigger");
 
   const groups = listGroupsForAdmin();
   const sync = syncOverview();
@@ -91,6 +103,17 @@ export default async function AdminGroupsPage() {
         </Callout>
       )}
 
+      {!canManage && (
+        <Callout tone="neutral" title="只读">
+          {/*
+            * 说清楚是「你没有那个权限」，不是「这一页坏了」。
+            * 一个按钮都没有的页面，不说明白的话看起来就是后者。
+            */}
+          你能看到群的规模和同步健康，但改不了群配置 ——
+          那需要「管理群配置」这个权限。
+        </Callout>
+      )}
+
       <Section title="同步任务">
         <div className="space-y-2">
           {sync.map((s) => (
@@ -113,7 +136,7 @@ export default async function AdminGroupsPage() {
               <span className="t-caption min-w-0 flex-1 truncate text-[var(--ink-tertiary)]">
                 {s.health.message}
               </span>
-              <SyncControls kind={s.kind} />
+              {canTrigger && <SyncControls kind={s.kind} />}
             </Card>
           ))}
         </div>
@@ -122,7 +145,7 @@ export default async function AdminGroupsPage() {
       {failed.length > 0 && (
         <Section
           title="失败的任务"
-          action={<SyncControls />}
+          action={canTrigger ? <SyncControls /> : undefined}
         >
           <div className="inset-group">
             {failed.map((job) => (
@@ -144,7 +167,7 @@ export default async function AdminGroupsPage() {
                 <span className="tabular t-caption2 shrink-0 text-[var(--ink-quaternary)]">
                   {relativeTime(job.createdAt)}
                 </span>
-                <SyncControls retryableId={job.id} />
+                {canTrigger && <SyncControls retryableId={job.id} />}
               </div>
             ))}
           </div>
@@ -207,7 +230,7 @@ export default async function AdminGroupsPage() {
                     </p>
                   </div>
 
-                  <GroupConfig group={group} />
+                  {canManage && <GroupConfig group={group} />}
                 </header>
               </Card>
             ))}

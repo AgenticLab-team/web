@@ -14,6 +14,15 @@ export interface AdminNavItem {
   label: string;
   icon: string;
   permission: PermissionKey;
+  /**
+   * 还有哪些权限点也够进这一页。
+   *
+   * 一页上有两种人要看的东西时（群页：配置归 `group.manage`，
+   * 规模数字归 `group.stats.read`），导航只认主权限点的后果是
+   * 另一批人**在导航里根本看不到这一页** —— 而页面那一侧其实放行。
+   * 那个权限点于是等于不存在。
+   */
+  alsoAllows?: readonly PermissionKey[];
   description?: string;
   ready?: boolean;
 }
@@ -216,6 +225,7 @@ export const ADMIN_NAV: AdminNavSection[] = [
         label: "群与数据源",
         icon: "message-square",
         permission: "group.manage",
+        alsoAllows: ["group.stats.read"],
         description: "接入状态、同步健康、每群配置",
         ready: true,
       },
@@ -304,7 +314,9 @@ export const ADMIN_NAV: AdminNavSection[] = [
 export function visibleAdminNav(has: (permission: PermissionKey) => boolean): AdminNavSection[] {
   return ADMIN_NAV.map((section) => ({
     ...section,
-    items: section.items.filter((item) => has(item.permission)),
+    items: section.items.filter(
+      (item) => has(item.permission) || (item.alsoAllows ?? []).some(has),
+    ),
   })).filter((section) => section.items.length > 0);
 }
 
