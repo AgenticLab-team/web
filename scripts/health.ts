@@ -13,6 +13,7 @@
  * 现在走 runSteps：一步失败不影响其它步，失败本身会在最后被汇总报出来。
  */
 import { checkAndDispatch } from "@/lib/alerts/dispatch";
+import { publishDueScheduled } from "@/lib/forum/schedule";
 import { settleExpiredPins } from "@/lib/forum/pin-settle";
 import {
   lastTickHealth,
@@ -69,6 +70,19 @@ async function main() {
       run: () => settleExpiredPins(),
       describe: (r: ReturnType<typeof settleExpiredPins>) =>
         r.cleared > 0 ? `清理 ${r.cleared} 条` : "无到期",
+    },
+    {
+      /*
+       * 定时发布挂在这一轮里，而不是自己起一个定时器 ——
+       * 多一个定时器就多一处会悄悄停掉、而且没人看得出来的东西。
+       * 挂进这里，它停了会和别的步骤一起被发现。
+       */
+      name: "定时发布",
+      run: () => publishDueScheduled(),
+      describe: (r: ReturnType<typeof publishDueScheduled>) =>
+        r.published === 0 && r.failed.length === 0
+          ? "无到点"
+          : `发出 ${r.published} 篇${r.failed.length ? ` · 失败 ${r.failed.length}` : ""}`,
     },
     {
       name: "赛季结算",

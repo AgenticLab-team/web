@@ -17,6 +17,7 @@ import { checkContent, fileForReview } from "@/lib/moderation/word-gate";
 import { recountBoardPosts } from "./board-stats";
 import { buildViewerContext } from "./context";
 import { dropDraft } from "./drafts";
+import { checkSchedule } from "./schedule-rules";
 import { autoSubscribe, notifyNewPost, notifyNewReply } from "./notify";
 import { getPost } from "./queries";
 import { indexPost, indexReply } from "./search";
@@ -118,6 +119,12 @@ export async function createPost(input: {
     hideUntilVoted?: boolean;
     closesAt?: number;
   };
+  /**
+   * 定时发布。到点之前存成草稿（只有作者和版主看得到）。
+   *
+   * `scheduled_at` 这一列在 schema 里躺了很久，全站零引用。
+   */
+  scheduledAt?: number;
 }): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return fail("请先登录");
@@ -175,6 +182,17 @@ export async function createPost(input: {
   });
 
   /*
+   * 定时的校验也放在开事务之前 —— 和投票同理，
+   * 一个「时间填早了」不该连累刚写完的两千字回滚。
+   */
+  let schedule: number | null = null;
+  if (input.scheduledAt) {
+    const verdict = checkSchedule(input.scheduledAt, Date.now());
+    if (!verdict.ok) return fail(verdict.reason);
+    schedule = verdict.at;
+  }
+
+  /*
    * 投票的校验放在开事务**之前**。
    *
    * 放进去的话，一个「只填了一个选项」这样的小错会连累整篇帖子回滚 ——
@@ -201,7 +219,17 @@ export async function createPost(input: {
         excerpt: rendered.excerpt,
         // 带了投票就是投票帖 —— 类型和内容在同一个事务里定下来，不会对不上
         type: pollDraft ? "poll" : (input.type ?? "discussion"),
-        status: "published",
+        /*
+         * 定时的先存成草稿。
+         *
+         * 复用 draft 这个状态，而不是新加一个 "scheduled" ——
+         * `canSeePost` 已经把 draft 判成「只有作者和版主可见」，
+         * 列表查询也已经把 draft 排除在别人的列表之外。
+         * 新加一个状态意味着这两处、以及所有 `status !== "published"`
+         * 的判断都要跟着改一遍，而漏掉任何一处就是一个提前泄露。
+         */
+        status: schedule ? "draft" : "published",
+        scheduledAt: schedule,
         visibility: normalized.visibility,
         visibilityGroupId: normalized.visibilityGroupId,
         visibilityLocked: normalized.locked,
@@ -264,6 +292,11 @@ export async function createPost(input: {
   /*
    * 扇给关注这个作者 / 版块 / 标签的人。
    *
+   * **定时的帖子这一刻不扇** —— 那会在帖子还看不见的时候
+   * 就把标题推到所有粉丝的通知栏里。到点发布时由
+   * publishDueScheduled 再调一次（notifyNewPost 自己也会
+   * 因为 status !== "published" 而拒绝，这里是第二道）。
+   *
    * 在这一行之前，**发新帖不通知任何人** —— 站里只有
    * notifyNewReply，而 subscriptions.target_type 里的
    * user / board / tag 三个值从来没有一行数据。
@@ -271,19 +304,21 @@ export async function createPost(input: {
    * 逐人可见性判定在 notifyNewPost 里面做，不在这里 ——
    * 放在调用点的话，下一个调用点（转帖、定时发布）就会忘掉。
    */
-  notifyNewPost({
-    postId: created.id,
-    title: safeTitle,
-    authorId: user.id,
-    // 匿名与否由 notifyNewPost 自己从帖子行上判 —— 调用点判的话，
-    // 下一个调用点（转帖、定时发布）会忘掉，而忘掉的后果是匿名失效
-    authorName: resolveDisplayName([user.siteNickname, user.wxNickname], {
-      wxId: user.wxId,
-      fallback: "有人",
-    }),
-    boardId: board.id,
-    boardName: board.name,
-  });
+  if (!schedule) {
+    notifyNewPost({
+      postId: created.id,
+      title: safeTitle,
+      authorId: user.id,
+      // 匿名与否由 notifyNewPost 自己从帖子行上判 —— 调用点判的话，
+      // 下一个调用点（转帖、定时发布）会忘掉，而忘掉的后果是匿名失效
+      authorName: resolveDisplayName([user.siteNickname, user.wxNickname], {
+        wxId: user.wxId,
+        fallback: "有人",
+      }),
+      boardId: board.id,
+      boardName: board.name,
+    });
+  }
 
   audit({ actorId: user.id }, {
     action: "forum.post.create",

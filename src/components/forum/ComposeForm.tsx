@@ -10,6 +10,7 @@ import { pickDraft, type DraftSnapshot } from "@/lib/forum/draft-rules";
 import { relativeTime } from "./PostList";
 
 import { DraftSync } from "./DraftSync";
+import { SchedulePicker } from "./SchedulePicker";
 import { clearLocalDraft, readLocalDraft } from "./local-draft";
 import { EMPTY_POLL, PollComposer, type PollDraft } from "./PollComposer";
 import { useServerDraft } from "./use-server-draft";
@@ -52,6 +53,8 @@ export function ComposeForm({
    * 而那种丢失没有任何提示，只能重填。
    */
   const [poll, setPoll] = useState<PollDraft>(EMPTY_POLL);
+  /** datetime-local 的本地时间字符串，空表示写完就发 */
+  const [scheduleAt, setScheduleAt] = useState("");
 
   const board = boards.find((b) => b.key === boardKey);
 
@@ -117,6 +120,8 @@ export function ComposeForm({
         boardKey,
         title,
         content,
+        // datetime-local 给的是本地时间字符串，转成毫秒再传
+        scheduledAt: scheduleAt ? new Date(scheduleAt).getTime() : undefined,
         // 投票帖的类型由服务端按有没有 poll 定 —— 两处各判一次迟早对不上
         type: type === "poll" ? "discussion" : type,
         poll:
@@ -139,7 +144,12 @@ export function ComposeForm({
       // 发出去了就把两边的草稿都清掉 —— 留着的话下次点发帖会把
       // 已经发表过的内容当草稿恢复出来，而人会以为上次没发成功
       clearLocalDraft(`new:${boardKey}`);
-      router.push(`/forum/p/${result.postId}`);
+      /*
+       * 定时的帖子发完不跳到帖子页 —— 那一页现在只有作者看得到，
+       * 跳过去会让人以为已经公开了。跳去「等着发的」列表，
+       * 那里能看到几点发、也能改主意。
+       */
+      router.push(scheduleAt ? "/me/drafts" : `/forum/p/${result.postId}`);
     });
   };
 
@@ -286,13 +296,15 @@ export function ComposeForm({
         </p>
       )}
 
+      <SchedulePicker value={scheduleAt} onChange={setScheduleAt} />
+
       <div className="flex gap-2">
         <button
           type="submit"
           disabled={pending || !title.trim() || !content.trim()}
           className="t-body flex-1 rounded-[var(--radius-control)] bg-[var(--accent)] px-6 py-3 font-medium text-[var(--accent-ink)] transition active:scale-[0.98] disabled:opacity-40"
         >
-          {pending ? "发布中…" : "发布"}
+          {pending ? "提交中…" : scheduleAt ? "定时发布" : "发布"}
         </button>
         <button
           type="button"
