@@ -70,7 +70,7 @@ export const NAV: NavSection[] = [
     items: [
       { key: "events", href: "/activities", label: "活动", icon: "calendar", ready: true },
       { key: "members", href: "/members", label: "成员", icon: "users", requiresAuth: true, ready: true },
-      { key: "links", href: "/links", label: "资源库", icon: "link", ready: false },
+      { key: "links", href: "/links", label: "资源库", icon: "link", requiresAuth: true, ready: true },
       { key: "shop", href: "/shop", label: "商店", icon: "gift", requiresAuth: true, ready: true },
     ],
   },

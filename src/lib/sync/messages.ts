@@ -7,6 +7,7 @@ import { segmentForIndex } from "@/lib/db/fts";
 import { dailyStats, groups, messages, syncCursors } from "@/lib/db/schema";
 import { nekobot } from "@/lib/nekobot/client";
 import type { UpstreamMessage } from "@/lib/nekobot/types";
+import { ingestMessages, type IngestMessage } from "@/lib/links/ingest";
 import { isQualityMessage } from "@/lib/quality";
 import { getSettingInt } from "@/lib/settings/store";
 import { dateKey, hourOf } from "@/lib/time";
@@ -84,6 +85,13 @@ export async function syncGroupMessages(
     })) {
       fetched += page.length;
 
+      /*
+       * 这一批里真正**新写入**的消息，交给资源库去抽链接。
+       * 只收新写入的：重叠窗口每次都会重拉一段已经存在的消息，
+       * 全都塞进去的话每轮同步都会做一遍无用功。
+       */
+      const freshlyWritten: IngestMessage[] = [];
+
       db.transaction((tx) => {
         for (const msg of page) {
           const quality = isQualityMessage(msg, qualityMin);
@@ -109,6 +117,15 @@ export async function syncGroupMessages(
 
           if (result.changes === 0) continue;
           written++;
+          freshlyWritten.push({
+            id: msg.msg_svr_id,
+            convId: msg.conv_id,
+            content: msg.content,
+            ts: msg.create_time,
+            senderWxId: msg.sender_wx_id,
+            senderName: msg.sender_name,
+            type: msg.type,
+          });
 
           if (shouldIndex(msg) && !existsFts.get(msg.msg_svr_id)) {
             insertFts.run(
@@ -144,6 +161,21 @@ export async function syncGroupMessages(
           bucket.hours[hourOf(msg.create_time)]++;
         }
       });
+
+      /*
+       * 抽链接放在写消息的事务**外面**。
+       *
+       * 放里面的话，资源库这边任何一个意外都会把整批消息的写入一起回滚 ——
+       * 而链接收录是锦上添花，消息入库是这个站的立身之本。
+       * 附属功能不该有能力弄坏主链路。
+       */
+      if (freshlyWritten.length > 0) {
+        try {
+          ingestMessages(freshlyWritten);
+        } catch (error) {
+          console.error("资源库收录失败（不影响消息同步）：", error);
+        }
+      }
     }
 
     flushDailyStats(convId, buckets);

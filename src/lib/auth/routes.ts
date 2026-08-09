@@ -19,6 +19,7 @@ export const PROTECTED_PREFIXES = [
   "/admin",
   "/notifications",
   "/members",
+  "/links",
   "/shop",
   "/search",
   "/forum/new",
