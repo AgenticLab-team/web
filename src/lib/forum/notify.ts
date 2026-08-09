@@ -1,9 +1,15 @@
 import "server-only";
 
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { notifications, subscriptions } from "@/lib/db/schema";
+import {
+  filterTypes,
+  isEnabled,
+  type NotificationFilter,
+} from "@/lib/notifications/prefs";
+import { getPrefs } from "@/lib/notifications/store";
 
 /**
  * 通知与聚合。
@@ -55,6 +61,18 @@ export function aggregateTitle(baseTitle: string, actorName: string | null, coun
 export function notify(input: NotifyInput): void {
   // 不给自己发通知 —— 自己回自己的帖子不该冒红点
   if (input.actorId && input.actorId === input.userId) return;
+
+  /*
+   * 用户关掉的类型**不产生这一行**，而不是产生了再在读的时候过滤。
+   *
+   * 存下来再过滤看起来更灵活（打开开关能补看历史），实际上是个陷阱：
+   * 未读数、红点、聚合计数全都要跟着记住「这条对这个人不算数」，
+   * 而其中任何一处漏了，用户就会看到一个点不掉的红点。
+   *
+   * 关掉的代价是那段时间的通知真的没有了 —— 这符合直觉，
+   * 也是「关掉」这个词本来的意思。
+   */
+  if (!isEnabled(getPrefs(input.userId), input.type)) return;
 
   const existing = db
     .select()
@@ -191,14 +209,47 @@ export function unreadCount(userId: string): number {
   );
 }
 
-export function listNotifications(userId: string, limit = 30) {
+export function listNotifications(
+  userId: string,
+  limit = 30,
+  filter: NotificationFilter = "all",
+) {
+  const conditions = [eq(notifications.userId, userId)];
+
+  /*
+   * 筛选在 SQL 里做，不是取 50 条回来再过滤。
+   * 后者的表现是「@ 我」那一页明明有内容却显示空 ——
+   * 因为最近 50 条里恰好一条都不是 @。
+   */
+  if (filter === "unread") conditions.push(isNull(notifications.readAt));
+  const types = filterTypes(filter);
+  if (types) conditions.push(inArray(notifications.type, types as NotificationType[]));
+
   return db
     .select()
     .from(notifications)
-    .where(eq(notifications.userId, userId))
+    .where(and(...conditions))
     .orderBy(desc(notifications.updatedAt))
     .limit(limit)
     .all();
+}
+
+/** 每个筛选页签下有多少条 —— 空页签要能提前看出来，而不是点进去才发现 */
+export function notificationCounts(userId: string): Record<NotificationFilter, number> {
+  const rows = db
+    .select({ type: notifications.type, readAt: notifications.readAt })
+    .from(notifications)
+    .where(eq(notifications.userId, userId))
+    .all();
+
+  const counts = { all: rows.length, unread: 0, mention: 0, reply: 0, account: 0 };
+  for (const row of rows) {
+    if (row.readAt === null) counts.unread++;
+    for (const key of ["mention", "reply", "account"] as const) {
+      if (filterTypes(key)?.includes(row.type)) counts[key]++;
+    }
+  }
+  return counts;
 }
 
 export function markRead(userId: string, notificationId?: string) {

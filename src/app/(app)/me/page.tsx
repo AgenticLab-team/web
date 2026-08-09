@@ -15,6 +15,8 @@ import { dailyStats, groupMembers, people, roles, userRoles } from "@/lib/db/sch
 import { listPasskeys } from "@/lib/auth/passkey";
 import { getMyRank } from "@/lib/queries/leaderboard";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
+import { isAlwaysOn } from "@/lib/notifications/prefs";
+import { getPrefs } from "@/lib/notifications/store";
 import { equippedTitle, titlesOf } from "@/lib/titles/queries";
 import { rarityColor } from "@/lib/titles/rules";
 import { resolveDisplayName } from "@/lib/users/display-name";
@@ -33,6 +35,11 @@ export default async function MePage() {
     wxId,
     fallback: "我",
   });
+
+  const prefs = getPrefs(user.id);
+  const mutedTypes = Object.entries(prefs).filter(
+    ([type, v]) => !v.site && !isAlwaysOn(type),
+  ).length;
 
   const heldRoles = db
     .select({ name: roles.name, color: roles.color, priority: roles.priority })
@@ -227,6 +234,17 @@ export default async function MePage() {
             <span className="t-body flex-1">登录与安全</span>
             <span className="t-footnote text-[var(--ink-tertiary)]">
               {passkeyCount ? `${passkeyCount} 个 Passkey` : "未设置 Passkey"}
+            </span>
+            <ChevronRight
+              className="h-4 w-4 shrink-0 text-[var(--ink-quaternary)]"
+              strokeWidth={2}
+              aria-hidden
+            />
+          </Row>
+          <Row href="/me/notifications">
+            <span className="t-body flex-1">通知设置</span>
+            <span className="t-footnote text-[var(--ink-tertiary)]">
+              {mutedTypes === 0 ? "全部开启" : `关了 ${mutedTypes} 类`}
             </span>
             <ChevronRight
               className="h-4 w-4 shrink-0 text-[var(--ink-quaternary)]"

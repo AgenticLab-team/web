@@ -6,9 +6,10 @@ import { redirect } from "next/navigation";
 import { relativeTime } from "@/components/forum/PostList";
 import { MarkAllRead } from "@/components/forum/MarkAllRead";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Empty, Group } from "@/components/ui/primitives";
+import { Empty, Group, Pill } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
-import { listNotifications } from "@/lib/forum/notify";
+import { listNotifications, notificationCounts } from "@/lib/forum/notify";
+import { FILTER_LABELS, parseFilter, type NotificationFilter } from "@/lib/notifications/prefs";
 
 export const metadata: Metadata = { title: "通知" };
 export const dynamic = "force-dynamic";
@@ -25,23 +26,64 @@ const ICONS: Record<string, typeof Bell> = {
   system: Bell,
 };
 
-export default async function NotificationsPage() {
+export default async function NotificationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ f?: string }>;
+}) {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/login?next=/notifications");
 
-  const items = listNotifications(user.id, 50);
-  const unread = items.filter((i) => !i.readAt).length;
+  const filter = parseFilter((await searchParams).f);
+  const counts = notificationCounts(user.id);
+  const items = listNotifications(user.id, 50, filter);
+  const unread = counts.unread;
 
   return (
     <>
       <PageHeader
         title="通知"
-        subtitle={unread ? `${unread} 条未读` : "都看完了"}
-        action={unread > 0 ? <MarkAllRead /> : undefined}
+        subtitle={unread ? `${unread} 条未读` : counts.all > 0 ? "都看完了" : "决定什么事值得打断你"}
+        action={
+          <span className="flex items-center gap-3">
+            {unread > 0 && <MarkAllRead />}
+            {/* 「太吵了」和「关掉它」之间的距离要尽可能短 ——
+                找不到开关的人不会去翻设置，他只会不再打开通知页 */}
+            <Link
+              href="/me/notifications"
+              className="t-subhead text-[var(--accent)] transition active:opacity-60"
+            >
+              设置
+            </Link>
+          </span>
+        }
       />
 
+      {/* 页签上带条数：空页签要能提前看出来，而不是点进去才发现 */}
+      <div className="-mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
+        {(Object.keys(FILTER_LABELS) as NotificationFilter[]).map((key) => (
+          <span key={key} className="shrink-0">
+            <Pill href={key === "all" ? "/notifications" : `/notifications?f=${key}`} active={key === filter}>
+              {FILTER_LABELS[key]}
+              {counts[key] > 0 && (
+                <span className="tabular ml-1 opacity-55">{counts[key]}</span>
+              )}
+            </Pill>
+          </span>
+        ))}
+      </div>
+
       {items.length === 0 ? (
-        <Empty title="还没有通知" hint="被回复、被提到、被采纳时会出现在这里" />
+        <Empty
+          title={filter === "all" ? "还没有通知" : `「${FILTER_LABELS[filter]}」下没有通知`}
+          hint={
+            filter === "all"
+              ? "被回复、被提到、被采纳时会出现在这里"
+              : counts.all > 0
+                ? "换个页签看看 —— 其它分类下还有"
+                : "被回复、被提到、被采纳时会出现在这里"
+          }
+        />
       ) : (
         <Group>
           {items.map((item) => {
