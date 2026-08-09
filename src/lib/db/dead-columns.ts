@@ -101,7 +101,7 @@ export const DEAD_COLUMNS: readonly DeadColumn[] = [
   {
     column: "forum_posts.pinned_globally",
     disposition: "duplicate",
-    why: "站内公告在「所有人都得看见」这件事上做得更好：能定向到群、能关掉、会过期、有已读记录。一条全站置顶帖三样都没有。该删而不是接",
+    why: "站内公告在「所有人都得看见」这件事上做得更好：能定向到身份组和群、能关掉、会过期、有已读记录。一条全站置顶帖一样都没有。该删而不是接",
   },
   {
     column: "forum_post_sources.converted_at",

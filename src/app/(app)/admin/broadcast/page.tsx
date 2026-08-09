@@ -14,7 +14,14 @@ import {
   sendableGroups,
   sentToday,
 } from "@/lib/broadcast/queries";
-import { audienceSize, dismissedCount, roleNameOf, targetableRoles } from "@/lib/broadcast/announce";
+import {
+  audienceSize,
+  dismissedCount,
+  groupNamesOf,
+  roleNameOf,
+  targetableGroups,
+  targetableRoles,
+} from "@/lib/broadcast/announce";
 import { describeAudience } from "@/lib/broadcast/announce-rules";
 import { MAX_SENDS_PER_DAY, MIN_SEND_GAP_MS, channelLabel } from "@/lib/broadcast/rules";
 import { db } from "@/lib/db";
@@ -132,6 +139,16 @@ export default async function AdminBroadcastPage({
             name: g.name,
             memberCount: memberCounts.get(g.convId) ?? 0,
           }))}
+          /*
+           * 站内公告能限定到的群 —— 和上面那份不是同一批。
+           * 上面是「机器人发得进去的」，这份是「站里认得的」：
+           * 一个机器人发不进去的群，里面的人照样在用这个站。
+           */
+          siteGroups={targetableGroups().map((g) => ({
+            convId: g.convId,
+            name: g.name ?? g.convId,
+            memberCount: g.members,
+          }))}
         />
       </Section>
 
@@ -178,7 +195,11 @@ export default async function AdminBroadcastPage({
                       * 点了关的人一定是看见了，这是唯一诚实的那个数。
                       */}
                     {row.channel === "site" && row.status === "sent" && (
-                      <> · {describeAudience(roleNameOf(row.targetRoleId), audienceSize(row.targetRoleId))}
+                      <> · {describeAudience(
+                          roleNameOf(row.targetRoleId),
+                          audienceSize(row.targetRoleId, row.targetConvIds as string[] | null),
+                          groupNamesOf(row.targetConvIds as string[] | null),
+                        )}
                         {`，${dismissedCount(row.id)} 人看过`}</>
                     )}
                     {row.channel === "wechat" && row.sentCount > 0 && ` · 已送达 ${row.sentCount}`}

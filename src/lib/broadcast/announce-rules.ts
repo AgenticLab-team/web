@@ -57,16 +57,49 @@ export function displayLabel(display: string | null): string {
 /**
  * 这条公告轮不轮得到这个人看。
  *
- * `targetRoleId` 为空 = 全体。指定了就只给持有那个身份组的人 ——
+ * ─────────────────────────────────────────
+ * 两个维度：身份组、群
+ * ─────────────────────────────────────────
+ *
+ * `targetRoleId` 为空 = 不限身份组。指定了就只给持有那个身份组的人 ——
  * 「版主请注意」这种话发给所有人，只会让所有人下次都跳过公告。
+ *
+ * `targetConvIds` 为空 = 不限群。指定了就只给这些群里的人 ——
+ * 「A 群周六线下」发给全站，对另外十一个群的人来说是纯噪音，
+ * 而且**它顺带告诉了他们 A 群的存在和活动安排**，
+ * 而群的事情属于群里的人。
+ *
+ * ─────────────────────────────────────────
+ * 两个都填 = 两个都要满足
+ * ─────────────────────────────────────────
+ *
+ * 取交集而不是并集。并集听起来「覆盖更广」，但它的失败方向是
+ * **发多了** —— 而这两个维度存在的理由恰恰是发少一点、发准一点。
+ * 一个用来收窄范围的东西，默认行为不该是放宽。
+ *
+ * 而且交集可以口头讲清楚：「A 群里的版主」。并集要说成
+ * 「A 群里的所有人，加上全站所有版主」—— 没有人是这么想事情的。
  */
 export function targeted(
-  announcement: { targetRoleId: string | null },
+  announcement: { targetRoleId: string | null; targetConvIds: string[] | null },
   viewerRoleIds: Iterable<string>,
+  viewerConvIds: Iterable<string> = [],
 ): boolean {
-  if (!announcement.targetRoleId) return true;
-  for (const id of viewerRoleIds) if (id === announcement.targetRoleId) return true;
-  return false;
+  if (announcement.targetRoleId) {
+    let hit = false;
+    for (const id of viewerRoleIds) if (id === announcement.targetRoleId) hit = true;
+    if (!hit) return false;
+  }
+
+  const convs = announcement.targetConvIds;
+  if (convs && convs.length > 0) {
+    const wanted = new Set(convs);
+    let hit = false;
+    for (const id of viewerConvIds) if (wanted.has(id)) hit = true;
+    if (!hit) return false;
+  }
+
+  return true;
 }
 
 /** 还在生效期内吗。`expiresAt` 为空 = 不过期 */
@@ -108,7 +141,20 @@ export function pickVisible<T extends { display: string | null; createdAt: numbe
  * 管理员没有任何办法确认自己有没有选错身份组，
  * 而选错的表现是「大家都说没收到」。
  */
-export function describeAudience(roleName: string | null, reached: number): string {
-  const who = roleName ? `「${roleName}」这个身份组` : "全体登录用户";
-  return `发给${who}，${reached} 个人`;
+export function describeAudience(
+  roleName: string | null,
+  reached: number,
+  groupNames: string[] = [],
+): string {
+  /*
+   * 两个条件同时存在时要读得像一句话：「A 群里的『版主』」。
+   * 拼成「发给『版主』和 A 群」会被理解成并集 —— 而实际是交集。
+   */
+  const inGroups =
+    groupNames.length === 0 ? ""
+    : groupNames.length <= 2 ? `${groupNames.join("、")}里的`
+    : `${groupNames.slice(0, 2).join("、")}等 ${groupNames.length} 个群里的`;
+
+  const who = roleName ? `「${roleName}」这个身份组` : inGroups ? "所有人" : "全体登录用户";
+  return `发给${inGroups}${who}，${reached} 个人`;
 }

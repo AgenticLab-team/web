@@ -50,7 +50,7 @@ export const PERMISSIONS = [
   { key: "forum.view", category: "forum", label: "浏览论坛", description: "论坛的可见性今天由版块的 visible_to 和功能开关在管，没有单独判它", status: "planned" },
   { key: "forum.post.create", category: "forum", label: "发帖", scopable: true },
   { key: "forum.reply.create", category: "forum", label: "回复", scopable: true },
-  { key: "forum.react", category: "forum", label: "点赞收藏", description: "点赞收藏today 只判登录，没有单独判它", status: "planned" },
+  { key: "forum.react", category: "forum", label: "点赞收藏", description: "点赞收藏目前只判登录，没有单独判它", status: "planned" },
   { key: "forum.post.edit.own", category: "forum", label: "编辑自己的帖子" },
   { key: "forum.post.edit.any", category: "forum", label: "编辑任何帖子", scopable: true, dangerLevel: 1 },
   { key: "forum.post.delete.own", category: "forum", label: "删除自己的帖子" },

@@ -42,7 +42,17 @@ export interface DraftInput {
   channel: "site" | "wechat";
   content: string;
   targetConvIds: readonly string[];
-  /** 已接入的群总数，用于校验目标 */
+  /**
+   * 这个渠道下允许出现的群 id。
+   *
+   * **两个渠道的合法集合不一样**：微信群发只能发到机器人进得去的群，
+   * 而站内公告可以限定到站里认得的任何一个群 ——
+   * 一个机器人发不进去的群，里面的人照样在用这个站。
+   *
+   * 传错的后果不对称：给站内公告传了「可发送」那份，
+   * 结果是管理员选了一个明明在列表里的群却被拒；
+   * 给微信群发传了「站里认得的」那份，结果是往一个发不进去的群发。
+   */
   availableConvIds: readonly string[];
 }
 
@@ -57,12 +67,26 @@ export function checkDraft(input: DraftInput): RuleResult {
       );
     }
 
-    const unknown = input.targetConvIds.filter((id) => !input.availableConvIds.includes(id));
-    if (unknown.length > 0) return no(`有 ${unknown.length} 个目标不在可发送列表里`);
-
     if (input.targetConvIds.length === 0 && input.availableConvIds.length === 0) {
       return no("没有任何可发送的群");
     }
+  }
+
+  /*
+   * 目标校验对两个渠道都做。
+   *
+   * 以前只在微信那一支里查，于是站内公告的 `targetConvIds`
+   * **完全没人校验** —— 一个手写的请求可以塞进任意 id，
+   * 存下来的是一条谁也匹配不上的公告，
+   * 而界面只会说「已发布」。
+   */
+  const unknown = input.targetConvIds.filter((id) => !input.availableConvIds.includes(id));
+  if (unknown.length > 0) {
+    return no(
+      input.channel === "wechat"
+        ? `有 ${unknown.length} 个目标不在可发送列表里`
+        : `有 ${unknown.length} 个群不在站里认得的群列表里`,
+    );
   }
 
   return OK;

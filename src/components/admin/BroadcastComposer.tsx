@@ -28,10 +28,20 @@ export interface GroupOption {
 
 export function BroadcastComposer({
   groups,
+  siteGroups,
   roles,
   canWechat,
 }: {
+  /** 微信群发能发到的群 —— 来自上游的可发送会话列表 */
   groups: GroupOption[];
+  /**
+   * 站内公告能限定到的群。
+   *
+   * **和上面那份不是同一批。** 上面那份是「机器人发得进去的群」，
+   * 这份是「站里认得的群」—— 一个机器人发不进去的群，
+   * 里面的人照样在用这个站，照样该看得到给他们的公告。
+   */
+  siteGroups: GroupOption[];
   /** 可以定向到的身份组。留空就只能发全体 */
   roles: { id: string; name: string }[];
   canWechat: boolean;
@@ -59,7 +69,11 @@ export function BroadcastComposer({
         content,
         display: channel === "site" ? display : undefined,
         targetRoleId: channel === "site" ? targetRole : undefined,
-        targetConvIds: channel === "wechat" ? [...targets] : undefined,
+        /*
+         * 两个渠道共用这一列，含义不同但都是「哪些群」：
+         * 微信群发 = 发到这些群；站内公告 = 只给这些群里的人看。
+         */
+        targetConvIds: targets.size > 0 ? [...targets] : undefined,
       });
       if (!saved.ok || !saved.id) {
         toast.show({ message: saved.error ?? "保存失败", kind: "error" });
@@ -88,7 +102,17 @@ export function BroadcastComposer({
             key={c}
             type="button"
             disabled={c === "wechat" && !canWechat}
-            onClick={() => setChannel(c)}
+            onClick={() => {
+              /*
+               * 换渠道就清掉已选的群。
+               *
+               * 两个渠道的「选群」是两个意思（发到 / 只给里面的人看），
+               * 而且两份名单不一样 —— 留着上一次的选择，
+               * 最好的情况是发错人，最坏的情况是发进一个不该发的群。
+               */
+              setTargets(new Set());
+              setChannel(c);
+            }}
             className={`t-footnote rounded-[var(--radius-pill)] px-3 py-1.5 font-medium transition-colors disabled:opacity-35 ${
               channel === c
                 ? "bg-[var(--ink)] text-[var(--canvas)]"
@@ -198,6 +222,72 @@ export function BroadcastComposer({
           <p className="t-caption2 text-[var(--ink-tertiary)]">
             只有这个身份组的人看得到
           </p>
+        )}
+
+        {/*
+          * 限定到群。
+          *
+          * 「A 群周六线下」发给全站，对另外十一个群的人来说是纯噪音 ——
+          * 而且顺带告诉了他们 A 群的存在和活动安排，
+          * 而群的事情属于群里的人。
+          */}
+        {siteGroups.length > 0 && (
+          <div className="space-y-1.5 pt-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="t-caption2 text-[var(--ink-quaternary)]">限定到群</span>
+              <button
+                type="button"
+                onClick={() => setTargets(new Set())}
+                className={`t-caption rounded-[var(--radius-pill)] px-2.5 py-1 transition-colors ${
+                  targets.size === 0
+                    ? "bg-[var(--accent)] font-medium text-[var(--accent-ink)]"
+                    : "bg-[var(--fill)] text-[var(--ink-secondary)]"
+                }`}
+              >
+                不限
+              </button>
+              {siteGroups.map((g) => (
+                <button
+                  key={g.convId}
+                  type="button"
+                  onClick={() =>
+                    setTargets((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(g.convId)) next.delete(g.convId);
+                      else next.add(g.convId);
+                      return next;
+                    })
+                  }
+                  className={`t-caption rounded-[var(--radius-pill)] px-2.5 py-1 transition-colors ${
+                    targets.has(g.convId)
+                      ? "bg-[var(--accent)] font-medium text-[var(--accent-ink)]"
+                      : "bg-[var(--fill)] text-[var(--ink-secondary)]"
+                  }`}
+                >
+                  {g.name}
+                  <span className="ml-1 opacity-60">{g.memberCount}</span>
+                </button>
+              ))}
+            </div>
+
+            {targets.size > 0 && (
+              <p className="t-caption2 leading-relaxed text-[var(--ink-tertiary)]">
+                {targetRole === null ? (
+                  <>只有这 {targets.size} 个群里的人看得到。</>
+                ) : (
+                  /*
+                   * 两个条件是**交集**。这句话必须写出来 ——
+                   * 一个用来收窄范围的东西，被理解成放宽的话，
+                   * 后果是「发多了」，而那正是这两个开关要防的事。
+                   */
+                  <>
+                    <strong>两个条件同时满足</strong>才看得到：既在这 {targets.size} 个群里、
+                    又有那个身份组。发出后这一条下面会显示实际送达的人数。
+                  </>
+                )}
+              </p>
+            )}
+          </div>
         )}
         </div>
       ) : (

@@ -1,10 +1,18 @@
 import "server-only";
 
-import { and, count, eq, isNull, notInArray, or, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 
 import type { CurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { announcementDismissals, broadcasts, roles, userRoles } from "@/lib/db/schema";
+import {
+  announcementDismissals,
+  broadcasts,
+  groupMembers,
+  groups,
+  roles,
+  userRoles,
+  users,
+} from "@/lib/db/schema";
 import { isLive, pickVisible, targeted } from "@/lib/broadcast/announce-rules";
 
 /**
@@ -27,6 +35,33 @@ export interface LiveAnnouncement {
   display: string | null;
   createdAt: number;
   expiresAt: number | null;
+}
+
+/**
+ * 这个人在哪些群里。
+ *
+ * ─────────────────────────────────────────
+ * 故意**不用** `visibleGroupIds`
+ * ─────────────────────────────────────────
+ *
+ * 那个函数回答的是「哪些群的**消息**他看得到」，因此要求
+ * `sync_enabled` —— 而同步开关管的是消息归档，不是群还存不存在。
+ * 一个没开同步的群，里面的人照样在用这个站，
+ * 照样该看得到发给他们的公告。
+ *
+ * 更要紧的是**两边必须用同一个口径**：`audienceSize()` 按群成员算。
+ * 这里如果按「消息可见」算，后台会显示「发给 30 个人」
+ * 而实际一个人都没看到 —— 那正是这个功能最坏的失败方式，
+ * 因为管理员看到那个数字之后就不会再核对了。
+ */
+function myGroupConvIds(user: CurrentUser): string[] {
+  if (!user.wxId) return [];
+  return db
+    .select({ convId: groupMembers.convId })
+    .from(groupMembers)
+    .where(and(eq(groupMembers.wxId, user.wxId), isNull(groupMembers.leftAt)))
+    .all()
+    .map((m) => m.convId);
 }
 
 export function announcementsFor(
@@ -53,6 +88,7 @@ export function announcementsFor(
       createdAt: broadcasts.createdAt,
       expiresAt: broadcasts.expiresAt,
       targetRoleId: broadcasts.targetRoleId,
+      targetConvIds: broadcasts.targetConvIds,
     })
     .from(broadcasts)
     .where(
@@ -83,8 +119,24 @@ export function announcementsFor(
     .all()
     .map((r) => r.roleId);
 
+  /*
+   * 群同理：只有真有按群定向的公告时才去查这个人在哪些群。
+   * 绝大多数公告是全站的，这一查大多数时候可以省掉。
+   */
+  const needsGroups = live.some((a) => {
+    const ids = a.targetConvIds as string[] | null;
+    return Array.isArray(ids) && ids.length > 0;
+  });
+  const myConvIds = needsGroups ? myGroupConvIds(user) : [];
+
   const mine = live.filter(
-    (a) => isLive(a, now) && targeted(a, myRoleIds),
+    (a) =>
+      isLive(a, now) &&
+      targeted(
+        { targetRoleId: a.targetRoleId, targetConvIds: a.targetConvIds as string[] | null },
+        myRoleIds,
+        myConvIds,
+      ),
   );
 
   return pickVisible(mine);
@@ -123,23 +175,106 @@ export function dismissedCount(broadcastId: string): number {
  * 界面上只写「已发布」的话，选错的表现是「大家都说没收到」，
  * 而那时候已经晚了。
  */
-export function audienceSize(targetRoleId: string | null): number {
-  if (!targetRoleId) {
-    return (
-      db
-        .select({ n: count() })
-        .from(sql`users`)
-        .where(sql`status = 'active'`)
-        .get()?.n ?? 0
-    );
-  }
-  return (
+/**
+ * 这条公告实际会送到几个人。
+ *
+ * ─────────────────────────────────────────
+ * 两个条件取交集，所以不能各算各的
+ * ─────────────────────────────────────────
+ *
+ * 分开算再相加会得出一个比真实值大得多的数 ——
+ * 而管理员看到「发给 116 个人」之后就不会再核对了。
+ * **一个偏大的受众数比没有这个数更坏**：它让人以为通知到位了。
+ *
+ * 所以这里按人去算：拿到符合条件的用户 id 集合，取交集，数大小。
+ * 一百多人的站，这么算比拼 SQL 清楚得多，也不会算错。
+ */
+export function audienceSize(
+  targetRoleId: string | null,
+  targetConvIds: string[] | null = null,
+): number {
+  const active = new Set(
     db
-      .select({ n: count() })
-      .from(userRoles)
-      .where(and(eq(userRoles.roleId, targetRoleId), isNull(userRoles.revokedAt)))
-      .get()?.n ?? 0
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.status, "active"))
+      .all()
+      .map((u) => u.id),
   );
+
+  if (targetRoleId) {
+    const holders = new Set(
+      db
+        .select({ userId: userRoles.userId })
+        .from(userRoles)
+        .where(and(eq(userRoles.roleId, targetRoleId), isNull(userRoles.revokedAt)))
+        .all()
+        .map((r) => r.userId),
+    );
+    for (const id of active) if (!holders.has(id)) active.delete(id);
+  }
+
+  if (targetConvIds && targetConvIds.length > 0) {
+    /*
+     * 群成员是按 wx_id 记的，不是 user_id —— 中间要过一次映射。
+     * 已经退群的（`left_at` 非空）不算：一条发给 A 群的公告
+     * 不该出现在上个月退群的人面前。
+     */
+    const wxIds = new Set(
+      db
+        .select({ wxId: groupMembers.wxId })
+        .from(groupMembers)
+        .where(and(inArray(groupMembers.convId, targetConvIds), isNull(groupMembers.leftAt)))
+        .all()
+        .map((m) => m.wxId),
+    );
+    const inGroups = new Set(
+      db
+        .select({ id: users.id, wxId: users.wxId })
+        .from(users)
+        .all()
+        .filter((u) => u.wxId && wxIds.has(u.wxId))
+        .map((u) => u.id),
+    );
+    for (const id of active) if (!inGroups.has(id)) active.delete(id);
+  }
+
+  return active.size;
+}
+
+/**
+ * 可以拿来定向的群。
+ *
+ * 只列**已接入且还有人**的 —— 一个空群出现在选项里，
+ * 选中它的结果是「发给 0 个人」，而那句话要等到发完才看得到。
+ */
+export function targetableGroups() {
+  const counts = db
+    .select({ convId: groupMembers.convId, n: count() })
+    .from(groupMembers)
+    .where(isNull(groupMembers.leftAt))
+    .groupBy(groupMembers.convId)
+    .all();
+  const byConv = new Map(counts.map((c) => [c.convId, Number(c.n)]));
+
+  return db
+    .select({ convId: groups.convId, name: groups.name })
+    .from(groups)
+    .all()
+    .map((g) => ({ ...g, members: byConv.get(g.convId) ?? 0 }))
+    .filter((g) => g.members > 0)
+    .sort((a, b) => b.members - a.members);
+}
+
+/** 群名，用来在后台把「发给谁」讲清楚 */
+export function groupNamesOf(convIds: string[] | null): string[] {
+  if (!convIds || convIds.length === 0) return [];
+  return db
+    .select({ convId: groups.convId, name: groups.name })
+    .from(groups)
+    .where(inArray(groups.convId, convIds))
+    .all()
+    .map((g) => g.name ?? g.convId);
 }
 
 /** 可以定向到的身份组，给后台的下拉用 */

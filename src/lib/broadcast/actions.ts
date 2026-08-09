@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireWritableAdmin } from "@/lib/admin/guard";
 import { audit } from "@/lib/audit";
+import { targetableGroups } from "@/lib/broadcast/announce";
 import {
   getBroadcast,
   msSinceLastSend,
@@ -57,7 +58,14 @@ export async function saveDraft(input: {
     input.channel === "wechat" ? "broadcast.wechat" : "announce.site",
   );
 
-  const available = sendableGroups().map((g) => g.convId);
+  /*
+   * 两个渠道的合法群集合不一样，不能共用一份。
+   * 微信群发 = 机器人进得去的；站内公告 = 站里认得的。
+   */
+  const available =
+    input.channel === "wechat"
+      ? sendableGroups().map((g) => g.convId)
+      : targetableGroups().map((g) => g.convId);
   const check = checkDraft({
     channel: input.channel,
     content: input.content,
