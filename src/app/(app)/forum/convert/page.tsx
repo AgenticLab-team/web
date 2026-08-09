@@ -8,7 +8,8 @@ import { BackLink, Callout, Empty, PageNote, Pill, PillRow, SearchField } from "
 import { getCurrentUser } from "@/lib/auth/session";
 import { messagesOfDay, searchMessagesForConvert } from "@/lib/forum/convert-source";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
-import { shiftDateKey, todayKey } from "@/lib/time";
+import { todayKey } from "@/lib/time";
+import { DayNav } from "@/components/ui/DayNav";
 
 export const metadata: Metadata = { title: "整理成帖子" };
 export const dynamic = "force-dynamic";
@@ -105,25 +106,14 @@ export default async function ConvertPage({
       )}
 
       {/* 搜索态下不显示翻天的控件 —— 两套导航同时在会让人不确定自己在看什么 */}
-      <div className={`mb-5 flex items-center justify-between gap-2 ${query ? "hidden" : ""}`}>
-        <Link
-          href={`/forum/convert?group=${encodeURIComponent(convId)}&date=${shiftDateKey(day, -1)}`}
-          className="t-footnote rounded-[var(--radius-pill)] bg-[var(--fill)] px-3 py-1.5"
-        >
-          前一天
-        </Link>
-        <span className="tabular t-subhead">{day}</span>
-        <Link
-          href={`/forum/convert?group=${encodeURIComponent(convId)}&date=${shiftDateKey(day, 1)}`}
-          className={`t-footnote rounded-[var(--radius-pill)] px-3 py-1.5 ${
-            day >= todayKey()
-              ? "pointer-events-none bg-[var(--fill)] opacity-40"
-              : "bg-[var(--fill)]"
-          }`}
-        >
-          后一天
-        </Link>
-      </div>
+      {!query && (
+        <DayNav
+          day={day}
+          href={(d) => `/forum/convert?group=${encodeURIComponent(convId)}&date=${d}`}
+          action="/forum/convert"
+          hidden={{ group: convId }}
+        />
+      )}
 
       {/* 裁剪过的一天和冷清的一天长得一模一样 —— 必须说出来 */}
       {dropped > 0 && (

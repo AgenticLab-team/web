@@ -217,7 +217,17 @@ describe("界面", () => {
   });
 
   it("搜索态下不显示翻天的控件 —— 两套导航同时在会让人不确定自己在看什么", () => {
-    assert.match(page, /query \? "hidden" : ""/);
+    assert.match(page, /\{!query && \(\s*<DayNav/);
+  });
+
+  it("**翻天用共用的 DayNav** —— 和 /archive 是同一件事，不该有两套长相", () => {
+    /*
+     * 原来 archive 用吸顶的箭头条、convert 用两个文字药丸,
+     * 功能一样外观完全不同 —— 在两页之间来回的人会觉得
+     * 自己走进了另一个网站。
+     */
+    assert.match(page, /<DayNav/);
+    assert.doesNotMatch(page, /前一天|后一天/);
   });
 
   it("**切群时把搜索词带上** —— 丢掉的话人得重新打一遍", () => {

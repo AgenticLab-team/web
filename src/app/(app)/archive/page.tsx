@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Reply } from "lucide-react";
+import { Reply } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -22,7 +22,8 @@ import {
 } from "@/lib/messages/interactions";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { currentNamesFor } from "@/lib/queries/people";
-import { shiftDateKey, todayKey } from "@/lib/time";
+import { todayKey } from "@/lib/time";
+import { DayNav } from "@/components/ui/DayNav";
 
 export const metadata: Metadata = { title: "按天回看" };
 export const dynamic = "force-dynamic";
@@ -78,7 +79,6 @@ export default async function ArchivePage({
 
   const groupName = groups.find((g) => g.convId === convId)?.name ?? "群聊";
   const link = (d: string, g = convId) => `/archive?group=${encodeURIComponent(g)}&date=${d}`;
-  const isToday = day >= todayKey();
 
   return (
     <>
@@ -92,29 +92,7 @@ export default async function ArchivePage({
         ))}
       </PillRow>
 
-      {/* 日期导航常驻顶部：翻天是这个页面的主操作，不该滚到底才找得到 */}
-      <div className="chrome sticky top-12 z-10 mb-4 flex items-center justify-between gap-2 rounded-[var(--radius-control)] px-2 py-2">
-        <Link
-          href={link(shiftDateKey(day, -1))}
-          aria-label="前一天"
-          className="rounded-[var(--radius-control)] p-2 transition active:scale-95 hover:bg-[var(--fill)]"
-        >
-          <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
-        </Link>
-
-        <span className="tabular t-subhead font-medium">{day}</span>
-
-        <Link
-          href={isToday ? link(day) : link(shiftDateKey(day, 1))}
-          aria-label="后一天"
-          aria-disabled={isToday}
-          className={`rounded-[var(--radius-control)] p-2 transition ${
-            isToday ? "pointer-events-none opacity-30" : "active:scale-95 hover:bg-[var(--fill)]"
-          }`}
-        >
-          <ChevronRight className="h-4 w-4" strokeWidth={2.2} aria-hidden />
-        </Link>
-      </div>
+      <DayNav day={day} href={link} action="/archive" hidden={{ group: convId }} />
 
       {/* 裁剪过的一天和冷清的一天长得一模一样 —— 必须说出来 */}
       {dropped > 0 && (

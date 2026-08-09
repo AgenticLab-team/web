@@ -353,6 +353,32 @@ export const RULES: Record<string, Rule> = {
   "icon-hidden": decorativeIconHidden,
 };
 
+/**
+ * 把注释挖空，但**保留每一个换行**。
+ *
+ * ─────────────────────────────────────────
+ * 不挖的话，说明文字会被当成真的标记
+ * ─────────────────────────────────────────
+ *
+ * 这是真撞上的：DayNav 的文件头注释里写了一句
+ * 「原生 `<input type="date">` + GET 表单」，用来解释为什么不自己搓日历。
+ * 扫描器把那行当成一个没有 label 的输入框报了出来 ——
+ * 而那一行根本不是代码。
+ *
+ * 误报比漏报更伤这类检查：一条查出来是假的之后，
+ * 下一条真的也会被顺手划掉。
+ *
+ * 换行必须保留，否则报出来的行号会往前串，
+ * 而**指错行的报告等于没有行号**。
+ */
+function blankComments(source: string): string {
+  const keepNewlines = (m: string) => m.replace(/[^\n]/g, " ");
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, keepNewlines)
+    .replace(/\/\/[^\n]*/g, keepNewlines);
+}
+
 export function auditSource(source: string): Finding[] {
-  return Object.values(RULES).flatMap((rule) => rule(source));
+  const code = blankComments(source);
+  return Object.values(RULES).flatMap((rule) => rule(code));
 }

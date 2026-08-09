@@ -248,3 +248,53 @@ describe("触控区 —— 点不中的人不会来报 bug", () => {
     assert.match(css, /@media \(pointer: fine\)[\s\S]{0,120}tap-target::after \{ display: none/);
   });
 });
+
+describe("**扫描器不该把注释当成代码**", () => {
+  /*
+   * 真撞上的：DayNav 的文件头注释里写了一句
+   * 「原生 <input type="date"> + GET 表单」，用来解释为什么不自己搓日历。
+   * 扫描器把那行报成了「没有 label 的输入框」—— 而那根本不是代码。
+   *
+   * 误报比漏报更伤这类检查：一条查出来是假的之后，
+   * 下一条真的也会被顺手划掉。
+   */
+  it("块注释里的 JSX 不报", () => {
+    const source = `
+      /**
+       * 用原生 <input type="date"> 而不是自己搓一个日历。
+       */
+      export function X() {
+        return <input type="date" aria-label="跳到某一天" />;
+      }
+    `;
+    assert.deepEqual(auditSource(source), []);
+  });
+
+  it("行注释里的 JSX 也不报", () => {
+    const source = `
+      export function X() {
+        // 这里本来是 <img src="a.png"> ，后来换掉了
+        return <img src="a.png" alt="猫" />;
+      }
+    `;
+    assert.deepEqual(auditSource(source), []);
+  });
+
+  it("**注释外面真的有问题时照样报** —— 别把扫描器整个挖空了", () => {
+    const source = `
+      /** 说明里提到 <input> 不算数 */
+      export function X() {
+        return <input type="text" />;
+      }
+    `;
+    const found = auditSource(source);
+    assert.equal(found.length, 1, "把真问题也一起吞了");
+  });
+
+  it("**行号不能因为挖空而串位** —— 指错行的报告等于没有行号", () => {
+    const source = ["/*", " * 注释", " */", "", '<input type="text" />'].join("\n");
+    const found = auditSource(source);
+    assert.equal(found.length, 1);
+    assert.equal(found[0].line, 5, `报在第 ${found[0].line} 行，实际在第 5 行`);
+  });
+});

@@ -158,3 +158,46 @@ describe("**栏宽按内容类型走**", () => {
     assert.match(css, /main:has\(\[data-dense\]\) \{\s*\n?\s*max-width/);
   });
 });
+
+describe("**同一件事只有一套长相**", () => {
+  it("两页的「按天翻」都用 DayNav", () => {
+    /*
+     * 原来 /archive 用吸顶的箭头条、/forum/convert 用两个文字药丸 ——
+     * 功能一模一样，外观完全不同。在两页之间来回的人
+     * 会觉得自己走进了另一个网站。这是「割裂」最具体的样子。
+     */
+    for (const p of ["app/(app)/archive/page.tsx", "app/(app)/forum/convert/page.tsx"]) {
+      assert.match(src(p), /<DayNav/, `${p} 还在自己拼翻天的控件`);
+      assert.doesNotMatch(strip(src(p)), /前一天/, `${p} 里还留着旧写法`);
+    }
+  });
+
+  it("**能直接跳日期** —— 只能 ±1 天的话，回到上个月要点三十下", () => {
+    const nav = src("components/ui/DayNav.tsx");
+    assert.match(nav, /type="date"/);
+    assert.match(nav, /max=\{today\}/, "能选到未来的日期，而未来一定是空的");
+  });
+
+  it("**用原生日期控件，不自己搓日历** —— 时区、键盘、读屏它都已经对了", () => {
+    const nav = src("components/ui/DayNav.tsx");
+    assert.doesNotMatch(nav, /useState|calendar|Calendar/);
+  });
+
+  it("到今天就停住，而且 aria-disabled —— 只调淡颜色的话读屏照样会念", () => {
+    const nav = src("components/ui/DayNav.tsx");
+    assert.match(nav, /aria-disabled=\{isToday\}/);
+    assert.match(nav, /pointer-events-none/);
+  });
+
+  it("翻天时带上筛选参数 —— 丢掉的话人会回到「全部群」", () => {
+    const nav = src("components/ui/DayNav.tsx");
+    assert.match(nav, /hidden\?: Record<string, string \| undefined>/);
+    for (const p of ["app/(app)/archive/page.tsx", "app/(app)/forum/convert/page.tsx"]) {
+      assert.match(src(p), /hidden=\{\{ group: convId \}\}/, `${p} 翻天会丢掉群`);
+    }
+  });
+
+  it("「今天/昨天」比一串数字好认", () => {
+    assert.match(src("components/ui/DayNav.tsx"), /relativeLabel/);
+  });
+});
