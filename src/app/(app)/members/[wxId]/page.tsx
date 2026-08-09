@@ -123,7 +123,7 @@ export default async function PersonPage({
 
       {githubConn && githubRepos.length > 0 && (
         <Section title="GitHub 项目">
-          <RepoShowcase repos={githubRepos} login={githubConn.login} />
+          <RepoShowcase repos={githubRepos} profileUrl={githubConn.htmlUrl} />
         </Section>
       )}
 

@@ -1,36 +1,114 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Agentic Lab
 
-## Getting Started
+一个微信群社区的站内门户：把群聊存档下来、可检索，并在它上面长出论坛、积分、
+称号、活动、资源库这些东西。
 
-First, run the development server:
+**它不是一个通用的论坛程序。** 整个站建立在一条硬约束上：
+
+> 只有微信群成员能登录。
+
+账号是靠在群里向机器人发一条验证码建立的，没有公开注册入口。所有可见性判定
+（谁能看哪条消息、谁的主页对谁可见）都以「你们有没有共同的群」为准。
+如果你想拿它当一个开放注册的社区来用，需要改的不是一两个开关，而是这条前提本身。
+
+---
+
+## 跑起来
+
+需要 Node 22+（开发用的是 24）。数据库是本地 SQLite 文件，不需要额外的数据库服务。
 
 ```bash
+npm install
+cp .env.example .env.local     # 然后把里面的值填上，见下一节
+npm run bootstrap              # 建表、灌种子（幂等，可反复跑）
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+打开 http://localhost:3000 。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+第一次进去是没有账号的 —— 登录要走微信绑定，而那需要上游 API（见下）。
+只想看看界面的话，`npm run bootstrap` 之后库里已经有版块、权限点和角色，
+可以自己往 `users` 表里插一行再造一个会话。
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 常用脚本
 
-## Learn More
+| 命令 | 做什么 |
+| --- | --- |
+| `npm run bootstrap` | 迁移 + 种子 + 拉群列表。幂等 |
+| `npm run sync` | 从上游同步消息与成员 |
+| `npm run health` | 定时任务的一轮：探活、备份、各种结算、告警投递 |
+| `npm run backup` | 本地备份（`npm run offsite` 推异地） |
+| `npm run db:generate` | 改完 `src/lib/db/schema/` 之后生成迁移 |
+| `npm test` | 跑全部测试（tsx 的 test runner，不做类型检查） |
 
-To learn more about Next.js, take a look at the following resources:
+单跑一个测试文件：
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npx tsx --conditions=react-server --test tests/github-oauth.test.ts
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 依赖哪些外部服务
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+只有第一项是必须的，其余不配就是对应功能整体不出现 —— **不会报错，也不会半死不活**。
+这是这个仓库里反复出现的一条原则：半套配置比没配置更糟，
+它会让功能真的跑起来、真的失败，然后失败被当成偶发问题忽略掉。
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| 服务 | 必须？ | 不配会怎样 |
+| --- | --- | --- |
+| **NekoBot API**（微信侧的消息与机器人接口） | 是 | 站起不来 —— 登录、同步、群列表全靠它 |
+| Web Push（VAPID，自己生成） | 否 | 只有站内通知，没有系统推送 |
+| **GitHub OAuth App** | 否 | GitHub 绑定整个功能不出现：入口不渲染、路由 404 |
+| S3 协议的对象存储（R2 / B2 / MinIO） | 否 | 没有异地备份副本，磁盘挂了备份跟着一起没 |
+| 一个 LLM API | 否 | 链接摘要、语义检索这些降级成没有 |
+
+各自的环境变量、怎么申请、注意事项，都写在 `.env.example` 的注释里。
+
+### GitHub 绑定申请的权限
+
+**scope 是空的。** 也就是说拿到的 token 只能读任何匿名访客也能读到的东西 ——
+公开资料、公开仓库、公开动态。它碰不到任何私有仓库，也发不了任何东西。
+
+抓数据走的是 `/users/{login}/repos` 和 `/users/{login}/events/public`，
+这两个接口**按定义只返回公开数据**，不是靠我们过滤。
+
+绑定是「一个已经登录的人给自己的账号加一个绑定」，
+**不是一种登录方式** —— 见 `src/lib/github/link.ts` 顶上那段说明，
+以及 `tests/github-oauth.test.ts` 里逐条钉死它的那些用例。
+
+---
+
+## 代码里的一些规矩
+
+在这个仓库里改东西之前，值得知道的几条（详细的在 `AGENTS.md`）：
+
+- **Next.js 16 App Router + Turbopack、React 19、Tailwind v4、SQLite（better-sqlite3 + Drizzle + FTS5）**
+- 注释用中文，而且写**为什么**，不写「这里做了什么」。
+  这个仓库里长注释很多，它们大多是在记「为什么不是那个更显然的做法」——
+  那些是最容易被下一个人顺手改回去的东西。
+- **纯规则放 `*-rules.ts`**，不许 import `server-only` / `@/lib/db` / `drizzle-orm`。
+  这样它们能被直接测，而不需要一个数据库。
+- 加数据库列要写迁移，放 `drizzle/`，照编号往后排。
+- 手机端和电脑端都要能用 —— 相当一部分访问来自微信内置浏览器。
+- 测试里的 `describe` / `it` 说的是**这条规则为什么存在**，不是「测试某函数」。
+  几个大的结构性检查（无障碍、审计覆盖、预览态拦截、UI 一致性）会扫全仓，
+  加了新页面要跟着跑一遍。
+
+---
+
+## 许可证
+
+**还没定。** 在定下来之前，这份代码没有授予任何使用许可。
+
+---
+
+## 这个仓库里没有什么
+
+为了能公开，下面这些东西一律不在仓库里，也请不要提交进来：
+
+- 任何真实的密钥、token、密码（`.env*` 全部忽略）
+- **源站的 IP 或主机地址**。站点在 Cloudflare 后面，源站只对 CF 网段开放，
+  而这套防护唯一的前提就是没人知道它。部署地址放在被忽略的 `.deploy-host` 里。
+- 数据库文件、备份、归档（`/data/`、`*.db`）
+- 真实的群聊内容与成员信息

@@ -24,3 +24,5 @@ export * from "./matrix";
 export * from "./search";
 export * from "./join";
 export * from "./push";
+export * from "./exports";
+export * from "./github";

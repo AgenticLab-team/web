@@ -6,6 +6,7 @@ import { useEffect, useState, useTransition } from "react";
 import { Editor } from "@/components/forum/Editor";
 import { useToast } from "@/components/ui/Toast";
 import { createPost } from "@/lib/forum/actions";
+import { markGithubPromptSharedAction } from "@/lib/github/actions";
 import { pickDraft, type DraftSnapshot } from "@/lib/forum/draft-rules";
 
 import { relativeTime } from "./PostList";
@@ -34,11 +35,24 @@ export function ComposeForm({
   boards,
   defaultBoard,
   serverDrafts = {},
+  prefill = null,
+  githubPromptId,
 }: {
   boards: BoardOption[];
   defaultBoard?: string;
   /** 服务端上已有的草稿，按版块 key 索引 */
   serverDrafts?: Record<string, DraftSnapshot>;
+  /**
+   * 打开就填好的内容（现在只有「GitHub 有新项目，去分享」那条路会传）。
+   *
+   * 和上面那份草稿的处理**刚好相反**：草稿是摆出来问一句、不自动填，
+   * 而这个直接填进去。区别在于人的意图 —— 打开发帖页的人想写点什么，
+   * 三天前的半成品冒出来是打扰；而点「去分享」的人要的就是这一篇，
+   * 让他对着空白框重新写一遍，那条提示就只剩下打扰。
+   */
+  prefill?: { title: string; content: string } | null;
+  /** 发出去之后要标成「已分享」的那条提示 */
+  githubPromptId?: string;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -46,8 +60,8 @@ export function ComposeForm({
   const [error, setError] = useState<string | null>(null);
   const [boardKey, setBoardKey] = useState(defaultBoard ?? boards[0]?.key ?? "");
   const [type, setType] = useState<(typeof TYPES)[number]["key"]>("discussion");
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
+  const [title, setTitle] = useState(prefill?.title ?? "");
+  const [content, setContent] = useState(prefill?.content ?? "");
   /*
    * 投票草稿一直留着，即使切回「讨论」。
    *
@@ -95,6 +109,9 @@ export function ComposeForm({
 
   useEffect(() => {
     if (askedFor === boardKey) return;
+    // 带着预填内容进来的，不再问「要不要接着写那份草稿」——
+    // 他要写的就是眼前这一篇，问一句只会让人以为填错了
+    if (prefill) return;
 
     /*
      * 推到下一个任务里再 setState。
@@ -113,7 +130,7 @@ export function ComposeForm({
     }, 0);
 
     return () => clearTimeout(timer);
-  }, [boardKey, serverDraft, askedFor]);
+  }, [boardKey, serverDraft, askedFor, prefill]);
 
   const submit = () => {
     setError(null);
@@ -151,6 +168,18 @@ export function ComposeForm({
        * 时间给足 —— 3.2 秒读不完，而这句话正是这条规则的全部意义。
        */
       if (result.note) toast.show({ message: result.note, kind: "info", durationMs: 12_000 });
+
+      /*
+       * 是从 GitHub 提示点进来的 —— 把那条提示标成「已分享」，
+       * 它就不会再挂在「我的」页上等着过期。
+       *
+       * 失败了也不管：那条记录早就在库里，**再提示一次是不可能的**
+       * （唯一索引挡着）。这一步只影响它还挂不挂着，
+       * 不值得为它挡住「发帖成功」这个结果。
+       */
+      if (githubPromptId && result.postId) {
+        void markGithubPromptSharedAction(githubPromptId, result.postId);
+      }
 
       // 发出去了就把两边的草稿都清掉 —— 留着的话下次点发帖会把
       // 已经发表过的内容当草稿恢复出来，而人会以为上次没发成功
@@ -224,6 +253,10 @@ export function ComposeForm({
 
       <Editor
         name="content"
+        /* defaultValue 只在挂载时读一次 —— 正好是预填要的语义。
+           它非空时 Editor 也不会再去恢复本地草稿（见 Editor 里那个 effect），
+           所以「点去分享」看到的一定是提示里那一篇，不会被草稿盖掉 */
+        defaultValue={prefill?.content ?? ""}
         draftKey={`new:${boardKey}`}
         minHeight={280}
         placeholder="正文…支持 Markdown、代码块、@提及"

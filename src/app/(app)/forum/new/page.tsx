@@ -5,6 +5,7 @@ import { ComposeForm } from "@/components/forum/ComposeForm";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { BackLink, Empty } from "@/components/ui/primitives";
 import { requireFeature } from "@/lib/flags/server";
+import { prefillOf, promptFor } from "@/lib/github/prompts";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
 import type { DraftSnapshot } from "@/lib/forum/draft-rules";
@@ -18,15 +19,28 @@ export const dynamic = "force-dynamic";
 export default async function NewPostPage({
   searchParams,
 }: {
-  searchParams: Promise<{ board?: string }>;
+  searchParams: Promise<{ board?: string; prompt?: string }>;
 }) {
   const user = await getCurrentUser();
   // 功能开关：关掉之后这一页 404 —— 只藏导航的话，地址栏敲一下照样进得去
   requireFeature("forum", user);
   if (!user) redirect("/login");
 
-  const { board } = await searchParams;
+  const { board, prompt: promptId } = await searchParams;
   const viewer = buildViewerContext(user);
+
+  /*
+   * 从「我的」页那条 GitHub 提示点过来的 —— 把标题和正文预先填好。
+   *
+   * `promptFor(user.id, id)` 是**双条件**查询：拿别人的提示 id
+   * 过来是查不到的。不这么写的话，这个页面就成了一个
+   * 「输入 id、返回别人还没公开的新仓库名」的接口。
+   *
+   * 查不到就当没有这个参数，安静地渲染一张空表单 ——
+   * 报错没有意义，用户对这个 id 无能为力。
+   */
+  const promptRow = promptId ? promptFor(user.id, promptId) : null;
+  const prefill = promptRow ? prefillOf(promptRow) : null;
 
   // 只列出这个人真的能发帖的版块，而不是能看见的版块 ——
   // 让人写完再告诉他发不了是最糟的体验
@@ -79,6 +93,8 @@ export default async function NewPostPage({
           maxVisibility: b.maxVisibility,
         }))}
         defaultBoard={board}
+        prefill={prefill}
+        githubPromptId={promptRow?.id}
       />
     </>
   );

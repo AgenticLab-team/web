@@ -36,6 +36,13 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# 但模板要进仓库。
+#
+# `.env*` 会把 .env.example 一起吞掉 —— 于是开源之后别人克隆下来
+# **看不到要配哪些变量**，而站长发现这点之后多半会 `git add -f .env.example`。
+# 那个 `-f` 一旦成了习惯，下一次手抖就是 .env.local（里面是真钥匙）。
+# 显式放行，让它永远不需要 -f。
+!.env.example
 
 # vercel
 .vercel
@@ -52,6 +59,14 @@ next-env.d.ts
 
 # agent worktrees —— 它们各自是独立的 git 仓库，不该进主仓
 .claude/worktrees/
+# agent 工具的运行时锁文件（里面是会话 id 和 pid，纯噪音）。
+# 注意 .claude/scheduled_tasks.lock **已经被跟踪了**，加这一行不会让它消失 ——
+# 还要跑一次 `git rm --cached .claude/scheduled_tasks.lock`。
+.claude/*.lock
+
+# 冒烟测试的产物。现在没有脚本生成它，但它出现过一次 ——
+# 未跟踪的目录迟早会被一次 `git add -A` 带进来。
+.smoke/
 
 # 源站地址。站点躲在 Cloudflare 后面，源站只对 CF 网段开 80/443，
 # 而这套防护的前提就是没人知道它 —— 绝不进仓库（何况这个项目要开源）。

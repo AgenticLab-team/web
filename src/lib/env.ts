@@ -42,6 +42,22 @@ export const env = {
     subject: process.env.VAPID_SUBJECT ?? "",
   },
 
+  /**
+   * GitHub 绑定。**故意不用 required()** —— 三项缺一不可，
+   * 缺了就整个功能不出现（入口不渲染、路由 404），而不是报错。
+   * 判定见 lib/github/oauth-rules.ts 的 githubConfigured()。
+   *
+   * tokenKey 是 32 字节的十六进制串，用来加密 access token：
+   *   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   * 换掉它等于让所有已存的 token 作废（功能降级，不会崩），
+   * 所以它属于要备份的东西。
+   */
+  github: {
+    clientId: process.env.GITHUB_CLIENT_ID ?? "",
+    clientSecret: process.env.GITHUB_CLIENT_SECRET ?? "",
+    tokenKey: process.env.GITHUB_TOKEN_KEY ?? "",
+  },
+
   /** WebAuthn 依赖站点域名，必须与实际访问域一致，否则 Passkey 校验失败 */
   webauthn: {
     rpId: process.env.WEBAUTHN_RP_ID ?? "localhost",
