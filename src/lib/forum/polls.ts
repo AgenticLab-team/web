@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { pollOptions, pollVotes, polls, posts } from "@/lib/db/schema";
 
 import { buildViewerContext } from "./context";
+import { checkClosesAt, normalizePollDraft } from "./poll-rules";
 import { getPost } from "./queries";
 
 /**
@@ -43,15 +44,25 @@ export async function createPoll(input: {
   const existing = db.select().from(polls).where(eq(polls.postId, input.postId)).get();
   if (existing) return fail("这篇帖子已经有投票了");
 
-  const cleaned = [...new Set(input.options.map((o) => o.trim()).filter(Boolean))].slice(0, 12);
-  if (cleaned.length < 2) return fail("至少要两个不同的选项");
+  /*
+   * 校验走和发帖那条路**同一份实现**。
+   *
+   * 两条路径各写一份的话迟早分叉，而分叉的表现是
+   * 「从这个入口建的投票有 12 个选项上限，从那个入口建的没有」——
+   * 没人查得出为什么。
+   */
+  const check = normalizePollDraft(input);
+  if (!check.ok) return fail(check.error);
+  const timeCheck = checkClosesAt(input.closesAt, Date.now());
+  if (timeCheck && !timeCheck.ok) return fail(timeCheck.error);
+  const cleaned = check.options;
 
   db.transaction((tx) => {
     const poll = tx
       .insert(polls)
       .values({
         postId: input.postId,
-        question: input.question?.trim(),
+        question: check.question,
         multi: Boolean(input.multi),
         hideUntilVoted: Boolean(input.hideUntilVoted),
         closesAt: input.closesAt,

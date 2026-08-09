@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { audit } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { boards, postRevisions, postViews, posts, replies, users } from "@/lib/db/schema";
+import { boards, pollOptions, polls, postRevisions, postViews, posts, replies, users } from "@/lib/db/schema";
 import { renderMarkdown } from "@/lib/markdown";
 import { can } from "@/lib/rbac/can";
 import { getSettingInt } from "@/lib/settings/store";
@@ -20,6 +20,7 @@ import { autoSubscribe, notifyNewReply } from "./notify";
 import { getPost } from "./queries";
 import { indexPost, indexReply } from "./search";
 import { canSeePost, normalizePostVisibility } from "./visibility";
+import { checkClosesAt, normalizePollDraft } from "./poll-rules";
 
 /**
  * 论坛写操作。
@@ -101,6 +102,20 @@ export async function createPost(input: {
   type?: "discussion" | "question" | "showcase";
   visibility?: "public" | "unlisted" | "member" | "private";
   anonymous?: boolean;
+  /**
+   * 顺带建一个投票。
+   *
+   * **和帖子在同一个事务里建**，不是发完帖再调一次 createPoll ——
+   * 那样中间失败会留下一个「类型是投票、但没有投票」的帖子，
+   * 而界面上那种帖子看起来就是坏的，作者也修不了。
+   */
+  poll?: {
+    question?: string;
+    options: string[];
+    multi?: boolean;
+    hideUntilVoted?: boolean;
+    closesAt?: number;
+  };
 }): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return fail("请先登录");
@@ -157,6 +172,21 @@ export async function createPost(input: {
     boardMax: board.maxVisibility,
   });
 
+  /*
+   * 投票的校验放在开事务**之前**。
+   *
+   * 放进去的话，一个「只填了一个选项」这样的小错会连累整篇帖子回滚 ——
+   * 而人刚写完两千字。校验和落库分开，错了只需要改那两行选项。
+   */
+  let pollDraft: { options: string[]; question: string | null } | null = null;
+  if (input.poll) {
+    const check = normalizePollDraft(input.poll);
+    if (!check.ok) return fail(check.error);
+    const timeCheck = checkClosesAt(input.poll.closesAt, Date.now());
+    if (timeCheck && !timeCheck.ok) return fail(timeCheck.error);
+    pollDraft = { options: check.options, question: check.question };
+  }
+
   const created = db.transaction((tx) => {
     const row = tx
       .insert(posts)
@@ -167,7 +197,8 @@ export async function createPost(input: {
         content: safeContent,
         contentHtml: rendered.html,
         excerpt: rendered.excerpt,
-        type: input.type ?? "discussion",
+        // 带了投票就是投票帖 —— 类型和内容在同一个事务里定下来，不会对不上
+        type: pollDraft ? "poll" : (input.type ?? "discussion"),
         status: "published",
         visibility: normalized.visibility,
         visibilityGroupId: normalized.visibilityGroupId,
@@ -177,6 +208,24 @@ export async function createPost(input: {
       })
       .returning({ id: posts.id })
       .get();
+
+    if (pollDraft) {
+      const poll = tx
+        .insert(polls)
+        .values({
+          postId: row.id,
+          question: pollDraft.question,
+          multi: Boolean(input.poll?.multi),
+          hideUntilVoted: Boolean(input.poll?.hideUntilVoted),
+          closesAt: input.poll?.closesAt,
+        })
+        .returning({ id: polls.id })
+        .get();
+
+      pollDraft.options.forEach((text, sort) => {
+        tx.insert(pollOptions).values({ pollId: poll.id, text, sort }).run();
+      });
+    }
 
     // 计数统一走重算，不再手写 +1 —— 「+1」是第二份真相，
     // 群聊转帖那条路当年就是忘了抄这一句，沉淀版因此常年显示 0
