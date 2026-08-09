@@ -30,6 +30,24 @@ describe("**每一条都要能单独点掉**", () => {
     assert.match(row, /onClick=\{mark\}/);
   });
 
+  it("**不能给客户端组件传函数** —— 第一版用 children 渲染函数，整页 500", () => {
+    /*
+     * 调用方是服务端组件，函数过不了 RSC 那道边界：
+     * 「Functions cannot be passed directly to Client Components」。
+     * 生产日志里三个 digest 全是这一条。
+     *
+     * 这个边界上只能传数据 —— 图标因此传字符串，在客户端映射成组件。
+     */
+    const page = src("app/(app)/notifications/page.tsx");
+    assert.doesNotMatch(page, /<NotificationRow[\s\S]{0,400}\{\(read\) =>/);
+    assert.match(page, /type=\{item\.type\}/);
+    assert.match(page, /timeLabel=\{relativeTime\(item\.updatedAt\)\}/);
+
+    const row = src("components/notifications/NotificationRow.tsx");
+    assert.doesNotMatch(row, /children: \(read: boolean\)/);
+    assert.match(row, /const ICONS: Record<string, typeof Bell>/);
+  });
+
   it("**没有链接的通知也点得掉** —— 否则那条红点永远消不掉", () => {
     /*
      * 「系统公告」这类没有落点。一条永远消不掉的未读，

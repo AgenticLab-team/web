@@ -1,5 +1,6 @@
 "use client";
 
+import { Bell, FileText, MessageSquare, Radar, Shield, Sparkles, AtSign } from "lucide-react";
 import Link from "next/link";
 import { useOptimistic, useTransition } from "react";
 
@@ -18,8 +19,17 @@ import { setLiveUnread } from "./live-store";
  * 「全部已读」那个按钮调它**，而且不传 id。列表里每一条都是
  * 一个光秃秃的 `<Link>`：点进去、看完、回来，红点还在。
  *
- * 结果是这一页只有两种状态 —— 全是红点，或者一键全灭。
- * 中间那个「我看过这条了」根本没有。
+ * ─────────────────────────────────────────
+ * 整行在这里画完，不接 children
+ * ─────────────────────────────────────────
+ *
+ * 第一版把渲染留给调用方，签名是 `children: (read) => ReactNode` ——
+ * 而调用方是**服务端组件**，函数过不了 RSC 那道边界：
+ * 「Functions cannot be passed directly to Client Components」，
+ * 整页 500。
+ *
+ * 教训是这个边界上只能传数据。图标因此传字符串，
+ * 在这一侧映射成组件 —— 和导航那边（shell/icons.tsx）同一个办法。
  *
  * ─────────────────────────────────────────
  * 已读要立刻看得见，不能等服务端
@@ -28,22 +38,44 @@ import { setLiveUnread } from "./live-store";
  * 点一条通知紧接着就是页面跳走。等服务端回来再更新的话，
  * 那次更新发生在一个已经不存在的页面上 —— 人回来时看到的
  * 是缓存里那份还带着红点的列表，于是以为没生效、再点一次。
- *
- * 所以乐观更新：点下去当场变灰，写库在后台跑。
  */
+
+const ICONS: Record<string, typeof Bell> = {
+  mention: AtSign,
+  reply_to_post: MessageSquare,
+  reply_to_reply: MessageSquare,
+  subscribed_reply: Bell,
+  new_post: FileText,
+  reaction: Sparkles,
+  featured: Sparkles,
+  accepted: Sparkles,
+  moderation: Shield,
+  system: Bell,
+  keyword: Radar,
+};
+
 export function NotificationRow({
   id,
+  type,
   href,
   readAt,
-  children,
+  title,
+  body,
+  timeLabel,
 }: {
   id: string;
+  type: string;
   href: string | null;
   readAt: number | null;
-  children: (read: boolean) => React.ReactNode;
+  title: string;
+  body: string | null;
+  /** 「3 分钟前」—— 在服务端算好，客户端读时钟既不纯也会两行不一致 */
+  timeLabel: string;
 }) {
   const [, startTransition] = useTransition();
   const [read, setRead] = useOptimistic(readAt !== null, (_: boolean, next: boolean) => next);
+
+  const Icon = ICONS[type] ?? Bell;
 
   const mark = () => {
     if (read) return;
@@ -55,7 +87,43 @@ export function NotificationRow({
     });
   };
 
-  const className = "inset-row flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--fill)]";
+  const inner = (
+    <>
+      <span
+        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+          read
+            ? "bg-[var(--fill)] text-[var(--ink-tertiary)]"
+            : "bg-[var(--accent-soft)] text-[var(--accent)]"
+        }`}
+      >
+        <Icon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+      </span>
+
+      <span className="min-w-0 flex-1">
+        <span
+          className={`t-subhead block leading-snug ${read ? "text-[var(--ink-secondary)]" : ""}`}
+        >
+          {title}
+        </span>
+        {body && (
+          <span className="t-caption mt-0.5 block truncate text-[var(--ink-tertiary)]">{body}</span>
+        )}
+        <span className="tabular t-caption mt-0.5 block text-[var(--ink-quaternary)]">
+          {timeLabel}
+        </span>
+      </span>
+
+      {!read && (
+        <span
+          className="mt-2 h-2 w-2 shrink-0 rounded-full bg-[var(--accent)]"
+          aria-label="未读"
+        />
+      )}
+    </>
+  );
+
+  const className =
+    "inset-row flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--fill)]";
 
   /*
    * 没有链接的通知也要能点掉。
@@ -66,14 +134,14 @@ export function NotificationRow({
   if (!href) {
     return (
       <button type="button" onClick={mark} className={className} aria-label="标记为已读">
-        {children(read)}
+        {inner}
       </button>
     );
   }
 
   return (
     <Link href={href} onClick={mark} className={className}>
-      {children(read)}
+      {inner}
     </Link>
   );
 }

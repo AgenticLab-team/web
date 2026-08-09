@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>正在重启 · Agentic Lab</title>
+    <link rel="icon" href="/favicon.ico" />
+    <!--
+      这一页由 nginx 直接返回，此刻 Node 进程多半不在。
+
+      所以它必须是**完全自足**的：没有外链样式、没有字体、没有脚本框架。
+      引一个 /_next/... 的文件进来就等于让这一页也依赖那个已经倒下的进程 ——
+      那时候用户看到的会是一个没有样式的白屏加一行黑字。
+
+      配色直接抄 globals.css 的 --accent / --canvas，深色模式跟随系统。
+    -->
+    <style>
+      :root {
+        --canvas: #fbfaf8;
+        --ink: #1c1b19;
+        --ink-secondary: #56534e;
+        --ink-tertiary: #8a857e;
+        --accent: #0d5c47;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --canvas: #131311;
+          --ink: #f2f0ec;
+          --ink-secondary: #b8b4ac;
+          --ink-tertiary: #86827b;
+          --accent: #4fd1a5;
+        }
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        background: var(--canvas);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
+          "Helvetica Neue", Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      main { max-width: 22rem; text-align: center; }
+      .mark {
+        width: 56px; height: 56px; margin: 0 auto 1.25rem;
+        border-radius: 15px; background: var(--accent);
+        display: flex; align-items: center; justify-content: center;
+      }
+      h1 { font-size: 1.0625rem; font-weight: 600; margin: 0 0 0.5rem; letter-spacing: 0.01em; }
+      p { font-size: 0.875rem; line-height: 1.7; color: var(--ink-secondary); margin: 0; }
+      .hint { margin-top: 1.5rem; font-size: 0.75rem; color: var(--ink-tertiary); }
+      /*
+        转圈的点。用 CSS 动画而不是 GIF —— 一张图又是一个要下载的东西，
+        而这一刻正是网络上最不该再多一个请求的时候。
+      */
+      .dots { display: inline-flex; gap: 4px; margin-top: 1.25rem; }
+      .dots i {
+        width: 5px; height: 5px; border-radius: 50%;
+        background: var(--ink-tertiary); animation: pulse 1.4s ease-in-out infinite;
+      }
+      .dots i:nth-child(2) { animation-delay: 0.2s; }
+      .dots i:nth-child(3) { animation-delay: 0.4s; }
+      @keyframes pulse { 0%, 60%, 100% { opacity: 0.25; } 30% { opacity: 1; } }
+      /* 有人开了「减少动效」就不要动 —— 这一页本来就是给焦虑的人看的 */
+      @media (prefers-reduced-motion: reduce) {
+        .dots i { animation: none; opacity: 0.5; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="mark" aria-hidden="true">
+        <!-- 站点图标那只猫，内联成 SVG：外链图片这一刻多半也取不到 -->
+        <svg width="34" height="34" viewBox="0 0 100 100" fill="#fff" aria-hidden="true">
+          <rect x="14" y="30" width="72" height="48" rx="16" />
+          <polygon points="15.5,33 31,11 46.5,33" />
+          <polygon points="53.5,33 69,11 84.5,33" />
+          <ellipse cx="37.5" cy="50.5" rx="5.8" ry="6.7" fill="#0d5c47" />
+          <ellipse cx="62.5" cy="50.5" rx="5.8" ry="6.7" fill="#0d5c47" />
+        </svg>
+      </div>
+
+      <h1>这个网站遇到问题，正在重启中</h1>
+      <p>通常十几秒就好。这一页会自己刷新，不用一直点。</p>
+
+      <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+
+      <p class="hint">如果过几分钟还是这样，在群里说一声。</p>
+    </main>
+
+    <!--
+      自己重试，而不是让人一直按刷新。
+
+      间隔逐次拉长（5s → 10s → 20s，封顶 30s）：重启通常十几秒，
+      而如果是真的挂了，一群浏览器每 5 秒敲一次只会让它更难起来。
+    -->
+    <script>
+      (function () {
+        var wait = 5000;
+        function retry() {
+          fetch(location.href, { method: "HEAD", cache: "no-store" })
+            .then(function (r) {
+              if (r.ok) location.reload();
+              else schedule();
+            })
+            .catch(schedule);
+        }
+        function schedule() {
+          wait = Math.min(wait * 2, 30000);
+          setTimeout(retry, wait);
+        }
+        setTimeout(retry, wait);
+      })();
+    </script>
+  </body>
+</html>

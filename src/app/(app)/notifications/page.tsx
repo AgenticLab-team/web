@@ -1,4 +1,3 @@
-import { AtSign, Bell, FileText, MessageSquare, Radar, Shield, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -18,19 +17,6 @@ import { FILTER_LABELS, parseFilter, type NotificationFilter } from "@/lib/notif
 export const metadata: Metadata = { title: "通知" };
 export const dynamic = "force-dynamic";
 
-const ICONS: Record<string, typeof Bell> = {
-  mention: AtSign,
-  reply_to_post: MessageSquare,
-  reply_to_reply: MessageSquare,
-  subscribed_reply: Bell,
-  new_post: FileText,
-  reaction: Sparkles,
-  featured: Sparkles,
-  accepted: Sparkles,
-  moderation: Shield,
-  system: Bell,
-  keyword: Radar,
-};
 
 export default async function NotificationsPage({
   searchParams,
@@ -99,46 +85,19 @@ export default async function NotificationsPage({
         />
       ) : (
         <Group>
-          {items.map((item) => {
-            const Icon = ICONS[item.type] ?? Bell;
-
-            return (
-              <NotificationRow key={item.id} id={item.id} href={item.link} readAt={item.readAt}>
-                {(read) => (
-                  <>
-                    <span
-                      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-                        read
-                          ? "bg-[var(--fill)] text-[var(--ink-tertiary)]"
-                          : "bg-[var(--accent-soft)] text-[var(--accent)]"
-                      }`}
-                    >
-                      <Icon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className={`t-subhead leading-snug ${read ? "text-[var(--ink-secondary)]" : ""}`}>
-                        {item.title}
-                      </p>
-                      {item.body && (
-                        <p className="t-caption mt-0.5 truncate text-[var(--ink-tertiary)]">
-                          {item.body}
-                        </p>
-                      )}
-                      <p className="tabular t-caption mt-0.5 text-[var(--ink-quaternary)]">
-                        {relativeTime(item.updatedAt)}
-                      </p>
-                    </div>
-                    {!read && (
-                      <span
-                        className="mt-2 h-2 w-2 shrink-0 rounded-full bg-[var(--accent)]"
-                        aria-label="未读"
-                      />
-                    )}
-                  </>
-                )}
-              </NotificationRow>
-            );
-          })}
+          {items.map((item) => (
+            <NotificationRow
+              key={item.id}
+              id={item.id}
+              type={item.type}
+              href={item.link}
+              readAt={item.readAt}
+              title={item.title}
+              body={item.body}
+              /* 时间在服务端算好再传 —— 这条边界上只传数据 */
+              timeLabel={relativeTime(item.updatedAt)}
+            />
+          ))}
         </Group>
       )}
     </>

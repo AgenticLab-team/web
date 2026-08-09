@@ -695,3 +695,55 @@ body {
 main:has([data-dense]) {
   max-width: var(--content-max-wide);
 }
+
+/* ── 数学公式 ──────────────────────────────────────────────
+ *
+ * 走的是 MathML（见 lib/markdown-math.ts），所以这里只需要
+ * 管**版面**，不需要 KaTeX 那 23KB 的 CSS。
+ */
+
+/*
+ * 块级公式要能横着滑。
+ *
+ * 公式是正文里最容易超宽的东西 —— 一个长积分在手机上必然出屏，
+ * 而出屏之后既看不全也没法滚，等于那一段丢了。
+ */
+.math-block {
+  /* span 加 display:block —— 消毒器不放行 div，见 markdown-math.ts */
+  display: block;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+  margin: 0.75rem 0;
+  text-align: center;
+}
+.math-block > .katex {
+  display: inline-block;
+  min-width: min-content;
+}
+
+/* 行内公式跟着正文走，别自己撑高行距 */
+.katex math {
+  font-size: 1.05em;
+}
+
+/*
+ * 写错的公式。
+ *
+ * KaTeX 会把原式原样显示出来（throwOnError:false）——
+ * 标红并加一条虚线下划线，作者一眼看得到是这里错了，
+ * 而不是以为自己写的公式「就长这样」。
+ */
+.katex-error {
+  color: var(--danger);
+  border-bottom: 1px dashed var(--danger);
+  cursor: help;
+}
+
+/*
+ * 不认识 MathML 的老浏览器会把 annotation 里的 TeX 源码也显示出来 ——
+ * 一条公式会出现两遍。藏掉它：那一份是给复制和读屏用的，不是给眼睛的。
+ */
+.katex annotation {
+  display: none;
+}

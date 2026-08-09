@@ -4,6 +4,14 @@ import DOMPurify from "isomorphic-dompurify";
 import { Marked } from "marked";
 import { codeToHtml } from "shiki";
 
+import {
+  MATHML_ATTRS,
+  MATHML_TAGS,
+  MATH_TOKEN_PREFIX,
+  extractMath,
+  renderMath,
+} from "./markdown-math";
+
 /**
  * Markdown 渲染管线。
  *
@@ -31,6 +39,9 @@ const ALLOWED_TAGS = [
   "code", "pre", "span",
   "table", "thead", "tbody", "tr", "th", "td",
   "details", "summary",
+  // 数学公式（MathML）。走 MathML 而不是 KaTeX 的带样式 span ——
+  // 理由见 markdown-math.ts：那条路要为它放宽 style 白名单
+  ...MATHML_TAGS,
 ];
 
 const ALLOWED_ATTR = [
@@ -39,6 +50,7 @@ const ALLOWED_ATTR = [
   "colspan", "rowspan",
   "data-lang", "data-mention", "data-footnote",
   "open",
+  ...MATHML_ATTRS,
 ];
 
 /**
@@ -154,7 +166,17 @@ export async function renderMarkdown(
     },
   );
 
-  const withMentions = withoutCode.replace(MENTION_PATTERN, (match, prefix, name) => {
+  /*
+   * 公式也要在 markdown 解析**之前**摘出来，理由和代码块一样：
+   * `a_1 * b_2` 里的 `_` 和 `*` 会被解析成下标和强调，`\\` 会被吃掉。
+   *
+   * 摘在代码块**之后** —— 代码里写 `$100` 的概率比正文里高得多，
+   * 而那时候它已经被换成占位符了，扫不到。
+   */
+  const mathToken = `${MATH_TOKEN_PREFIX}${Math.random().toString(36).slice(2, 10).toUpperCase()}X`;
+  const { text: withoutMath, pieces: mathPieces } = extractMath(withoutCode, mathToken);
+
+  const withMentions = withoutMath.replace(MENTION_PATTERN, (match, prefix, name) => {
     const resolved = options.resolveMention?.(name);
     if (!resolved) return match;
     mentions.push(resolved);
@@ -176,8 +198,21 @@ export async function renderMarkdown(
       .replace(`${token}${i}${token}`, replacement);
   }
 
+  /*
+   * 回填公式。同样放在消毒**之前** —— KaTeX 的输出也要过一遍，
+   * 「连我们自己生成的 HTML 也要消毒」那条原则不给任何东西开口子。
+   */
+  let withMath = withCode;
+  for (let i = 0; i < mathPieces.length; i++) {
+    const replacement = renderMath(mathPieces[i]);
+    // 块级公式会被 markdown 包进 <p>，一起换掉，免得 p 里嵌 div
+    withMath = withMath
+      .replace(`<p>${mathToken}${i}${mathToken}</p>`, replacement)
+      .replace(`${mathToken}${i}${mathToken}`, replacement);
+  }
+
   return {
-    html: sanitizeHtml(withCode),
+    html: sanitizeHtml(withMath),
     excerpt: makeExcerpt(source),
     mentions: [...new Set(mentions)],
   };
@@ -195,6 +230,8 @@ function escapeHtml(text: string): string {
 export function makeExcerpt(source: string, length = 140): string {
   const plain = source
     .replace(/```[\s\S]*?```/g, " [代码] ")
+    // 公式在摘要里只留一个词 —— 一串 \frac{}{} 在列表里既占地方又读不懂
+    .replace(/\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]/g, " [公式] ")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, " [图片] ")
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/[#*_>`~|-]/g, "")
