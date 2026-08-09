@@ -183,6 +183,29 @@ export function parseEnrichResponse(raw: string, context: string): EnrichOutcome
  * 而且**重跑整个资源库应该是幂等的**，否则每次跑都在把
  * 已经好了的条目换成另一个说法，谁也说不清哪次是对的。
  */
+/**
+ * 完全没有语境的链接，**根本不用问**。
+ *
+ * 生产上第一次跑就撞上了:`box.muran.tech` 既没有分享时的原话、
+ * 前后也没有相关对话,模型返回了一段空内容 —— 既不是「知道」
+ * 也不是规规矩矩的「不知道」,于是被记成了一次故障。
+ *
+ * 但它其实不是故障:**没有语境的时候，答案必然是「不知道」**。
+ * 先问再解析空回复是白花一次调用,而且会把
+ * 「模型没配好」和「这条本来就没东西可说」混进同一个失败计数里。
+ */
+export function hasEnoughContext(input: Pick<EnrichInput, "sharedIn" | "context" | "currentTitle" | "domain">): boolean {
+  const fromMessage = (input.sharedIn ?? "").trim();
+  const fromNeighbors = input.context.join("").trim();
+  if (fromMessage.length + fromNeighbors.length >= MIN_CONTEXT_CHARS) return true;
+
+  // URL 路径里带的文字本身也是线索（`lopleec/imnotcnuser` 就够说明问题）
+  return input.currentTitle !== input.domain && input.currentTitle.trim().length >= 4;
+}
+
+/** 语境短到这个程度，问了也是白问 */
+export const MIN_CONTEXT_CHARS = 8;
+
 export function needsEnrichment(link: {
   title: string;
   domain: string;
