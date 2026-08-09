@@ -13,6 +13,7 @@ import {
   type Severity,
 } from "@/lib/alerts/rules";
 import { db } from "@/lib/db";
+import { isModuleEnabled } from "@/lib/modules/state";
 import { alerts, roles, userRoles, users } from "@/lib/db/schema";
 import { runHealthChecks, unhealthySince, type HealthReport } from "@/lib/health";
 import { nekobot } from "@/lib/nekobot/client";
@@ -216,6 +217,15 @@ async function deliver(
   message: { title: string; body: string },
   severity: Severity,
 ): Promise<{ ok: boolean; error?: string }> {
+  /*
+   * 模块关掉时**只停投递，不停落库**。
+   * 告警照样记下来，只是不再发出去 —— 关掉投递的人应该知道
+   * 自己换成了「主动去看后台」，而不是换成了「什么都不会发生」。
+   */
+  if (!isModuleEnabled("alerts")) {
+    return { ok: false, error: "告警投递模块已关闭 —— 告警仍然落库，但没有人会被通知到" };
+  }
+
   if (!canDeliverViaWechat(component)) {
     return {
       ok: false,

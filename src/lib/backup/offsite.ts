@@ -21,6 +21,7 @@ import {
 } from "@/lib/backup/rules";
 import { S3Client, md5Hex } from "@/lib/backup/s3";
 import { db } from "@/lib/db";
+import { isModuleEnabled } from "@/lib/modules/state";
 import { backupRuns } from "@/lib/db/schema";
 import { archiveDir } from "@/lib/storage/prune";
 
@@ -86,6 +87,12 @@ function localFiles(): { file: LocalFile; path: string; remoteKey: string }[] {
  * 传一轮：把本地有、远端没有（或大小对不上）的文件传上去，传完读回来对哈希。
  */
 export async function syncOffsite(now = Date.now()): Promise<OffsiteResult> {
+  if (!isModuleEnabled("offsite")) {
+    const note = "异地备份模块已关闭 —— 备份仍然在本机做，但只存在这一块磁盘上";
+    record({ kind: "upload", status: "skipped", error: note, startedAt: now });
+    return { ok: false, status: "unconfigured", uploaded: 0, verified: 0, deleted: 0, bytes: 0, note };
+  }
+
   const config = loadOffsiteConfig();
 
   if (!config) {

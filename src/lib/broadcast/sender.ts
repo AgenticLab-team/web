@@ -3,6 +3,7 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import { isModuleEnabled } from "@/lib/modules/state";
 import { broadcastDeliveries, broadcasts } from "@/lib/db/schema";
 import { contentHash, sendIntervalMs } from "@/lib/broadcast/rules";
 import { nekobot } from "@/lib/nekobot/client";
@@ -44,6 +45,17 @@ export async function deliverBroadcast(
   broadcastId: string,
   options: { sleep?: (ms: number) => Promise<void> } = {},
 ): Promise<SendReport> {
+  // 关掉之后一律不发，包括已经排好的 —— 群发是唯一会打扰到群里所有人的动作
+  if (!isModuleEnabled("broadcast")) {
+    return {
+      broadcastId,
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      error: "群发模块已关闭 —— 排队中的也不会发出去",
+    };
+  }
+
   const sleep = options.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
 
   const row = db.select().from(broadcasts).where(eq(broadcasts.id, broadcastId)).get();

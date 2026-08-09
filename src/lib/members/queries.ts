@@ -6,6 +6,7 @@ import type { CurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { groupMembers, people, userSkills, users } from "@/lib/db/schema";
 import { paletteIndexFor } from "@/components/Avatar";
+import { isModuleEnabled } from "@/lib/modules/state";
 import { preferredLabel, visibleFacets, type TagFacet } from "@/lib/members/tags";
 import { equippedTitles } from "@/lib/titles/queries";
 import { resolveDisplayName } from "@/lib/users/display-name";
@@ -118,14 +119,31 @@ export interface DirectoryResult {
   hidden: number;
   /** 一个标签都没填的人数 —— 目录的价值取决于这个数字往下走 */
   untagged: number;
+  /**
+   * 模块是不是被关掉了。
+   *
+   * 必须和「目录是空的」分开：两者在页面上长得一模一样，
+   * 而一个显示「还没有人加入」的关停功能，会让用户以为
+   * 这个社区没人 —— 这正是这个项目一直在防的那种伪装。
+   */
+  moduleOff: boolean;
 }
 
 export function memberDirectory(
   user: CurrentUser | null,
   options: { tag?: string } = {},
 ): DirectoryResult {
-  const empty: DirectoryResult = { members: [], facets: [], total: 0, hidden: 0, untagged: 0 };
+  const empty: DirectoryResult = {
+    members: [],
+    facets: [],
+    total: 0,
+    hidden: 0,
+    untagged: 0,
+    moduleOff: false,
+  };
   if (!user) return empty;
+  // 关掉之后目录为空；标签数据本身保留，而且要说清楚是被关了
+  if (!isModuleEnabled("directory")) return { ...empty, moduleOff: true };
 
   const peerIds = peersOf(user);
   if (peerIds.length === 0) return empty;
@@ -217,7 +235,7 @@ export function memberDirectory(
       a.name.localeCompare(b.name, "zh"),
   );
 
-  return { members, facets, total, hidden, untagged };
+  return { members, facets, total, hidden, untagged, moduleOff: false };
 }
 
 function buildFacets(members: DirectoryMember[]): TagFacet[] {

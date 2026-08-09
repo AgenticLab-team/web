@@ -5,6 +5,7 @@ import { desc, eq } from "drizzle-orm";
 import { audit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { adminTasks } from "@/lib/db/schema";
+import { isModuleEnabled } from "@/lib/modules/state";
 import { getSettingInt } from "@/lib/settings/store";
 import { loadTierConfig, previewPrune, runPrune, type PruneResult } from "@/lib/storage/prune";
 import { isNoop, shouldAutoPrune } from "@/lib/storage/tiers";
@@ -32,6 +33,10 @@ export async function autoPruneIfNeeded(
   diskPct: number,
   now = Date.now(),
 ): Promise<AutoPruneOutcome> {
+  if (!isModuleEnabled("prune")) {
+    return { ran: false, reason: "自动裁剪模块已关闭 —— 磁盘满了需要人工处理" };
+  }
+
   const config = loadTierConfig();
   const preview = previewPrune(config, now);
 

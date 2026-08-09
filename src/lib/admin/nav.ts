@@ -245,10 +245,11 @@ export const ADMIN_NAV: AdminNavSection[] = [
       {
         key: "modules",
         href: "/admin/modules",
-        label: "模块",
+        label: "模块与健康度",
         icon: "puzzle",
         permission: "module.read",
-        ready: false,
+        description: "每个开关都真的关得掉某样东西",
+        ready: true,
       },
     ],
   },

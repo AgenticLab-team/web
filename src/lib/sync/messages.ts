@@ -10,6 +10,7 @@ import type { UpstreamMessage } from "@/lib/nekobot/types";
 import { ingestMessages, type IngestMessage } from "@/lib/links/ingest";
 import { isQualityMessage } from "@/lib/quality";
 import { scanMessages } from "@/lib/radar/engine";
+import { isModuleEnabled } from "@/lib/modules/state";
 import { getSettingInt } from "@/lib/settings/store";
 import { dateKey, hourOf } from "@/lib/time";
 
@@ -62,6 +63,15 @@ export async function syncGroupMessages(
   options: SyncOptions = {},
 ): Promise<SyncResult> {
   return runSyncJob("messages", { ...options, scope: convId }, async () => {
+    /*
+     * 模块关掉时**明确报出来**，而不是安静地返回 0 条。
+     * 「同步了 0 条」和「同步没在跑」在日志里长得一模一样，
+     * 而后者意味着整站的数据从此刻起就停在这里了。
+     */
+    if (!isModuleEnabled("sync")) {
+      throw new Error("消息同步模块已关闭 —— 在 /admin/modules 打开");
+    }
+
     const qualityMin = getSettingInt("sync.quality_min", 15);
     const OVERLAP_MS = 5 * 60 * 1000;
 

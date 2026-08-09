@@ -298,3 +298,39 @@ describe("后台的全站标签分布", () => {
     assert.equal(q.allTagFacets().length, 1, "后台该看到全站的");
   });
 });
+
+describe("模块关掉时不能伪装成「目录是空的」", () => {
+  it("**关掉之后要说得出是被关了**，而不是显示成没有人", async () => {
+    group("g1");
+    user("me", "我");
+    user("peer", "同伴");
+    joinGroup("g1", "wx_me");
+    joinGroup("g1", "wx_peer");
+    skill("peer", "rag", "RAG");
+
+    assert.equal(q.memberDirectory(viewer("me")).moduleOff, false);
+    assert.ok(q.memberDirectory(viewer("me")).members.length > 0);
+
+    // 关掉模块
+    const store = await import("@/lib/settings/store");
+    dbm.db
+      .insert(schema.settings)
+      .values({
+        key: "module.directory.enabled",
+        value: "false",
+        type: "bool",
+        category: "module",
+        label: "模块：成员目录",
+      })
+      .onConflictDoUpdate({ target: schema.settings.key, set: { value: "false" } })
+      .run();
+    store.invalidateSettingsCache();
+
+    const off = q.memberDirectory(viewer("me"));
+    assert.equal(off.moduleOff, true, "被关了却报成「目录是空的」");
+    assert.equal(off.members.length, 0);
+
+    // 标签数据本身没被删 —— 打开就回来
+    assert.equal(dbm.db.select().from(schema.userSkills).all().length, 1);
+  });
+});

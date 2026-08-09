@@ -63,7 +63,13 @@ export default async function MembersPage({
         }
       />
 
-      {dir.total === 0 ? (
+      {dir.moduleOff ? (
+        /* 「被关了」和「本来就是空的」在页面上长得一模一样 —— 必须分开说 */
+        <Empty
+          title="成员目录已关闭"
+          hint="管理员在后台停用了这个模块。大家填过的技能标签都还在，重新打开就会回来"
+        />
+      ) : dir.total === 0 ? (
         <Empty
           title="目录是空的"
           hint="只收录和你同群的注册用户 —— 群里绝大多数人还没在站上注册过"

@@ -3,6 +3,7 @@ import "server-only";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import { isModuleEnabled } from "@/lib/modules/state";
 import { makeupCards, orders, shopItems, titles, userTitles } from "@/lib/db/schema";
 import { findLedgerByIdempotencyKey, grantPoints, revertPoints } from "@/lib/points/ledger";
 import { checkPurchase, checkRefund, isInstantDelivery } from "@/lib/shop/rules";
@@ -43,6 +44,11 @@ export function purchaseItem(input: {
   shipping?: Record<string, unknown>;
   idempotencyKey: string;
 }): PurchaseResult {
+  // 关掉之后不能再下单；已有订单照常处理
+  if (!isModuleEnabled("shop")) {
+    return { ok: false, error: "积分商店暂时关闭了" };
+  }
+
   const item = db
     .select()
     .from(shopItems)

@@ -6,6 +6,7 @@ import { db, sqlite } from "@/lib/db";
 import { linkMentions, links, messages } from "@/lib/db/schema";
 import { contextFor, displayTitle, extractUrls, normalizeUrl } from "@/lib/links/extract";
 import { env } from "@/lib/env";
+import { isModuleEnabled } from "@/lib/modules/state";
 
 /**
  * 把消息里的链接收进资源库。
@@ -47,6 +48,10 @@ const LINKABLE_TYPES = new Set(["text", "quote"]);
 
 export function ingestMessages(rows: IngestMessage[]): IngestResult {
   const result: IngestResult = { scanned: 0, created: 0, mentions: 0, skipped: 0 };
+  // 模块关掉时**不再收录新的**，已收录的照常可见 ——
+  // 关一个模块是「先别再长了」，不是「把过去删掉」
+  if (!isModuleEnabled("links")) return result;
+
   const hosts = selfHosts();
 
   db.transaction(() => {

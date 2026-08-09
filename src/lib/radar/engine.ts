@@ -5,6 +5,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { db, sqlite } from "@/lib/db";
 import { groupMembers, keywordHits, keywordSubs, users } from "@/lib/db/schema";
 import { notify } from "@/lib/forum/notify";
+import { isModuleEnabled } from "@/lib/modules/state";
 import {
   highlight,
   isNewDay,
@@ -100,6 +101,8 @@ function loadWatchers(): Watcher[] {
 
 export function scanMessages(rows: RadarMessage[], now = Date.now()): RadarResult {
   const result: RadarResult = { scanned: 0, hits: 0, notified: 0, suppressed: 0 };
+  // 关掉之后不再扫、不再通知；已有的订阅与命中记录都留着
+  if (!isModuleEnabled("radar")) return result;
   if (rows.length === 0) return result;
 
   const watchers = loadWatchers();
