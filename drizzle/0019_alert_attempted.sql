@@ -1,0 +1,1 @@
+ALTER TABLE `alerts` ADD `notify_attempted_at` integer;

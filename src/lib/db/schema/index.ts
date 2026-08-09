@@ -12,3 +12,4 @@ export * from "./broadcast";
 export * from "./invites";
 export * from "./activities";
 export * from "./shop";
+export * from "./alerts";

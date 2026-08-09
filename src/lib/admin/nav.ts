@@ -39,6 +39,15 @@ export const ADMIN_NAV: AdminNavSection[] = [
         ready: true,
       },
       {
+        key: "health",
+        href: "/admin/health",
+        label: "健康与告警",
+        icon: "activity",
+        permission: "system.dashboard",
+        description: "坏了的时候，有人会知道吗",
+        ready: true,
+      },
+      {
         key: "audit",
         href: "/admin/audit",
         label: "审计日志",

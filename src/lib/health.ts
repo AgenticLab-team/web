@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { desc, sql } from "drizzle-orm";
+import { desc, inArray, sql } from "drizzle-orm";
 
 import { db, sqlite } from "@/lib/db";
 import { storageSnapshots, systemHealth } from "@/lib/db/schema";
@@ -168,20 +168,35 @@ export function latestHealth() {
     `);
 }
 
-/** 连续失败多久了 —— 用来判断该不该告警 */
-export function downSince(component: string): number | null {
+/**
+ * 从什么时候开始不正常的 —— 用来判断该不该告警。
+ *
+ * 算的是 `ok` 以外的**连续**记录（degraded 也算），
+ * 因为「一直半死不活」和「彻底断了」都需要有人去看；
+ * 只盯 down 的话，一个持续降级的上游会永远不报警。
+ *
+ * 传多个组件时当成一个整体看 —— frp_tunnel 和 upstream_api
+ * 是同一次探测的两种归因，分开算会两边都够不到报警线。
+ */
+export function unhealthySince(components: string[]): number | null {
+  if (components.length === 0) return null;
   const rows = db
     .select()
     .from(systemHealth)
-    .where(sql`${systemHealth.component} = ${component}`)
+    .where(inArray(systemHealth.component, components as ("upstream_api" | "frp_tunnel" | "db" | "disk")[]))
     .orderBy(desc(systemHealth.checkedAt))
-    .limit(50)
+    .limit(200)
     .all();
 
   let since: number | null = null;
   for (const row of rows) {
-    if (row.status === "down") since = row.checkedAt;
-    else break;
+    if (row.status === "ok") break;
+    since = row.checkedAt;
   }
   return since;
+}
+
+/** @deprecated 用 {@link unhealthySince} —— 只看 down 会漏掉持续降级 */
+export function downSince(component: string): number | null {
+  return unhealthySince([component]);
 }
