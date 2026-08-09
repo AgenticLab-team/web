@@ -5,7 +5,12 @@ import Link from "next/link";
 import { LedgerTable } from "@/components/admin/LedgerTable";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { BackLink, PageNote, Pill, PillRow, Section, StatTile } from "@/components/ui/primitives";
+import { and, desc, eq } from "drizzle-orm";
+
+import { RecountPanel } from "@/components/admin/RecountPanel";
 import { requireAdmin } from "@/lib/admin/guard";
+import { db } from "@/lib/db";
+import { adminTasks } from "@/lib/db/schema";
 import { listAllLedger, ledgerSummary, riskQueue } from "@/lib/points/admin";
 import { RISK_LABEL, emptyRiskMessage } from "@/lib/points/admin-rules";
 import { relativeTime } from "@/components/forum/PostList";
@@ -48,6 +53,18 @@ export default async function AdminLedgerPage({
   const rows = listAllLedger({ q, manualOnly, revertedOnly, limit: 80 });
   const summary = ledgerSummary(30);
   const risks = riskQueue();
+
+  /*
+   * 还挂着的那个重算任务 —— 出过预览但没执行也没取消。
+   * 不显示的话，人会以为上次点的预览丢了，然后再点一次。
+   */
+  const pendingRecount =
+    db
+      .select({ id: adminTasks.id, preview: adminTasks.preview })
+      .from(adminTasks)
+      .where(and(eq(adminTasks.kind, "points.recount"), eq(adminTasks.status, "awaiting_confirm")))
+      .orderBy(desc(adminTasks.createdAt))
+      .get() ?? null;
 
   const href = (next: Record<string, string | undefined>) => {
     const params = new URLSearchParams();
@@ -117,6 +134,14 @@ export default async function AdminLedgerPage({
             ))}
           </div>
         )}
+      </Section>
+
+      {/*
+        * 重算摆在风控队列**下面**：先看有没有问题，再谈修。
+        * 反过来的话，一个只是来看账的人第一眼就是个会改所有人余额的按钮。
+        */}
+      <Section title="对账修复">
+        <RecountPanel pending={pendingRecount} />
       </Section>
 
       <Section title="流水">
