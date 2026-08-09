@@ -17,6 +17,9 @@ import { resolveDisplayName } from "@/lib/users/display-name";
 
 import { LiveNotifications } from "@/components/notifications/LiveNotifications";
 
+import { Announcements, type AnnouncementView } from "@/components/shell/Announcements";
+import { announcementsFor } from "@/lib/broadcast/announce";
+import { renderMarkdown } from "@/lib/markdown";
 import { Shortcuts } from "./Shortcuts";
 import { Sidebar, type ShellUser } from "./Sidebar";
 import { TabBar } from "./TabBar";
@@ -27,6 +30,24 @@ import { TabBar } from "./TabBar";
  * 导航项的可见性走 can()，不是前端 if。未登录访客看到的就是访客能访问的那几项，
  * 不是「渲染出来点进去再拒绝」。
  */
+
+/**
+ * 把一条公告渲染成可以直接塞进 DOM 的 HTML。
+ *
+ * 走 `renderMarkdown` 而不是 `escapeHtml` —— 公告和帖子正文用同一条
+ * 消毒管线，包括那条「站外图片降级成链接」的规则。
+ * 另写一套的话，那些坑要重新踩一遍，而公告是管理员写的、
+ * 出问题时影响的是所有人。
+ */
+async function toView(a: {
+  id: string;
+  title: string | null;
+  content: string;
+}): Promise<AnnouncementView> {
+  const { html } = await renderMarkdown(a.content);
+  return { id: a.id, title: a.title, html };
+}
+
 export async function AppShell({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
 
@@ -45,6 +66,23 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   const badges: Record<string, number> = {};
   if (user) badges.notifications = unreadCount(user.id);
+
+  /*
+   * 站内公告。
+   *
+   * 正文走和帖子同一条 markdown 管线 —— 一条公告常常需要给一个链接，
+   * 而「详见某某页」写成纯文本等于没给。渲染不便宜（shiki + 消毒），
+   * 所以**只有真的有公告时才渲染**：`announcementsFor` 在没有生效公告时
+   * 一条便宜的查询就返回了，而那是绝大多数时候。
+   */
+  const live = announcementsFor(user);
+  const announcements =
+    live.modal || live.banners.length > 0
+      ? {
+          modal: live.modal ? await toView(live.modal) : null,
+          banners: await Promise.all(live.banners.map(toView)),
+        }
+      : null;
 
   let shellUser: ShellUser | null = null;
   if (user) {
@@ -101,6 +139,16 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
             paddingBottom: "calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px) + 1.5rem)",
           }}
         >
+          {/*
+            * 公告摆在正文之上、外壳之内。
+            *
+            * 放进 main 里而不是钉在窗口顶上：钉住的话它会一直占着
+            * 一条高度，在手机上那是首屏的十分之一；而公告本来就是
+            * 「看一眼就关掉」的东西，跟着页面滚走是对的。
+            */}
+          {announcements && (
+            <Announcements banners={announcements.banners} modal={announcements.modal} />
+          )}
           {children}
         </main>
       </div>

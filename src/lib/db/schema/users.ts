@@ -66,6 +66,33 @@ export const users = sqliteTable(
      */
     passwordOptOutAt: integer("password_opt_out_at"),
 
+    /**
+     * 「加个 Passkey 吧」这条提醒被推掉的时刻（「以后再说」）。
+     *
+     * 存在服务端而不是 localStorage，是因为**两份状态迟早会分叉**，
+     * 而分叉那天用户看到的是一个点不掉的东西：他在手机上划掉了，
+     * 换到电脑上它还在；清一次缓存，它又回来了。
+     * 这个项目刚修过一个同源的 bug（通知重复弹出，根因是「已读」没落库），
+     * 不必再踩第二遍。
+     *
+     * 存的是**推掉的那一刻**，不是「推到哪天」——「隔多久再提」是条规则
+     * （见 passkey-nudge-rules.ts 的 SNOOZE_DAYS），规则改了不用迁移数据。
+     */
+    passkeyNudgeSnoozedAt: integer("passkey_nudge_snoozed_at"),
+
+    /**
+     * 「不用了」——明确表过态，这条提醒永远不再出现。
+     *
+     * 它说的是**「别再提醒我」，不是「这个账号永不使用 Passkey」**。
+     * 两者差别很实在：这个人随时可以自己去 /me/security 加一个；
+     * 而他哪天被授了危险级权限，管理员强制 Passkey 那条线照常生效 ——
+     * 那条线读的是权限和凭证，从来不读这一列。
+     *
+     * 和 passwordOptOutAt 一样存时间戳而不是布尔：翻旧账时
+     * 「什么时候决定的」就是证据。
+     */
+    passkeyNudgeDeclinedAt: integer("passkey_nudge_declined_at"),
+
     kind: text("kind", { enum: ["member", "external", "bot", "system"] })
       .notNull()
       .default("member"),

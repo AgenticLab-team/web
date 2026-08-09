@@ -3,10 +3,12 @@ import Link from "next/link";
 
 import { LeaderboardList } from "@/components/LeaderboardList";
 import { DigestCard } from "@/components/home/DigestCard";
+import { PasskeyNudge } from "@/components/passkey/PasskeyNudge";
 import { CheckinCard } from "@/components/points/CheckinCard";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Empty, EmptyAction, Group, Row, Section, StatTile } from "@/components/ui/primitives";
-import { getCurrentUser } from "@/lib/auth/session";
+import { passkeyNudgeFor } from "@/lib/auth/passkey-nudge";
+import { getCurrentUser, getRealUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { messages, people } from "@/lib/db/schema";
 import { checkinStatus } from "@/lib/points/checkin";
@@ -49,6 +51,26 @@ export default async function HomePage() {
 
   const checkin = user ? checkinStatus(user) : null;
   const digest = buildDigest(user, user ? visibleGroupIds(user) : allIds);
+
+  /*
+   * ─────────────────────────────────────────
+   * 「加个 Passkey 吧」
+   * ─────────────────────────────────────────
+   *
+   * **只对本人**，所以走 getRealUser() 而不是上面那个 user ——
+   * 管理员预览别人时 user 是被预览的那个人，那张卡片上的
+   * 「不用了」会写到别人的账号上，而他本人从来没看见过这张卡片。
+   *
+   * 摆在首页而不是 /me：这是唯一一个每个人每次都会经过的页面，
+   * 而 /me 是要专门去点的。它一生最多出现两次（一次，
+   * 「以后再说」两周后再一次），绑上或者说了「不用了」就再也不出现，
+   * 所以它占得起左栏最上面这个位置。
+   *
+   * 什么时候才出现（第二次用验证码登录之后）见 passkey-nudge-rules.ts。
+   * 时钟在这一层读完 —— render 期间读 Date.now() 过不了 React Compiler。
+   */
+  const realUser = user ? await getRealUser() : null;
+  const nudge = realUser && realUser.id === user?.id ? passkeyNudgeFor(realUser) : null;
 
   const scope = inArray(messages.convId, allIds);
   const totals = db
@@ -104,6 +126,18 @@ export default async function HomePage() {
       <div className="grid gap-x-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         {/* 左栏：和我有关的 */}
         <div className="min-w-0">
+          {/*
+            排在摘要前面 —— 这是整页唯一一个会被排到摘要之前的东西。
+            理由是它只在一个人一生中出现一两次，而且一次点击就永远处理完；
+            排在摘要后面的话，手机上它在第一屏之外，等于不存在。
+            没有它的时候这一段完全不渲染，不留空位。
+          */}
+          {nudge && (
+            <Section>
+              <PasskeyNudge title={nudge.title} body={nudge.body} />
+            </Section>
+          )}
+
           {user && (
             <Section>
               <DigestCard digest={digest} loggedIn />

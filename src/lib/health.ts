@@ -33,27 +33,69 @@ export interface HealthReport {
   latencyMs?: number;
 }
 
-export async function probeUpstream(): Promise<HealthReport> {
+/**
+ * 探一次上游，**同时给出 frp_tunnel 和 upstream_api 两个组件的状态**。
+ *
+ * ─────────────────────────────────────────
+ * 原来这里只返回其中一个，于是 frp_tunnel 会永远卡在 down
+ * ─────────────────────────────────────────
+ *
+ * 老写法是：失败且判定为上游不可达 → 写 `frp_tunnel: down`；
+ * 成功 → 写 `upstream_api: ok`。
+ *
+ * 也就是说**没有任何一条路径会把 `frp_tunnel` 写回 ok**。
+ * 隧道断过一次之后，那一行永远停在 down；而站点总状态取所有组件里
+ * 最差的那个 —— 于是隧道恢复了、消息也照常同步了，
+ * 首页和 `/api/health` 仍然一直说「down」。
+ *
+ * 这比一个没做的功能糟：它让健康状态**变成了一个学会撒谎的仪表盘**。
+ * 看过两次「明明好了还说坏」之后，真出事那次也不会有人信。
+ *
+ * 所以每一轮都为两个组件各写一个明确的状态：
+ *
+ * · 通了 → 两个都 ok
+ * · 隧道不通 → 两个都 down。**upstream_api 也要标 down** ——
+ *   隧道断的时候我们对那头的 API 一无所知，而「不知道」在
+ *   健康检查里只能算坏；标成 ok 是在替一个探不到的东西打包票
+ * · 隧道通、但 API 报错 → frp_tunnel ok，upstream_api down。
+ *   这一分就是这两个组件存在的全部意义：**它区分「家里那台机器
+ *   没连上来」和「机器连上来了但 NekoBot 出错了」**，
+ *   而这两件事要做的处理完全不同
+ */
+export async function probeUpstream(): Promise<HealthReport[]> {
   const started = Date.now();
   try {
     const who = await nekobot.whoami();
     const latency = Date.now() - started;
-    return {
-      component: "upstream_api",
-      // 隧道通但很慢，通常是家里那台机器负载高或网络抖动
-      status: latency > 5000 ? "degraded" : "ok",
-      detail: `key=${who.prefix} 累计调用 ${who.calls}`,
-      latencyMs: latency,
-    };
+    return [
+      { component: "frp_tunnel", status: "ok", detail: "隧道通", latencyMs: latency },
+      {
+        component: "upstream_api",
+        // 隧道通但很慢，通常是家里那台机器负载高或网络抖动
+        status: latency > 5000 ? "degraded" : "ok",
+        detail: `key=${who.prefix} 累计调用 ${who.calls}`,
+        latencyMs: latency,
+      },
+    ];
   } catch (err) {
     const latency = Date.now() - started;
-    const down = err instanceof NekoBotError && err.isUpstreamDown;
-    return {
-      component: down ? "frp_tunnel" : "upstream_api",
-      status: "down",
-      detail: err instanceof Error ? err.message.slice(0, 200) : String(err),
-      latencyMs: latency,
-    };
+    const tunnelDown = err instanceof NekoBotError && err.isUpstreamDown;
+    const detail = err instanceof Error ? err.message.slice(0, 200) : String(err);
+
+    return [
+      {
+        component: "frp_tunnel",
+        status: tunnelDown ? "down" : "ok",
+        detail: tunnelDown ? detail : "隧道通（上游自己报的错，见 upstream_api）",
+        latencyMs: latency,
+      },
+      {
+        component: "upstream_api",
+        status: "down",
+        detail: tunnelDown ? `隧道不通，探不到：${detail}` : detail,
+        latencyMs: latency,
+      },
+    ];
   }
 }
 
@@ -218,7 +260,8 @@ export function probeWebPush(): HealthReport {
 /** 跑一轮完整探测并落库 */
 export async function runHealthChecks(): Promise<HealthReport[]> {
   const reports = [
-    await probeUpstream(),
+    // 上游一次返回两条（隧道 + API），摊平进来
+    ...(await probeUpstream()),
     probeDatabase(),
     probeDisk(),
     probeOffsite(),
