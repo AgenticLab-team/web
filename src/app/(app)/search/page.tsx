@@ -11,6 +11,7 @@ import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { myMessageCount, searchMessages } from "@/lib/search/messages";
 import { semanticSearch } from "@/lib/search/semantic";
 import { todayKey } from "@/lib/time";
+import { env } from "@/lib/env";
 
 export const metadata: Metadata = { title: "检索" };
 export const dynamic = "force-dynamic";
@@ -188,7 +189,7 @@ export default async function SearchPage({
             pending={semanticResult?.pending ?? 0}
           />
           {semanticResult && semanticResult.hits.length > 0 ? (
-            <SemanticHits hits={semanticResult.hits} />
+            <SemanticHits hits={semanticResult.hits} siteUrl={env.site.url} />
           ) : (
             !semanticResult?.error && (
               <Empty

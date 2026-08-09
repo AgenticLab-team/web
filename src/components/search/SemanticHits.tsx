@@ -1,5 +1,6 @@
 import { Sparkles } from "lucide-react";
 
+import { ShareSheet } from "@/components/share/ShareSheet";
 import type { SemanticHit } from "@/lib/search/semantic";
 
 /**
@@ -27,7 +28,7 @@ function time(ms: number) {
   });
 }
 
-export function SemanticHits({ hits }: { hits: SemanticHit[] }) {
+export function SemanticHits({ hits, siteUrl }: { hits: SemanticHit[]; siteUrl: string }) {
   return (
     <ul className="space-y-3">
       {hits.map((hit) => (
@@ -50,6 +51,19 @@ export function SemanticHits({ hits }: { hits: SemanticHit[] }) {
             >
               {(hit.score * 100).toFixed(0)}% 接近
             </span>
+
+            {/*
+              * 分享这一段。
+              *
+              * 图上**不会有群名** —— 「这条消息来自哪个群」比消息本身
+              * 敏感得多。链接指回检索页，而检索页是有权限的。
+              */}
+            <ShareSheet
+              url={`${siteUrl}/search`}
+              text={`一段群聊记录\n${hit.messages[0]?.content?.slice(0, 40) ?? ""}\n${siteUrl}/search\n—— Agentic Lab`}
+              imageUrl={`/api/share/window/${hit.windowId}/card`}
+              label="转发"
+            />
           </div>
 
           <div className="space-y-1">

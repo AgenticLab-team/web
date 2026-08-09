@@ -11,6 +11,9 @@ import { PollWidget } from "@/components/forum/PollWidget";
 import { TipButton } from "@/components/forum/TipButton";
 import { PostActions } from "@/components/forum/PostActions";
 import { PostManageMenu } from "@/components/forum/PostManageMenu";
+import { ShareSheet } from "@/components/share/ShareSheet";
+import { env } from "@/lib/env";
+import { canSharePost, shareText } from "@/lib/share/rules";
 import { relativeTime } from "@/components/forum/PostList";
 import { QuoteButton } from "@/components/forum/QuoteButton";
 import { QuoteProvider } from "@/components/forum/QuoteContext";
@@ -116,6 +119,25 @@ export default async function PostPage({
     : [];
 
   const status = post.raw.status;
+
+  /*
+   * 分享。链接是有权限的 —— 对方点进来照样要过一遍收口，
+   * 所以文案可以随便转；而**图片跑出去就收不回来**，
+   * 所以草稿、已删除、私密一律不给生成。
+   */
+  const shareVerdict = canSharePost({
+    visibility: post.visibility,
+    status,
+    viewerCanSee: true,
+  });
+  const shareUrl = `${env.site.url}/forum/p/${post.id}`;
+  const shareCopy = shareText({
+    kind: "post",
+    title: post.title,
+    url: shareUrl,
+    excerpt: post.excerpt,
+    siteName: env.site.name,
+  });
   const locked = status === "locked";
   const deleted = status === "deleted";
   const canReply = Boolean(user) && !locked && !deleted;
@@ -244,6 +266,13 @@ export default async function PostPage({
             />
             {user && post.authorId !== user.id && (
               <ReportButton targetType="post" targetId={post.id} />
+            )}
+            {shareVerdict.ok && (
+              <ShareSheet
+                url={shareUrl}
+                text={shareCopy}
+                imageUrl={`/api/share/post/${post.id}/card`}
+              />
             )}
             <PostManageMenu
               postId={post.id}

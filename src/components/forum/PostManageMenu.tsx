@@ -16,6 +16,9 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
+
+import { panelStyles, useAnchoredPanel } from "@/components/ui/anchored";
 
 import { useToast } from "@/components/ui/Toast";
 import { moderatePost, movePost } from "@/lib/forum/moderation";
@@ -75,6 +78,17 @@ export function PostManageMenu({
   const [reason, setReason] = useState("");
   const [targetBoard, setTargetBoard] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
+  /*
+   * 面板传送到 body。
+   *
+   * 帖子那个 <article> 因为 animate-rise 里的 transform 成了层叠上下文，
+   * 菜单的 z-40 出不去，被 DOM 顺序更靠后的回复列表盖住 ——
+   * 这是站长报的「更多菜单会被底下的回复挡住」。
+   * z-index 调多大都没用，只能不待在那个上下文里。
+   */
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const anchored = useAnchoredPanel(open, anchorRef, panelRef, "end");
 
   const close = useCallback(() => {
     setOpen(false);
@@ -176,6 +190,7 @@ export function PostManageMenu({
   return (
     <div ref={rootRef} className="relative">
       <button
+        ref={anchorRef}
         type="button"
         aria-label="帖子管理操作"
         aria-expanded={open}
@@ -190,11 +205,23 @@ export function PostManageMenu({
         <Ellipsis className="h-4 w-4" strokeWidth={1.9} aria-hidden />
       </button>
 
-      {/* 移动端贴底但要让开 tab 栏与安全区（和 Toast 同一套算法），
-          桌面端锚在按钮下方。不能用 style 写 bottom —— 内联样式会把
-          sm:bottom-auto 也压掉，桌面弹层就飞到屏幕底部去了 */}
-      {open && (
-        <div className="animate-rise fixed inset-x-3 bottom-[calc(var(--tabbar-height)+env(safe-area-inset-bottom,0px)+0.75rem)] z-40 rounded-[var(--radius-card)] bg-[var(--surface)] p-1.5 shadow-[var(--shadow-raised)] hairline sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-full sm:mt-1 sm:w-60">
+      {/*
+        * 手机上贴底（让开 tab 栏与安全区），桌面上锚在按钮下方 ——
+        * 排布在 panelStyles 里，两种共用一处。
+        * 面板整个传送到 body，所以不受任何祖先的层叠上下文影响。
+        */}
+      {open &&
+        anchored.mounted &&
+        createPortal(
+          <>
+            {anchored.narrow && (
+              <div
+                className="animate-fade fixed inset-0 z-[90] bg-black/25"
+                onPointerDown={close}
+                aria-hidden
+              />
+            )}
+            <div ref={panelRef} {...panelStyles({ narrow: anchored.narrow, position: anchored.position })}>
           {step === null && (
             <div className="flex flex-col">
               {caps.edit && (
@@ -378,8 +405,10 @@ export function PostManageMenu({
               </div>
             </div>
           )}
-        </div>
-      )}
+            </div>
+          </>,
+          document.body,
+        )}
     </div>
   );
 }
