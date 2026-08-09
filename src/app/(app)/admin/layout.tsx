@@ -1,6 +1,7 @@
 import { ShieldAlert } from "lucide-react";
 
 import { AdminNav } from "@/components/admin/AdminNav";
+import { AdminNavPicker } from "@/components/admin/AdminNavPicker";
 import { requireAdmin } from "@/lib/admin/guard";
 import { visibleAdminNav } from "@/lib/admin/nav";
 
@@ -27,8 +28,20 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </p>
       </div>
 
+      {/*
+        * 手机上把 24 个后台入口收进一个选择器。
+        *
+        * 之前是同一个 <aside> 在手机上直接堆在正文上面 ——
+        * 24 行链接压在每一个后台页面的头顶，
+        * 人要滚过整份目录才能看到自己点进来要看的东西。
+        * 那不算「有入口」，那是把内容推到了第二屏。
+        */}
+      <div className="mb-4 lg:hidden">
+        <AdminNavPicker sections={sections} />
+      </div>
+
       <div className="gap-8 lg:flex">
-        <aside className="mb-6 shrink-0 lg:mb-0 lg:w-[13rem]">
+        <aside className="hidden shrink-0 lg:block lg:w-[13rem]">
           <AdminNav sections={sections} />
         </aside>
         <div className="min-w-0 flex-1">{children}</div>

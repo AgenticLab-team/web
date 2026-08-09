@@ -39,7 +39,9 @@ export const NAV: NavSection[] = [
         icon: "trophy",
         // 全站总榜对所有人开放 —— 贡献排名是荣誉。
         // 分群榜单在页面内部按可见性收口，不靠隐藏入口来保护
-        inTabBar: true,
+        //
+        // 不占 tab 栏的格子：榜单是「偶尔看一眼」的东西，
+        // 而 tab 栏的 5 个格子要留给每天都点的。它在「更多」里。
         ready: true,
       },
       {
@@ -135,11 +137,49 @@ export function navItemVisible(item: NavItem, ctx: NavContext): boolean {
   return ctx.hasPermission(item.permission);
 }
 
-/** Tab Bar 最多容得下 5 个，多了每个都太窄，点不准 */
+/**
+ * Tab Bar 最多容得下 5 个，多了每个都太窄，点不准。
+ *
+ * ─────────────────────────────────────────
+ * 第 5 格永远是「更多」，不是第 5 个目的地
+ * ─────────────────────────────────────────
+ *
+ * 这个站有 12 个前台入口。把 5 个塞进 tab 栏、剩下 7 个只放在
+ * 桌面侧栏里，结果是**手机上那 7 个板块根本没有入口** ——
+ * 通知、资源库、活动、成员、雷达、商店，以及整个后台。
+ *
+ * 那不是「手机端功能少一点」，是这些功能在手机上不存在，
+ * 而这个站大部分人是在微信里点开的。
+ *
+ * 所以 tab 栏只放 4 个真正天天点的，第 5 格固定是「更多」，
+ * 「更多」里放**全部**剩下的 —— 任何新页面都自动够得着，
+ * 不需要有人记得去改 tab 栏。
+ */
 export const TAB_BAR_MAX = 5;
 
+/** 留给「更多」，所以真正的目的地只有 4 个 */
+export const TAB_BAR_DESTINATIONS = TAB_BAR_MAX - 1;
+
 export function tabBarItems(visible: (item: NavItem) => boolean): NavItem[] {
-  return ALL_NAV_ITEMS.filter((item) => item.inTabBar && visible(item)).slice(0, TAB_BAR_MAX);
+  return ALL_NAV_ITEMS.filter((item) => item.inTabBar && visible(item)).slice(
+    0,
+    TAB_BAR_DESTINATIONS,
+  );
+}
+
+/**
+ * 「更多」里放什么：**所有不在 tab 栏里的**。
+ *
+ * 刻意用「减法」而不是维护第二份清单 ——
+ * 维护两份清单的话，加了新页面而忘了往「更多」里加，
+ * 表现就是手机上摸不到它，而桌面上一切正常，很难被发现。
+ */
+export function moreSheetSections(visible: (item: NavItem) => boolean): NavSection[] {
+  const inTabs = new Set(tabBarItems(visible).map((i) => i.key));
+  return NAV.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => visible(item) && !inTabs.has(item.key)),
+  })).filter((section) => section.items.length > 0);
 }
 
 export function visibleSections(visible: (item: NavItem) => boolean): NavSection[] {

@@ -3,7 +3,13 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { people, roles, userRoles } from "@/lib/db/schema";
-import { navItemVisible, tabBarItems, visibleSections, type NavItem } from "@/lib/nav";
+import {
+  moreSheetSections,
+  navItemVisible,
+  tabBarItems,
+  visibleSections,
+  type NavItem,
+} from "@/lib/nav";
 import { unreadCount } from "@/lib/forum/notify";
 import { can } from "@/lib/rbac/can";
 import { resolveDisplayName } from "@/lib/users/display-name";
@@ -31,6 +37,8 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   const sections = visibleSections(visible);
   const tabs = tabBarItems(visible);
+  // 「更多」= 所有不在 tab 栏里的，用减法算出来 —— 新页面自动进得去
+  const moreSections = moreSheetSections(visible);
 
   const badges: Record<string, number> = {};
   if (user) badges.notifications = unreadCount(user.id);
@@ -88,7 +96,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      <TabBar items={tabs} badges={badges} />
+      <TabBar items={tabs} more={moreSections} badges={badges} />
       {/* 只给登录用户挂实时通道 —— 访客连上也只会收到 401 */}
       {user && <LiveNotifications />}
       <Shortcuts />

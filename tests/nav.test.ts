@@ -8,6 +8,7 @@ import {
   navItemVisible,
   tabBarItems,
   visibleSections,
+  moreSheetSections,
   TAB_BAR_MAX,
 } from "@/lib/nav";
 
@@ -76,11 +77,20 @@ describe("导航可见性", () => {
   it("需要登录的项对访客隐藏", () => {
     const keys = tabBarItems(asGuest).map((i) => i.key);
     assert.ok(!keys.includes("me"), "访客不该看到「我的」");
-    assert.deepEqual(
-      keys,
-      ["home", "leaderboard", "forum"],
-      "访客能看首页、总榜和论坛公开版块；检索与我的需要登录",
-    );
+    assert.deepEqual(keys, ["home", "forum"], "访客能看首页和论坛公开版块；检索与我的需要登录");
+  });
+
+  it("**总榜不占 tab 栏的格子，但仍然够得着**", () => {
+    /*
+     * tab 栏一共 5 格，第 5 格留给「更多」——
+     * 5 格全是目的地的话，剩下 7 个板块在手机上就没有入口了
+     * （之前就是这样：通知、资源库、活动、成员、雷达、商店、后台全都摸不到）。
+     *
+     * 榜单是「偶尔看一眼」的东西，让位给每天都点的那几个，
+     * 它在「更多」里 —— 而「更多」是用减法算的，不会漏。
+     */
+    const inMore = moreSheetSections(asGuest).flatMap((s) => s.items.map((i) => i.key));
+    assert.ok(inMore.includes("leaderboard"), "总榜从 tab 栏拿掉之后没进「更多」");
   });
 
   it("总榜对访客开放", () => {
@@ -92,7 +102,7 @@ describe("导航可见性", () => {
   it("登录用户能看到需要登录的项", () => {
     const keys = tabBarItems(asMember).map((i) => i.key);
     assert.ok(keys.includes("me"));
-    assert.ok(keys.includes("leaderboard"));
+    assert.ok(keys.includes("search"));
   });
 
   it("未实现的入口对谁都不显示", () => {

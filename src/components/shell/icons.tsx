@@ -2,6 +2,7 @@
 
 import {
   Bell,
+  LayoutGrid,
   Calendar,
   Gift,
   Home,
@@ -23,6 +24,7 @@ import {
  */
 const ICONS: Record<string, LucideIcon> = {
   home: Home,
+  more: LayoutGrid,
   bell: Bell,
   trophy: Trophy,
   search: Search,

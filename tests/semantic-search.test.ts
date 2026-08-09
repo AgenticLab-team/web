@@ -286,9 +286,26 @@ describe("向量缓存", () => {
 
 describe("分数门槛", () => {
   it("**有个下限** —— 语义检索总能算出个最相似的，哪怕毫不相干", () => {
-    assert.ok(sem.MIN_SCORE > 0.2 && sem.MIN_SCORE < 0.8, `${sem.MIN_SCORE} 不像个合理的门槛`);
     const src = readFileSync(new URL("../src/lib/search/semantic.ts", import.meta.url), "utf8");
     assert.match(src, /score >= MIN_SCORE/);
+  });
+
+  it("**门槛要落在实测的噪音与信号之间**", () => {
+    /*
+     * 第一版拍了 0.35，上线一测形同虚设:
+     * 拿这个社区从没聊过的话题（红烧肉、南极企鹅）去搜，
+     * 照样每条返回 5 个结果。
+     *
+     * 生产语料上量出来:噪音最高 52%、信号最低 57%。
+     */
+    assert.ok(sem.MIN_SCORE > 0.52, `${sem.MIN_SCORE} 低于实测噪音地板 0.52，等于没有门槛`);
+    assert.ok(sem.MIN_SCORE < 0.57, `${sem.MIN_SCORE} 高于实测信号地板 0.57，会把真结果挡掉`);
+  });
+
+  it("**注释里记着这个数字是怎么来的** —— 换模型要重新量", () => {
+    const src = readFileSync(new URL("../src/lib/search/semantic.ts", import.meta.url), "utf8");
+    assert.match(src, /噪音最高 52%/);
+    assert.match(src, /换嵌入模型之后这个数字要重新量/);
   });
 });
 
