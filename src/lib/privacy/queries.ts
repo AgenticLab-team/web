@@ -63,7 +63,23 @@ export function privacyOf(userId: string): PrivacySettings {
     .from(userPrivacy)
     .where(eq(userPrivacy.userId, userId))
     .get();
-  return withDefaults(row);
+
+  /*
+   * 「隐身」存在 `users.directory_hidden` 上，不在这张表里。
+   *
+   * 不为了整齐把它搬过来：`users.directory_hidden` 是真正接了线的
+   * 那一个（成员目录、搜人都读它），搬家意味着改所有读它的地方，
+   * 而每改一处都是一次「隐私开关可能失效」的机会。
+   *
+   * 界面上是一份清单，库里是两张表 —— 由这里合上。
+   */
+  const hidden = db
+    .select({ directoryHidden: users.directoryHidden })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get();
+
+  return withDefaults({ ...row, directoryHidden: hidden?.directoryHidden });
 }
 
 /**

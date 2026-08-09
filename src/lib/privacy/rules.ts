@@ -31,7 +31,37 @@
  * 剩下两个是真的有暴露面、也真的能关上的：
  */
 
+/**
+ * ─────────────────────────────────────────
+ * 三个开关，一个地方
+ * ─────────────────────────────────────────
+ *
+ * 「隐身」原来单独摆在个人资料页上，另外两个在隐私页 ——
+ * 而三个问的是同一件事：**谁看得见我**。
+ *
+ * 分成两页的后果不是多点一次，是**有人设了其中一个就以为设完了**。
+ * 而这一页顶上那句话已经说清了这种失败：
+ * 一个隐私开关最坏的形态不是没有，是让人以为它管得比实际多。
+ *
+ * 它们存在不同的表里（隐身在 `users.directory_hidden`，
+ * 另两个在 `user_privacy`），所以每一条要说明自己从哪儿读写 ——
+ * 这比把三张表的值搬到一起省事，也比让界面各自去查各自的表安全：
+ * 那样「取值」和「翻转」的逻辑会散成三份。
+ */
 export const PRIVACY_SWITCHES = [
+  {
+    key: "directoryHidden",
+    label: "出现在成员目录里",
+    /** 字段叫 hidden，开关问的是「要不要出现」 */
+    inverted: true,
+    source: "users",
+    detail: "关掉之后你不出现在成员列表和搜人结果里。别人仍然能通过你发的帖子点进你的主页",
+    exposure: "成员目录会列出你的昵称、头像、简介和技能标签，所有登录成员都看得到",
+    limit:
+      "它管的是「被列出来」和「被搜到人」。**它不管你已经发过的内容** —— " +
+      "帖子、回复、群聊记录里的发言都还在，点得进你的主页。" +
+      "要少露一点发言，看下面那两个开关",
+  },
   {
     key: "hideFromLeaderboard",
     label: "出现在榜单上",
@@ -41,6 +71,7 @@ export const PRIVACY_SWITCHES = [
      * 是没有人能一眼读懂的。
      */
     inverted: true,
+    source: "user_privacy",
     detail: "关掉之后别人看到的榜单里没有你。你自己那一行还在，标着「仅自己可见」",
     /** 关掉它之后，究竟少了什么暴露 —— 说清楚才谈得上知情 */
     exposure: "榜单对未登录访客也公开，所以你的昵称、头像和发言量是全网可见的",
@@ -50,6 +81,7 @@ export const PRIVACY_SWITCHES = [
     key: "searchableByOthers",
     label: "别人能搜到我的发言",
     inverted: false,
+    source: "user_privacy",
     detail: "关掉之后，别人搜关键词、搜语义都搜不到你说过的话。你自己搜自己照样搜得到",
     exposure:
       "微信自己的搜索半年前的内容就等于不存在，而这里能搜到全部 —— " +
@@ -72,6 +104,7 @@ export type PrivacyKey = (typeof PRIVACY_SWITCHES)[number]["key"];
 
 /** 默认值 = 什么都不藏。默认隐身的话，榜单和检索一开始就是空的，没人会再打开第二次 */
 export const PRIVACY_DEFAULTS: Record<PrivacyKey, boolean> = {
+  directoryHidden: false,
   hideFromLeaderboard: false,
   searchableByOthers: true,
 };
@@ -105,9 +138,15 @@ export type PrivacySettings = Record<PrivacyKey, boolean>;
 /** 没有这个人的行时用默认值 —— 绝大多数人永远不会打开这一页 */
 export function withDefaults(row: Partial<PrivacySettings> | null | undefined): PrivacySettings {
   return {
+    directoryHidden: row?.directoryHidden ?? PRIVACY_DEFAULTS.directoryHidden,
     hideFromLeaderboard: row?.hideFromLeaderboard ?? PRIVACY_DEFAULTS.hideFromLeaderboard,
     searchableByOthers: row?.searchableByOthers ?? PRIVACY_DEFAULTS.searchableByOthers,
   };
+}
+
+/** 这个开关的值存在哪张表 —— 读写两侧都按它分流 */
+export function sourceOf(key: PrivacyKey): "users" | "user_privacy" {
+  return PRIVACY_SWITCHES.find((s) => s.key === key)!.source;
 }
 
 /**

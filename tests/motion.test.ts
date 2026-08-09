@@ -162,7 +162,8 @@ describe("铁律二：只动合成器属性（微信 webview 里的低端机才�
       "components/admin/ModuleToggle.tsx",
       "components/notifications/PrefsPanel.tsx",
       "components/titles/TitleShelf.tsx",
-      "components/members/DirectoryToggle.tsx",
+      // 隐私开关那三个走的是同一个组件 —— 隐身也并进去了
+      "components/me/PrivacyToggle.tsx",
     ];
     for (const f of knobs) {
       const code = src(f);

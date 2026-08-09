@@ -7,6 +7,8 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import {
   PRIVACY_DEFAULTS,
   PRIVACY_SWITCHES,
+  sourceOf,
+  type PrivacySettings,
   hiddenCount,
   isPrivacyKey,
   storedValue,
@@ -85,6 +87,7 @@ describe("**默认什么都不藏**", () => {
 
   it("有一半的行也能补齐另一半", () => {
     assert.deepEqual(withDefaults({ hideFromLeaderboard: true }), {
+      directoryHidden: false,
       hideFromLeaderboard: true,
       searchableByOthers: true,
     });
@@ -131,10 +134,76 @@ describe("每个开关都要说清楚它**不管**什么", () => {
 });
 
 describe("摘要", () => {
+  const settings = (over: Partial<PrivacySettings> = {}): PrivacySettings => ({
+    directoryHidden: false,
+    hideFromLeaderboard: false,
+    searchableByOthers: true,
+    ...over,
+  });
+
   it("藏了几样就说几样", () => {
-    assert.equal(hiddenCount({ hideFromLeaderboard: false, searchableByOthers: true }), 0);
-    assert.equal(hiddenCount({ hideFromLeaderboard: true, searchableByOthers: true }), 1);
-    assert.equal(hiddenCount({ hideFromLeaderboard: true, searchableByOthers: false }), 2);
+    assert.equal(hiddenCount(settings()), 0);
+    assert.equal(hiddenCount(settings({ hideFromLeaderboard: true })), 1);
+    assert.equal(hiddenCount(settings({ hideFromLeaderboard: true, searchableByOthers: false })), 2);
+  });
+
+  it("**隐身也算一样** —— 它和另外两个是同一件事", () => {
+    assert.equal(hiddenCount(settings({ directoryHidden: true })), 1);
+    assert.equal(
+      hiddenCount(settings({ directoryHidden: true, hideFromLeaderboard: true, searchableByOthers: false })),
+      3,
+    );
+  });
+});
+
+describe("**三个开关在一处**", () => {
+  /*
+   * 「隐身」原来单独摆在个人资料页上，另外两个在隐私页 ——
+   * 而三个问的是同一件事：谁看得见我。
+   *
+   * 分成两页的后果不是多点一次，是**有人设了其中一个就以为设完了**。
+   * 而这一页顶上那句话已经说清了这种失败：一个隐私开关最坏的形态
+   * 不是没有，是让人以为它管得比实际多。
+   */
+  it("清单里就是这三个", () => {
+    assert.deepEqual(
+      PRIVACY_SWITCHES.map((s) => s.key),
+      ["directoryHidden", "hideFromLeaderboard", "searchableByOthers"],
+    );
+  });
+
+  it("**每个都说明自己存在哪张表**", () => {
+    // 隐身在 users.directory_hidden，另两个在 user_privacy
+    assert.equal(sourceOf("directoryHidden"), "users");
+    assert.equal(sourceOf("hideFromLeaderboard"), "user_privacy");
+    assert.equal(sourceOf("searchableByOthers"), "user_privacy");
+  });
+
+  it("**写入按 source 分流，界面不知道有两张表**", () => {
+    /*
+     * 界面知道的话，下一个加开关的人得先搞清楚它该写哪儿，
+     * 而写错的表现是「拨了没反应」。
+     */
+    const actions = src("lib/privacy/actions.ts");
+    assert.match(actions, /sourceOf\(column\) === "users"/);
+    assert.match(actions, /db[\s\S]{0,20}\.update\(users\)/);
+  });
+
+  it("**旧的那条写路已经删掉了** —— 两条写同一列迟早分叉", () => {
+    // 先去注释：那个文件里留了一段说明它为什么被删，正好含这个名字
+    assert.equal(strip(src("lib/members/actions.ts")).includes("setDirectoryHidden"), false);
+  });
+
+  it("个人资料页只显示状态，不再自己改", () => {
+    const profile = src("app/(app)/me/profile/page.tsx");
+    assert.equal(profile.includes("DirectoryToggle"), false);
+    assert.match(profile, /href="\/me\/privacy"/);
+  });
+
+  it("隐身那一条要说清楚**它不管已经发过的内容**", () => {
+    // 藏的是「被列出来」，不是发言 —— 不说的话有人会以为帖子也一起藏了
+    const spec = PRIVACY_SWITCHES.find((s) => s.key === "directoryHidden")!;
+    assert.match(spec.limit, /不管|已经发过|帖子/);
   });
 });
 

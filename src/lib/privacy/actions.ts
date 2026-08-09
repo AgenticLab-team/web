@@ -1,11 +1,12 @@
 "use server";
 
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { userPrivacy } from "@/lib/db/schema";
-import { isPrivacyKey, storedValue, type PrivacyKey } from "@/lib/privacy/rules";
+import { userPrivacy, users } from "@/lib/db/schema";
+import { isPrivacyKey, sourceOf, storedValue, type PrivacyKey } from "@/lib/privacy/rules";
 
 /**
  * 拨一个隐私开关。
@@ -33,19 +34,34 @@ export async function setPrivacySwitch(key: string, on: boolean): Promise<Privac
   const column: PrivacyKey = key;
   const value = storedValue(column, on);
 
-  /*
-   * upsert：绝大多数人没有这一行。
-   *
-   * 「先查再插」在这里是错的 —— 同一个人在两个设备上同时拨，
-   * 两边都查到「没有这一行」，然后都插，撞主键。
-   */
-  db.insert(userPrivacy)
-    .values({ userId: user.id, [column]: value, updatedAt: Date.now() })
-    .onConflictDoUpdate({
-      target: userPrivacy.userId,
-      set: { [column]: value, updatedAt: Date.now() },
-    })
-    .run();
+  if (sourceOf(column) === "users") {
+    /*
+     * 「隐身」存在 `users.directory_hidden` 上。
+     *
+     * 界面上它和另外两个是一份清单，库里却在另一张表 ——
+     * 分流放在这里，而不是让界面知道这件事：
+     * 界面知道的话，下一个加开关的人得先搞清楚它该写哪儿，
+     * 而写错的表现是「拨了没反应」。
+     */
+    db.update(users)
+      .set({ directoryHidden: value, updatedAt: Date.now() })
+      .where(eq(users.id, user.id))
+      .run();
+  } else {
+    /*
+     * upsert：绝大多数人没有这一行。
+     *
+     * 「先查再插」在这里是错的 —— 同一个人在两个设备上同时拨，
+     * 两边都查到「没有这一行」，然后都插，撞主键。
+     */
+    db.insert(userPrivacy)
+      .values({ userId: user.id, [column]: value, updatedAt: Date.now() })
+      .onConflictDoUpdate({
+        target: userPrivacy.userId,
+        set: { [column]: value, updatedAt: Date.now() },
+      })
+      .run();
+  }
 
   /*
    * 榜单和检索页都是 force-dynamic / 现算的，但「我的」那一页
@@ -54,6 +70,9 @@ export async function setPrivacySwitch(key: string, on: boolean): Promise<Privac
    */
   revalidatePath("/me/privacy");
   revalidatePath("/me");
+  // 隐身还影响成员目录和个人资料页上那句状态
+  revalidatePath("/me/profile");
+  revalidatePath("/members");
 
   return {
     ok: true,
