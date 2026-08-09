@@ -18,7 +18,8 @@ import { PERMISSIONS, type PermissionDef, type PermissionKey } from "@/lib/rbac/
  * 定期回顾「谁有什么权限」是最基本的治理动作。没有反查就只能靠记忆。
  */
 
-export type MatrixState = "granted" | "denied" | "none";
+export type { MatrixState } from "./matrix-types";
+import type { MatrixState } from "./matrix-types";
 
 export interface MatrixRole {
   id: string;
