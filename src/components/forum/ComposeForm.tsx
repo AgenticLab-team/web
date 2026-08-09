@@ -1,11 +1,18 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { Editor } from "@/components/forum/Editor";
 import { createPost } from "@/lib/forum/actions";
+import { pickDraft, type DraftSnapshot } from "@/lib/forum/draft-rules";
+
+import { relativeTime } from "./PostList";
+
+import { DraftSync } from "./DraftSync";
+import { clearLocalDraft, readLocalDraft } from "./local-draft";
 import { EMPTY_POLL, PollComposer, type PollDraft } from "./PollComposer";
+import { useServerDraft } from "./use-server-draft";
 
 export interface BoardOption {
   key: string;
@@ -24,9 +31,12 @@ const TYPES = [
 export function ComposeForm({
   boards,
   defaultBoard,
+  serverDrafts = {},
 }: {
   boards: BoardOption[];
   defaultBoard?: string;
+  /** 服务端上已有的草稿，按版块 key 索引 */
+  serverDrafts?: Record<string, DraftSnapshot>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -44,6 +54,61 @@ export function ComposeForm({
   const [poll, setPoll] = useState<PollDraft>(EMPTY_POLL);
 
   const board = boards.find((b) => b.key === boardKey);
+
+  /*
+   * 服务端草稿。
+   *
+   * scope 用版块 key —— 和本地那份 `new:<boardKey>` 对齐。
+   * 换版块就是换一份草稿，这符合直觉：在「问答」写了一半
+   * 不该在「展示」里冒出来。
+   */
+  const serverDraft = serverDrafts[boardKey] ?? null;
+  const sync = useServerDraft({
+    target: "post",
+    scope: boardKey,
+    boardId: null,
+    title,
+    content,
+    serverUpdatedAt: serverDraft?.updatedAt ?? null,
+  });
+
+  /*
+   * 打开时服务器上就有一份 —— 摆出来问一句，不自动填。
+   *
+   * 自动填的话，人明明是想开一篇新的，却看到三天前写了一半的东西
+   * 已经躺在框里，而且不知道怎么回到空白。
+   */
+  const [offer, setOffer] = useState<DraftSnapshot | null>(null);
+  /*
+   * 把内容塞回 Editor 里。
+   *
+   * Editor 自己拿 state 管着文本框，`defaultValue` 只在挂载时读一次 ——
+   * 恢复草稿时改它不会有任何效果。所以要一个显式的「换成这个」通道。
+   */
+  const [restoreInto, setRestoreInto] = useState<string | null>(null);
+  const [askedFor, setAskedFor] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (askedFor === boardKey) return;
+
+    /*
+     * 推到下一个任务里再 setState。
+     *
+     * 一是 effect 体内同步 setState 会触发级联渲染；
+     * 二是这里要读 localStorage —— 那是外部系统，服务端渲染时根本没有，
+     * 只能等到浏览器里才问得出来。Editor 恢复本地草稿走的是同一条路。
+     */
+    const timer = setTimeout(() => {
+      setAskedFor(boardKey);
+
+      const local = readLocalDraft(`new:${boardKey}`);
+      const { pick, ask } = pickDraft({ local, server: serverDraft });
+      // 只有「服务器那份该赢」或者「两边差得远、拿不准」时才问
+      setOffer(serverDraft && (pick === "server" || ask) ? serverDraft : null);
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [boardKey, serverDraft, askedFor]);
 
   const submit = () => {
     setError(null);
@@ -71,7 +136,9 @@ export function ComposeForm({
         setError(result.error ?? "发布失败");
         return;
       }
-      localStorage.removeItem(`draft:new:${boardKey}`);
+      // 发出去了就把两边的草稿都清掉 —— 留着的话下次点发帖会把
+      // 已经发表过的内容当草稿恢复出来，而人会以为上次没发成功
+      clearLocalDraft(`new:${boardKey}`);
       router.push(`/forum/p/${result.postId}`);
     });
   };
@@ -140,7 +207,66 @@ export function ComposeForm({
         minHeight={280}
         placeholder="正文…支持 Markdown、代码块、@提及"
         onValueChange={setContent}
+        restoreValue={restoreInto}
         onSubmit={submit}
+      />
+
+      {/*
+        * 服务器上那份先摆出来问一句，不自动填 ——
+        * 自动填的话，人明明想开一篇新的，却看到三天前的东西已经在框里，
+        * 而且不知道怎么回到空白。
+        */}
+      {offer && (
+        <div className="rounded-[var(--radius-control)] bg-[var(--fill)] p-3">
+          <p className="t-subhead font-medium">服务器上还有一份没写完的</p>
+          <p className="t-caption mt-0.5 text-[var(--ink-tertiary)]">
+            {relativeTime(offer.updatedAt)}存的，可能是在别的设备上写的
+          </p>
+          <pre className="t-caption mt-2 max-h-24 overflow-auto whitespace-pre-wrap break-words text-[var(--ink-secondary)]">
+            {offer.content.slice(0, 200)}
+            {offer.content.length > 200 ? "…" : ""}
+          </pre>
+          <div className="mt-2.5 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setTitle(offer.title ?? title);
+                setContent(offer.content);
+                setRestoreInto(offer.content);
+                sync.acceptServer(offer);
+                setOffer(null);
+              }}
+              className="t-caption rounded-[var(--radius-control)] bg-[var(--accent)] px-3 py-1.5 font-medium text-[var(--accent-ink)] transition active:scale-95"
+            >
+              接着写这一份
+            </button>
+            {/*
+              * 「不用了」只是把这个提示收起来，**不删服务器上那份** ——
+              * 一次点击不该销毁一份还看得见内容的草稿。
+              * 真要删就在下面清空正文，那时候会走正常的删除路径。
+              */}
+            <button
+              type="button"
+              onClick={() => setOffer(null)}
+              className="t-caption px-2 py-1.5 text-[var(--ink-tertiary)]"
+            >
+              不用了
+            </button>
+          </div>
+        </div>
+      )}
+
+      <DraftSync
+        saving={sync.saving}
+        savedAt={sync.savedAt}
+        conflict={sync.conflict}
+        onUseServer={(snapshot) => {
+          setTitle(snapshot.title ?? title);
+          setContent(snapshot.content);
+          setRestoreInto(snapshot.content);
+          sync.acceptServer(snapshot);
+        }}
+        onKeepMine={sync.keepMine}
       />
 
       {board && (

@@ -16,6 +16,7 @@ import { checkContent, fileForReview } from "@/lib/moderation/word-gate";
 
 import { recountBoardPosts } from "./board-stats";
 import { buildViewerContext } from "./context";
+import { dropDraft } from "./drafts";
 import { autoSubscribe, notifyNewPost, notifyNewReply } from "./notify";
 import { getPost } from "./queries";
 import { indexPost, indexReply } from "./search";
@@ -249,6 +250,14 @@ export async function createPost(input: {
     });
   }
 
+  /*
+   * 发出去了就把服务端草稿删掉。
+   *
+   * 不删的话，下次点「发帖」会把**已经发表过的内容**当草稿恢复出来 ——
+   * 而人多半会以为上次没发成功，于是再发一遍。
+   */
+  dropDraft(user.id, "post", board.key);
+
   // 发帖后自动订阅自己的帖子，有人回复才收得到通知
   autoSubscribe(user.id, created.id);
 
@@ -371,6 +380,9 @@ export async function createReply(input: {
   });
 
   indexReply(input.postId, created.id, safeReply);
+  // 回复发出去了，服务端那份草稿也该没了
+  dropDraft(user.id, "reply", input.postId);
+
   autoSubscribe(user.id, input.postId);
 
   if (gate.needsReview) {

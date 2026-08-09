@@ -6,6 +6,8 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { BackLink, Empty } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
+import type { DraftSnapshot } from "@/lib/forum/draft-rules";
+import { getDraft } from "@/lib/forum/drafts";
 import { listBoards } from "@/lib/forum/queries";
 import { can } from "@/lib/rbac/can";
 
@@ -47,6 +49,18 @@ export default async function NewPostPage({
     );
   }
 
+  /*
+   * 每个能发帖的版块各取一份草稿。
+   *
+   * 一次取完而不是切版块时再去问 —— 版块数是个位数，
+   * 而「切过去才发现那边有草稿」会让人以为草稿刚刚才出现。
+   */
+  const serverDrafts: Record<string, DraftSnapshot> = {};
+  for (const b of boards) {
+    const draft = getDraft(user.id, "post", b.key);
+    if (draft) serverDrafts[b.key] = draft;
+  }
+
   return (
     <>
       <BackLink href="/forum">论坛</BackLink>
@@ -54,6 +68,7 @@ export default async function NewPostPage({
       <PageHeader title="发帖" />
 
       <ComposeForm
+        serverDrafts={serverDrafts}
         boards={boards.map((b) => ({
           key: b.key,
           name: b.name,

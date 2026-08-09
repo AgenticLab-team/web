@@ -6,10 +6,23 @@ import { useEffect, useRef, useState, useTransition } from "react";
 
 import { Editor } from "@/components/forum/Editor";
 import { createReply } from "@/lib/forum/actions";
+import type { DraftSnapshot } from "@/lib/forum/draft-rules";
 
+import { DraftSync } from "./DraftSync";
+import { clearLocalDraft } from "./local-draft";
 import { useQuote } from "./QuoteContext";
+import { useServerDraft } from "./use-server-draft";
 
-export function ReplyForm({ postId, locked }: { postId: string; locked: boolean }) {
+export function ReplyForm({
+  postId,
+  locked,
+  serverDraft = null,
+}: {
+  postId: string;
+  locked: boolean;
+  /** 服务端上那份写了一半的回复 */
+  serverDraft?: DraftSnapshot | null;
+}) {
   const router = useRouter();
   const quoteCtx = useQuote();
   const [pending, startTransition] = useTransition();
@@ -19,6 +32,24 @@ export function ReplyForm({ postId, locked }: { postId: string; locked: boolean 
   const rootRef = useRef<HTMLDivElement>(null);
 
   const quote = quoteCtx?.quote ?? null;
+
+  /*
+   * 回复框也存服务端。
+   *
+   * 长回复在微信里被回收掉的概率和长帖一样高，而回复框还多一层：
+   * 它在页面底部，人写着写着上滑去翻别人说了什么，
+   * 一切走就可能回不来了。
+   */
+  const sync = useServerDraft({
+    target: "reply",
+    scope: postId,
+    title: null,
+    content,
+    serverUpdatedAt: serverDraft?.updatedAt ?? null,
+    enabled: !locked,
+  });
+
+  const [restoreInto, setRestoreInto] = useState<string | null>(serverDraft?.content ?? null);
 
   // 点了某楼的「引用」之后把回复框滚进视野 ——
   // 长帖里回复框在几屏之外，不滚过去用户会以为点了没反应
@@ -47,7 +78,8 @@ export function ReplyForm({ postId, locked }: { postId: string; locked: boolean 
         setError(result.error ?? "回复失败");
         return;
       }
-      localStorage.removeItem(`draft:reply:${postId}`);
+      clearLocalDraft(`reply:${postId}`);
+      setRestoreInto(null);
       setContent("");
       quoteCtx?.clearQuote();
       // 换掉 key 让编辑器重建，清空内容且不残留草稿
@@ -81,7 +113,20 @@ export function ReplyForm({ postId, locked }: { postId: string; locked: boolean 
         minHeight={110}
         placeholder={quote ? `回复 #${quote.floor}…` : "写下你的回复…"}
         onValueChange={setContent}
+        restoreValue={restoreInto}
         onSubmit={submit}
+      />
+
+      <DraftSync
+        saving={sync.saving}
+        savedAt={sync.savedAt}
+        conflict={sync.conflict}
+        onUseServer={(snapshot) => {
+          setContent(snapshot.content);
+          setRestoreInto(snapshot.content);
+          sync.acceptServer(snapshot);
+        }}
+        onKeepMine={sync.keepMine}
       />
 
       {error && (

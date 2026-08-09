@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { previewMarkdown } from "@/lib/forum/preview";
 
+import { readLocalDraft, writeLocalDraft } from "./local-draft";
+
 /**
  * Markdown 编辑器。
  *
@@ -52,6 +54,13 @@ interface EditorProps {
   onSubmit?: () => void;
   /** 内容变化回调。表单需要拿到值时用这个，别去监听 DOM 事件冒泡 */
   onValueChange?: (value: string) => void;
+  /**
+   * 从外面把内容换掉（恢复服务端草稿用）。
+   *
+   * `defaultValue` 只在挂载时读一次，恢复草稿时改它没有任何效果 ——
+   * 所以要这么一个显式通道。传 null 表示「不要动」。
+   */
+  restoreValue?: string | null;
 }
 
 export function Editor({
@@ -62,6 +71,7 @@ export function Editor({
   draftKey,
   onSubmit,
   onValueChange,
+  restoreValue = null,
 }: EditorProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [value, setValueRaw] = useState(defaultValue);
@@ -90,7 +100,7 @@ export function Editor({
   useEffect(() => {
     if (!draftKey || defaultValue) return;
 
-    const saved = localStorage.getItem(`draft:${draftKey}`);
+    const saved = readLocalDraft(draftKey)?.content;
     if (!saved || !saved.trim()) return;
 
     let hideTimer: ReturnType<typeof setTimeout> | undefined;
@@ -107,12 +117,25 @@ export function Editor({
     };
   }, [draftKey, defaultValue, setValue]);
 
+  /*
+   * 外面要求换内容（恢复了一份服务端草稿）。
+   *
+   * 比对一下再写，不然每次父组件重渲染都会把光标打回原处 ——
+   * 而人可能正在这段文字里改字。
+   */
+  useEffect(() => {
+    if (restoreValue === null) return;
+    if (ref.current?.value === restoreValue) return;
+    setValue(restoreValue);
+    dirty.current = true;
+  }, [restoreValue, setValue]);
+
   // 每 3 秒存一次草稿
   useEffect(() => {
     if (!draftKey) return;
     const id = setInterval(() => {
       if (!dirty.current) return;
-      localStorage.setItem(`draft:${draftKey}`, value);
+      writeLocalDraft(draftKey, value);
       dirty.current = false;
     }, 3000);
     return () => clearInterval(id);

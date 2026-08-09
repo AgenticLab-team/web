@@ -3,6 +3,7 @@
 import {
   Bell,
   Bookmark,
+  FileText,
   UserPlus,
   LayoutGrid,
   Calendar,
@@ -40,6 +41,7 @@ const ICONS: Record<string, LucideIcon> = {
   gift: Gift,
   bookmark: Bookmark,
   "user-plus": UserPlus,
+  "file-text": FileText,
 };
 
 export function NavIcon({

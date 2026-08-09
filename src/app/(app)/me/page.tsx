@@ -15,6 +15,7 @@ import { db } from "@/lib/db";
 import { dailyStats, groupMembers, people, roles, userRoles } from "@/lib/db/schema";
 import { listPasskeys } from "@/lib/auth/passkey";
 import { bookmarkTabs } from "@/lib/forum/bookmark-queries";
+import { draftCount } from "@/lib/forum/drafts";
 import { listFollows } from "@/lib/forum/follow";
 import { getMyRank } from "@/lib/queries/leaderboard";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
@@ -73,6 +74,7 @@ export default async function MePage() {
   const passkeyCount = listPasskeys(user.id).length;
   const bookmarkCount = bookmarkTabs(user.id).all;
   const followCount = listFollows(user.id).length;
+  const drafts = draftCount(user.id);
 
   const weekRank = wxId && convIds.length ? getMyRank(wxId, { period: "week", convIds }) : null;
   const today = todayKey();
@@ -162,12 +164,23 @@ export default async function MePage() {
         <TitleShelf titles={ownedTitles} />
       </Section>
 
-      <Section title="收藏与关注">
+      <Section title="收藏、草稿与关注">
         <Group>
           <Row href="/me/bookmarks">
             <span className="t-body flex-1">收藏夹</span>
             <span className="t-footnote text-[var(--ink-tertiary)]">
               {bookmarkCount === 0 ? "还没收藏过" : `${bookmarkCount} 条`}
+            </span>
+            <ChevronRight
+              className="h-4 w-4 shrink-0 text-[var(--ink-quaternary)]"
+              strokeWidth={2}
+              aria-hidden
+            />
+          </Row>
+          <Row href="/me/drafts">
+            <span className="t-body flex-1">草稿箱</span>
+            <span className="t-footnote text-[var(--ink-tertiary)]">
+              {drafts === 0 ? "没有写到一半的" : `${drafts} 份没写完`}
             </span>
             <ChevronRight
               className="h-4 w-4 shrink-0 text-[var(--ink-quaternary)]"

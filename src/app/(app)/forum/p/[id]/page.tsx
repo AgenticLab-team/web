@@ -32,6 +32,7 @@ import { pollOfPost } from "@/lib/forum/polls-queries";
 import { tipsOfTargets } from "@/lib/forum/tips-queries";
 import { isSubscribed } from "@/lib/forum/notify";
 import { bookmarkOf, listFolders } from "@/lib/forum/bookmark-queries";
+import { getDraft } from "@/lib/forum/drafts";
 import { isBookmarked, reactionStates, readFloor } from "@/lib/forum/social-queries";
 import { isIndexable } from "@/lib/forum/visibility";
 import { recordView } from "@/lib/forum/actions";
@@ -100,6 +101,7 @@ export default async function PostPage({
     user?.id ?? null,
   );
   const bookmarked = user ? isBookmarked(user.id, post.id) : false;
+  const replyDraft = user ? getDraft(user.id, "reply", post.id) : null;
   // 收藏夹只在已经收藏时用得上，没收藏就不查
   const myFolders = user && bookmarked ? listFolders(user.id) : [];
   const myFolderId = user && bookmarked ? (bookmarkOf(user.id, post.id)?.folderId ?? null) : null;
@@ -433,7 +435,7 @@ export default async function PostPage({
         )}
 
         {user ? (
-          !deleted && <ReplyForm postId={post.id} locked={locked} />
+          !deleted && <ReplyForm postId={post.id} locked={locked} serverDraft={replyDraft} />
         ) : (
           <Empty
             title="登录后参与讨论"
