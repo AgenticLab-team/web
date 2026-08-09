@@ -96,6 +96,14 @@ export const NAV: NavSection[] = [
         ready: true,
       },
       {
+        key: "bookmarks",
+        href: "/me/bookmarks",
+        label: "收藏夹",
+        icon: "bookmark",
+        requiresAuth: true,
+        ready: true,
+      },
+      {
         key: "me",
         href: "/me",
         label: "我的",

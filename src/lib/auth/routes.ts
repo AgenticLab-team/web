@@ -45,7 +45,15 @@ export function isProtectedPath(pathname: string): boolean {
  * 一个看起来完全正常的本站登录链接就能把人导到钓鱼站。
  * 只接受站内路径，且 `//evil.com` 这种协议相对写法必须一起挡掉 ——
  * 浏览器把它当 https://evil.com。
+ *
+ * `/\evil.com` 也一样：按 URL 规范，反斜杠在这个位置等同于斜杠，
+ * 浏览器同样会把它解析成协议相对地址。只挡 `//` 会漏掉它。
+ *
+ * 查询串是放行的（`/search?q=台风`）—— 挡掉的话，
+ * 登录后回到的是一个没有筛选条件的空页面，人得重新填一遍。
  */
 export function safeRedirect(next: string | undefined | null): string {
-  return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  if (!next || !next.startsWith("/")) return "/";
+  if (next.startsWith("//") || next.startsWith("/\\")) return "/";
+  return next;
 }

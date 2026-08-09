@@ -95,10 +95,10 @@
 
 还缺的（按影响排序，做的时候一次挑两三个）：
 
-- [ ] 编辑**回复**（schema 里 `replies.edit_count` 字段已在，action 和界面都没有）
-- [ ] 版主折叠低质回复的界面入口（`moderateReply` 支持 collapse，没接）+ 折叠展示
+- [x] 编辑**回复**（schema 里 `replies.edit_count` 字段已在，action 和界面都没有）
+- [x] 版主折叠低质回复的界面入口（`moderateReply` 支持 collapse，没接）+ 折叠展示
 - [ ] 楼中楼 / 树形视图切换（版块可设默认）
-- [ ] 收藏夹分组（`bookmark_folders` 表已建，界面只有单一收藏）
+- [x] 收藏夹分组（`bookmark_folders` 表已建，界面只有单一收藏）
 - [ ] 关注作者 / 标签 / 版块（`subscriptions.target_type` 已预留）
 - [ ] 服务端草稿（换设备接着写；现在只有 IndexedDB/localStorage 本地草稿）
 - [ ] 定时发布（`scheduled_at` 字段已在）

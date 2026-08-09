@@ -14,6 +14,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { dailyStats, groupMembers, people, roles, userRoles } from "@/lib/db/schema";
 import { listPasskeys } from "@/lib/auth/passkey";
+import { bookmarkTabs } from "@/lib/forum/bookmark-queries";
 import { getMyRank } from "@/lib/queries/leaderboard";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { mySkills } from "@/lib/members/queries";
@@ -69,6 +70,7 @@ export default async function MePage() {
   );
 
   const passkeyCount = listPasskeys(user.id).length;
+  const bookmarkCount = bookmarkTabs(user.id).all;
 
   const weekRank = wxId && convIds.length ? getMyRank(wxId, { period: "week", convIds }) : null;
   const today = todayKey();
@@ -156,6 +158,22 @@ export default async function MePage() {
 
       <Section title="称号">
         <TitleShelf titles={ownedTitles} />
+      </Section>
+
+      <Section title="收藏">
+        <Group>
+          <Row href="/me/bookmarks">
+            <span className="t-body flex-1">收藏夹</span>
+            <span className="t-footnote text-[var(--ink-tertiary)]">
+              {bookmarkCount === 0 ? "还没收藏过" : `${bookmarkCount} 条`}
+            </span>
+            <ChevronRight
+              className="h-4 w-4 shrink-0 text-[var(--ink-quaternary)]"
+              strokeWidth={2}
+              aria-hidden
+            />
+          </Row>
+        </Group>
       </Section>
 
       <Section title="积分">

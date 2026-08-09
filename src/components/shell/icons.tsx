@@ -2,6 +2,7 @@
 
 import {
   Bell,
+  Bookmark,
   LayoutGrid,
   Calendar,
   Gift,
@@ -36,6 +37,7 @@ const ICONS: Record<string, LucideIcon> = {
   "user-round": UserRound,
   shield: Shield,
   gift: Gift,
+  bookmark: Bookmark,
 };
 
 export function NavIcon({

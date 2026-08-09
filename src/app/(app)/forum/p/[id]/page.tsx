@@ -31,6 +31,7 @@ import { consentSummary } from "@/lib/forum/convert-queries";
 import { pollOfPost } from "@/lib/forum/polls-queries";
 import { tipsOfTargets } from "@/lib/forum/tips-queries";
 import { isSubscribed } from "@/lib/forum/notify";
+import { bookmarkOf, listFolders } from "@/lib/forum/bookmark-queries";
 import { isBookmarked, reactionStates, readFloor } from "@/lib/forum/social-queries";
 import { isIndexable } from "@/lib/forum/visibility";
 import { recordView } from "@/lib/forum/actions";
@@ -99,6 +100,9 @@ export default async function PostPage({
     user?.id ?? null,
   );
   const bookmarked = user ? isBookmarked(user.id, post.id) : false;
+  // 收藏夹只在已经收藏时用得上，没收藏就不查
+  const myFolders = user && bookmarked ? listFolders(user.id) : [];
+  const myFolderId = user && bookmarked ? (bookmarkOf(user.id, post.id)?.folderId ?? null) : null;
   const subscribed = user ? isSubscribed(user.id, post.id) : false;
   const isAsker = user?.id === post.authorId;
   const consent = consentSummary(post.id, user?.wxId ?? null);
@@ -258,6 +262,8 @@ export default async function PostPage({
               bookmarked={bookmarked}
               subscribed={subscribed}
               canAct={Boolean(user)}
+              folders={myFolders.map((x) => ({ id: x.id, name: x.name }))}
+              folderId={myFolderId}
             />
             {user && post.authorId !== user.id && (
               <ReportButton targetType="post" targetId={post.id} />

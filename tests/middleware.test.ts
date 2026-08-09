@@ -33,6 +33,26 @@ describe("回跳地址", () => {
     assert.equal(safeRedirect("//evil.com/path"), "/");
   });
 
+  it("**反斜杠写法也是协议相对地址** —— 只挡 // 会漏掉它", () => {
+    /*
+     * 按 URL 规范，反斜杠在这个位置等同于斜杠：
+     * 浏览器把 /\evil.com 解析成 https://evil.com。
+     */
+    assert.equal(safeRedirect("/\\evil.com"), "/");
+    assert.equal(safeRedirect("/\\evil.com/path"), "/");
+  });
+
+  it("**查询串要留着** —— 丢掉的话登录后回到一个没有筛选条件的空页面", () => {
+    assert.equal(safeRedirect("/search?q=台风"), "/search?q=台风");
+    assert.equal(safeRedirect("/me/bookmarks?f=none"), "/me/bookmarks?f=none");
+  });
+
+  it("中间件把查询串一起放进 next", () => {
+    const src = readFileSync(new URL("../src/middleware.ts", import.meta.url), "utf8");
+    assert.match(src, /const \{ pathname, search \} = request\.nextUrl;/);
+    assert.match(src, /set\("next", `\$\{pathname\}\$\{search\}`\)/);
+  });
+
   it("空值退回首页", () => {
     assert.equal(safeRedirect(undefined), "/");
     assert.equal(safeRedirect(""), "/");

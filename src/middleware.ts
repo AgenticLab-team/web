@@ -22,14 +22,21 @@ import { isProtectedPath } from "@/lib/auth/routes";
 const SESSION_COOKIE = "al_session";
 
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, search } = request.nextUrl;
   if (!isProtectedPath(pathname)) return NextResponse.next();
 
   if (request.cookies.has(SESSION_COOKIE)) return NextResponse.next();
 
   const login = new URL("/login", request.url);
-  // 登录后回到原来想去的地方，而不是一律扔回首页
-  login.searchParams.set("next", pathname);
+  /*
+   * 登录后回到原来想去的地方，而不是一律扔回首页。
+   *
+   * **带上查询串**。只存 pathname 的话，`/search?q=台风`、
+   * `/me/bookmarks?f=none`、`/forum?board=xx` 登录后回到的都是
+   * 一个没有筛选条件的空页面 —— 人得重新填一遍，
+   * 而且多半会以为是刚才那一下没生效。
+   */
+  login.searchParams.set("next", `${pathname}${search}`);
   return NextResponse.redirect(login, 307);
 }
 
