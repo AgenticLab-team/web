@@ -3,6 +3,12 @@ import "server-only";
 import { and, asc, eq, gte, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import {
+  LEASE_TTL_MS,
+  NOTIFICATIONS_LEASE,
+  acquireLease,
+  releaseLease,
+} from "@/lib/runtime/lease";
 import { notifications } from "@/lib/db/schema";
 import { createPushDispatcher, type PushDispatcher } from "@/lib/notifications/push-dispatch";
 
@@ -200,6 +206,20 @@ export function startWatcher(): void {
   if (s.timer) return;
   s.timer = setInterval(() => {
     try {
+      /*
+       * 抢一次租约，抢不到就这一轮不干活。
+       *
+       * 蓝绿部署时两个实例同时活着，而推送派发的状态全在内存里 ——
+       * 两个进程各攒各的，同一条通知会被推两遍。
+       *
+       * 放在 tick 里而不是启动时抢一次：主权要能**流动**。
+       * 持有者被停掉之后，另一边最多等一个 TTL 就接手，
+       * 不需要谁去通知它。
+       *
+       * 站内实时（SSE）不受影响：那是连接进哪个实例就由哪个实例推，
+       * 而没有流量的那一边根本没有连接。
+       */
+      if (!acquireLease(NOTIFICATIONS_LEASE, LEASE_TTL_MS)) return;
       pollOnce();
     } catch {
       /*
@@ -216,6 +236,17 @@ export function stopWatcher(): void {
   const s = state();
   if (s.timer) clearInterval(s.timer);
   s.timer = null;
+  /*
+   * 主动放手，别让另一边空等一个 TTL。
+   *
+   * 一次部署省下的这十几秒，正好是推送最不该停的那十几秒 ——
+   * 部署通常发生在有人正在用的时候。
+   */
+  try {
+    releaseLease(NOTIFICATIONS_LEASE);
+  } catch {
+    /* 放手失败不要紧：租约会自己过期，最多晚十几秒 */
+  }
 }
 
 /** 拉一轮增量并派发。导出是为了测试能不依赖真实时钟驱动它。 */
