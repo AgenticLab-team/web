@@ -277,7 +277,6 @@ export const bindCodes = sqliteTable(
 /** 隐私开关。群聊可检索这件事需要它来平衡 */
 export const userPrivacy = sqliteTable("user_privacy", {
   userId: text("user_id").primaryKey(),
-  hideFromDirectory: integer("hide_from_directory", { mode: "boolean" }).notNull().default(false),
   hideFromLeaderboard: integer("hide_from_leaderboard", { mode: "boolean" })
     .notNull()
     .default(false),

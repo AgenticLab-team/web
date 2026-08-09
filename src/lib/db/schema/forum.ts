@@ -98,7 +98,6 @@ export const posts = sqliteTable(
 
     pinned: integer("pinned", { mode: "boolean" }).notNull().default(false),
     pinnedUntil: integer("pinned_until"),
-    pinnedGlobally: integer("pinned_globally", { mode: "boolean" }).notNull().default(false),
     featured: integer("featured", { mode: "boolean" }).notNull().default(false),
     featuredBy: text("featured_by"),
     featuredAt: integer("featured_at"),

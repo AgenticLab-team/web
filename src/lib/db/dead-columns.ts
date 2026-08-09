@@ -28,10 +28,28 @@
  *
  *   · `duplicate` —— 同一件事已经有别的列在管。**最该删**，
  *     因为它随时会被谁接上，接上就是两套。
+ *     这一类真的删掉了两个（`user_privacy.hide_from_directory`、
+ *     `forum_posts.pinned_globally`）—— 靠 `ALTER TABLE ... DROP COLUMN`，
+ *     删之前在从真备份恢复出来的副本上跑过一遍。
  *   · `decided-against` —— 想清楚之后主动没做，理由记在这里。
  *   · `superseded` —— 设计变了，这一列对应的那条路已经不存在。
  *   · `planned` —— 功能还没做，列先建着。
  *   · `gap` —— **本来就该写而没写**，是缺陷，不是遗留。
+ *
+ * ─────────────────────────────────────────
+ * 这张表本身也会写错
+ * ─────────────────────────────────────────
+ *
+ * `group_member_events.detected_at` 曾经被判成「和 created_at 重复」——
+ * 而那张表**根本没有 created_at**，它是唯一的时间戳，还在索引里。
+ * 差一点就按这条判断把它删了。
+ *
+ * 错的根源是探测器：只出现在 `index(...).on(...)` 里的列被报成
+ * 「一次都没出现过」。现在索引也算引用了（但**只在这张表本身
+ * 被用到时才算** —— 否则一张死表会把它所有的列都洗白）。
+ *
+ * 教训是：**先去看那张表长什么样，再写下判断**。
+ * 名单上的每一句「为什么」都会被后来的人当成事实。
  *
  * 这一类真的会被清掉：`api_usage` 整张表曾经建了 763 天、0 行，
  * 标成 `gap` 之后接上了记账，这条测试立刻反过来报红
@@ -49,11 +67,6 @@ export interface DeadColumn {
 
 export const DEAD_COLUMNS: readonly DeadColumn[] = [
   /* ── 隐私 ────────────────────────────────────────────────── */
-  {
-    column: "user_privacy.hide_from_directory",
-    disposition: "duplicate",
-    why: "目录隐身真正在用的是 users.directory_hidden。谁把这一列接上，就成了两个开关管一件事 —— 只拨了其中一个的人以为自己藏起来了。该删",
-  },
   {
     column: "user_privacy.hide_activity_hours",
     disposition: "decided-against",
@@ -99,14 +112,9 @@ export const DEAD_COLUMNS: readonly DeadColumn[] = [
 
   /* ── 论坛 ────────────────────────────────────────────────── */
   {
-    column: "forum_posts.pinned_globally",
-    disposition: "duplicate",
-    why: "站内公告在「所有人都得看见」这件事上做得更好：能定向到身份组和群、能关掉、会过期、有已读记录。一条全站置顶帖一样都没有。该删而不是接",
-  },
-  {
     column: "forum_post_sources.converted_at",
-    disposition: "duplicate",
-    why: "转帖时间用帖子自己的 created_at 就够了，两处各存一份必然有一天对不上",
+    disposition: "planned",
+    why: "**这条我先前判错过**：一开始写的是「和帖子的 created_at 重复」，而这张表根本没有 created_at —— 它是转帖这件事自己的时间戳，每次转帖都写。留着：帖子会被编辑、移版块，而「这次转帖发生在什么时候」是一个独立的事实。缺的是读它的地方（转帖来源那一栏该显示它）",
   },
 
   /* ── 邀请 / 角色 ─────────────────────────────────────────── */
@@ -126,11 +134,6 @@ export const DEAD_COLUMNS: readonly DeadColumn[] = [
     column: "group_members.is_admin",
     disposition: "planned",
     why: "上游接口目前不告诉我们谁是群管理员。拿不到就不写，写个恒为 false 的列比空着更容易被误信",
-  },
-  {
-    column: "group_member_events.detected_at",
-    disposition: "duplicate",
-    why: "这张表的 created_at 就是「我们什么时候发现的」，两个时间戳表达同一件事",
   },
   {
     column: "sync_cursors.last_id",

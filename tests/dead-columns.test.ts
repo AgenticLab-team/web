@@ -97,9 +97,32 @@ function tables(): Table[] {
 
 const ALL = tables();
 
-/** src 里（除 schema 之外）出现过这个列名的任何一种写法 */
+/**
+ * src 里出现过这个列名的任何一种写法。
+ *
+ * ─────────────────────────────────────────
+ * schema 文件整体排除，但**索引定义要算**
+ * ─────────────────────────────────────────
+ *
+ * 一个只出现在 `index(...).on(t.xxx)` 里的列不是死列 ——
+ * 它在为查询排序或过滤，删掉它索引就得跟着改。
+ *
+ * 漏掉这一条真的坑过一次：`group_member_events.detected_at`
+ * 被报成「一次都没出现过」，我据此写下「它和 created_at 重复」——
+ * 而那张表**根本没有 created_at**：detected_at 是它唯一的时间戳，
+ * 还在 `gme_conv_idx` 里。差一点就把它删了。
+ */
 function referenced(): (t: Table, ts: string) => boolean {
   const schemaFiles = new Set(walk(SCHEMA_DIR));
+
+  /* 从 schema 文件里只取索引定义那一段，其余照旧排除 */
+  const indexUse = [...schemaFiles]
+    .flatMap((f) => [
+      ...readFileSync(f, "utf8").matchAll(/(?:unique)?[iI]ndex\([^)]*\)\s*\.on\(([^)]*)\)/g),
+    ])
+    .map((m) => m[1])
+    .join(" ");
+
   const body = walk(join(root, "src"))
     .filter((f) => !schemaFiles.has(f) && !f.endsWith("db/dead-columns.ts"))
     .map((f) => readFileSync(f, "utf8"))
@@ -114,7 +137,18 @@ function referenced(): (t: Table, ts: string) => boolean {
      * 写 null 不是用它。
      */
     .replace(/\b[\w$]+\s*:\s*null\b/g, "");
+  /*
+   * 索引只在**这张表本身被用到**时才算数。
+   *
+   * `user_identities` 整张表没有任何地方引用（GitHub 绑定走的是
+   * `github_connections`），而它自己身上是有索引的 ——
+   * 认索引就等于让一张死表把它所有的列都洗白，
+   * 而那正是这条测试要抓的东西。
+   */
+  const tableAlive = (t: Table) => new RegExp(`\\b${t.varName}\\b`).test(body);
+
   return (t, ts) =>
+    (tableAlive(t) && new RegExp(`\\b${ts}\\b`).test(indexUse)) ||
     new RegExp(
       [
         `\\b${t.varName}\\.${ts}\\b`, // posts.shareCode
@@ -157,7 +191,7 @@ describe("扫描本身没坏", () => {
   it("库里的列名也解析出来了", () => {
     // 名单上写的是库里的名字（迁移和排查看的是这个），对不上就白记了
     const t = ALL.find((x) => x.sqlName === "user_privacy");
-    assert.ok(t?.cols.some((c) => c.sql === "hide_from_directory"), "列名映射坏了");
+    assert.ok(t?.cols.some((c) => c.sql === "hide_from_leaderboard"), "列名映射坏了");
   });
 });
 
@@ -235,5 +269,58 @@ describe("**同一件事有两列的最该先处理**", () => {
     for (const d of DEAD_COLUMNS.filter((x) => x.disposition === "gap")) {
       assert.match(d.why, /本来就该/, `${d.column} 标了 gap 但读起来像 planned`);
     }
+  });
+});
+
+describe("**真删掉的那两个不会再回来**", () => {
+  /*
+   * `duplicate` 那一类的定义就是「同一件事已经有别的列在管」——
+   * 它最该删，因为它随时会被谁接上，接上就是两套开关管一件事，
+   * 只拨了其中一个的人以为自己设好了。
+   *
+   * 删是靠 `ALTER TABLE ... DROP COLUMN`（SQLite 3.35+，
+   * 线上是 3.53）。删之前在**从真备份恢复出来的副本**上跑过一遍：
+   * 56 篇帖子、45512 条消息一条不少，完整性检查 ok。
+   */
+  const schemaText = walk(SCHEMA_DIR)
+    .map((f) => readFileSync(f, "utf8"))
+    .join("\n");
+
+  for (const [col, instead] of [
+    ["hideFromDirectory", "users.directoryHidden"],
+    ["pinnedGlobally", "站内公告"],
+  ]) {
+    it(`${col} 不在 schema 里了 —— 这件事由 ${instead} 管`, () => {
+      assert.equal(schemaText.includes(col), false, `${col} 又回到 schema 里了`);
+    });
+  }
+
+  it("迁移文件里是 DROP COLUMN，不是重建整张表", () => {
+    /*
+     * 重建整张表要把数据搬一遍，而 forum_posts 里是真内容。
+     * SQLite 3.35 起支持原地删列，两条语句的事。
+     */
+    const sql = readFileSync(new URL("../drizzle/0048_damp_skin.sql", import.meta.url), "utf8");
+    assert.match(sql, /ALTER TABLE `user_privacy` DROP COLUMN `hide_from_directory`/);
+    assert.match(sql, /ALTER TABLE `forum_posts` DROP COLUMN `pinned_globally`/);
+    assert.equal(/CREATE TABLE/.test(sql), false, "变成重建表了");
+  });
+});
+
+describe("**索引里用到的列不算死列**", () => {
+  it("group_member_events.detected_at 被认成在用", () => {
+    /*
+     * 它只出现在 `index("gme_conv_idx").on(t.convId, t.detectedAt)` 里。
+     * 探测器漏掉这种用法时，它被报成「一次都没出现过」，
+     * 我据此写下「和 created_at 重复」—— 而那张表根本没有 created_at。
+     * 差一点就把一张表唯一的时间戳删了。
+     */
+    const t = ALL.find((x) => x.sqlName === "group_member_events")!;
+    assert.equal(isRead(t, "detectedAt"), true);
+  });
+
+  it("**但一张死表的索引救不活它** —— user_identities 整张没人用", () => {
+    const t = ALL.find((x) => x.sqlName === "user_identities")!;
+    assert.equal(isRead(t, "provider"), false, "死表被它自己的索引洗白了");
   });
 });
