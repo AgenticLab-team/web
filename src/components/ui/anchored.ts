@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 
 /**
  * 把一个悬浮面板锚在触发按钮下方 —— 用视口坐标，配合传送到 body。
@@ -133,4 +133,59 @@ export function panelStyles(p: Pick<AnchoredPanel, "narrow" | "position">) {
           left: p.position?.left ?? -9999,
         } as React.CSSProperties,
       };
+}
+
+/**
+ * 点外面关掉 + Escape 关掉。
+ *
+ * ─────────────────────────────────────────
+ * 传送门把「里面」和「外面」拆开了
+ * ─────────────────────────────────────────
+ *
+ * 面板为了不被后面的内容盖住，是 `createPortal` 到 `document.body` 的
+ * （见「论坛更多菜单被回复挡住」那次修复）。而这么一来，
+ * **面板在 DOM 上就不再是触发按钮的后代**了。
+ *
+ * 于是只判 `根元素.contains(target)` 的话，点面板里任何一个东西
+ * 都会被算成「点在外面」—— 菜单在手指落下的那一刻就关掉了，
+ * 表现是「点不动，点了就瞬间消失」。
+ *
+ * 传送门是上一次修 bug 引进来的，而这个判定留在原地没跟着改。
+ * 所以这个 helper 收在这里：谁用 `useAnchoredPanel`，就用这个关闭 ——
+ * 两个 ref 本来就在手上，不该由每个调用方各记一遍。
+ */
+export function useDismissOnOutside(
+  open: boolean,
+  close: () => void,
+  refs: React.RefObject<HTMLElement | null>[],
+): void {
+  /*
+   * refs 数组每次渲染都是新的，直接进依赖会让 effect 每帧重挂。
+   * 存进 ref，effect 只依赖 open 与 close。
+   */
+  const latest = useRef(refs);
+  useEffect(() => {
+    latest.current = refs;
+  });
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onDown = (e: PointerEvent) => {
+      const target = e.target as Node;
+      // 任何一个 ref 包住它，就算「点在里面」
+      if (latest.current.some((r) => r.current?.contains(target))) return;
+      close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, close]);
 }

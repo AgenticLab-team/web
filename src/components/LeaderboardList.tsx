@@ -1,5 +1,7 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
+
 import { Avatar } from "@/components/Avatar";
+import { PersonLink } from "@/components/PersonLink";
 import { Empty, Group, RankBadge, Row } from "@/components/ui/primitives";
 import type { BoardEntry } from "@/lib/queries/leaderboard";
 
@@ -28,15 +30,19 @@ export function LeaderboardList({
             <li key={entry.wxId} style={{ "--i": i } as React.CSSProperties}>
               <Row className={isMe ? "bg-[var(--accent-soft)]" : ""}>
                 <RankBadge rank={entry.rank} />
-                <Avatar
-                  wxId={entry.wxId}
-                  name={entry.name}
-                  src={entry.avatarUrl}
-                  size={36}
-                />
+                <PersonLink wxId={entry.wxId} name={entry.name}>
+                  <Avatar
+                    wxId={entry.wxId}
+                    name={entry.name}
+                    src={entry.avatarUrl}
+                    size={36}
+                  />
+                </PersonLink>
                 <div className="min-w-0 flex-1">
                   <p className="t-body truncate leading-tight">
-                    {entry.name}
+                    <PersonLink wxId={entry.wxId} name={entry.name} className="hover:underline">
+                      {entry.name}
+                    </PersonLink>
                     {isMe && (
                       <span className="t-caption ml-1.5 text-[var(--accent)]">你</span>
                     )}

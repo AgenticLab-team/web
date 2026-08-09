@@ -86,13 +86,16 @@ export default async function LinksPage({
           </form>
 
           {/*
-            * 排序放在筛选之前。
+            * 排序和筛选合成一行。
             *
-            * 「最有用」是这个页面真正的价值 —— 两百条链接里
-            * 真正值得看的就那么十几条,而只有点赞数能把它们浮上来。
-            * 按时间排只回答「最近有人分享什么」，那是另一个问题。
+            * 原来是两排药丸各占一行，加上上面的搜索框就是**三行**壳子 ——
+            * 在手机上，翻到第一条链接之前得先划过半屏的按钮。
+            *
+            * 两组做的是同一件事（把列表收窄），中间一道竖线就够分开了。
+            * 排序仍然排在前面：「最有用」是这个页面真正的价值 ——
+            * 两百条链接里值得看的就那么十几条，而只有点赞数能把它们浮上来。
             */}
-          <PillRow wrap>
+          <PillRow>
             <Pill href={query({ sort: undefined })} active={!byVotes}>
               最近分享
             </Pill>
@@ -102,9 +105,13 @@ export default async function LinksPage({
                 最有用
               </span>
             </Pill>
-          </PillRow>
 
-          <PillRow>
+            {/* 分组之间的竖线。aria-hidden —— 读屏念一条竖线没有意义 */}
+            <span
+              className="mx-0.5 h-4 w-px self-center bg-[var(--separator)]"
+              aria-hidden
+            />
+
             <Pill href={query({ d: undefined, saved: undefined })} active={!params.d && !savedOnly}>
               全部
             </Pill>

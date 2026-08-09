@@ -15,10 +15,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 
-import { panelStyles, useAnchoredPanel } from "@/components/ui/anchored";
+import { panelStyles, useAnchoredPanel, useDismissOnOutside } from "@/components/ui/anchored";
 
 import { useToast } from "@/components/ui/Toast";
 import { moderatePost, movePost } from "@/lib/forum/moderation";
@@ -97,22 +97,14 @@ export function PostManageMenu({
     setTargetBoard("");
   }, []);
 
-  // 点外面关掉；Escape 关掉 —— 菜单关不上比打不开更让人烦躁
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: PointerEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) close();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    document.addEventListener("pointerdown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open, close]);
+  /*
+   * 点外面关掉；Escape 关掉。
+   *
+   * **panelRef 必须一起判**：面板是传送到 document.body 的，
+   * DOM 上不是 rootRef 的后代 —— 只判 rootRef 的话，
+   * 点菜单里任何一项都算「点在外面」，菜单在手指落下那一刻就关了。
+   */
+  useDismissOnOutside(open, close, [rootRef, panelRef]);
 
   const runModeration = (
     action: "feature" | "unfeature" | "pin" | "unpin" | "lock" | "unlock" | "delete" | "restore",

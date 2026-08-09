@@ -205,7 +205,9 @@ export function Pill({
  * 一排 Pill 的容器。
  *
  * 默认横向滚动并在窄屏上出血到屏幕边缘 —— 群名、版块这类列表长度
- * 不受控，换行的话第三行以后就把内容顶出首屏了。滚动条藏在 pb-1 里。
+ * 不受控，换行的话第三行以后就把内容顶出首屏了。
+ * 滚动条整条不画（.no-scrollbar）：「还能往右滑」由内容在边缘被切一半
+ * 来表达，比一条横线准确得多。
  * `wrap` 给数量有上限的筛选（排序方式、状态）用：桌面上换行比滚动好点。
  *
  * 每个孩子包一层 shrink-0 —— 不包的话 flex 会把 Pill 压扁而不是让容器滚，
@@ -222,7 +224,8 @@ export function PillRow({
 }) {
   const base = wrap
     ? "mb-3 flex flex-wrap gap-1.5"
-    : "-mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0";
+    // no-scrollbar：一排 30px 高的药丸底下压一条横条，看起来就是根下划线
+    : "no-scrollbar -mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0";
   return (
     <div className={`${base} ${className}`}>
       {Children.map(children, (child) =>

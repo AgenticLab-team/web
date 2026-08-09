@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
+import { PersonLink } from "@/components/PersonLink";
 import { MessageText } from "@/components/messages/MessageText";
 import { PageHeader } from "@/components/shell/PageHeader";
 import {
@@ -114,13 +115,16 @@ export default async function ArchivePage({
               : undefined;
             return (
               <div key={message.id} className="inset-row flex gap-3 px-4 py-2.5">
-                <Avatar
-                  wxId={message.senderWxId}
-                  name={message.senderName}
-                  src={message.avatarUrl}
-                  size={28}
-                  className="mt-0.5"
-                />
+                {/* 昵称本来就有链接，而旁边的头像点不动 —— 同一个人，两种行为 */}
+                <PersonLink wxId={message.senderWxId} name={message.senderName}>
+                  <Avatar
+                    wxId={message.senderWxId}
+                    name={message.senderName}
+                    src={message.avatarUrl}
+                    size={28}
+                    className="mt-0.5"
+                  />
+                </PersonLink>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
                     <Link

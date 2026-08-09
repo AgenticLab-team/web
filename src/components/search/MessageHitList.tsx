@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { Avatar } from "@/components/Avatar";
+import { PersonLink } from "@/components/PersonLink";
 import { relativeTime } from "@/components/forum/PostList";
 import { loadContext } from "@/lib/search/actions";
 import type { ContextMessage, MessageHit } from "@/lib/search/messages";
@@ -46,19 +47,29 @@ function HitRow({ hit }: { hit: MessageHit }) {
 
   return (
     <div className="inset-row">
-      <button
-        type="button"
-        onClick={toggle}
-        aria-expanded={expanded}
-        className="flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--fill)]"
-      >
-        <Avatar
-          wxId={hit.senderWxId}
-          name={hit.senderName}
-          src={hit.avatarUrl}
-          size={32}
-          className="mt-0.5"
-        />
+      {/*
+        * 头像挪到展开按钮**外面**。
+        *
+        * 整行原来是一个 <button>，而 <button> 里不能放 <a> ——
+        * 嵌进去在部分浏览器上直接失效，键盘遍历顺序也会乱。
+        * 所以头像单独站出来，剩下的仍然是「点一下展开上下文」。
+        */}
+      <div className="flex px-4 py-3 transition-colors hover:bg-[var(--fill)]">
+        <PersonLink wxId={hit.senderWxId} name={hit.senderName} className="mr-3 shrink-0">
+          <Avatar
+            wxId={hit.senderWxId}
+            name={hit.senderName}
+            src={hit.avatarUrl}
+            size={32}
+            className="mt-0.5"
+          />
+        </PersonLink>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={expanded}
+          className="flex min-w-0 flex-1 gap-3 text-left"
+        >
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-baseline gap-x-2">
             <span className="t-subhead font-medium">{hit.senderName}</span>
@@ -79,7 +90,8 @@ function HitRow({ hit }: { hit: MessageHit }) {
             <ChevronDown className="h-4 w-4" strokeWidth={2} aria-hidden />
           )}
         </span>
-      </button>
+        </button>
+      </div>
 
       {expanded && (
         <div className="animate-fade border-t border-[var(--separator)] bg-[var(--surface-sunken)] px-4 py-3">

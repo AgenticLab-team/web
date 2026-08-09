@@ -4,6 +4,19 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
+import { PersonLink } from "@/components/PersonLink";
+
+/**
+ * 目录里那一行链到哪。
+ *
+ * 走账号 id 的中转，不直接拼 wx_id —— 见 lib/members/queries.ts
+ * 里 `hasProfile` 那段：目录里有一群从没在群里说过话的人，
+ * 他们的 wx_id 不该因为「让头像可以点」就摊在页面源码里。
+ */
+function profileHref(member: { id: string; isMe: boolean; hasProfile: boolean }): string | null {
+  if (member.isMe || !member.hasProfile) return null;
+  return `/members/by/${member.id}`;
+}
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, Empty, PageNote, Pill, PillRow, Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -127,11 +140,20 @@ export default async function MembersPage({
                 {dir.members.map((member) => (
                   <Card as="article" key={member.id}>
                     <div className="flex gap-3">
-                      <Avatar src={member.avatarUrl} paletteIndex={member.paletteIndex} name={member.name} size={40} />
+                      {/* 目录里的人本来点不动 —— 一本点不开的通讯录 */}
+                      <PersonLink href={profileHref(member)} name={member.name}>
+                        <Avatar src={member.avatarUrl} paletteIndex={member.paletteIndex} name={member.name} size={40} />
+                      </PersonLink>
 
                       <div className="min-w-0 flex-1">
                         <p className="t-body flex flex-wrap items-center gap-1.5 font-medium">
-                          {member.name}
+                          <PersonLink
+                            href={profileHref(member)}
+                            name={member.name}
+                            className="hover:underline"
+                          >
+                            {member.name}
+                          </PersonLink>
                           {member.title && (
                             <span
                               className="t-caption2 rounded-full px-1.5 py-0.5"

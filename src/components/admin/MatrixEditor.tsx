@@ -166,7 +166,7 @@ export function MatrixEditor({ roles, categories, initial, canEdit, lookupBase }
 
   return (
     <div>
-      <div className="-mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+      <div className="no-scrollbar -mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
         {categories.map((c) => {
           const pending = editsByCategory.get(c.category) ?? 0;
           const isActive = c.category === active;

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
+import { PersonLink } from "@/components/PersonLink";
 import { AcceptButton } from "@/components/forum/AcceptButton";
 import { BountyBadge } from "@/components/forum/BountyBadge";
 import { ConsentPanel } from "@/components/forum/ConsentPanel";
@@ -196,9 +197,16 @@ export default async function PostPage({
         <h1 className="t-title1 mb-3 leading-snug">{post.title}</h1>
 
         <div className="mb-5 flex items-center gap-2.5">
-          <Avatar wxId={post.authorId} name={post.authorName} src={post.authorAvatar} size={32} />
+          {/* 匿名帖的 authorWxId 是 null，PersonLink 会退化成普通 span */}
+          <PersonLink wxId={post.authorWxId} name={post.authorName}>
+            <Avatar wxId={post.authorId} name={post.authorName} src={post.authorAvatar} size={32} />
+          </PersonLink>
           <div className="min-w-0 flex-1">
-            <p className="t-subhead leading-tight">{post.authorName}</p>
+            <p className="t-subhead leading-tight">
+              <PersonLink wxId={post.authorWxId} name={post.authorName} className="hover:underline">
+                {post.authorName}
+              </PersonLink>
+            </p>
             <p className="tabular t-caption text-[var(--ink-tertiary)]">
               {relativeTime(post.createdAt)}
               {post.raw.editCount > 0 && (
@@ -353,13 +361,21 @@ export default async function PostPage({
                 className="inset-row scroll-mt-16 px-4 py-3.5"
               >
                 <div className="mb-2 flex items-center gap-2.5">
-                  <Avatar
-                    wxId={reply.authorId}
+                  <PersonLink wxId={reply.authorWxId} name={reply.authorName}>
+                    <Avatar
+                      wxId={reply.authorId}
+                      name={reply.authorName}
+                      src={reply.authorAvatar}
+                      size={26}
+                    />
+                  </PersonLink>
+                  <PersonLink
+                    wxId={reply.authorWxId}
                     name={reply.authorName}
-                    src={reply.authorAvatar}
-                    size={26}
-                  />
-                  <span className="t-subhead">{reply.authorName}</span>
+                    className="t-subhead hover:underline"
+                  >
+                    {reply.authorName}
+                  </PersonLink>
                   {reply.accepted && (
                     <span className="t-caption rounded-[var(--radius-pill)] bg-[var(--success)]/15 px-2 py-0.5 font-medium text-[var(--success)]">
                       已采纳

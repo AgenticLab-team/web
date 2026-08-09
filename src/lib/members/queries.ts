@@ -43,6 +43,19 @@ export interface DirectoryMember {
    * 出现在网页源码里。一个只用来算颜色的值不值得冒这个险。
    */
   paletteIndex: number;
+  /**
+   * 有没有站内主页可以点进去。
+   *
+   * **这里仍然不给 wx_id** —— 它会被序列化进 RSC 载荷、出现在网页源码里。
+   * 目录列的是所有同群的人，包括从没在群里说过话的：他们的 wx_id
+   * 在别处拿不到（存档里只有开过口的人），而拿着 wx_id 就能在微信里
+   * 直接加人。一次「让头像可以点」不该顺带把一群沉默的人的微信号
+   * 摊在页面源码里。
+   *
+   * 所以只给一个布尔，链接走 `/members/by/<账号 id>` 那条中转 ——
+   * 账号 id 本来就在这个结构里（列表的 key 用它）。
+   */
+  hasProfile: boolean;
   bio: string | null;
   title: { name: string; icon: string | null; rarity: string } | null;
   tags: { slug: string; label: string }[];
@@ -204,6 +217,8 @@ export function memberDirectory(
       }),
       avatarUrl: profile?.avatar ?? row.wxAvatarUrl ?? null,
       paletteIndex: paletteIndexFor(row.wxId ?? row.id),
+      // 只说「有没有主页」，不给 wx_id —— 链接走 /members/by/<账号 id>
+      hasProfile: Boolean(row.wxId),
       bio: row.bio,
       title,
       tags: byUser.get(row.id) ?? [],

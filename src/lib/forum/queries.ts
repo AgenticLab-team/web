@@ -31,6 +31,11 @@ export interface PostSummary {
   authorId: string;
   authorName: string;
   authorAvatar: string | null;
+  /**
+   * 作者主页的落点。**匿名帖必须是 null** ——
+   * 点进去就是本人，那等于没有匿名。
+   */
+  authorWxId: string | null;
   anonymous: boolean;
   boardId: string;
   boardKey: string;
@@ -183,6 +188,8 @@ function hydrateAuthors(rows: { post: typeof posts.$inferSelect; board: typeof b
             fallback: "成员",
           }),
       authorAvatar: post.anonymous ? null : (author?.avatar ?? profile?.avatar ?? null),
+      // 同上：匿名帖连主页链接都不能给
+      authorWxId: post.anonymous ? null : (author?.wxId ?? null),
       anonymous: post.anonymous,
       boardId: board.id,
       boardKey: board.key,
@@ -270,6 +277,8 @@ export function listReplies(viewer: ViewerContext, postId: string) {
             fallback: "成员",
           }),
       authorAvatar: r.anonymous ? null : (author?.avatar ?? null),
+      // 匿名回复不给主页链接 —— 点进去就是本人
+      authorWxId: r.anonymous ? null : (author?.wxId ?? null),
       accepted: r.accepted,
       // 原文（markdown）—— 编辑时要拿它填输入框，渲染后的 HTML 回不去
       content: r.content,
