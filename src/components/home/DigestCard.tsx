@@ -19,6 +19,25 @@ import type { Digest } from "@/lib/queries/digest";
  */
 export function DigestCard({ digest, loggedIn }: { digest: Digest; loggedIn: boolean }) {
   const items = [
+    /*
+     * 草稿排在最前面。
+     *
+     * 别的几条是「外面发生了什么」，这一条是**他自己写了一半的东西** ——
+     * 那是最强的一个回来的理由，也是唯一一个别人替代不了的。
+     *
+     * 有标题就报标题：「《人脑相当于多大的 AI 模型？》还没写完」
+     * 比「你有 1 篇没写完的」强得多 —— 前者他一眼就想起来写到哪儿了。
+     */
+    loggedIn &&
+      digest.drafts > 0 && {
+        key: "drafts",
+        text:
+          digest.draftTitle
+            ? `《${digest.draftTitle}》还没写完`
+            : `${digest.drafts} 篇没写完的`,
+        href: "/me/drafts",
+        strong: true,
+      },
     digest.repliesToMe > 0 && {
       key: "replies",
       text: `${digest.repliesToMe} 个人回复了你`,

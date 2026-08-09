@@ -161,3 +161,146 @@ describe("**「昨天」的口径和链接必须是同一天**", () => {
     assert.equal(d.chatQualityYesterday, 0);
   });
 });
+
+/* ───────────────────────────────────────────────────────────────
+ * 没写完的草稿
+ *
+ * 线上 56 篇帖子对着 8 份草稿，其中两份上千字 ——
+ * 有人认真写了一半，而**没有任何地方提醒过他**。
+ * 草稿页藏在「我的」下面，离开那个编辑器之后它就消失了。
+ *
+ * 一篇写了一半的东西，比任何「有 3 篇新帖」都更能把人叫回来 ——
+ * 那是他自己的东西，也是唯一一个别人替代不了的理由。
+ * ─────────────────────────────────────────────────────────────── */
+
+describe("真库：草稿", async () => {
+  const tmp2 = mkdtempSync(join(tmpdir(), "al-digest-drafts-"));
+  process.env.DB_PATH ??= join(tmp2, "test.db");
+  process.env.NEKOBOT_API_KEY ??= "nk_test";
+
+  const dbm = await import("@/lib/db");
+  const schema = await import("@/lib/db/schema");
+  const { migrate } = await import("drizzle-orm/better-sqlite3/migrator");
+  migrate(dbm.db, { migrationsFolder: "./drizzle" });
+  const q = await import("@/lib/queries/digest");
+
+  after(() => rmSync(tmp2, { recursive: true, force: true }));
+
+  const USER = "u_writer";
+  const viewer = () =>
+    ({ id: USER, wxId: "wx_w", status: "active", kind: "member" }) as unknown as Parameters<
+      typeof q.buildDigest
+    >[0];
+
+  const reset = () => {
+    dbm.db.delete(schema.drafts).run();
+    dbm.db.delete(schema.users).run();
+    dbm.db.insert(schema.users).values({ id: USER, wxId: "wx_w", status: "active" }).run();
+  };
+
+  let n = 0;
+  const draft = (over: { title?: string | null; content?: string; updatedAt?: number } = {}) =>
+    dbm.db
+      .insert(schema.drafts)
+      .values({
+        userId: USER,
+        targetType: "post",
+        targetId: `t${++n}`,
+        title: over.title ?? null,
+        content: over.content ?? "写了一半",
+        updatedAt: over.updatedAt ?? Date.now(),
+      })
+      .run();
+
+  it("没有草稿就是 0，不显示那一行", () => {
+    reset();
+    const d = q.buildDigest(viewer(), []);
+    assert.equal(d.drafts, 0);
+    assert.equal(d.draftTitle, null);
+  });
+
+  it("有草稿就数出来", () => {
+    reset();
+    draft();
+    draft();
+    assert.equal(q.buildDigest(viewer(), []).drafts, 2);
+  });
+
+  it("**只有一份时报标题** —— 他一眼就想起来写到哪儿了", () => {
+    reset();
+    draft({ title: "人脑相当于多大的 AI 模型？" });
+    assert.equal(q.buildDigest(viewer(), []).draftTitle, "人脑相当于多大的 AI 模型？");
+  });
+
+  it("**多份时不报标题** —— 报哪一份都是武断的", () => {
+    reset();
+    draft({ title: "甲" });
+    draft({ title: "乙" });
+    assert.equal(q.buildDigest(viewer(), []).draftTitle, null);
+  });
+
+  it("没标题的那份不编名字", () => {
+    reset();
+    draft({ title: null });
+    assert.equal(q.buildDigest(viewer(), []).draftTitle, null);
+  });
+
+  it("标题只有空白也不算有名字", () => {
+    reset();
+    draft({ title: "   " });
+    assert.equal(q.buildDigest(viewer(), []).draftTitle, null);
+  });
+
+  it("**不设时间窗** —— 放了三天的草稿更需要有人提一句", () => {
+    /*
+     * 别的几项都只看最近 24 小时（「你不在的时候」发生了什么），
+     * 而一份写了一半的东西不会因为放久了就不算数。
+     */
+    reset();
+    draft({ updatedAt: Date.now() - 30 * 86_400_000 });
+    assert.equal(q.buildDigest(viewer(), []).drafts, 1);
+  });
+
+  it("**别人的草稿不算**", () => {
+    reset();
+    dbm.db.insert(schema.users).values({ id: "u_other", wxId: "wx_o", status: "active" }).run();
+    dbm.db
+      .insert(schema.drafts)
+      .values({ userId: "u_other", targetType: "post", targetId: "x", content: "别人的" })
+      .run();
+    assert.equal(q.buildDigest(viewer(), []).drafts, 0);
+  });
+
+  it("未登录访客不查这一项", () => {
+    reset();
+    draft();
+    assert.equal(q.buildDigest(null, []).drafts, 0);
+  });
+});
+
+describe("草稿那一行的显示", () => {
+  const card = strip(
+    readFileSync(new URL("../src/components/home/DigestCard.tsx", import.meta.url), "utf8"),
+  );
+
+  it("**排在最前面** —— 那是他自己的东西", () => {
+    const items = card.slice(card.indexOf("const items = ["));
+    assert.ok(
+      items.indexOf('key: "drafts"') < items.indexOf('key: "replies"'),
+      "草稿那一行跑到别人的动静后面去了",
+    );
+  });
+
+  it("有标题就报标题", () => {
+    assert.match(card, /《\$\{digest\.draftTitle\}》还没写完/);
+  });
+
+  it("点得进草稿页 —— 每个数字后面都得有个能去的地方", () => {
+    assert.match(card, /href: "\/me\/drafts"/);
+  });
+
+  it("**只给登录用户** —— 访客没有草稿", () => {
+    const block = card.slice(card.indexOf('key: "drafts"') - 200, card.indexOf('key: "drafts"'));
+    assert.match(block, /loggedIn &&/);
+  });
+});

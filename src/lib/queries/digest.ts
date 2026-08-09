@@ -3,7 +3,7 @@ import "server-only";
 import { and, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { boards, messages, posts, replies, users } from "@/lib/db/schema";
+import { boards, drafts, messages, posts, replies, users } from "@/lib/db/schema";
 import type { CurrentUser } from "@/lib/auth/session";
 import { canSeePost } from "@/lib/forum/visibility";
 import { buildViewerContext } from "@/lib/forum/context";
@@ -40,12 +40,52 @@ export interface Digest {
    * 也可能和统计口径差一天（跨过零点那次请求）。
    */
   chatDateKey: string;
+  /**
+   * 没写完的草稿。
+   *
+   * ─────────────────────────────────────────
+   * 这是「明天还会打开」最强的一个理由
+   * ─────────────────────────────────────────
+   *
+   * 线上 56 篇帖子对着 8 份草稿，其中两份上千字 ——
+   * 有人认真写了一半，然后**没有任何地方提醒过他**。
+   * 草稿页藏在「我的」下面，离开那个编辑器之后它就消失了。
+   *
+   * 一篇写了一半的东西，比任何「有 3 篇新帖」都更能把人叫回来 ——
+   * 那是他自己的东西。
+   */
+  drafts: number;
+  /**
+   * 只有一份草稿时，把标题带出来。
+   *
+   * 「《人脑相当于多大的 AI 模型？》还没写完」比「你有 1 篇没写完的」
+   * 强得多：前者他一眼就想起来自己写到哪儿了，后者他得先点进去看。
+   *
+   * 没标题的那些给 null —— 编不出名字就不编。
+   */
+  draftTitle: string | null;
   /** 最新的几篇帖子，直接给入口 */
   latest: { id: string; title: string; boardName: string; authorName: string; createdAt: number }[];
 }
 
 export function buildDigest(user: CurrentUser | null, convIds: string[]): Digest {
   const since = Date.now() - 86_400_000;
+
+  /*
+   * 草稿不设时间窗。
+   *
+   * 别的几项都只看最近 24 小时（「你不在的时候」发生了什么），
+   * 而一份写了一半的东西**不会因为放了三天就不算数** ——
+   * 恰恰相反，放得越久越需要有人提一句。
+   */
+  const draftRows = user
+    ? db
+        .select({ title: drafts.title, updatedAt: drafts.updatedAt })
+        .from(drafts)
+        .where(eq(drafts.userId, user.id))
+        .orderBy(desc(drafts.updatedAt))
+        .all()
+    : [];
 
   const repliesToMe = user
     ? Number(
@@ -115,6 +155,9 @@ export function buildDigest(user: CurrentUser | null, convIds: string[]): Digest
     newPosts: visible.filter((r) => r.post.createdAt > since).length,
     chatQualityYesterday,
     chatDateKey,
+    drafts: draftRows.length,
+    // 只有一份时才报标题 —— 多份的时候报哪一份都是武断的
+    draftTitle: draftRows.length === 1 ? (draftRows[0].title?.trim() || null) : null,
     latest: visible.slice(0, 3).map((r) => ({
       id: r.post.id,
       title: r.post.title,
