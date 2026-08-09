@@ -69,8 +69,8 @@ function withPassword(id: string, secret = SECRET) {
     .run();
 }
 
-function attempt(wxId: string, password: string, now = NOW) {
-  return login.loginWithPassword({ wxId, password, ip: "1.2.3.4", now });
+function attempt(identifier: string, password: string, now = NOW) {
+  return login.loginWithPassword({ identifier, password, ip: "1.2.3.4", now });
 }
 
 function failures(userId: string) {

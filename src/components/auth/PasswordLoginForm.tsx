@@ -4,6 +4,8 @@ import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { IDENTIFIER_LABEL, IDENTIFIER_PLACEHOLDER } from "@/lib/auth/login-name";
+
 /**
  * 密码登录表单。
  *
@@ -12,11 +14,19 @@ import { useState, useTransition } from "react";
  *
  * 但也不能藏得太深：需要它的人恰恰是已经进不来的人，
  * 那时候多一层折叠就是多一分挫败。所以是一行可点的文字，不是菜单里的一项。
+ *
+ * ─────────────────────────────────────────
+ * 第一个框收四种东西
+ * ─────────────────────────────────────────
+ *
+ * 原来只写「微信 ID」，而真实的微信 ID 长这样：`wxid_examplemember01`——
+ * 一条只有背得下这串号的人才走得通的兜底通道，等于没有这条通道。
+ * 现在登录名、手机号、邮箱、微信 ID 都收（谁先认见 lib/auth/identity.ts）。
  */
 export function PasswordLoginForm({ next }: { next: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [wxId, setWxId] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -27,7 +37,7 @@ export function PasswordLoginForm({ next }: { next: string }) {
       const response = await fetch("/api/auth/password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wxId: wxId.trim(), password }),
+        body: JSON.stringify({ identifier: identifier.trim(), password }),
       });
       const data = await response.json().catch(() => ({}));
 
@@ -63,9 +73,10 @@ export function PasswordLoginForm({ next }: { next: string }) {
       }}
     >
       <input
-        value={wxId}
-        onChange={(e) => setWxId(e.target.value)}
-        placeholder="微信 ID"
+        value={identifier}
+        onChange={(e) => setIdentifier(e.target.value)}
+        aria-label={IDENTIFIER_LABEL}
+        placeholder={IDENTIFIER_PLACEHOLDER}
         autoComplete="username"
         autoCapitalize="off"
         autoCorrect="off"
@@ -83,7 +94,7 @@ export function PasswordLoginForm({ next }: { next: string }) {
 
       <button
         type="submit"
-        disabled={pending || !wxId.trim() || !password}
+        disabled={pending || !identifier.trim() || !password}
         className="t-subhead flex w-full items-center justify-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2.5 font-medium transition active:opacity-70 disabled:opacity-40"
       >
         {pending && <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.2} aria-hidden />}
@@ -102,6 +113,7 @@ export function PasswordLoginForm({ next }: { next: string }) {
 
       <p className="t-caption2 px-1 leading-relaxed text-[var(--ink-quaternary)]">
         密码要先在站内设置过才能用（我的 → 登录与安全）。没设过就走上面的微信验证。
+        微信 ID 记不住的话，进去之后在同一页设一个登录名。
       </p>
     </form>
   );

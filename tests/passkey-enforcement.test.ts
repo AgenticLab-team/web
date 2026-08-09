@@ -125,7 +125,7 @@ beforeEach(() => {
 describe("**这个开关真的被读了**", () => {
   it("开着时，有权限的人用密码登不进来", () => {
     givePasskey(ADMIN);
-    const r = login.loginWithPassword({ wxId: "admin_wx", password: PASSWORD });
+    const r = login.loginWithPassword({ identifier: "admin_wx", password: PASSWORD });
     assert.equal(r.ok, false, "密码是对的就放进来了 —— 那这个开关还是没人读");
     assert.match(r.error!, /Passkey/);
   });
@@ -133,12 +133,12 @@ describe("**这个开关真的被读了**", () => {
   it("关掉之后同一个人就能进 —— 证明判定确实来自这个设置", () => {
     givePasskey(ADMIN);
     setEnforced(false);
-    const r = login.loginWithPassword({ wxId: "admin_wx", password: PASSWORD });
+    const r = login.loginWithPassword({ identifier: "admin_wx", password: PASSWORD });
     assert.equal(r.ok, true);
   });
 
   it("普通成员不受影响", () => {
-    const r = login.loginWithPassword({ wxId: "member_wx", password: PASSWORD });
+    const r = login.loginWithPassword({ identifier: "member_wx", password: PASSWORD });
     assert.equal(r.ok, true);
   });
 
@@ -147,7 +147,7 @@ describe("**这个开关真的被读了**", () => {
      * 这条锁的是「按权限判而不是按角色名判」。
      * 按名字判的话，这里怎么改权限都不会有变化。
      */
-    let r = login.loginWithPassword({ wxId: "member_wx", password: PASSWORD });
+    let r = login.loginWithPassword({ identifier: "member_wx", password: PASSWORD });
     assert.equal(r.ok, true, "先确认他本来进得来");
 
     dbm.db
@@ -156,12 +156,12 @@ describe("**这个开关真的被读了**", () => {
       .run();
     can.invalidatePermissionCache();
 
-    r = login.loginWithPassword({ wxId: "member_wx", password: PASSWORD });
+    r = login.loginWithPassword({ identifier: "member_wx", password: PASSWORD });
     assert.equal(r.ok, false, "授了危险权限之后还能用密码进 —— 判定没跟着权限走");
   });
 
   it("没绑 Passkey 的管理员也被拦，而且说法不一样", () => {
-    const r = login.loginWithPassword({ wxId: "admin_wx", password: PASSWORD });
+    const r = login.loginWithPassword({ identifier: "admin_wx", password: PASSWORD });
     assert.equal(r.ok, false);
     assert.match(r.error!, /密码是对的/);
   });
@@ -177,13 +177,13 @@ describe("**检查的位置**", () => {
      * 而那正是攻击者最想先知道的一件事。
      */
     givePasskey(ADMIN);
-    const r = login.loginWithPassword({ wxId: "admin_wx", password: "wrong" });
+    const r = login.loginWithPassword({ identifier: "admin_wx", password: "wrong" });
     assert.equal(r.ok, false);
     assert.equal(r.error, password.GENERIC_LOGIN_ERROR, "密码还没验就泄露了「他是管理员」");
   });
 
   it("不存在的账号也报通用错误 —— 不能从措辞上分出「有没有这个人」", () => {
-    const r = login.loginWithPassword({ wxId: "nobody_wx", password: PASSWORD });
+    const r = login.loginWithPassword({ identifier: "nobody_wx", password: PASSWORD });
     assert.equal(r.error, password.GENERIC_LOGIN_ERROR);
   });
 
@@ -197,7 +197,7 @@ describe("**检查的位置**", () => {
 
   it("被拦下来也记一次登录尝试 —— 否则这类失败在历史里是隐形的", () => {
     givePasskey(ADMIN);
-    login.loginWithPassword({ wxId: "admin_wx", password: PASSWORD });
+    login.loginWithPassword({ identifier: "admin_wx", password: PASSWORD });
 
     const attempt = dbm.db.select().from(schema.loginAttempts).get();
     assert.ok(attempt);

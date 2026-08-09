@@ -219,5 +219,9 @@ export function checkLockout(state: LockoutState, now: number): LockoutVerdict {
  *
  * **不区分「没有这个人」和「密码不对」**。区分了就等于送了一个
  * 查询接口：输入一个微信号，从回答里就能知道他在不在这个社群。
+ *
+ * 措辞里也不点名是哪一种标识 —— 现在第一个框收登录名、手机号、
+ * 邮箱和微信 ID 四种，说「微信 ID 不对」会让一个用登录名登录的人
+ * 去反复检查一个他根本没填的东西。
  */
-export const GENERIC_LOGIN_ERROR = "微信 ID 或密码不对";
+export const GENERIC_LOGIN_ERROR = "账号或密码不对";

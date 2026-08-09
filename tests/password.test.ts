@@ -177,5 +177,14 @@ describe("对外的措辞", () => {
     assert.equal(GENERIC_LOGIN_ERROR.includes("不存在"), false);
     assert.equal(GENERIC_LOGIN_ERROR.includes("未注册"), false);
     assert.match(GENERIC_LOGIN_ERROR, /或/);
+
+    /*
+     * 也不点名是哪一种标识。第一个框收登录名、手机号、邮箱和微信 ID
+     * 四种，说「微信 ID 不对」会让一个用登录名登录的人
+     * 去反复检查一个他根本没填的东西。
+     */
+    for (const kind of ["微信", "手机", "邮箱", "登录名"]) {
+      assert.equal(GENERIC_LOGIN_ERROR.includes(kind), false, `措辞里点名了「${kind}」`);
+    }
   });
 });

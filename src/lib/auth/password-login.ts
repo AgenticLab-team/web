@@ -12,6 +12,7 @@ import {
   needsRehash,
   verifyPassword,
 } from "@/lib/auth/password";
+import { resolveIdentity } from "@/lib/auth/identity";
 import { isPrivileged, passwordLoginVerdict } from "@/lib/auth/passkey-policy";
 import { effectivePermissions } from "@/lib/rbac/can";
 import { getSettingBool } from "@/lib/settings/store";
@@ -142,23 +143,36 @@ export function hasPassword(userId: string): boolean {
 }
 
 /**
- * 用微信 ID + 密码登录。
+ * 用「登录名 / 手机号 / 邮箱 / 微信 ID」+ 密码登录。
+ *
+ * ─────────────────────────────────────────
+ * 原来只收微信 ID
+ * ─────────────────────────────────────────
+ *
+ * 而真实的微信 ID 长这样：`wxid_examplemember01` —— 系统分配、
+ * 绝大多数人从来没见过。于是这条「兜底通道」对最需要它的人
+ * 等于不存在：主路（群里的验证码）不通的时候，
+ * 备用钥匙上刻着一串谁也背不下来的号。
+ *
+ * 现在四种标识都收，谁先认见 identity.ts。
  *
  * 返回的错误措辞对「没有这个人」「没设过密码」「密码不对」
- * **完全一致** —— 区分了就等于送了一个「这个微信号在不在社群里」的查询接口。
+ * **完全一致** —— 区分了就等于送了一个「这个字符串在不在社群里」的查询接口。
  */
 export function loginWithPassword(input: {
-  wxId: string;
+  /** 登录名、手机号、邮箱或微信 ID */
+  identifier: string;
   password: string;
   ip?: string;
   userAgent?: string;
   now?: number;
 }): LoginResult {
   const now = input.now ?? Date.now();
-  const identifier = input.wxId.trim();
+  const identifier = input.identifier.trim();
 
-  const user = identifier
-    ? db.select().from(users).where(eq(users.wxId, identifier)).get()
+  const resolved = identifier ? resolveIdentity(identifier) : null;
+  const user = resolved
+    ? db.select().from(users).where(eq(users.id, resolved.userId)).get()
     : undefined;
 
   const credential = user ? passwordCredentialOf(user.id) : null;

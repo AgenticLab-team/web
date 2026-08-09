@@ -69,12 +69,19 @@ export function listUsers(query: UserQuery = {}): {
   if (query.keyword) {
     const kw = `%${query.keyword.trim()}%`;
     // 站内昵称、微信昵称、wxid、邮箱、账号 id 都能搜 ——
-    // 管理员手上拿到的线索形态不一定，只支持一种等于逼人去猜
+    /*
+     * 管理员手上拿到的线索形态不一定，只支持一种等于逼人去猜。
+     *
+     * **手机号刻意不在里面**。它是用户填的真实世界身份、没有经过验证，
+     * 而且从来不显示给任何人 —— 能用它搜人的话，这个站就成了
+     * 一个「手机号 → 这个人是谁」的反查工具。
+     */
     conditions.push(
       or(
         like(users.siteNickname, kw),
         like(users.wxNickname, kw),
         like(users.wxId, kw),
+        like(users.username, kw),
         like(users.email, kw),
         like(users.id, kw),
       )!,

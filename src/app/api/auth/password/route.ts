@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { auditContextFrom } from "@/lib/audit";
+import { IDENTIFIER_LABEL } from "@/lib/auth/login-name";
 import { loginWithPassword } from "@/lib/auth/password-login";
 import { tooManyLoginAttempts } from "@/lib/auth/ratelimit";
 import { createSession, setSessionCookie } from "@/lib/auth/session";
@@ -27,15 +28,26 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => null);
-  const wxId = typeof body?.wxId === "string" ? body.wxId : "";
+  /*
+   * 老字段名 wxId 一起收着。
+   *
+   * 有人可能把登录页停在标签里好几天，那个页面发出来的还是 wxId ——
+   * 改名当天让这些人收到「请填写…」是完全没必要的一次伤害。
+   */
+  const identifier =
+    typeof body?.identifier === "string"
+      ? body.identifier
+      : typeof body?.wxId === "string"
+        ? body.wxId
+        : "";
   const password = typeof body?.password === "string" ? body.password : "";
 
-  if (!wxId || !password) {
-    return NextResponse.json({ error: "请填写微信 ID 与密码" }, { status: 400 });
+  if (!identifier || !password) {
+    return NextResponse.json({ error: `请填写「${IDENTIFIER_LABEL}」和密码` }, { status: 400 });
   }
 
   const result = loginWithPassword({
-    wxId,
+    identifier,
     password,
     ip: ctx.actorIp,
     userAgent: ctx.actorUa,

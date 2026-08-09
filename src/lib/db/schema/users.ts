@@ -28,6 +28,30 @@ export const users = sqliteTable(
       .notNull()
       .default(false),
 
+    /**
+     * 自己起的登录名。
+     *
+     * 微信 ID 记不住 —— 真实的那个长这样：`wxid_examplemember01`，
+     * 系统分配、绝大多数人从来没见过。于是「密码兜底登录」
+     * 对最需要它的人等于不存在。
+     *
+     * **统一存小写**：不统一的话 `Admin` 和 `admin` 是两个账号，
+     * 而它们在页面上长得几乎一样，这是最省事的一种冒充。
+     * 格式与保留词见 lib/auth/login-name.ts。
+     */
+    username: text("username").unique(),
+
+    /**
+     * 手机号。**没有经过验证** —— 这个站没有短信通道。
+     *
+     * 所以它的地位和登录名完全一样：一个自己挑的、恰好好记的字符串。
+     * 由此有两条线：不能用它找回账号（否则等于填上别人的号码就能接管），
+     * 也不在任何地方显示或用它搜人（它是真实世界的身份）。
+     */
+    phone: text("phone").unique(),
+    /** 留给真有短信通道的那天。在那之前永远是 null —— 比一个假装验证过的布尔安全 */
+    phoneVerifiedAt: integer("phone_verified_at"),
+
     email: text("email").unique(),
     emailVerifiedAt: integer("email_verified_at"),
 

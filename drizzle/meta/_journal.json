@@ -260,6 +260,13 @@
       "when": 1786268494446,
       "tag": "0039_join_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1786272291040,
+      "tag": "0040_login_identifiers",
+      "breakpoints": true
     }
   ]
 }

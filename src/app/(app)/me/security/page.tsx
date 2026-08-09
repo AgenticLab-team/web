@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { LoginNameSetup } from "@/components/auth/LoginNameSetup";
 import { PasswordSetup } from "@/components/auth/PasswordSetup";
 import { PasskeySetup } from "@/components/passkey/PasskeySetup";
 import { SessionList } from "@/components/passkey/SessionList";
@@ -70,6 +71,16 @@ export default async function SecurityPage() {
           </p>
         )}
       </Card>
+
+      {/*
+        * 登录名排在密码前面。
+        *
+        * 「设了密码但登录名是 wxid_examplemember01」是一个
+        * 用不上的密码 —— 顺序应该是先有个记得住的名字，再谈密码。
+        */}
+      <Section title="登录名">
+        <LoginNameSetup username={user.username} phone={user.phone} wxId={user.wxId} />
+      </Section>
 
       <Section title="Passkey">
         <PasskeySetup items={passkeys} />
