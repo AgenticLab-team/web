@@ -190,7 +190,19 @@ export function Pill({
   return (
     <Link
       href={href}
-      className={`t-footnote rounded-[var(--radius-pill)] px-3 py-1.5 font-medium transition-colors ${
+      /*
+       * `inline-flex` 不是为了排版好看，是**必需的**。
+       *
+       * `<a>` 默认是 `display: inline`。一个 inline 元素里放进任何块级子元素
+       * （比如一个 `flex` 的 span），排版引擎会把这个 inline 盒子**劈成三段**：
+       * 子元素之前的一段、子元素本身、子元素之后的一段。
+       * 而圆角和背景是按段画的 —— 于是屏幕上出现
+       * 「左边半圆 / 中间文字 / 右边半圆」三行。
+       *
+       * 顺带解决另一件事：inline 元素的垂直 padding 不参与行高计算，
+       * 所以 `py-1.5` 在原来那个写法下根本撑不开药丸。
+       */
+      className={`t-footnote inline-flex items-center gap-1 rounded-[var(--radius-pill)] px-3 py-1.5 font-medium transition-colors ${
         active
           ? "bg-[var(--ink)] text-[var(--canvas)]"
           : "bg-[var(--fill)] text-[var(--ink-secondary)] hover:bg-[var(--fill-strong)]"

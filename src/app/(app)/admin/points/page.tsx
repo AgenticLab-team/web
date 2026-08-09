@@ -55,7 +55,7 @@ export default async function AdminPointsPage() {
           /* 这一页是体检，流水页才是逐笔查账 —— 两件事，给一条明路过去 */
           <Link
             href="/admin/points/ledger"
-            className="t-footnote shrink-0 rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 font-medium transition active:scale-[0.97]"
+            className="inline-flex items-center t-footnote shrink-0 rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 font-medium transition active:scale-[0.97]"
           >
             看流水
           </Link>

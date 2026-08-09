@@ -101,7 +101,7 @@ function Row({ item }: { item: ScheduledPost }) {
 
         <Link
           href={`/forum/p/${item.id}/edit`}
-          className="t-caption rounded-[var(--radius-control)] px-2.5 py-1.5 text-[var(--ink-tertiary)] transition hover:bg-[var(--fill)]"
+          className="inline-flex items-center t-caption rounded-[var(--radius-control)] px-2.5 py-1.5 text-[var(--ink-tertiary)] transition hover:bg-[var(--fill)]"
         >
           去改改
         </Link>

@@ -170,19 +170,15 @@ export default async function ArchivePage({
         */}
       <PillRow>
         <Pill href={pageHref("/archive", { ...carry, order: undefined }, 1)} active={order === "desc"}>
-          <span className="flex items-center gap-1">
             <ArrowDownWideNarrow className="h-3 w-3" strokeWidth={2.2} aria-hidden />
             最新在前
-          </span>
         </Pill>
         <Pill
           href={pageHref("/archive", { ...carry, order: flipOrder(DEFAULT_ORDER) }, 1)}
           active={order === "asc"}
         >
-          <span className="flex items-center gap-1">
             <ArrowUpWideNarrow className="h-3 w-3" strokeWidth={2.2} aria-hidden />
             按对话顺序
-          </span>
         </Pill>
       </PillRow>
 

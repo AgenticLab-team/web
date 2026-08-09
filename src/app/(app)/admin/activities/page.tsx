@@ -221,7 +221,7 @@ function DomainCsvDownload({ id, counts }: { id: string; counts: Record<ExportSc
             download
             // 空的那一档也留着但点不动：藏起来的话人会以为功能没了
             aria-disabled={counts[scope] === 0}
-            className={`t-caption rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-1.5 font-medium ${
+            className={`inline-flex items-center t-caption rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-1.5 font-medium ${
               counts[scope] === 0
                 ? "pointer-events-none text-[var(--ink-quaternary)]"
                 : "text-[var(--accent)]"

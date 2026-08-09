@@ -129,19 +129,15 @@ export default async function SearchPage({
           按关键词
         </Pill>
         <Pill href={href({ mode: "semantic" })} active={semantic}>
-          <span className="flex items-center gap-1">
             <Sparkles className="h-3 w-3" strokeWidth={2.2} aria-hidden />
             意思差不多的
-          </span>
         </Pill>
       </PillRow>
 
       <PillRow wrap>
         <Pill href={href({ mine: onlyMine ? undefined : "1" })} active={onlyMine}>
-          <span className="flex items-center gap-1">
             <User className="h-3 w-3" strokeWidth={2.2} aria-hidden />
             只搜我说过的
-          </span>
         </Pill>
         {/*
           * 原来这里还有一颗「按天回看」——

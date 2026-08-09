@@ -106,10 +106,8 @@ export default async function LinksPage({
               最近分享
             </Pill>
             <Pill href={query({ sort: "votes" })} active={byVotes}>
-              <span className="flex items-center gap-1">
                 <ThumbsUp className="h-3 w-3" strokeWidth={2.2} aria-hidden />
                 最有用
-              </span>
             </Pill>
 
             {/* 分组之间的竖线。aria-hidden —— 读屏念一条竖线没有意义 */}

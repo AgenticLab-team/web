@@ -31,7 +31,7 @@ export default async function ForumPage() {
             <Link
               href="/forum/search"
               aria-label="搜索"
-              className="rounded-[var(--radius-control)] bg-[var(--fill)] p-2 text-[var(--ink-secondary)] transition active:scale-[0.95]"
+              className="inline-flex items-center rounded-[var(--radius-control)] bg-[var(--fill)] p-2 text-[var(--ink-secondary)] transition active:scale-[0.95]"
             >
               <Search className="h-4 w-4" strokeWidth={2} aria-hidden />
             </Link>

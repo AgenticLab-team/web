@@ -249,7 +249,7 @@ export default async function MembersPage({
                               <Link
                                 key={t.slug}
                                 href={`/members?tag=${encodeURIComponent(t.slug)}`}
-                                className="t-caption2 rounded-full bg-[var(--fill)] px-2 py-0.5 text-[var(--ink-secondary)] transition active:opacity-60"
+                                className="inline-flex items-center t-caption2 rounded-full bg-[var(--fill)] px-2 py-0.5 text-[var(--ink-secondary)] transition active:opacity-60"
                               >
                                 {t.label}
                               </Link>

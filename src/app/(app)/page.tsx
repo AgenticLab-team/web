@@ -115,7 +115,7 @@ export default async function HomePage() {
           user ? null : (
             <Link
               href="/login"
-              className="t-subhead shrink-0 rounded-[var(--radius-control)] bg-[var(--accent)] px-3.5 py-2 font-medium text-[var(--accent-ink)] transition active:scale-[0.97]"
+              className="inline-flex items-center t-subhead shrink-0 rounded-[var(--radius-control)] bg-[var(--accent)] px-3.5 py-2 font-medium text-[var(--accent-ink)] transition active:scale-[0.97]"
             >
               登录
             </Link>
