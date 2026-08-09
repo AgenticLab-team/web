@@ -14,6 +14,7 @@
  */
 import { checkAndDispatch } from "@/lib/alerts/dispatch";
 import { publishDueScheduled } from "@/lib/forum/schedule";
+import { settleAutoRoles } from "@/lib/rbac/role-settle";
 import { settleExpiredPins } from "@/lib/forum/pin-settle";
 import {
   lastTickHealth,
@@ -89,6 +90,20 @@ async function main() {
       run: () => settleDueSeasons(),
       describe: (rows: ReturnType<typeof settleDueSeasons>) =>
         rows.length === 0 ? "无待结算" : rows.map((r) => `${r.seasonKey}:${r.reason}`).join("；"),
+    },
+    {
+      /*
+       * 自动身份组和定时发布挂在同一轮里 —— 理由一样：
+       * 多一个定时器就多一处会悄悄停掉、而且没人看得出来的东西。
+       */
+      name: "身份组结算",
+      run: () => settleAutoRoles(),
+      describe: (r: ReturnType<typeof settleAutoRoles>) => {
+        if (r.blocked.length > 0) return `拦下 ${r.blocked.join("、")}（带危险权限）`;
+        return r.granted || r.revoked || r.waitlisted
+          ? `授予 ${r.granted} · 回收 ${r.revoked}${r.waitlisted ? ` · 名额不够 ${r.waitlisted}` : ""}`
+          : "无变化";
+      },
     },
     {
       name: "称号结算",

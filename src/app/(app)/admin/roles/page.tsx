@@ -4,8 +4,10 @@ import Link from "next/link";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Empty, Section } from "@/components/ui/primitives";
+import { listRoles } from "@/lib/rbac/role-admin";
 import { requireAdmin } from "@/lib/admin/guard";
 import { buildMatrix, categoryLabel, whoHasPermission } from "@/lib/admin/permissions";
+import { RoleEditor } from "@/components/admin/RoleEditor";
 import { MatrixEditor } from "@/components/admin/MatrixEditor";
 import { MatrixHistory } from "@/components/admin/MatrixHistory";
 import { getPermission, type PermissionKey } from "@/lib/rbac/permissions";
@@ -34,6 +36,8 @@ export default async function AdminRolesPage({
   const history = recentPreviews();
 
   const matrix = buildMatrix();
+  // 增删改要的字段比矩阵那份多（名额、自动规则、危险等级）
+  const editableRoles = listRoles();
 
   const lookupKey = params.lookup as PermissionKey | undefined;
   const lookupDef = lookupKey ? getPermission(lookupKey) : undefined;
@@ -113,29 +117,15 @@ export default async function AdminRolesPage({
         </Section>
       )}
 
+      {/*
+        * 身份组的增删改。
+        *
+        * 这一节以前是只读的 —— 身份组只能靠改代码里的 BUILTIN_ROLES
+        * 来增减，而 roles 表上 max_holders / auto_grant_rule /
+        * auto_revoke 三列在 schema 之外零引用。
+        */}
       <Section title="身份组">
-        <div className="inset-group">
-          {matrix.roles.map((role) => (
-            <div key={role.id} className="inset-row flex items-center gap-3 px-4 py-3">
-              <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ background: role.color ?? "var(--ink-tertiary)" }}
-                aria-hidden
-              />
-              <span className="t-body min-w-0 flex-1">{role.name}</span>
-              <code className="t-caption font-mono text-[var(--ink-quaternary)]">{role.key}</code>
-              {role.isSystem && (
-                <span className="t-caption2 text-[var(--ink-quaternary)]">内置</span>
-              )}
-              <Link
-                href={`/admin/users?role=${role.key}`}
-                className="tabular t-caption shrink-0 text-[var(--accent)]"
-              >
-                {role.holders} 人
-              </Link>
-            </div>
-          ))}
-        </div>
+        <RoleEditor roles={editableRoles} />
       </Section>
 
       <Section title="权限矩阵">
