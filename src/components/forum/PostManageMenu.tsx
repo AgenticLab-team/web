@@ -196,7 +196,7 @@ export function PostManageMenu({
         aria-expanded={open}
         aria-haspopup="true"
         onClick={() => (open ? close() : setOpen(true))}
-        className={`tap-target rounded-[0.5rem] p-2 transition-all duration-150 active:scale-90 ${
+        className={`tap-target rounded-[0.5rem] p-2 transition active:scale-90 ${
           open
             ? "bg-[var(--fill)] text-[var(--ink)]"
             : "text-[var(--ink-tertiary)] hover:bg-[var(--fill)] hover:text-[var(--ink-secondary)]"

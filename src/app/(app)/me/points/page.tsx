@@ -56,8 +56,8 @@ export default async function PointsPage() {
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-[var(--fill)]">
               <div
-                className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-700"
-                style={{ width: `${progress.ratio * 100}%` }}
+                className="progress-fill h-full rounded-full bg-[var(--accent)]"
+                style={{ transform: `translateX(${progress.ratio * 100 - 100}%)` }}
               />
             </div>
             <p className="tabular t-caption mt-2 text-[var(--ink-tertiary)]">

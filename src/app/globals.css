@@ -36,6 +36,40 @@
   );
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
 
+  /*
+   * ── 动效的三档时长 ──────────────────────
+   *
+   * 以前每处动画的时长都是随手写的（0.55s、0.35s、0.32s、0.2s…），
+   * 整站的「手感」因此不一致。收敛成三档，**按交互的物理感受分**，
+   * 不是按组件分 —— 新组件先问自己属于哪一档，而不是再发明一个数字：
+   *
+   * · 反馈（150ms）：hover、按压、选中态的颜色/缩放。
+   *   手指还贴在屏幕上，界面必须跟手 —— 超过 200ms 就是「卡」，
+   *   低于 100ms 又看不见变化。150ms 恰好是 Tailwind 的默认时长，
+   *   所以裸写 transition-colors 就落在这一档，不用记数字。
+   *
+   * · 转场（320ms）：已有元素改变位置或形态 —— 开关滑块、
+   *   滑动归位、菜单浮层。眼睛要跟着东西移动，太快看不清方向，
+   *   太慢挡住下一步操作。配 spring 用：曲线前 25% 就走完七成路程，
+   *   所以 320ms 的体感依然「快」，只是收尾从容。
+   *
+   * · 入场（500ms）：导航后新内容首次出现。每次导航只发生一次，
+   *   眼睛需要时间解析一屏新东西，这档可以最慢；同样靠 spring
+   *   的快起步保证「点下去马上有反应」的体感。
+   *
+   * 反馈档动颜色/透明度，转场和入场档动 transform ——
+   * 三档全部只碰合成器属性（transform/opacity/颜色），
+   * 微信 webview 里的低端安卓才跑得满帧。
+   */
+  --motion-feedback: 150ms;
+  --motion-shift: 320ms;
+  --motion-entrance: 500ms;
+  /* 列表逐项错位的间隔。10 项累计 252ms，仍在转场档之内，不显得拖 */
+  --motion-stagger-step: 28ms;
+
+  /* 让裸写的 transition-* 工具类自动落在反馈档 */
+  --default-transition-duration: var(--motion-feedback);
+
   --sidebar-width: 15.5rem;
   --tabbar-height: 3.25rem;
 
@@ -261,7 +295,32 @@ body {
   box-shadow: inset -0.5px 0 0 var(--separator);
 }
 
-/* ── 动效 ─────────────────────────────────────────────── */
+/* ── 动效 ───────────────────────────────────────────────
+ *
+ * 时长与缓动的三档定义见上面 @theme 里的注释。这里只写实现，
+ * 但有一条铁律要先说清楚，因为它来自一个真实的 bug：
+ *
+ * ─────────────────────────────────────────
+ * 入场动画一律 fill-mode: backwards，不许用 both / forwards
+ * ─────────────────────────────────────────
+ *
+ * 站长报过「帖子页的更多菜单被回复列表挡住」。成因：
+ * `.animate-rise` 当时写的是 `both`，而 rise 里有 transform ——
+ * 只要动画还在「应用」（both 的 forwards 半边就是永远应用），
+ * 元素就是一个层叠上下文，里面的 z-index 再大也逃不出去。
+ * 于是一个**纯装饰的入场动画**，永久改变了容器的层叠行为。
+ *
+ * 这两种 fill 的差别在这儿：
+ * · backwards 只在「延迟期」生效 —— stagger 的后排条目在等自己的
+ *   delay 时保持透明，这是我们真正需要 fill 的唯一原因；
+ * · forwards 在动画结束后**继续持有** to 帧 —— 而 rise 的 to 帧
+ *   本来就等于元素的自然状态，所以 forwards 什么也没贡献，
+ *   只留下一个永久的层叠上下文当地雷。
+ *
+ * 动画进行中的 0.5s 里层叠上下文依然存在 —— 这就是为什么悬浮
+ * 面板必须传送到 body（见 ui/anchored.ts），而不是指望这里根治。
+ * 两层防御缺一不可。
+ */
 @keyframes rise {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: none; }
@@ -272,26 +331,91 @@ body {
   to   { opacity: 1; }
 }
 
-@keyframes toast-progress {
-  from { width: 100%; }
-  to   { width: 0%; }
-}
-
-.animate-rise { animation: rise 0.55s var(--ease-spring) both; }
-.animate-fade { animation: fade 0.35s var(--ease-out-quart) both; }
+.animate-rise { animation: rise var(--motion-entrance) var(--ease-spring) backwards; }
+.animate-fade { animation: fade var(--motion-shift) var(--ease-out-quart) backwards; }
 
 /* 列表逐项入场：靠 CSS 变量传序号，避免给每一项写内联 delay */
 .stagger > * {
-  animation: rise 0.5s var(--ease-spring) both;
-  animation-delay: calc(var(--i, 0) * 28ms);
+  animation: rise var(--motion-entrance) var(--ease-spring) backwards;
+  animation-delay: calc(var(--i, 0) * var(--motion-stagger-step));
 }
 
+/*
+ * Toast 的剩余时间条。
+ *
+ * 动 scaleX 而不是 width：width 每一帧都触发布局，微信 webview
+ * 里的低端安卓会明显掉帧；scaleX 全程在合成器上跑。
+ * 时长由 JS 传进来（撤销 6s / 普通 3.2s），它表达的是真实的
+ * 剩余时间，不属于三档里的任何一档。
+ *
+ * 这里的 forwards 是全站唯一的例外：JS 定时器晚到一帧时，
+ * 进度条不该跳回满格。它是个 aria-hidden 的叶子节点，
+ * 没有任何需要逃逸层叠上下文的后代，所以上面那条铁律不适用。
+ */
+@keyframes toast-progress {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+.animate-toast-progress {
+  transform-origin: left;
+  animation: toast-progress var(--toast-duration, 4s) linear forwards;
+}
+
+/*
+ * 开关滑块的位移。
+ *
+ * 之前五处开关都在动 left（transition-all + 换 left 值）——
+ * left 触发布局，等于每拨一次开关就让低端机卡一下。
+ * 收敛到这一个类：left 固定，位移交给 translateX。
+ */
+.switch-knob {
+  transition: transform var(--motion-shift) var(--ease-spring);
+}
+
+/*
+ * 进度条填充：投票结果、升级进度、签到路径。
+ *
+ * 之前四处都在动 width（transition-[width]）—— 和开关动 left 是
+ * 同一个病：每一帧都触发布局。改成铺满轨道再用 translateX 拉回来，
+ * 轨道的 overflow-hidden 负责裁掉多出的部分，全程只碰合成器。
+ * 组件里写 translateX(比例 - 100%)，0% 时正好完全移出可见区。
+ *
+ * 缓动用 out-quart 而不是 spring —— spring 会短暂冲过头，
+ * 进度条冲过头等于对用户「虚报」了一瞬间的进度。
+ */
+.progress-fill {
+  width: 100%;
+  transition: transform var(--motion-shift) var(--ease-out-quart);
+}
+
+/*
+ * ─────────────────────────────────────────
+ * 减少动效
+ * ─────────────────────────────────────────
+ *
+ * 前庭功能障碍的用户看到大幅位移动画会真的眩晕，
+ * 这是无障碍需求，不是偏好。
+ *
+ * 用 0.01ms 而不是 animation: none —— 动画仍然「完成」，
+ * animationend 照常触发、backwards fill 照常结算到自然状态，
+ * 任何等动画结束的逻辑都不会挂；用户看到的是内容直接就位。
+ */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /*
+   * Toast 进度条豁免：它是信息不是装饰 ——「还有多久可以撤销」。
+   * 被上面的规则压成 0.01ms 的话，条会瞬间清空，用户以为撤销
+   * 窗口已经关了。6s 的线性缩放没有大幅位移，不触发前庭问题。
+   */
+  .animate-toast-progress {
+    animation-duration: var(--toast-duration, 4s) !important;
   }
 }
 
@@ -401,7 +525,7 @@ body {
   /* 下划线避开字母下伸部，读起来干净很多 */
   text-underline-offset: 0.2em;
   text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
-  transition: text-decoration-color 0.15s;
+  transition: text-decoration-color var(--motion-feedback);
 }
 .prose-forum a:hover { text-decoration-color: var(--accent); }
 

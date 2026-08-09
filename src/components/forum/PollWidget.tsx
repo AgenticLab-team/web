@@ -64,15 +64,15 @@ export function PollWidget({ poll, canVote }: { poll: PollView; canVote: boolean
               disabled={!interactive || pending}
               onClick={() => toggle(option.id)}
               aria-pressed={checked}
-              className={`relative w-full overflow-hidden rounded-[var(--radius-control)] px-3.5 py-2.5 text-left transition-all ${
+              className={`relative w-full overflow-hidden rounded-[var(--radius-control)] px-3.5 py-2.5 text-left transition ${
                 interactive ? "active:scale-[0.99]" : ""
               } ${checked ? "bg-[var(--accent-soft)]" : "bg-[var(--fill)]"}`}
             >
               {/* 结果条画在背景层，文字始终在上面，不会被遮住 */}
               {showResults && (
                 <span
-                  className="absolute inset-y-0 left-0 bg-[var(--accent)]/12 transition-[width] duration-500"
-                  style={{ width: `${option.percent}%` }}
+                  className="progress-fill absolute inset-y-0 left-0 bg-[var(--accent)]/12"
+                  style={{ transform: `translateX(${option.percent - 100}%)` }}
                   aria-hidden
                 />
               )}

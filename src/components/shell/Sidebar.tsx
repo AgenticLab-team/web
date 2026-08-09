@@ -61,7 +61,7 @@ export function Sidebar({
                     <Link
                       href={item.href}
                       aria-current={isActive ? "page" : undefined}
-                      className={`group flex items-center gap-3 rounded-[var(--radius-control)] px-3 py-2 transition-colors duration-150 ${
+                      className={`group flex items-center gap-3 rounded-[var(--radius-control)] px-3 py-2 transition-colors ${
                         isActive
                           ? "bg-[var(--accent-soft)] text-[var(--accent)]"
                           : "text-[var(--ink-secondary)] hover:bg-[var(--fill)] hover:text-[var(--ink)]"

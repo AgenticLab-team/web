@@ -50,7 +50,7 @@ export function TipButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`t-caption flex items-center gap-1 rounded-[var(--radius-pill)] px-2.5 py-1 transition-all active:scale-95 ${
+        className={`t-caption flex items-center gap-1 rounded-[var(--radius-pill)] px-2.5 py-1 transition active:scale-95 ${
           done
             ? "bg-[var(--success)]/15 text-[var(--success)]"
             : received > 0

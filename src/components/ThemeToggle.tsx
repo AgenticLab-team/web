@@ -77,7 +77,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
             aria-checked={isActive}
             aria-label={option.label}
             onClick={() => select(option.value)}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-[0.4375rem] py-1.5 transition-all duration-200 ${
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-[0.4375rem] py-1.5 transition ${
               isActive
                 ? "bg-[var(--surface)] text-[var(--ink)] shadow-[0_1px_2px_rgb(0_0_0/0.06)]"
                 : "text-[var(--ink-tertiary)] hover:text-[var(--ink-secondary)]"
