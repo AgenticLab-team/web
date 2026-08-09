@@ -9,6 +9,7 @@ import { resolveDisplayName } from "@/lib/users/display-name";
 
 import { isEffectivelyPinned } from "./pin";
 import { canSeePost, type PostVisibilityInfo, type ViewerContext } from "./visibility";
+import { canEditReply } from "./reply-rules";
 
 /**
  * 论坛查询。
@@ -218,6 +219,13 @@ export function getPost(viewer: ViewerContext, postId: string) {
 }
 
 export function listReplies(viewer: ViewerContext, postId: string) {
+  /*
+   * 时钟只读一次，在这里读。
+   *
+   * 逐条读的话同一屏上早的和晚的回复会用上不同的「现在」，
+   * 而在页面组件里读又是渲染期副作用（React 编译器会拦，拦得对）。
+   */
+  const now = Date.now();
   const rows = db
     .select()
     .from(replies)
@@ -263,6 +271,8 @@ export function listReplies(viewer: ViewerContext, postId: string) {
           }),
       authorAvatar: r.anonymous ? null : (author?.avatar ?? null),
       accepted: r.accepted,
+      // 原文（markdown）—— 编辑时要拿它填输入框，渲染后的 HTML 回不去
+      content: r.content,
       collapsed: r.collapsed,
       collapseReason: r.collapseReason,
       status: r.status,
@@ -272,6 +282,19 @@ export function listReplies(viewer: ViewerContext, postId: string) {
       editCount: r.editCount,
       createdAt: r.createdAt,
       isMine: viewer.userId === r.authorId,
+      /*
+       * 能不能改在这里算，和 isMine 一样。
+       *
+       * 放到页面组件里算的话要在渲染期读时钟 —— 那既不纯
+       * （React 编译器会拦，拦得对），又会让同一屏上早晚不同的回复
+       * 用上不同的「现在」。
+       */
+      canEdit: canEditReply({
+        isAuthor: viewer.userId === r.authorId,
+        status: r.status,
+        createdAt: r.createdAt,
+        now,
+      }).ok,
     };
   });
 }

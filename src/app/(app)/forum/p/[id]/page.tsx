@@ -34,6 +34,7 @@ import { isSubscribed } from "@/lib/forum/notify";
 import { isBookmarked, reactionStates, readFloor } from "@/lib/forum/social-queries";
 import { isIndexable } from "@/lib/forum/visibility";
 import { recordView } from "@/lib/forum/actions";
+import { CollapsedWrap } from "@/components/forum/CollapsedWrap";
 
 export const dynamic = "force-dynamic";
 
@@ -316,6 +317,28 @@ export default async function PostPage({
                 floor={reply.floor}
                 authorName={reply.authorName}
                 isMine={reply.isMine}
+                content={reply.content}
+                /*
+                 * 能不能改由服务端算 —— 客户端只管显示按钮。
+                 * 时间窗判定也在服务端再走一遍，页面开着不动
+                 * 半小时之后按钮还在，但保存会被拒。
+                 */
+                /* 能不能改在查询层算好 —— 和 isMine 一样，规则只有一处 */
+                canEdit={reply.canEdit}
+                canModerate={caps.moderateReplies}
+              >
+              {/*
+                * 折叠的回复收成一行摘要。
+                *
+                * collapsed 这个列一直在库里、查询也读它，
+                * 而界面上从来没渲染过 —— 折叠和不折叠长得一模一样，
+                * 版主点了之后什么都不会发生。
+                */}
+              <CollapsedWrap
+                collapsed={reply.collapsed}
+                floor={reply.floor}
+                authorName={reply.authorName}
+                reason={reply.collapseReason}
               >
               <div
                 id={`f${reply.floor}`}
@@ -363,6 +386,17 @@ export default async function PostPage({
                   dangerouslySetInnerHTML={{ __html: reply.contentHtml }}
                 />
 
+                {/*
+                  * 改过就标出来。回复是对话的一部分 ——
+                  * 悄悄改掉一条被引用过的回复，会让后面那串回应
+                  * 看起来莫名其妙，而读的人只会觉得那些人在胡言乱语。
+                  */}
+                {reply.editCount > 0 && (
+                  <p className="t-caption2 mt-1 text-[var(--ink-quaternary)]">
+                    编辑过 {reply.editCount} 次
+                  </p>
+                )}
+
                 <div className="mt-2 flex items-center justify-between gap-3">
                   <span className="flex flex-wrap items-center gap-1.5">
                     <ReactionBar
@@ -386,6 +420,7 @@ export default async function PostPage({
                   </span>
                 </div>
               </div>
+              </CollapsedWrap>
               </ReplyRow>
             ))}
           </div>

@@ -4,7 +4,7 @@ import { and, count, eq, gt, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { audit } from "@/lib/audit";
-import { getCurrentUser } from "@/lib/auth/session";
+import { assertNotPreviewing, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { boards, pollOptions, polls, postRevisions, postViews, posts, replies, users } from "@/lib/db/schema";
 import { renderMarkdown } from "@/lib/markdown";
@@ -21,6 +21,7 @@ import { getPost } from "./queries";
 import { indexPost, indexReply } from "./search";
 import { canSeePost, normalizePostVisibility } from "./visibility";
 import { checkClosesAt, normalizePollDraft } from "./poll-rules";
+import { canEditReply, checkReplyContent } from "./reply-rules";
 
 /**
  * 论坛写操作。
@@ -523,4 +524,68 @@ export async function markReadFloor(postId: string, floor: number) {
       set: { lastReadFloor: sql`MAX(${postViews.lastReadFloor}, ${floor})`, readAt: Date.now() },
     })
     .run();
+}
+
+/**
+ * 编辑自己的回复。
+ *
+ * ─────────────────────────────────────────
+ * 走和发表时一模一样的内容管线
+ * ─────────────────────────────────────────
+ *
+ * `checkContent`（敏感词）、`renderMarkdown`（净化 + @解析）一样都不能省。
+ * 省掉的话编辑就成了**绕过审核的后门**：发一条干净的，
+ * 然后编辑成任何内容 —— 而审核只看发表那一刻。
+ *
+ * ─────────────────────────────────────────
+ * 改过就标，没有「小改不算」
+ * ─────────────────────────────────────────
+ *
+ * 回复是对话的一部分，底下可能已经有人引用它、回应它。
+ * 悄悄改掉一条被引用过的回复，会让后面那串回应看起来莫名其妙，
+ * 而读的人只会觉得那些人在胡言乱语。
+ *
+ * `replies.edit_count` 这个列一直在库里、查询也读它 ——
+ * 只是从来没有任何地方写过它，因为根本没有编辑的入口。
+ */
+export async function editReply(input: {
+  replyId: string;
+  content: string;
+}): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return fail("请先登录");
+  await assertNotPreviewing();
+
+  const reply = db.select().from(replies).where(eq(replies.id, input.replyId)).get();
+  if (!reply) return fail("回复不存在");
+
+  const verdict = canEditReply({
+    isAuthor: reply.authorId === user.id,
+    status: reply.status,
+    createdAt: reply.createdAt,
+    now: Date.now(),
+  });
+  if (!verdict.ok) return fail(verdict.reason);
+
+  const shape = checkReplyContent(input.content);
+  if (!shape.ok) return fail(shape.reason);
+
+  // 和发表时同一道闸 —— 少这一步，编辑就是绕过审核的后门
+  const gate = checkContent(shape.content);
+  if (!gate.allowed) return fail(gate.message!);
+
+  const rendered = await renderMarkdown(gate.content, { resolveMention: mentionResolver() });
+
+  db.update(replies)
+    .set({
+      content: gate.content,
+      contentHtml: rendered.html,
+      editCount: sql`${replies.editCount} + 1`,
+      lastEditedAt: Date.now(),
+    })
+    .where(eq(replies.id, reply.id))
+    .run();
+
+  revalidatePath(`/forum/p/${reply.postId}`);
+  return { ok: true };
 }

@@ -41,9 +41,12 @@ export interface PostCaps {
   pin: boolean;
   lock: boolean;
   move: boolean;
+  /** 能不能折叠别人的回复 —— 判据和 moderateReply 服务端那条保持一致 */
+  moderateReplies: boolean;
 }
 
 export const NO_CAPS: PostCaps = {
+  moderateReplies: false,
   edit: false,
   deleteOwn: false,
   deleteAny: false,
@@ -89,6 +92,14 @@ export function postCapabilities(actor: Actor | null, post: PostRow): PostCaps {
     pin: can(actor, "forum.post.pin", scope).allowed,
     lock: can(actor, "forum.post.lock", scope).allowed,
     move: can(actor, "forum.post.move", scope).allowed,
+    /*
+     * 能不能折叠**别人的回复**。
+     *
+     * 判据和 moderateReply 服务端那条一致：版主，或者楼主
+     * （楼主可以管理自己帖子下的回复，但同样要留痕）。
+     * 两处判据不一致的话，界面上会出现一个点了必然失败的按钮。
+     */
+    moderateReplies: isAuthor || canDeleteAny,
   };
 }
 
