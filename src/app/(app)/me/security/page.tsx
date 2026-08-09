@@ -6,11 +6,13 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { PasswordSetup } from "@/components/auth/PasswordSetup";
 import { PasskeySetup } from "@/components/passkey/PasskeySetup";
 import { SessionList } from "@/components/passkey/SessionList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Group, Row, Section } from "@/components/ui/primitives";
 import { listLoginHistory, listSessions } from "@/lib/auth/devices";
+import { hasPassword } from "@/lib/auth/password-login";
 import { listPasskeys } from "@/lib/auth/passkey";
 import { getCurrentUser, SESSION_COOKIE } from "@/lib/auth/session";
 
@@ -31,6 +33,7 @@ export default async function SecurityPage() {
   const currentHash = token ? createHash("sha256").update(token).digest("hex") : undefined;
 
   const passkeys = listPasskeys(user.id);
+  const passwordSet = hasPassword(user.id);
   const sessionList = listSessions(user.id, currentHash);
   const history = listLoginHistory(user.id, 15);
 
@@ -48,6 +51,10 @@ export default async function SecurityPage() {
 
       <Section title="Passkey">
         <PasskeySetup items={passkeys} />
+      </Section>
+
+      <Section title="密码">
+        <PasswordSetup hasPassword={passwordSet} passkeyCount={passkeys.length} />
       </Section>
 
       <Section title={`登录的设备（${sessionList.length}）`}>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { BindFlow } from "@/components/BindFlow";
+import { PasswordLoginForm } from "@/components/auth/PasswordLoginForm";
 import { PasskeyLoginButton } from "@/components/passkey/PasskeyLoginButton";
 import { safeRedirect } from "@/lib/auth/routes";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -41,8 +42,16 @@ export default async function LoginPage({
 
       <BindFlow next={target} />
 
+      {/* 兜底通道放在最下面 —— 需要它的人会去找，不需要的人不该被它挡住 */}
+      <div className="mt-6">
+        <PasswordLoginForm next={target} />
+      </div>
+
       <footer className="t-caption mt-10 text-center leading-relaxed text-[var(--ink-tertiary)]">
         首次登录后可以设置 Passkey，下次一步进入。
+        <br />
+        建议同时设一个密码 —— Passkey 换设备就用不了，
+        而验证码要靠群猫娘发得出来。
       </footer>
     </main>
   );

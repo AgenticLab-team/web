@@ -48,7 +48,10 @@ fi
 # 加一个临时的 console.log 都要先去改配置，最后大家会去掉整个检查。
 # 注意是 [1-9] 开头：eslint 在只有 warning 时会打印「0 errors」，
 # 写成 [0-9]+ 的话每次都会误判失败 —— 又一个「看起来在检查」的坑。
-npx eslint src > /tmp/al-lint.log 2>&1 || true
+# 扫全仓而不是只扫 src：测试文件里同样会出现真问题
+# （加这一行的当天就查出两处 require() 风格的导入）。
+# 只扫 src 的检查，看起来在跑，实际上放过了三分之一的代码。
+npx eslint . > /tmp/al-lint.log 2>&1 || true
 if grep -qE '[1-9][0-9]* error' /tmp/al-lint.log; then
   tail -30 /tmp/al-lint.log
   fail "lint 未通过"
