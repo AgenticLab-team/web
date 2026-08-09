@@ -172,3 +172,65 @@ export function describeRisk(risk: LockoutRisk): string {
   }
   return `已开启，而 ${risk.strandedCount} 人有危险级权限却没绑 Passkey —— 他们现在登不进来：${risk.strandedNames.join("、")}${tail}`;
 }
+
+// ── 一个人自己的登录处境 ────────────────────────────────────
+
+export interface SelfLoginStatus {
+  /** 现在真的能把他放进门的路，按可靠程度排序 */
+  paths: string[];
+  /**
+   * 红色：现在就有问题。目前只有一种 —— 有密码却被管理员强制
+   * Passkey 挡着，「密码是对的却进不来」是最让人不知所措的失败
+   */
+  danger: string | null;
+  /** 黄色：今天没事，但某个具体的将来会出事 */
+  caution: string | null;
+  /** 「不设密码」这个选择在他身上是否说得通（有别的可靠门路） */
+  passwordlessViable: boolean;
+}
+
+/**
+ * 「我现在到底能怎么登录」。给 /me 的登录与安全页用。
+ *
+ * 判定复用 lockoutRisk 的 stranded / atRisk 口径（传单人名单进去），
+ * 而不是在这里重抄一份条件 —— 抄件和原件迟早会分叉，
+ * 分叉的表现是：设置页说「有 1 人会被锁在外面」，
+ * 而那个人自己的安全页却一片绿。
+ */
+export function selfLoginStatus(input: {
+  privileged: boolean;
+  hasPasskey: boolean;
+  hasPassword: boolean;
+  enforced: boolean;
+}): SelfLoginStatus {
+  const risk = lockoutRisk([{ name: "me", ...input }], input.enforced);
+  const stranded = risk.active;
+  const atRisk = input.enforced && risk.atRiskCount > 0;
+  // 密码这条路通不通，问的是和登录时同一个判定 —— 不另抄条件
+  const passwordUsable =
+    input.hasPassword && passwordLoginVerdict(input).allowed;
+
+  const paths: string[] = [];
+  if (input.hasPasskey) paths.push("Passkey");
+  if (passwordUsable) paths.push("密码");
+  // 验证码永远排最后：它依赖群猫娘没被风控，是兜底不是正路
+  paths.push("微信群验证码");
+
+  return {
+    paths,
+    danger: stranded
+      ? "你有管理权限，而站点要求管理员用 Passkey 登录 —— 你设的密码现在进不来，先绑一个 Passkey"
+      : null,
+    caution: atRisk
+      ? "你有管理权限但还没绑 Passkey。现在走验证码没事，但哪天设了密码会发现它进不来 —— 先绑 Passkey"
+      : !input.hasPasskey && !input.hasPassword
+        ? "你现在只有群里的验证码这一条路 —— 它依赖群猫娘没被风控。绑一个 Passkey 最稳"
+        : null,
+    /*
+     * 「不设密码」要有一条不依赖机器人的门路才算站得住：
+     * 只剩验证码的人选择不设密码，等于把钥匙全押在风控没来上。
+     * 不禁止（站长说了没密码的人走 Passkey 或绑定码），但界面要说清。
+     */
+    passwordlessViable: input.hasPasskey,
+  };
+}

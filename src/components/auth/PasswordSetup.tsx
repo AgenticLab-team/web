@@ -4,20 +4,34 @@ import { Check, KeyRound, ShieldAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import { removePassword, setPassword } from "@/lib/auth/password-actions";
+import { removePassword, setPassword, setPasswordlessIntent } from "@/lib/auth/password-actions";
 import { MIN_LENGTH } from "@/lib/auth/password";
 
 /**
- * 密码设置。
+ * 密码设置。三种状态，措辞各不相同：
  *
- * 措辞上刻意说清楚**它是干什么用的** ——
- * 一个没有理由的「设置密码」入口，多数人会跳过；
- * 而跳过它的人正是某天换了手机之后进不来、来群里问的那个人。
+ *   已设置        —— 说清它是兜底钥匙
+ *   还没设置      —— 劝一句，并给「我不打算设」一个出口
+ *   明确不设密码  —— **闭嘴，不再劝**。这个状态存在的意义就是
+ *                    让表过态的人不被反复骚扰 —— 被反复劝的人
+ *                    最后会连真正重要的提醒一起无视掉
+ *
+ * 「设置密码」永远可点，包括不设密码状态下 —— 设密码本身就是
+ * 最明确的改主意，服务端会顺手清掉表态，不用先点「取消」。
  *
  * 已经有密码时要先验旧的：否则一台没锁屏的电脑就能改掉别人的密码，
  * 而改完之后原主人连自己的账号都进不去。
  */
-export function PasswordSetup({ hasPassword, passkeyCount }: { hasPassword: boolean; passkeyCount: number }) {
+export function PasswordSetup({
+  hasPassword,
+  passkeyCount,
+  optedOut,
+}: {
+  hasPassword: boolean;
+  passkeyCount: number;
+  /** 用户明确表过态「这个账号不设密码」 */
+  optedOut: boolean;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -59,17 +73,37 @@ export function PasswordSetup({ hasPassword, passkeyCount }: { hasPassword: bool
     });
   }
 
+  function intent(optOut: boolean) {
+    startTransition(async () => {
+      const result = await setPasswordlessIntent({ optOut });
+      setMessage({
+        text: result.ok ? (result.note ?? "已记录") : (result.error ?? "操作失败"),
+        ok: result.ok,
+      });
+      if (result.ok) {
+        reset();
+        router.refresh();
+      }
+    });
+  }
+
   return (
     <div>
       <div className="inset-group">
         <div className="inset-row flex items-start gap-3 px-4 py-3">
           <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ink-tertiary)]" strokeWidth={2} aria-hidden />
           <div className="min-w-0 flex-1">
-            <p className="t-body">{hasPassword ? "已设置密码" : "还没有设置密码"}</p>
+            <p className="t-body">
+              {hasPassword ? "已设置密码" : optedOut ? "这个账号不设密码" : "还没有设置密码"}
+            </p>
             <p className="t-caption mt-0.5 leading-relaxed text-[var(--ink-tertiary)]">
               {hasPassword
                 ? "换了设备、或者群猫娘被风控发不出验证码时，用它登录"
-                : "Passkey 换设备就用不了，而验证码要靠群猫娘发得出来 —— 两条都不通的时候，密码是唯一还能进来的方式"}
+                : optedOut
+                  ? passkeyCount > 0
+                    ? "你选择了不设密码，用 Passkey 和群验证码登录。想改主意随时设一个就行"
+                    : "你选择了不设密码，但也没有 Passkey —— 现在唯一的门路是群验证码，它依赖群猫娘没被风控"
+                  : "Passkey 换设备就用不了，而验证码要靠群猫娘发得出来 —— 两条都不通的时候，密码是唯一还能进来的方式"}
             </p>
           </div>
           {!open && (
@@ -86,6 +120,24 @@ export function PasswordSetup({ hasPassword, passkeyCount }: { hasPassword: bool
           )}
         </div>
       </div>
+
+      {/*
+        「我不打算设密码」放在卡片外面、字号更小 —— 它是给想好了的人
+        的出口，不是推荐项。反过来（做成和「设置」一样大的按钮）
+        会让犹豫的人把它当成省事的默认选择。
+      */}
+      {!open && !hasPassword && (
+        <p className="mt-2 px-1 text-right">
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => intent(!optedOut)}
+            className="t-caption text-[var(--ink-quaternary)] underline-offset-2 transition hover:underline active:opacity-60 disabled:opacity-40"
+          >
+            {optedOut ? "取消「不设密码」这个选择" : "我不打算设密码"}
+          </button>
+        </p>
+      )}
 
       {open && (
         <form

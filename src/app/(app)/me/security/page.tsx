@@ -12,9 +12,12 @@ import { SessionList } from "@/components/passkey/SessionList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Group, Row, Section } from "@/components/ui/primitives";
 import { listLoginHistory, listSessions } from "@/lib/auth/devices";
+import { isPrivileged, selfLoginStatus } from "@/lib/auth/passkey-policy";
 import { hasPassword } from "@/lib/auth/password-login";
 import { listPasskeys } from "@/lib/auth/passkey";
 import { getCurrentUser, SESSION_COOKIE } from "@/lib/auth/session";
+import { effectivePermissions } from "@/lib/rbac/can";
+import { getSettingBool } from "@/lib/settings/store";
 
 export const metadata: Metadata = { title: "登录与安全" };
 export const dynamic = "force-dynamic";
@@ -34,8 +37,21 @@ export default async function SecurityPage() {
 
   const passkeys = listPasskeys(user.id);
   const passwordSet = hasPassword(user.id);
+  const optedOut = user.passwordOptOutAt !== null;
   const sessionList = listSessions(user.id, currentHash);
   const history = listLoginHistory(user.id, 15);
+
+  /*
+   * 「我现在能怎么登录」放在页面最上面，用的是和登录时同一套判定
+   * （selfLoginStatus 内部复用 lockoutRisk / passwordLoginVerdict）——
+   * 这一页存在的意义就是回答这个问题，Passkey 和密码只是手段的清单。
+   */
+  const status = selfLoginStatus({
+    privileged: isPrivileged(effectivePermissions(user).keys()),
+    hasPasskey: passkeys.length > 0,
+    hasPassword: passwordSet,
+    enforced: getSettingBool("auth.require_passkey_for_admin", true),
+  });
 
   return (
     <>
@@ -49,12 +65,30 @@ export default async function SecurityPage() {
 
       <PageHeader title="登录与安全" />
 
+      <div className="mb-5 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
+        <p className="t-subhead">你现在的登录方式：{status.paths.join("、")}</p>
+        {status.danger && (
+          <p className="t-caption mt-1.5 leading-relaxed" style={{ color: "var(--danger)" }}>
+            {status.danger}
+          </p>
+        )}
+        {status.caution && (
+          <p className="t-caption mt-1.5 leading-relaxed" style={{ color: "var(--warning)" }}>
+            {status.caution}
+          </p>
+        )}
+      </div>
+
       <Section title="Passkey">
         <PasskeySetup items={passkeys} />
       </Section>
 
       <Section title="密码">
-        <PasswordSetup hasPassword={passwordSet} passkeyCount={passkeys.length} />
+        <PasswordSetup
+          hasPassword={passwordSet}
+          passkeyCount={passkeys.length}
+          optedOut={optedOut}
+        />
       </Section>
 
       <Section title={`登录的设备（${sessionList.length}）`}>
