@@ -165,7 +165,19 @@ export default async function PostPage({
     status,
     viewerCanSee: true,
   });
-  const shareUrl = `${env.site.url}/forum/p/${post.id}`;
+  /*
+   * 分享用短链。
+   *
+   * `share_code` 一直在生成而没有任何地方读它 —— 分享出去的是
+   * `/forum/p/<26 位 ULID>`，那串东西转进微信里又长又难看。
+   *
+   * 没有码的老帖子退回长地址：群聊转帖那条路以前不生成码，
+   * 生产库里 56 篇有 4 篇没有。退回去比给一个坏链接强，
+   * 而且不需要为这 4 篇专门跑一次回填。
+   */
+  const shareUrl = post.raw.shareCode
+    ? `${env.site.url}/p/${post.raw.shareCode}`
+    : `${env.site.url}/forum/p/${post.id}`;
   const shareCopy = shareText({
     kind: "post",
     title: post.title,

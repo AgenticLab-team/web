@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { audit } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { newShareCode } from "@/lib/forum/share-code";
 import {
   boards,
   groups,
@@ -121,6 +122,9 @@ export async function convertMessagesToPost(input: {
     const post = tx
       .insert(posts)
       .values({
+        // 转帖也要有短链码 —— 原来只有普通发帖那条路会生成，
+        // 于是群聊转出来的帖子分享出去永远是那串 26 位的 ULID
+        shareCode: newShareCode(),
         boardId: board.id,
         authorId: user.id,
         title,

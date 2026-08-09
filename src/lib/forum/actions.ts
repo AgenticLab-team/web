@@ -27,6 +27,7 @@ import { checkSchedule } from "./schedule-rules";
 import { autoSubscribe, notifyNewPost, notifyNewReply } from "./notify";
 import { getPost } from "./queries";
 import { cleanTags } from "@/lib/forum/tag-rules";
+import { newShareCode } from "@/lib/forum/share-code";
 import { applyTags } from "@/lib/forum/tags-write";
 import { indexPost, indexReply } from "./search";
 import { canSeePost, normalizePostVisibility } from "./visibility";
@@ -277,7 +278,7 @@ export async function createPost(input: {
         visibilityGroupId: normalized.visibilityGroupId,
         visibilityLocked: normalized.locked,
         anonymous: Boolean(input.anonymous),
-        shareCode: Math.random().toString(36).slice(2, 10),
+        shareCode: newShareCode(),
       })
       .returning({ id: posts.id })
       .get();
