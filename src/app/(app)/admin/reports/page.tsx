@@ -5,7 +5,8 @@ import { ReportActions } from "@/components/admin/ReportActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { TruncationNote } from "@/components/ui/Pagination";
-import { Card, Empty, Pill, PillRow, StatTile } from "@/components/ui/primitives";
+import { Callout, Card, Empty, Pill, PillRow, StatTile } from "@/components/ui/primitives";
+import { awaitingConsent, readyToRaise } from "@/lib/forum/consent-queue";
 import { requireAdmin } from "@/lib/admin/guard";
 import { reportFacets, reportQueue, reportsForTarget } from "@/lib/admin/reports";
 import { severityLabel } from "@/lib/moderation/rules";
@@ -60,6 +61,16 @@ export default async function AdminReportsPage({
     return qs ? `/admin/reports?${qs}` : "/admin/reports";
   };
 
+  /*
+   * 「全员已同意，等人提升可见范围」的那一批。
+   *
+   * 放在举报队列这一页，而不是新开一页：两者是同一类工作 ——
+   * **有人在等一个治理决定**。多开一页的结果是那一页没人每天看，
+   * 而这件事的失败方式恰恰是「没人看见」。
+   */
+  const ready = readyToRaise();
+  const waiting = awaitingConsent();
+
   return (
     <>
       <PageHeader
@@ -73,6 +84,40 @@ export default async function AdminReportsPage({
         <StatTile label="无人认领" value={facets.unassigned} />
         <StatTile label="待处理" value={facets.pending} />
       </div>
+
+      {ready.length > 0 && (
+        <Callout tone="accent" title={`${ready.length} 篇群聊整理帖等着提升可见范围`}>
+          <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">
+            每一位被引用的原作者都已经同意了，而<strong>提升可见范围的按钮只有版主看得到</strong> ——
+            没有人处理的话，它会一直停在「只有原群成员可见」。
+            整理的人那一侧看到的是「N/N 位原作者同意公开」，
+            一个看起来该公开却没公开的状态，读起来像是坏了。
+          </p>
+          <ul className="mt-2 space-y-1">
+            {ready.map((r) => (
+              <li key={r.postId}>
+                <Link
+                  href={`/forum/p/${r.postId}`}
+                  className="t-footnote text-[var(--accent)] transition active:opacity-60"
+                >
+                  {r.title}
+                </Link>
+                <span className="t-caption2 ml-1.5 text-[var(--ink-tertiary)]">
+                  {r.boardName} · {r.authors} 位原作者已同意
+                  {r.boardMax !== "public" && ` · 这个版块最高只到 ${r.boardMax}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Callout>
+      )}
+
+      {waiting.length > 0 && (
+        <p className="t-caption mb-3 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+          另有 {waiting.length} 篇还在等原作者表态（共 {waiting.reduce((n, w) => n + w.pending, 0)} 位未回应）——
+          这一步不该催，被引用的人有权不表态。
+        </p>
+      )}
 
       <PillRow>
         <Pill href={href({ reason: undefined })} active={!params.reason}>

@@ -93,7 +93,7 @@ export function WordTester() {
       )}
 
       <p className="t-caption leading-relaxed text-[var(--ink-tertiary)]">
-        预览**不计入命中次数** —— 试几下就把统计打脏的话，
+        预览<strong>不计入命中次数</strong> —— 试几下就把统计打脏的话，
         「命中特别多说明是误伤」这个判断就失真了。
       </p>
     </div>

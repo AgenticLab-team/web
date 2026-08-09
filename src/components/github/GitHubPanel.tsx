@@ -160,7 +160,7 @@ export function GitHubPanel(props: GithubPanelProps) {
         </button>
 
         {/*
-          解绑要点两下。这是个会**删掉数据**的动作（缓存和提示记录一起清），
+          解绑要点两下。这是个会<strong>删掉数据</strong>的动作（缓存和提示记录一起清），
           而它就摆在几个可以随手拨来拨去的开关旁边
         */}
         {confirming ? (

@@ -139,19 +139,27 @@ describe("**配方不许散落在页面里**", () => {
 });
 
 describe("**UI 文本是给人看的，不是 markdown 源码**", () => {
-  it("页面 JSX 文本里不再有字面 ** 星号", () => {
+  it("**所有 .tsx 里都不许有字面 ** 星号，不只是页面**", () => {
     /*
-     * 注释里的 **强调** 被人顺手带进了 JSX 文本，用户真的会看到
+     * 注释里的 **强调** 被人顺手带进 JSX 文本，用户真的会看到
      * 「且**每一条都会独立留处罚记录**」这样的星号 —— 出现过 8 处。
      * 强调要用 <strong>。
+     *
+     * 这条检查原来只扫 `page.tsx`，而**大量 UI 文案在 components 里** ——
+     * 扩大范围之后当场又抓出两处（敏感词预览、GitHub 解绑那两句话），
+     * 它们已经在线上给人看了不知道多久。
+     *
+     * 这个错我自己在这一轮里也犯了第三次。写在注释里的强调
+     * 和写在 JSX 里的强调长得一模一样，靠记性是防不住的。
      */
     const offenders: string[] = [];
-    for (const file of pageFiles()) {
+    for (const file of allSourceFiles()) {
+      if (!file.endsWith(".tsx")) continue;
       const code = stripComments(read(file));
       const match = code.match(/\*\*[^*\n]{1,80}\*\*/);
-      if (match) offenders.push(`${short(file)}: ${match[0].slice(0, 40)}`);
+      if (match) offenders.push(`${file.slice(SRC_DIR.length + 1)}: ${match[0].slice(0, 40)}`);
     }
-    assert.deepEqual(offenders, [], "这些页面把 markdown 星号渲染给了用户");
+    assert.deepEqual(offenders, [], "这些地方把 markdown 星号渲染给了用户");
   });
 });
 

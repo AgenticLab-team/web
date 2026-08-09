@@ -108,6 +108,23 @@ export function ConsentPanel({
         </p>
       )}
 
+      {/*
+        * 不是版主的人：齐了之后要知道在等什么。
+        *
+        * 只显示「3/3 位原作者同意公开」而帖子还锁着的话，
+        * 读起来像是坏了 —— 而整理的人多半会以为是自己哪一步没做完，
+        * 然后去点一遍所有按钮。
+        */}
+      {!canModerate && summary.canRaise && (
+        <p className="t-caption leading-relaxed text-[var(--ink-secondary)]">
+          所有原作者都同意了 —— 接下来由版主决定提到哪个范围。
+          <span className="text-[var(--ink-tertiary)]">
+            {" "}
+            放大别人在群里说过的话是一次治理动作，所以这一步不由整理的人自己按。
+          </span>
+        </p>
+      )}
+
       {/* 管理员：全体同意后才出现提升入口 */}
       {canModerate && summary.canRaise && !raising && (
         <button
