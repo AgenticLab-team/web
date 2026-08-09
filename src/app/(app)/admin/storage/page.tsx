@@ -32,7 +32,7 @@ export const dynamic = "force-dynamic";
  * 但 ① 出问题的时候，③ 上的数字全都是在描述一件已经无法挽回的事。
  */
 export default async function AdminStoragePage() {
-  const admin = await requireAdmin("system.dashboard");
+  const admin = await requireAdmin("system.storage");
   const s = storageOverview();
   const pending = pendingPruneTask();
   const tasks = recentPruneTasks(8);

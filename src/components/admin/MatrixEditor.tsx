@@ -41,6 +41,15 @@ export interface PermissionCol {
   key: string;
   label: string;
   dangerLevel: number;
+  /**
+   * 这个权限点今天管不管用。
+   *
+   * 不标出来的话，这张矩阵会让人以为每一个勾都管事 ——
+   * 而其中一批**勾了什么都不会发生，取消了那个人照样做得了**。
+   * 权限是拿来限制人的东西，一个不生效的限制比没有更糟：
+   * 它让人以为已经限制住了。
+   */
+  planned?: boolean;
 }
 
 const NEXT: Record<MatrixState, MatrixState> = {
@@ -247,6 +256,14 @@ export function MatrixEditor({ roles, categories, initial, canEdit, lookupBase }
                     >
                       <span className="t-subhead block truncate">
                         {permission.label}
+                        {permission.planned && (
+                          <span
+                            className="t-caption2 ml-1.5 rounded-[var(--radius-pill)] bg-[var(--fill)] px-1.5 py-0.5 align-middle font-normal text-[var(--ink-tertiary)]"
+                            title="这一项今天还没接线：勾上不会有任何效果，取消也拦不住"
+                          >
+                            未生效
+                          </span>
+                        )}
                         {permission.dangerLevel > 0 && (
                           <span
                             className="ml-1.5 text-[var(--danger)]"

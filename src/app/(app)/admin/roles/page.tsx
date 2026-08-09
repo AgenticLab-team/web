@@ -143,6 +143,7 @@ export default async function AdminRolesPage({
               key: p.key,
               label: p.label,
               dangerLevel: p.dangerLevel ?? 0,
+              planned: p.status === "planned",
             })),
           }))}
           initial={Object.fromEntries(

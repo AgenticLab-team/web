@@ -42,7 +42,7 @@ async function save(
   patch: { enabled?: boolean; rollout?: Rollout; rolloutValue?: unknown },
 ): Promise<FlagResult> {
   // requireWritableAdmin 自己会在没权限时跳走，这里拿到的一定是有权限的
-  const admin = await requireWritableAdmin("system.settings");
+  const admin = await requireWritableAdmin("system.flags");
 
   const spec = specOf(key);
   if (!spec) return fail("没有这个开关");

@@ -34,7 +34,7 @@ export const dynamic = "force-dynamic";
  * 这条写死在代码里（registry 的 NEVER_GATED），不做成配置。
  */
 export default async function AdminFlagsPage() {
-  await requireAdmin("system.settings");
+  await requireAdmin("system.flags");
 
   const flags = listFlagsForAdmin();
   const orphans = orphanFlagKeys();
