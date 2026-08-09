@@ -88,6 +88,16 @@ export const DEFAULT_RULES: Record<string, AlertRule> = {
   db: { fireAfterMs: 2 * 60_000, renotifyAfterMs: 3600_000, retryAfterMs: 5 * 60_000 },
   // 磁盘是慢性问题，报太急只会让人麻木
   disk: { fireAfterMs: 30 * 60_000, renotifyAfterMs: 24 * 3600_000, retryAfterMs: 15 * 60_000 },
+  /*
+   * 异地备份是「一直缺着」型的问题 —— 没配置的那段时间里它每一轮都不正常。
+   * 按分钟级的线去报，等于每天提醒你同一件你已经知道的事，
+   * 而那正是让人把整个通道静音的原因。一个月提醒一次刚好。
+   */
+  offsite: {
+    fireAfterMs: 24 * 3600_000,
+    renotifyAfterMs: 30 * 86_400_000,
+    retryAfterMs: 6 * 3600_000,
+  },
 };
 
 export function ruleFor(component: string): AlertRule {
@@ -225,6 +235,7 @@ export function formatAlert(input: {
 const HINTS: Record<string, string> = {
   upstream: "先查 frp 隧道：ssh 上去看 127.0.0.1:8090 通不通",
   db: "查磁盘是否写满、WAL 是否损坏",
+  offsite: "看 /admin/backup：是没配置、传失败，还是该做恢复演练了",
   disk: "跑存储裁剪，或清理媒体缓存",
 };
 
@@ -234,6 +245,7 @@ export const COMPONENT_LABELS: Record<string, string> = {
   frp_tunnel: "frp 隧道",
   db: "数据库",
   disk: "磁盘",
+  offsite: "异地备份",
   sync: "同步任务",
 };
 

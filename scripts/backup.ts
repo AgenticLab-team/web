@@ -8,6 +8,11 @@
  *
  *   npm run backup
  *   npm run backup -- --verify   备份后校验能否打开并读出关键表
+ *   npm run backup -- --local    只做本机快照，不推异地
+ *
+ * 备完立刻推异地 —— **一份只存在本机的备份不算备份完了**。
+ * 分成两个独立的定时任务的话，第二个挂掉之后第一个还在每天报成功，
+ * 而那正是「备份一直在成功」的经典形态。
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
@@ -74,6 +79,19 @@ async function main() {
 
   prune("daily", DAILY_KEEP);
   prune("weekly", WEEKLY_KEEP);
+
+  if (process.argv.includes("--local")) return;
+
+  // 备完就推异地。磁盘挂了的时候，本机这几份和原库一起没
+  const { offsiteSummary, restoreDrill, syncOffsite } = await import("@/lib/backup/offsite");
+  const result = await syncOffsite();
+  console.log(`${result.ok ? "✓" : "✗"} 异地  ${result.note}`);
+
+  // 到期就顺手演练一次 —— 没演练过的备份只是一堆字节
+  if (offsiteSummary().drillDue) {
+    const drill = await restoreDrill();
+    console.log(`${drill.ok ? "✓" : "✗"} 演练  ${drill.note}`);
+  }
 }
 
 function prune(kind: string, keep: number) {

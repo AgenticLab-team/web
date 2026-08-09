@@ -10,6 +10,7 @@ import { db, sqlite } from "@/lib/db";
 import { storageSnapshots, systemHealth } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { NekoBotError, nekobot } from "@/lib/nekobot/client";
+import { offsiteSummary } from "@/lib/backup/offsite";
 import { getSettingInt } from "@/lib/settings/store";
 
 /**
@@ -140,13 +141,33 @@ function safeSize(path: string): number {
   }
 }
 
+/**
+ * 异地备份。
+ *
+ * 「没配置」报的是 degraded 而不是 ok —— 备份和归档都只在这一块磁盘上，
+ * 这是个真实存在的缺口，不该因为「本来就没开」就显示成正常。
+ * 但也不报 down：站是活的，只是没有后路。
+ */
+export function probeOffsite(): HealthReport {
+  const summary = offsiteSummary();
+  if (summary.status === "ok") {
+    return { component: "offsite", status: "ok", detail: summary.detail };
+  }
+  return {
+    component: "offsite",
+    // 失败了才算 down；没配置/过期/没验证过都是 degraded —— 有区别
+    status: summary.status === "failing" ? "down" : "degraded",
+    detail: summary.detail,
+  };
+}
+
 /** 跑一轮完整探测并落库 */
 export async function runHealthChecks(): Promise<HealthReport[]> {
-  const reports = [await probeUpstream(), probeDatabase(), probeDisk()];
+  const reports = [await probeUpstream(), probeDatabase(), probeDisk(), probeOffsite()];
   for (const report of reports) {
     db.insert(systemHealth)
       .values({
-        component: report.component as "upstream_api" | "frp_tunnel" | "db" | "disk",
+        component: report.component as "upstream_api" | "frp_tunnel" | "db" | "disk" | "offsite",
         status: report.status,
         detail: report.detail,
         latencyMs: report.latencyMs,
@@ -183,7 +204,12 @@ export function unhealthySince(components: string[]): number | null {
   const rows = db
     .select()
     .from(systemHealth)
-    .where(inArray(systemHealth.component, components as ("upstream_api" | "frp_tunnel" | "db" | "disk")[]))
+    .where(
+      inArray(
+        systemHealth.component,
+        components as ("upstream_api" | "frp_tunnel" | "db" | "disk" | "offsite")[],
+      ),
+    )
     .orderBy(desc(systemHealth.checkedAt))
     .limit(200)
     .all();

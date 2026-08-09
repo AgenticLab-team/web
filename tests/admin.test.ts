@@ -101,7 +101,7 @@ describe("按权限过滤", () => {
     // 存储页上的裁剪按钮另有 system.settings 把关，不在导航这一层
     const sections = visibleAdminNav((p) => p === "system.dashboard");
     const keys = sections.flatMap((s) => s.items.map((i) => i.key));
-    assert.deepEqual(keys, ["dashboard", "health", "storage"]);
+    assert.deepEqual(keys, ["dashboard", "health", "storage", "backup"]);
   });
 
   it("**审计员只看得到只读入口**", () => {

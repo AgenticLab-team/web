@@ -57,6 +57,15 @@ export const ADMIN_NAV: AdminNavSection[] = [
         ready: true,
       },
       {
+        key: "backup",
+        href: "/admin/backup",
+        label: "备份与异地副本",
+        icon: "cloud-upload",
+        permission: "system.dashboard",
+        description: "明天服务器没了，站还回不回得来",
+        ready: true,
+      },
+      {
         key: "audit",
         href: "/admin/audit",
         label: "审计日志",
