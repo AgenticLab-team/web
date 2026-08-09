@@ -1,0 +1,1 @@
+CREATE INDEX `daily_stats_conv_date_idx` ON `daily_stats` (`conv_id`,`date`);

@@ -16,6 +16,13 @@ set -euo pipefail
 HOST="${DEPLOY_HOST:-ubuntu@agenticlab.sh}"
 REMOTE="${DEPLOY_PATH:-/home/ubuntu/agenticlab}"
 URL="${DEPLOY_URL:-https://agenticlab.sh}"
+# 首屏 JS 预算（字节，**压缩后**）。
+#
+# 量压缩后是因为那才是用户真的要下的东西：同一批 chunk 未压缩 362 KB、
+# 压缩后 109 KB，按前者定预算等于按一个没有人经历过的数字做决定。
+# 当前 109 KB，预算 160 KB —— 留出成长空间，但不至于悄悄翻倍。
+# 调高它要在提交信息里说清楚换来了什么。
+JS_BUDGET="${JS_BUDGET:-163840}"
 
 step() { printf '\n\033[1m→ %s\033[0m\n' "$1"; }
 fail() { printf '\033[31m✗ %s\033[0m\n' "$1" >&2; exit 1; }
@@ -75,6 +82,25 @@ for attempt in $(seq 1 10); do
   code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' "$URL/" || echo 000)
   if [ "$code" = "200" ]; then
     printf '  第 %s 次探活通过\n' "$attempt"
+
+    # 首屏 JS 体积预算。
+    #
+    # 不设上限的话它只会单调变大 —— 每次都只多几 KB，
+    # 没有哪一次值得拦下来，而半年后首页要下三百 KB。
+    # 量的是**首页真的会拉的那几个 chunk**，不是构建产物总大小：
+    # 后者包含所有路由，涨了也不一定影响任何人。
+    step "首屏体积"
+    bytes=0
+    for chunk in $(curl -s -m 10 "$URL/" | grep -o '/_next/static/chunks/[a-z0-9_]*\.js' | sort -u); do
+      # 带上 Accept-Encoding：量的是用户真的要下的字节数
+      size=$(curl -s -m 10 -H 'Accept-Encoding: br, gzip' -o /dev/null -w '%{size_download}' "$URL$chunk" || echo 0)
+      bytes=$((bytes + size))
+    done
+    printf '  首页 JS %s KB（压缩后，预算 %s KB）\n' "$((bytes / 1024))" "$((JS_BUDGET / 1024))"
+    if [ "$bytes" -gt "$JS_BUDGET" ]; then
+      fail "首屏 JS 超预算 —— 要么拆包，要么明确调高 JS_BUDGET 并说明为什么"
+    fi
+
     step "完成"
     curl -s -m 10 "$URL/api/health" | head -c 200
     echo

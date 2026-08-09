@@ -169,6 +169,13 @@
       "when": 1786241686502,
       "tag": "0023_radar",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1786243617239,
+      "tag": "0024_leaderboard_index",
+      "breakpoints": true
     }
   ]
 }

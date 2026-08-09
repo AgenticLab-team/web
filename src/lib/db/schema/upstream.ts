@@ -141,6 +141,12 @@ export const dailyStats = sqliteTable(
   (t) => [
     uniqueIndex("daily_stats_pk").on(t.wxId, t.convId, t.date),
     index("daily_stats_date_idx").on(t.date),
+    /*
+     * 榜单查的是「这几个群、这段日期」——
+     * 只有 (wx_id,date) 和 (date) 的话它只能扫全表再临时排序。
+     * 今天 3,570 行无所谓，一年后是四万行，而榜单是访问量最大的一页。
+     */
+    index("daily_stats_conv_date_idx").on(t.convId, t.date),
     index("daily_stats_wx_date_idx").on(t.wxId, t.date),
   ],
 );
