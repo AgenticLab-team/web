@@ -86,9 +86,15 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       <div className="lg:pl-[var(--sidebar-width)]">
         <main
           id="main"
-          className="mx-auto w-full max-w-[52rem] px-4 sm:px-6"
-          // 给底部 Tab Bar 让出空间，含 Home Indicator 的安全区
+          className="mx-auto w-full px-4 sm:px-6"
           style={{
+            /*
+             * 栏宽由内容类型决定，不写死在这里 ——
+             * 密集页面（后台、表格）用 [data-dense] 声明自己要宽的，
+             * globals.css 里那条 :has() 会把它放到 78rem。
+             */
+            maxWidth: "var(--content-max)",
+            // 给底部 Tab Bar 让出空间，含 Home Indicator 的安全区
             paddingBottom: "calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px) + 1.5rem)",
           }}
         >

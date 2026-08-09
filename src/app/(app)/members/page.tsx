@@ -10,6 +10,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { memberDirectory } from "@/lib/members/queries";
 import { isDirectoryHidden } from "@/lib/members/queries";
 import { rarityColor } from "@/lib/titles/rules";
+import { TitleIcon } from "@/components/titles/TitleIcon";
 
 export const metadata: Metadata = { title: "成员" };
 export const dynamic = "force-dynamic";
@@ -142,7 +143,8 @@ export default async function MembersPage({
                                 background: `color-mix(in srgb, ${rarityColor(member.title.rarity)} 12%, transparent)`,
                               }}
                             >
-                              {member.title.icon} {member.title.name}
+                              <TitleIcon icon={member.title.icon} className="h-3 w-3" />
+                              {member.title.name}
                             </span>
                           )}
                           {member.isMe && (

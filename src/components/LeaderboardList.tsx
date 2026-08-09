@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
 import { Empty, Group, RankBadge, Row } from "@/components/ui/primitives";
 import type { BoardEntry } from "@/lib/queries/leaderboard";
@@ -78,7 +79,12 @@ function Delta({ current, previous }: { current: number; previous: number | null
       style={{ color: up ? "var(--success)" : "var(--ink-tertiary)" }}
       title={`上期第 ${previous} 名`}
     >
-      {up ? "↑" : "↓"}
+      {/* 箭头用 SVG —— ↑↓ 这两个字符在不同字体里粗细差很多，一列排下来会歪 */}
+      {up ? (
+        <ChevronUp className="h-3 w-3" strokeWidth={2.6} aria-hidden />
+      ) : (
+        <ChevronDown className="h-3 w-3" strokeWidth={2.6} aria-hidden />
+      )}
       {Math.abs(diff)}
     </span>
   );

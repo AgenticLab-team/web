@@ -20,7 +20,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const sections = visibleAdminNav(admin.has);
 
   return (
-    <div className="pb-8">
+    /*
+      * data-dense:告诉外壳这一片要宽栏。
+      *
+      * 后台没有需要「读」的长句，全是要对照着看的行和列 ——
+      * 压在正文栏宽里的话，减掉左边 13rem 的目录之后只剩 592px，
+      * 而屏幕有 1900px。
+      */
+    <div className="pb-8" data-dense>
       <div className="mb-5 flex items-center gap-2 rounded-[var(--radius-control)] bg-[var(--warning)]/12 px-3 py-2">
         <ShieldAlert className="h-4 w-4 shrink-0 text-[var(--warning)]" strokeWidth={2} aria-hidden />
         <p className="t-caption text-[var(--warning)]">

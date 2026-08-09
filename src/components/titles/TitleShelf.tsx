@@ -9,6 +9,7 @@ import { equipTitle } from "@/lib/titles/actions";
 import { setAutoRenew } from "@/lib/titles/renew-actions";
 import type { OwnedTitle } from "@/lib/titles/queries";
 import { rarityColor, rarityLabel } from "@/lib/titles/rules";
+import { TitleIcon } from "./TitleIcon";
 
 /**
  * 称号架。
@@ -94,7 +95,7 @@ export function TitleShelf({ titles }: { titles: OwnedTitle[] }) {
                 boxShadow: title.equipped ? `inset 0 0 0 1px ${color}` : undefined,
               }}
             >
-              {title.icon && <span aria-hidden>{title.icon}</span>}
+              <TitleIcon icon={title.icon} className="h-3.5 w-3.5" />
               <span className="t-footnote font-medium" style={{ color: title.active ? color : undefined }}>
                 {title.name}
               </span>
@@ -116,8 +117,9 @@ export function TitleShelf({ titles }: { titles: OwnedTitle[] }) {
           {renewable.map((title) => (
             <div key={title.userTitleId} className="inset-row flex items-start gap-3 px-4 py-2.5">
               <div className="min-w-0 flex-1">
-                <p className="t-subhead">
-                  {title.icon} {title.name}
+                <p className="t-subhead flex items-center gap-1.5">
+                  <TitleIcon icon={title.icon} />
+                  {title.name}
                 </p>
                 <p className="t-caption mt-0.5 leading-relaxed text-[var(--ink-tertiary)]">
                   {title.expired

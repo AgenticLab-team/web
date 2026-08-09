@@ -1,3 +1,4 @@
+import { Folder } from "lucide-react";
 import type { Metadata } from "next";
 
 import { BoardEditor } from "@/components/admin/BoardEditor";
@@ -69,7 +70,13 @@ export default async function AdminBoardsPage() {
                 className="rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline"
               >
                 <header className="flex items-start gap-3">
-                  <span className="text-[22px] leading-none">{board.icon ?? "📁"}</span>
+                  {board.icon ? (
+                    <span className="text-[22px] leading-none">{board.icon}</span>
+                  ) : (
+                    /* 版块自定义图标是运营填的，可以是 emoji；没填时的兜底用 SVG，
+                       和后台其它地方保持同一套线条 */
+                    <Folder className="h-5 w-5 text-[var(--ink-tertiary)]" strokeWidth={2} aria-hidden />
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="t-body flex flex-wrap items-center gap-1.5">
                       <span className="truncate font-medium">{board.name}</span>
