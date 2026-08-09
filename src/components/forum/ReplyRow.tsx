@@ -1,6 +1,6 @@
 "use client";
 
-import { EyeOff, Pencil, Quote, Trash2 } from "lucide-react";
+import { EyeOff, Pencil, Reply, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -188,12 +188,12 @@ export function ReplyRow({
   }
 
   const actions = [
-    // 没有 Provider（未登录 / 帖子已锁）就不给引用入口
+    // 没有 Provider（未登录 / 帖子已锁）就不给回复入口
     ...(quoteCtx
       ? [
           {
-            label: "引用",
-            icon: <Quote className="h-4 w-4" strokeWidth={2} aria-hidden />,
+            label: "回复",
+            icon: <Reply className="h-4 w-4" strokeWidth={2} aria-hidden />,
             run: () => quoteCtx.setQuote({ replyId, floor, authorName }),
           },
         ]

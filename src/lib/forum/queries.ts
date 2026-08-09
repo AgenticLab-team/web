@@ -285,6 +285,8 @@ export function listReplies(viewer: ViewerContext, postId: string) {
       collapsed: r.collapsed,
       collapseReason: r.collapseReason,
       status: r.status,
+      // 树形视图按 parentId 排；quoted* 只管那一小段引文的显示
+      parentId: r.parentId,
       quotedReplyId: r.quotedReplyId,
       quotedExcerpt: r.quotedExcerpt,
       reactionCount: r.reactionCount,

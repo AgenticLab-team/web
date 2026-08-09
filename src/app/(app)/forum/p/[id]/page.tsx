@@ -36,6 +36,8 @@ import { isSubscribed } from "@/lib/forum/notify";
 import { bookmarkOf, listFolders } from "@/lib/forum/bookmark-queries";
 import { getDraft } from "@/lib/forum/drafts";
 import { lockNotice } from "@/lib/forum/lock-rules";
+import { arrange, parseViewMode, threadingIsMeaningful } from "@/lib/forum/thread-rules";
+import { ThreadToggle } from "@/components/forum/ThreadToggle";
 import { isBookmarked, reactionStates, readFloor } from "@/lib/forum/social-queries";
 import { isIndexable } from "@/lib/forum/visibility";
 import { recordView } from "@/lib/forum/actions";
@@ -80,10 +82,10 @@ export default async function PostPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ only?: string }>;
+  searchParams: Promise<{ only?: string; view?: string }>;
 }) {
   const { id } = await params;
-  const { only } = await searchParams;
+  const { only, view } = await searchParams;
   const user = await getCurrentUser();
   const viewer = buildViewerContext(user);
 
@@ -119,6 +121,24 @@ export default async function PostPage({
   const isQuestion = post.type === "question";
   const lastRead = user ? readFloor(user.id, post.id) : 0;
   const maxFloor = allReplies.length > 0 ? allReplies[allReplies.length - 1].floor : 0;
+
+  /*
+   * 平铺还是楼中楼。
+   *
+   * 默认跟着**版块**走（`boards.view_mode` —— 这一列一直只有种子数据
+   * 写过，没有任何地方读）。地址里带了 `?view=` 就以地址为准：
+   * 视图写在链接里才分享得出去。
+   *
+   * 一条嵌套都没有的时候不给切换按钮 —— 两种视图长得一模一样，
+   * 点了什么都不变的按钮会让人以为站坏了。
+   */
+  const boardDefault = parseViewMode(
+    listBoards(viewer).find((b) => b.id === post.boardId)?.viewMode,
+    "flat",
+  );
+  const viewMode = parseViewMode(view, boardDefault);
+  const canThread = threadingIsMeaningful(replies);
+  const arranged = arrange(replies, canThread ? viewMode : "flat");
 
   // 能力集只决定按钮显不显示；每个 action 在服务端还会用 can() 再判一遍
   const caps = postCapabilities(user, post.raw);
@@ -351,9 +371,14 @@ export default async function PostPage({
           <ResumeReading postId={post.id} lastReadFloor={lastRead} maxFloor={maxFloor} />
         )}
 
+        {/* 有嵌套才给切换 —— 没有的话两种视图长得一模一样 */}
+        {canThread && !onlyAuthor && (
+          <ThreadToggle postId={post.id} current={viewMode} boardDefault={boardDefault} />
+        )}
+
         {replies.length > 0 && (
           <div className="inset-group mb-4">
-            {replies.map((reply) => (
+            {arranged.map(({ reply, indent, depth, orphaned, descendantCount }) => (
               <ReplyRow
                 key={reply.id}
                 replyId={reply.id}
@@ -385,8 +410,32 @@ export default async function PostPage({
               >
               <div
                 id={`f${reply.floor}`}
-                className="inset-row scroll-mt-16 px-4 py-3.5"
+                className="inset-row scroll-mt-16 py-3.5 pr-4"
+                /*
+                 * 缩进用 padding 而不是 margin —— 分隔线要一直画到最左边，
+                 * 缩进的行才不会在列表里割出一道参差不齐的边。
+                 * indent 已经在 thread-rules 里封顶（手机上第六层
+                 * 留给文字的宽度只剩不到一半）。
+                 */
+                style={{ paddingLeft: `${1 + indent * 1.1}rem` }}
               >
+                {/*
+                  * 超过封顶深度之后不再缩进，改用一行「回复 #12」说明接的是谁 ——
+                  * 信息一点不少，只是不再用缩进表达。
+                  */}
+                {depth > indent && reply.quotedExcerpt && (
+                  <p className="t-caption2 mb-1 text-[var(--ink-quaternary)]">↳ 更深一层的回复</p>
+                )}
+                {orphaned && (
+                  /*
+                   * 父级被删了。不说的话，一条明明在回答别人的话
+                   * 会突然以顶层身份出现，读起来像在自言自语。
+                   */
+                  <p className="t-caption2 mb-1 text-[var(--ink-quaternary)]">
+                    它回复的那条已经没了
+                  </p>
+                )}
+
                 <div className="mb-2 flex items-center gap-2.5">
                   <PersonLink wxId={reply.authorWxId} name={reply.authorName}>
                     <Avatar
@@ -418,6 +467,18 @@ export default async function PostPage({
                     />
                   )}
                   <QuoteButton replyId={reply.id} floor={reply.floor} authorName={reply.authorName} />
+                  {/*
+                    * 这一支底下还有多少条。
+                    *
+                    * 树形视图里，一条回复下面接着的对话可能有十几条，
+                    * 而缩进封了顶之后光看层级看不出来 ——
+                    * 一个数字比多缩一格有用得多。
+                    */}
+                  {descendantCount > 0 && (
+                    <span className="tabular t-caption2 text-[var(--ink-quaternary)]">
+                      {descendantCount} 条接着说
+                    </span>
+                  )}
                   <a
                     href={`#f${reply.floor}`}
                     className="tabular t-caption text-[var(--ink-quaternary)] transition hover:text-[var(--ink-tertiary)]"

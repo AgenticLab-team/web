@@ -60,7 +60,7 @@ export function ReplyForm({
 
   const [restoreInto, setRestoreInto] = useState<string | null>(serverDraft?.content ?? null);
 
-  // 点了某楼的「引用」之后把回复框滚进视野 ——
+  // 点了某楼的「回复」之后把回复框滚进视野 ——
   // 长帖里回复框在几屏之外，不滚过去用户会以为点了没反应
   useEffect(() => {
     if (quote) rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -105,11 +105,11 @@ export function ReplyForm({
       {quote && (
         <div className="flex items-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-soft)] px-3 py-2">
           <p className="t-footnote min-w-0 flex-1 truncate text-[var(--accent)]">
-            引用 #{quote.floor} · {quote.authorName}
+            回复 #{quote.floor} · {quote.authorName}
           </p>
           <button
             type="button"
-            aria-label="取消引用"
+            aria-label="不回复这一楼了"
             onClick={() => quoteCtx?.clearQuote()}
             className="tap-target shrink-0 rounded-full p-1 text-[var(--accent)] transition hover:bg-[var(--accent)]/10 active:scale-90"
           >

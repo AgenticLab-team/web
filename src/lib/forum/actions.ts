@@ -380,11 +380,24 @@ export async function createReply(input: {
         .get()?.max ?? 0;
 
     let quotedExcerpt: string | null = null;
+    /*
+     * 回复某一楼 = 树上的一条边。
+     *
+     * `parent_id` 一直空着，因为没有任何地方写它。而「引用某一楼」
+     * 就是「回复某一楼」，不该是两个各自记一份的关系 ——
+     * 两份迟早对不上，而且没人说得清哪一份算数。
+     *
+     * 所以这里一次写两列，分工写清楚：
+     *   · parent_id       —— 结构，树形视图按它排
+     *   · quoted_excerpt  —— 显示，那一小段引文
+     */
+    let parentId: string | null = null;
     if (input.quotedReplyId) {
       const quoted = tx.select().from(replies).where(eq(replies.id, input.quotedReplyId)).get();
       // 只引用同一帖内的回复，避免跨帖拼接出误导性的上下文
       if (quoted && quoted.postId === input.postId) {
         quotedExcerpt = quoted.content.slice(0, 80);
+        parentId = quoted.id;
       }
     }
 
@@ -396,7 +409,9 @@ export async function createReply(input: {
         content: safeReply,
         contentHtml: rendered.html,
         floor: maxFloor + 1,
-        quotedReplyId: input.quotedReplyId,
+        // 跨帖引用会被上面滤掉，那时 parentId 是 null，这一条就是顶层
+        parentId,
+        quotedReplyId: parentId ? input.quotedReplyId : null,
         quotedExcerpt,
         anonymous: Boolean(input.anonymous),
       })
