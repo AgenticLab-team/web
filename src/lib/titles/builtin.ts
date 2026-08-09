@@ -36,6 +36,40 @@ export const BUILTIN_TITLES: TitleSeed[] = [
     limitCount: 100,
     sort: 100,
   },
+  /*
+   * 赛季称号。
+   *
+   * 只发前三 —— 发到前二十就变成参与奖，而参与奖没有人会为它多做一件事。
+   * 到期日在结算时按赛季长度算（挂到下个赛季结束），
+   * 所以这里不写 rentDays：赛季长度不是固定的。
+   */
+  {
+    key: "season_champion",
+    name: "赛季冠军",
+    description: "在某个赛季的贡献榜上排第一。",
+    icon: "🥇",
+    rarity: "legendary",
+    source: "seasonal",
+    sort: 95,
+  },
+  {
+    key: "season_runner_up",
+    name: "赛季亚军",
+    description: "在某个赛季的贡献榜上排第二。",
+    icon: "🥈",
+    rarity: "epic",
+    source: "seasonal",
+    sort: 94,
+  },
+  {
+    key: "season_third",
+    name: "赛季季军",
+    description: "在某个赛季的贡献榜上排第三。",
+    icon: "🥉",
+    rarity: "epic",
+    source: "seasonal",
+    sort: 93,
+  },
   {
     key: "first_post",
     name: "开了个头",

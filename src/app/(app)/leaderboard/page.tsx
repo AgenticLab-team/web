@@ -7,13 +7,15 @@ import { Pill, Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getLeaderboard, getMyRank, PERIODS, type Period } from "@/lib/queries/leaderboard";
 import { allSyncedGroupIds, visibleGroupsFor } from "@/lib/queries/visibility";
+import { currentSeasonView } from "@/lib/seasons/queries";
 
 export const metadata: Metadata = { title: "排行" };
 export const dynamic = "force-dynamic";
 
 function hrefFor(period: Period, scope?: string) {
   const params = new URLSearchParams();
-  if (period !== "week") params.set("period", period);
+  // 默认是赛季，所以只有非赛季才需要带参数
+  if (period !== "season") params.set("period", period);
   if (scope) params.set("scope", scope);
   const qs = params.toString();
   return qs ? `/leaderboard?${qs}` : "/leaderboard";
@@ -27,7 +29,8 @@ export default async function LeaderboardPage({
   const params = await searchParams;
   const user = await getCurrentUser();
   const myGroups = visibleGroupsFor(user);
-  const period = (PERIODS.find((p) => p.key === params.period)?.key ?? "week") as Period;
+  const period = (PERIODS.find((p) => p.key === params.period)?.key ?? "season") as Period;
+  const season = currentSeasonView();
 
   /*
    * 范围有三种：
@@ -62,7 +65,31 @@ export default async function LeaderboardPage({
 
   return (
     <>
-      <PageHeader title="排行" subtitle={`${scopeLabel} · 按高质量消息`} />
+      <PageHeader
+        title="排行"
+        subtitle={
+          period === "season" && season
+            ? `${season.name} · 还剩 ${season.daysLeft} 天`
+            : `${scopeLabel} · 按高质量消息`
+        }
+      />
+
+      {/* 赛季的意义全在「还剩几天」被看见的那一刻 ——
+          不显示倒计时的话，它和「本月」没有区别 */}
+      {period === "season" && season && (
+        <div
+          className="mb-4 rounded-[var(--radius-card)] p-4 hairline"
+          style={{ background: "color-mix(in srgb, var(--accent) 7%, var(--surface))" }}
+        >
+          <p className="t-subhead font-medium">
+            {season.name} · 还剩 {season.daysLeft} 天
+          </p>
+          <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">
+            赛季只重置<strong>排名</strong>，不动任何人的积分 ——
+            攒下的分永远是你的。赛季结束时前三名会拿到称号。
+          </p>
+        </div>
+      )}
 
       <div className="mb-3 flex flex-wrap gap-1.5">
         {PERIODS.map((p) => (

@@ -4,6 +4,8 @@ import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { dailyStats, people } from "@/lib/db/schema";
+import { currentSeason } from "@/lib/seasons/queries";
+import { dateRangeOf } from "@/lib/seasons/rules";
 import { shiftDateKey, todayKey } from "@/lib/time";
 import { resolveDisplayName } from "@/lib/users/display-name";
 
@@ -14,9 +16,19 @@ import { resolveDisplayName } from "@/lib/users/display-name";
  * 总条数仍然展示，但只作为参考，不参与排名。
  */
 
-export type Period = "week" | "month" | "all";
+export type Period = "week" | "month" | "season" | "all";
 
+/**
+ * 赛季**排在总榜前面，而且是默认**。
+ *
+ * 总榜跑久了会冻住：最早那批人永远在前面，新来的人算一下就知道
+ * 这辈子追不上，于是不再参与。赛季给的是一次「从零开始」的机会 ——
+ * 但只有它是默认看到的那一屏，这件事才成立。
+ *
+ * 赛季的区间不是固定天数，要现查（见 rangeFor）。
+ */
 export const PERIODS: { key: Period; label: string; days: number | null }[] = [
+  { key: "season", label: "本赛季", days: null },
   { key: "week", label: "本周", days: 7 },
   { key: "month", label: "本月", days: 30 },
   { key: "all", label: "总榜", days: null },
@@ -48,8 +60,31 @@ export interface BoardOptions {
   limit?: number;
 }
 
-function rangeFor(period: Period): { from: string | null; previousFrom: string | null; previousTo: string | null } {
+function rangeFor(period: Period): {
+  from: string | null;
+  to?: string | null;
+  previousFrom: string | null;
+  previousTo: string | null;
+} {
   const today = todayKey();
+
+  /*
+   * 赛季的区间由赛季表决定，不是「最近 N 天」。
+   * 找不到当前赛季时退回总榜 —— 空榜看起来像出了故障。
+   */
+  if (period === "season") {
+    const season = currentSeason();
+    if (!season) return { from: null, previousFrom: null, previousTo: null };
+    const { from, to } = dateRangeOf({
+      key: season.key,
+      name: season.name,
+      startsAt: season.startsAt,
+      endsAt: season.endsAt,
+    });
+    // 赛季没有「上一个同长度区间」可比，所以不显示升降箭头
+    return { from, to, previousFrom: null, previousTo: null };
+  }
+
   const spec = PERIODS.find((p) => p.key === period) ?? PERIODS[0];
   if (spec.days === null) return { from: null, previousFrom: null, previousTo: null };
   const from = shiftDateKey(today, -(spec.days - 1));
@@ -94,11 +129,12 @@ export function getLeaderboard(options: BoardOptions): BoardEntry[] {
   // 指定的群必须在可见范围内，否则当作看不到
   if (options.convId && !options.convIds.includes(options.convId)) return [];
 
-  const period = options.period ?? "week";
+  const period = options.period ?? "season";
   const limit = options.limit ?? 50;
-  const { from, previousFrom, previousTo } = rangeFor(period);
+  const { from, to, previousFrom, previousTo } = rangeFor(period);
 
-  const current = aggregate(from, null, options.convIds, options.convId, limit);
+  // 赛季有结束日，所以上界要传进去 —— 不传的话看历史赛季会把之后的也算进来
+  const current = aggregate(from, to ?? null, options.convIds, options.convId, limit);
   if (current.length === 0) return [];
 
   // 上一周期的名次，用来算升降。总榜没有「上一周期」，箭头不显示

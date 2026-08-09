@@ -3,6 +3,7 @@ import { checkAndDispatch } from "@/lib/alerts/dispatch";
 import { runHealthChecks, takeStorageSnapshot } from "@/lib/health";
 import { autoPruneIfNeeded } from "@/lib/storage/auto";
 import { settleExpiredPins } from "@/lib/forum/pin-settle";
+import { settleDueSeasons } from "@/lib/seasons/settle";
 import { settleAll } from "@/lib/titles/settle";
 
 async function main() {
@@ -42,6 +43,12 @@ async function main() {
    */
   const pins = settleExpiredPins();
   if (pins.cleared > 0) console.log(`\n置顶 到期清理 ${pins.cleared} 条`);
+
+  // 赛季结算：跑完的赛季冻结名次、发前三的称号。不碰任何人的余额
+  const seasonResults = settleDueSeasons();
+  for (const r of seasonResults) {
+    console.log(`\n赛季 ${r.seasonKey} ${r.ok ? "已结算" : "跳过"}：${r.reason}`);
+  }
 
   const titles = settleAll();
   if (titles.granted || titles.expired || titles.renewed || titles.reminded) {
