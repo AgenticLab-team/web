@@ -121,7 +121,23 @@ export interface StorageOverview {
   fullSince: number | null;
   /** 已经丢掉正文、但没有任何归档文件兜底 —— 这是最危险的状态 */
   droppedWithoutArchive: boolean;
-  disk: { pct: number; dbBytes: number; ftsBytes: number; takenAt: number } | null;
+  /**
+   * 磁盘。
+   *
+   * **带上绝对值，不只是百分比。** `disk_total` / `disk_used`
+   * 每次探测都写进了快照，而页面只显示 `87%` —— 一个百分比
+   * 答不了「还能撑多久」，也答不了「清一次能腾出多少」，
+   * 而这两个问题正是有人打开这一页的原因。
+   */
+  disk: {
+    pct: number;
+    totalBytes: number;
+    usedBytes: number;
+    freeBytes: number;
+    dbBytes: number;
+    ftsBytes: number;
+    takenAt: number;
+  } | null;
   thresholds: { warnPct: number; prunePct: number; stopCachePct: number };
   byTable: { name: string; bytes: number }[];
 }
@@ -155,6 +171,10 @@ export function storageOverview(now = Date.now()): StorageOverview {
     disk: snapshot
       ? {
           pct: snapshot.diskPct,
+          totalBytes: snapshot.diskTotal,
+          usedBytes: snapshot.diskUsed,
+          // 剩余是算出来的，不再存一份 —— 存三个数迟早有一天对不上
+          freeBytes: Math.max(0, snapshot.diskTotal - snapshot.diskUsed),
           dbBytes: snapshot.dbBytes,
           ftsBytes: snapshot.ftsBytes,
           takenAt: snapshot.takenAt,

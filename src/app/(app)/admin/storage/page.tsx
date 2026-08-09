@@ -121,7 +121,17 @@ export default async function AdminStoragePage() {
 
         {s.disk && level && (
           <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
-            磁盘 {s.disk.pct}% · {DISK_LEVEL_LABELS[level]}
+            {/*
+              * 百分比后面跟上绝对值。
+              *
+              * 这两个数每次探测都写进了快照，而这一页一直只显示
+              * `87%` —— 一个百分比答不了「还能撑多久」，
+              * 也答不了「清一次能腾出多少」，
+              * 而这两个问题正是有人打开这一页的原因。
+              */}
+            磁盘 {s.disk.pct}%（已用 {formatBytes(s.disk.usedBytes)} / 共{" "}
+            {formatBytes(s.disk.totalBytes)}，还剩 {formatBytes(s.disk.freeBytes)}）·{" "}
+            {DISK_LEVEL_LABELS[level]}
             （{s.thresholds.warnPct}% 提醒 / {s.thresholds.prunePct}% 该裁 /{" "}
             {s.thresholds.stopCachePct}% 停缓存）· 采样于 {relativeTime(s.disk.takenAt)}
           </p>

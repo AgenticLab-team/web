@@ -107,13 +107,17 @@
 
 反复出现的那个病，现在有了静态检查：
 
-- **配置项** —— `tests/dead-settings.test.ts`。75 个里 10 个从来没被读过。
+- **配置项** —— `tests/dead-settings.test.ts`。65 个里 10 个从来没被读过。
   出路只有三条：接上、标 `planned`、退役（`RETIRED_SETTINGS`，seed 会
   把行从库里删掉 —— 只从清单里删不够，后台列的是库里的行）。
 - **权限点** —— `tests/permission-wiring.test.ts`（早先做的）。
 
-还差 **数据库列**：97 张表 1058 列里有 23 列 src 里一次都没出现过。
-已经查清楚的几个：
+- **数据库列** —— `tests/dead-columns.test.ts`。1058 列逐列检查，
+  每一列要么被读、要么在 `src/lib/db/dead-columns.ts` 上写明实情。
+  22 列在名单上，分五类（`duplicate` / `decided-against` /
+  `superseded` / `planned` / `gap`）。
+
+名单上最该动手的几个：
 
 | 列 | 实情 |
 |---|---|
@@ -123,8 +127,11 @@
 | `bind_codes.attempts` | 设计变了：绑定码是用户发给机器人的，站内没有「输码」这一步，也就没有可爆破的地方 |
 | `forum_posts.pinned_globally` | 站内公告（定向、可关闭、会过期）在「所有人都得看见」这件事上做得更好，这一列大概该删 |
 | `invites.grant_role_id` | 邀请码创建界面根本不让选角色 —— 值得确认是不是漏了个功能 |
-| `storage_snapshots.disk_total/used` | health.ts 算得出来，但从来没写进快照 —— 所以存储趋势图没有磁盘历史 |
+| `api_usage.*` | **整张表建了 763 天、0 行** —— 「上游有配额，调用量要能看」写在表的注释里，而这件事从来没发生过 |
 
-删列要走迁移（SQLite 得重建表），比删配置项重。下一步先把
-「每列要么被读、要么在名单上写明为什么」这条测试立起来，
-再逐个处理。
+删列要走迁移（SQLite 得重建整张表），比删一行配置重得多，
+所以名单只逼「说得出实情」，不逼删。
+
+顺手修掉的：`storage_snapshots.disk_total/used` 其实一直在写，
+只是存储页只显示百分比 —— 现在把绝对值也显示出来了
+（「还能撑多久」「清一次能腾出多少」，百分比答不了）。
