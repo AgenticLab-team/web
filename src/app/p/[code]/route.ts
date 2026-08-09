@@ -29,7 +29,7 @@ import { looksLikeShareCode } from "@/lib/forum/share-code";
  * 而枚举的成本正好被短码的长度挡着，不该由我们自己拆掉。
  */
 export async function GET(
-  request: Request,
+  _request: Request,
   // 不用 `RouteContext<...>`：它从构建产物生成的路由表上取，
   // 而一条新路由还不在那张表里，`tsc` 会在构建之前先报错
   { params }: { params: Promise<{ code: string }> },
@@ -50,11 +50,27 @@ export async function GET(
   if (!row) return new Response("Not Found", { status: 404 });
 
   /*
-   * 302 而不是 301。
+   * ─────────────────────────────────────────
+   * 跳**相对地址**，绝不用 request.url 拼绝对地址
+   * ─────────────────────────────────────────
    *
-   * 301 会被浏览器和中间层长期缓存 —— 帖子删掉、短码换掉之后，
-   * 那条缓存还会把人送到一个已经不存在的地址，而且清不掉。
-   * 短链的映射是数据，不是路由结构，不该被当成永久的。
+   * 站点在 nginx 后面，Next 收到的 `request.url` 是内网那一个
+   * （`http://localhost:3000/...`）。拿它去 `new URL(path, request.url)`
+   * 拼出来的 Location 就是 `https://localhost:3000/forum/p/...` ——
+   * 也就是**每一条分享出去的短链都会把人送到他自己的机器上**。
+   *
+   * 这个 bug 在本地怎么测都测不出来（本地它恰好就是对的），
+   * 只有真的部署到 nginx 后面再点一次才看得见。
+   *
+   * 相对 Location 由浏览器按它实际访问的地址来解析，
+   * 所以不需要这台机器知道自己对外叫什么名字。
+   *
+   * 302 而不是 301：301 会被浏览器和中间层长期缓存 ——
+   * 帖子删掉、短码换掉之后，那条缓存还会把人送到一个
+   * 已经不存在的地址，而且清不掉。短链的映射是数据，不是路由结构。
    */
-  return Response.redirect(new URL(`/forum/p/${row.id}`, request.url), 302);
+  return new Response(null, {
+    status: 302,
+    headers: { Location: `/forum/p/${row.id}` },
+  });
 }

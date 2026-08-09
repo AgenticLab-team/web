@@ -116,11 +116,26 @@ describe("**短码不是通行证**", () => {
      */
     assert.equal(route.includes("canSeePost"), false, "短链里自己判可见性了");
     assert.equal(route.includes("visibleGroupIds"), false);
-    assert.match(route, /Response\.redirect/);
+    assert.match(route, /status: 302/);
   });
 
   it("跳到正式地址，由那一页去判", () => {
     assert.match(route, /\/forum\/p\/\$\{row\.id\}/);
+  });
+
+  it("**跳相对地址，不许拿 request.url 拼绝对地址**", () => {
+    /*
+     * 站点在 nginx 后面，Next 收到的 `request.url` 是内网那一个
+     * （http://localhost:3000/...）。拿它拼出来的 Location 是
+     * `https://localhost:3000/forum/p/...` —— 每一条分享出去的短链
+     * 都会把人送到他自己的机器上。
+     *
+     * 这个 bug 在本地怎么测都测不出来（本地它恰好是对的），
+     * 是真的部署上去点了一次才看见的。
+     */
+    assert.equal(route.includes("request.url"), false, "又拿 request.url 拼绝对地址了");
+    assert.equal(route.includes("Response.redirect"), false, "Response.redirect 只收绝对地址");
+    assert.match(route, /Location: `\/forum\/p\//);
   });
 
   it("**认不出来一律 404，不区分「码不对」和「帖子没了」**", () => {

@@ -151,3 +151,23 @@
 - **上游返回的形态必须实测，不能照文档推测。**
 - **故障不能伪装成业务结果。** 那个「你不是社群成员」的假象就是这么来的 ——
   接口挂了，判定拿到 false，界面如实地把 false 说成了「你不是成员」。
+
+## Route Handler 里的 `request.url` 是内网地址
+
+短链 `/p/<code>` 本地怎么点都对，部署上去第一次点就跳到了
+`https://localhost:3000/forum/p/...` —— **每一条分享出去的链接
+都把人送回他自己的机器**。
+
+站点在 nginx 后面，Node 收到的请求行写的就是 `http://localhost:3000/...`。
+`new URL(path, request.url)` 忠实地照着拼。
+
+坑在于**本地测不出来**：本地它恰好是对的。也在于
+`middleware.ts` 里同样的写法**是对的** —— Edge 运行时会按请求头
+重建公网地址（线上实测跳的是正确域名）。两处长得一模一样、行为不同。
+
+- 跳站内 → 写相对 `Location`，这台机器不需要知道自己叫什么
+- 非要绝对地址（OAuth redirect_uri、邮件链接、OG 图）→ `env.site.url`
+- 读 `new URL(request.url).searchParams` 没问题，错的只有 host
+
+`tests/absolute-urls.test.ts` 扫所有 `route.ts` 盯这一条，
+并且显式豁免中间件，免得下一个人顺手把对的那处也改了。
