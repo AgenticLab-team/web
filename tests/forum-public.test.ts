@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 
+import { CONDITIONAL_PREFIXES } from "@/lib/auth/routes";
 import { NAV, navItemVisible, type NavItem } from "@/lib/nav";
 
 /**
@@ -43,9 +44,14 @@ describe("**开关真的被读了**", () => {
     assert.match(strip(src("lib/forum/public-access.ts")), /"site\.forum_public",\s*true/);
   });
 
-  it("判定只有一处实现", () => {
+  it("**只有一处真的去读它**", () => {
     /*
      * 两处的话迟早分叉，而分叉出来更松的那一份就是漏的那个口。
+     *
+     * 数的是「读」（`getSetting*`），不是「提到」——
+     * `routes.ts` 的有条件前缀表里写着它归哪个开关管，那是**说明**，
+     * 不是第二次判定。把说明也算成读的话，这条测试会逼着人
+     * 把说明删掉，而说明正是下一个人需要的东西。
      */
     let hits = 0;
     const walk = (d: string) => {
@@ -59,12 +65,25 @@ describe("**开关真的被读了**", () => {
           !f.endsWith("public-access.ts") &&
           !f.endsWith("settings/defaults.ts")
         ) {
-          if (strip(readFileSync(f, "utf8")).includes('"site.forum_public"')) hits++;
+          if (/getSetting\w*\(\s*"site\.forum_public"/.test(strip(readFileSync(f, "utf8")))) hits++;
         }
       }
     };
     walk(join(root, "src"));
     assert.equal(hits, 0, "还有别的地方自己读了这个配置项");
+  });
+
+  it("**有条件前缀表上写的开关名，和真正读的那个是同一个**", () => {
+    /*
+     * 两个地方各写一遍字符串，写错一个字母就是：
+     * 表上说归 A 管、代码读的是 B，而两边看起来都对。
+     */
+    const forum = CONDITIONAL_PREFIXES.find((c) => c.prefix === "/forum");
+    assert.ok(forum, "有条件前缀表里没有 /forum");
+    assert.match(
+      strip(src("lib/forum/public-access.ts")),
+      new RegExp(`getSettingBool\\("${forum.setting.replace(/\./g, "\\.")}"`),
+    );
   });
 });
 

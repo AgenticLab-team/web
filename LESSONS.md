@@ -162,12 +162,54 @@
 `new URL(path, request.url)` 忠实地照着拼。
 
 坑在于**本地测不出来**：本地它恰好是对的。也在于
-`middleware.ts` 里同样的写法**是对的** —— Edge 运行时会按请求头
-重建公网地址（线上实测跳的是正确域名）。两处长得一模一样、行为不同。
+`middleware.ts` 里同样的写法当时**是对的** —— Edge 运行时会按请求头
+重建公网地址（线上实测跳的是正确域名）。
+
+**这条豁免后来没了**：Next 16 把 middleware 改名成 `proxy.ts`，
+运行时固定成 nodejs。同一行代码，换个运行时就开始把人送去 localhost。
 
 - 跳站内 → 写相对 `Location`，这台机器不需要知道自己叫什么
 - 非要绝对地址（OAuth redirect_uri、邮件链接、OG 图）→ `env.site.url`
 - 读 `new URL(request.url).searchParams` 没问题，错的只有 host
 
-`tests/absolute-urls.test.ts` 扫所有 `route.ts` 盯这一条，
-并且显式豁免中间件，免得下一个人顺手把对的那处也改了。
+`tests/absolute-urls.test.ts` 扫所有 `route.ts` 盯这一条 ——
+现在没有例外了，proxy 也一起管。
+
+## 两层的跳转地址要求正好相反
+
+同一件事「往哪跳」，在 proxy 和 Route Handler 里的正确写法是反的：
+
+| | 相对 Location | 绝对地址 |
+|---|---|---|
+| **Route Handler** | ✅ 正确 | 只能来自 `env.site.url` |
+| **proxy.ts** | ❌ `ERR_INVALID_URL` | ✅ 必须，且只能来自 `env.site.url` |
+
+proxy 那一层的 Location 会被 Next 自己 `new URL()` 一遍，
+给相对地址会抛 `ERR_INVALID_URL` —— 而这不是那一条路径 500，
+是**整条 matcher 覆盖的路径一起 500**：登录、后台、论坛同时挂掉。
+
+这个是本地跑真构建才发现的。`npm test` 和 `tsc` 全绿，
+因为它是运行时行为，既不是类型问题也不是结构问题。
+
+**教训不是「记住这张表」，是「碰 proxy 就得本地起一次真构建再点几下」。**
+它是唯一一处「写错一行、整站白屏」的代码。
+
+## Next 16：middleware 已废弃，改名 proxy
+
+`mv middleware.ts proxy.ts`，导出的函数从 `middleware` 改成 `proxy`，
+`skipMiddlewareUrlNormalize` 之类的配置项同步改名。
+**运行时固定 nodejs，不可配置** —— 这条是有用的：
+proxy 从此查得了数据库，站点级配置（不是身份）可以在这一层判。
+
+身份仍然不能在这一层判：光凭 cookie 自称就放行等于让客户端自证身份。
+
+## redirect() 在有 loading.tsx 的路由下不是 HTTP 跳转
+
+论坛那道门第一版写在 `layout.tsx` 里。线上实测：访客拿到的是
+**200 + 一个空壳**，跳转指令躺在 HTML 流里等客户端执行。
+
+浏览器会跳，所以点着是对的 —— 而 `curl`、爬虫、监控、
+微信的预览抓取拿到的都是 200。内容确实没渲染，但状态码在骗人。
+
+门要开在 proxy 里，在渲染开始之前。页面里那一道留着当兜底，
+两处读的是**同一个**判定函数 —— 一个决定，两个执行点，不是两套逻辑。

@@ -226,7 +226,7 @@ describe("群聊：四个视图一个入口", () => {
     /*
      * 群聊内容 100% 靠 visibleGroupsFor 收口，访客能拿到的只有一个空壳。
      * 导航里给访客留一个入口，就是让他点进去撞一次墙。
-     * 两边要一致：导航藏起来、路径也要真的拦（见 tests/middleware.test.ts）。
+     * 两边要一致：导航藏起来、路径也要真的拦（见 tests/proxy.test.ts）。
      */
     const chat = ALL_NAV_ITEMS.find((i) => i.key === "chat")!;
     assert.equal(chat.requiresAuth, true);

@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
-import { PROTECTED_PREFIXES, isProtectedPath, safeRedirect } from "@/lib/auth/routes";
+import {
+  CONDITIONAL_PREFIXES,
+  PROTECTED_PREFIXES,
+  isProtectedPath,
+  safeRedirect,
+} from "@/lib/auth/routes";
 import { NAV } from "@/lib/nav";
 
 /**
@@ -12,8 +17,17 @@ import { NAV } from "@/lib/nav";
  * 攻击者可以拿一个看起来正常的登录链接把人导到钓鱼站。
  *
  * 这个文件以前抄了一份 isProtected / safeRedirect 在测试里，
- * 结果中间件漏掉 /admin 的时候测试照样全绿 —— 测的是抄件。
+ * 结果门禁漏掉 /admin 的时候测试照样全绿 —— 测的是抄件。
  * 现在两边引的是同一个 routes.ts。
+ *
+ * ─────────────────────────────────────────
+ * middleware 改名成了 proxy
+ * ─────────────────────────────────────────
+ *
+ * Next 16 废弃了 `middleware.ts`，改名 `proxy.ts`，导出的函数
+ * 也从 `middleware` 改成 `proxy`，运行时固定为 nodejs。
+ * 这里连文件名一起改了 —— 留着旧名字的测试会在下次有人
+ * 搜索 middleware 时把他领到一个不存在的东西上。
  */
 
 describe("回跳地址", () => {
@@ -47,8 +61,8 @@ describe("回跳地址", () => {
     assert.equal(safeRedirect("/me/bookmarks?f=none"), "/me/bookmarks?f=none");
   });
 
-  it("中间件把查询串一起放进 next", () => {
-    const src = readFileSync(new URL("../src/middleware.ts", import.meta.url), "utf8");
+  it("门禁把查询串一起放进 next", () => {
+    const src = readFileSync(new URL("../src/proxy.ts", import.meta.url), "utf8");
     assert.match(src, /const \{ pathname, search \} = request\.nextUrl;/);
     assert.match(src, /set\("next", `\$\{pathname\}\$\{search\}`\)/);
   });
@@ -101,26 +115,103 @@ describe("matcher 与前缀表不能脱节", () => {
    * 所以只能手写一份。手写的东西一定会和前缀表跑偏 ——
    * 跑偏的后果是中间件根本不被调用，isProtectedPath 写得再对也没用。
    */
-  const source = readFileSync(new URL("../src/middleware.ts", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../src/proxy.ts", import.meta.url), "utf8");
   const matcher = [...source.matchAll(/"(\/[^"]*)"/g)]
     .map((m) => m[1])
     .filter((p) => p !== "/login");
 
   it("每个受保护前缀都在 matcher 里", () => {
     for (const prefix of PROTECTED_PREFIXES) {
+      /*
+       * 「被覆盖」有三种：写死这一条、写了它的 `/:path*`、
+       * 或者被一条更宽的通配覆盖（`/forum/:path*` 罩住 `/forum/new`）。
+       *
+       * 只认前两种的话，把两条窄的合并成一条宽的就会报假警 ——
+       * 而报假警的测试很快就没人看了。
+       */
+      const covered = matcher.some(
+        (m) =>
+          m === prefix ||
+          m === `${prefix}/:path*` ||
+          (m.endsWith("/:path*") && prefix.startsWith(`${m.slice(0, -"/:path*".length)}/`)),
+      );
+      assert.ok(covered, `${prefix} 不在 proxy 的 matcher 里，门禁根本不会被调用`);
+    }
+  });
+
+  it("**有条件保护的前缀也要在 matcher 里**", () => {
+    /*
+     * 论坛平时是公开的，只有管理员把「允许未登录浏览」关掉时才拦。
+     * 但 matcher 是构建期常量 —— 它不知道开关拨到哪边，
+     * 所以必须**永远**覆盖，由 proxy 里的判定决定放不放行。
+     *
+     * 漏掉这条的后果最阴：开关拨过去了，管理员以为关上了，
+     * 而门禁压根没被调用。
+     */
+    for (const { prefix } of CONDITIONAL_PREFIXES) {
       const covered = matcher.some((m) => m === prefix || m === `${prefix}/:path*`);
-      assert.ok(covered, `${prefix} 不在 middleware 的 matcher 里，中间件不会被调用`);
+      assert.ok(covered, `${prefix} 是有条件保护的，matcher 必须永远覆盖它`);
     }
   });
 
   it("matcher 里没有多余的路径", () => {
+    const known = [
+      ...PROTECTED_PREFIXES,
+      ...CONDITIONAL_PREFIXES.map((c) => c.prefix),
+    ] as readonly string[];
     for (const entry of matcher) {
       const prefix = entry.replace("/:path*", "");
       assert.ok(
-        (PROTECTED_PREFIXES as readonly string[]).includes(prefix),
-        `matcher 里的 ${entry} 不在受保护前缀表里`,
+        known.includes(prefix) || known.some((k) => prefix.startsWith(`${k}/`)),
+        `matcher 里的 ${entry} 既不在受保护前缀表里，也不在有条件保护表里`,
       );
     }
+  });
+
+  it("**有条件的那张表上写清楚了归哪个开关管**", () => {
+    // 没写的话，下一个人只会看到一个「有时候拦有时候不拦」的路径
+    for (const c of CONDITIONAL_PREFIXES) {
+      assert.match(c.setting, /^[a-z0-9_.]+$/);
+      assert.ok(c.why.length > 4, `${c.prefix} 没说为什么是有条件的`);
+    }
+  });
+});
+
+describe("**proxy 的形状**", () => {
+  const source = readFileSync(new URL("../src/proxy.ts", import.meta.url), "utf8");
+
+  it("导出的是 proxy，不是 middleware", () => {
+    assert.match(source, /export function proxy\(/);
+    assert.equal(/export function middleware\(/.test(source), false);
+  });
+
+  it("仓库里没有残留的 middleware.ts", () => {
+    /*
+     * 两个文件同时存在的话，Next 只认一个，而另一个看起来还在管事 ——
+     * 改错那一个的人不会得到任何提示。
+     */
+    let exists = true;
+    try {
+      readFileSync(new URL("../src/middleware.ts", import.meta.url));
+    } catch {
+      exists = false;
+    }
+    assert.equal(exists, false, "src/middleware.ts 还在，Next 16 已经不认它了");
+  });
+
+  it("**登录判定仍然只看 cookie 在不在** —— 鉴权不在这一层", () => {
+    /*
+     * proxy 现在跑 nodejs，查得了库 —— 正因为查得了，这条要写死：
+     * 光凭 cookie 自称就当成「这个人是谁」等于让客户端自证身份。
+     * 会话有效性和权限仍然由页面里的 getCurrentUser / can() 判定。
+     *
+     * 读**站点配置**是另一回事：那是管理员拨的开关，不是「你是谁」。
+     */
+    // 注释里提到这些名字是**在解释为什么不用它们**，先去掉注释再断言
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
+    assert.equal(code.includes("getCurrentUser"), false);
+    assert.equal(code.includes('can("'), false);
+    assert.match(code, /cookies\.has\(SESSION_COOKIE\)/);
   });
 });
 

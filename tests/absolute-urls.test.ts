@@ -19,14 +19,29 @@ import { describe, it } from "node:test";
  * 因为本地它恰好就是对的。
  *
  * ─────────────────────────────────────────
- * 中间件不一样 —— 别顺手把它也禁了
+ * 门禁那一层曾经是例外，现在不是了
  * ─────────────────────────────────────────
  *
- * `middleware.ts` 跑在 Edge 运行时，`NextRequest.url` 是 Next
- * 按请求头重建出来的公网地址，`new URL("/login", request.url)` 是对的
- * （线上实测跳的是 `https://agenticlab.sh/login`）。
+ * 旧的 `middleware.ts` 跑在 Edge 运行时，`NextRequest.url` 是 Next
+ * 按请求头重建出来的公网地址，同样的写法在那儿**是对的**
+ * （线上实测跳的是正确域名）。
  *
- * 两者长得一模一样而行为不同，所以这条规则**只管 Route Handler**。
+ * Next 16 把它改名成 `proxy.ts`，**运行时固定成了 nodejs** ——
+ * 那条豁免随之失效：同一行代码，换个运行时就开始把人送去 localhost。
+ *
+ * 所以现在规则是一条，没有例外：**谁都不许拿 request.url 拼绝对地址**。
+ *
+ * ─────────────────────────────────────────
+ * 但「该用什么代替」两层不一样
+ * ─────────────────────────────────────────
+ *
+ *   · **Route Handler** → 相对 Location。`Response.redirect` 只收
+ *     绝对地址，所以要手写 `new Response(null, { headers: { Location } })`。
+ *   · **proxy** → 绝对地址，来自 `env.site.url`。这一层的 Location
+ *     会被 Next 自己 `new URL()` 一遍，给相对地址会 `ERR_INVALID_URL`，
+ *     整条 matcher 覆盖的路径一起 500。
+ *
+ * 同一个词在两层里含义相反，所以两处各写了一遍原因。
  *
  * ─────────────────────────────────────────
  * 那该用什么
@@ -89,14 +104,27 @@ describe("**Route Handler 不拿 request.url 拼绝对地址**", () => {
   }
 });
 
-describe("中间件是另一回事", () => {
-  it("**它可以用 request.url** —— Edge 运行时重建过公网地址", () => {
+describe("**门禁那一层也一样**", () => {
+  const proxy = strip(readFileSync(join(root, "src/proxy.ts"), "utf8"));
+
+  it("不拿 request.url 拼登录地址", () => {
     /*
-     * 写在这里是为了下一个看到上面那条规则的人不会顺手把这里也改了：
-     * 改成相对地址在中间件里反而是错的，`NextResponse.redirect` 要绝对地址。
+     * 这一条是改名改出来的：edge 时代它是对的，换成 nodejs 就错了。
+     * 同一行代码，换个运行时就开始把人送去 localhost。
      */
-    const mw = strip(readFileSync(join(root, "src/middleware.ts"), "utf8"));
-    assert.match(mw, /new URL\("\/login", request\.url\)/);
+    assert.equal(proxy.includes("request.url"), false);
+  });
+
+  it("**用 env.site.url，不是相对地址** —— 这一层和 Route Handler 正相反", () => {
+    /*
+     * proxy 这一层的 Location 会被 Next 自己 `new URL()` 一遍，
+     * 相对地址直接 `ERR_INVALID_URL`，整条 matcher 覆盖的路径
+     * 全部 500 —— 登录、后台、论坛一起挂。本地构建跑起来才发现的。
+     *
+     * 所以两条限制方向相反：不能相对、也不能来自 request.url，
+     * 同时满足的只有配出来的那个域名。
+     */
+    assert.match(proxy, /new URL\("\/login", env\.site\.url\)/);
   });
 });
 

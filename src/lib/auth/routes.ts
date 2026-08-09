@@ -5,12 +5,18 @@
  * 于是测试测的是抄件 —— 中间件漏掉 /admin 的时候测试全绿。
  * 现在只有这一份，改这里三处一起变。
  *
- * 注意这个文件会被 middleware 引入，跑在 edge runtime 里：
- * **不能碰数据库、不能引 server-only**。
+ * 注意这个文件会被 `proxy.ts` 引入。Next 16 起 proxy 跑的是 nodejs
+ * 运行时（不像旧的 middleware 是 edge），所以「不能碰数据库」这条
+ * 硬限制没有了 —— 但**这个文件仍然保持纯粹**：它是一张名单，
+ * 名单不该依赖运行时能不能查库。要查库的判定写在 proxy 里。
  *
  * 页面里再写一次 redirect() 不能代替这份名单：那样访客拿到的是
  * 一个 200 的空壳，然后才被客户端弹走 —— 页面主体确实没渲染，
  * 但地址栏、标题、加载过程全都发生过一遍。/admin 当初就是这个样子。
+ *
+ * 这一条在论坛那道门上又验证了一次：只在 layout 里 redirect，
+ * 线上实测拿到的是 **200 + 壳**，跳转指令躺在流里等客户端执行 ——
+ * 浏览器会跳，`curl`、爬虫、微信的预览抓取不会。
  */
 
 /** 未登录一律拦下的路径前缀 */
@@ -35,6 +41,25 @@ export const PROTECTED_PREFIXES = [
   "/forum/new",
   "/forum/convert",
   "/onboarding",
+] as const;
+
+/**
+ * **有条件**受保护的前缀 —— 拦不拦由配置说了算。
+ *
+ * 和上面那张表的区别：上面是「未登录一律拦下」，这里是
+ * 「未登录时，看管理员把开关拨到哪一边」。
+ *
+ * 目前只有论坛（`site.forum_public`「论坛允许未登录浏览」）。
+ * 单列出来是因为 matcher 必须覆盖它 —— 而 matcher 与
+ * `PROTECTED_PREFIXES` 的一致性有测试盯着，
+ * 混在一起的话，要么测试报假警，要么就得把断言放松到没用。
+ */
+export const CONDITIONAL_PREFIXES = [
+  {
+    prefix: "/forum",
+    setting: "site.forum_public",
+    why: "论坛是否允许未登录浏览，由管理员配置",
+  },
 ] as const;
 
 /**
