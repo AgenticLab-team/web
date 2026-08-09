@@ -8,6 +8,11 @@ import { audit } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { activities, activityApplications, activityEvents } from "@/lib/db/schema";
+import {
+  parseFulfillText,
+  planBulkFulfill,
+  type BulkPlan,
+} from "@/lib/activities/bulk-fulfill";
 import { evaluateEligibility, validateRule, type Rule } from "@/lib/activities/eligibility";
 import { getActivity } from "@/lib/activities/queries";
 import { claimQuota, releaseQuota } from "@/lib/activities/quota";
@@ -404,22 +409,36 @@ export async function fulfillApplication(input: {
   if (!app) return fail("申请不存在");
   if (!input.note.trim()) return fail("必须写明结果 —— 申请人会看到");
 
+  return fulfillOne(admin.user.id, app, input.success, input.note.trim());
+}
+
+/**
+ * 履约回填的唯一实现。单条按钮和批量粘贴都走这里 ——
+ * 两份逻辑意味着改名额规则时总有一份会被忘掉，
+ * 而被忘掉的那份出的错（少还一个名额）没有人会来投诉。
+ */
+async function fulfillOne(
+  actorId: string,
+  app: typeof activityApplications.$inferSelect,
+  success: boolean,
+  note: string,
+): Promise<ActivityResult> {
   const result = await transition({
     application: app,
-    to: input.success ? "fulfilled" : "failed",
-    actorId: admin.user.id,
+    to: success ? "fulfilled" : "failed",
+    actorId,
     actorKind: "admin",
-    note: input.note.trim(),
+    note,
     notifyUser: true,
   });
 
   if (result.ok) {
     db.update(activityApplications)
       .set({
-        fulfilledAt: input.success ? Date.now() : null,
-        failureReason: input.success ? null : input.note.trim(),
+        fulfilledAt: success ? Date.now() : null,
+        failureReason: success ? null : note,
       })
-      .where(eq(activityApplications.id, input.id))
+      .where(eq(activityApplications.id, app.id))
       .run();
 
     /*
@@ -428,16 +447,131 @@ export async function fulfillApplication(input: {
      * 事后追问「这个域名是谁批的、凭什么」时，要查的是审计日志。
      */
     audit(
-      { actorId: admin.user.id },
+      { actorId },
       {
         action: "activity.fulfill",
         targetType: "activity_application",
-        targetId: input.id,
+        targetId: app.id,
         before: { status: app.status },
-        after: { status: input.success ? "fulfilled" : "failed" },
-        reason: input.note.trim(),
+        after: { status: success ? "fulfilled" : "failed" },
+        reason: note,
       },
     );
+  }
+
+  return result;
+}
+
+// ── 批量回填 ──────────────────────────────────────────────────
+
+/**
+ * 预览和提交拿同一段文本各算一遍计划，而不是把预览算好的计划传回来提交。
+ *
+ * 客户端传回来的计划谁都不该信；更重要的是这让提交天然幂等 ——
+ * 同一段文本粘两遍，第二遍里每一条都落进「已处理过」，什么都不会发生，
+ * 不会重复动名额、重复发通知。
+ */
+function planForActivity(activityId: string, text: string): BulkPlan {
+  const rows = db
+    .select({
+      id: activityApplications.id,
+      key: activityApplications.normalizedKey,
+      status: activityApplications.status,
+    })
+    .from(activityApplications)
+    .where(eq(activityApplications.activityId, activityId))
+    .all();
+
+  const apps = rows
+    .filter((r): r is typeof r & { key: string } => Boolean(r.key))
+    .map((r) => ({ id: r.id, domain: r.key, status: r.status }));
+
+  return planBulkFulfill(parseFulfillText(text), apps);
+}
+
+export interface BulkPreviewResult {
+  ok: boolean;
+  error?: string;
+  plan?: BulkPlan;
+}
+
+/** 只算不写 —— 预览态的管理员也要能看到粘贴的结果长什么样 */
+export async function previewBulkFulfill(input: {
+  activityId: string;
+  text: string;
+}): Promise<BulkPreviewResult> {
+  await requireAdmin("activity.fulfill");
+
+  if (!getActivity(input.activityId)) return { ok: false, error: "活动不存在" };
+  if (!input.text.trim()) return { ok: false, error: "先把注册商那边的结果粘进来" };
+
+  return { ok: true, plan: planForActivity(input.activityId, input.text) };
+}
+
+export interface BulkCommitResult {
+  ok: boolean;
+  error?: string;
+  /** 真的写进去的 */
+  fulfilled: number;
+  failed: number;
+  /** 之前处理过、这次跳过的 */
+  skipped: number;
+  /** 写的时候才失败的（名额、状态被并发改了）—— 和 unknown 一样不能吞 */
+  errors: { domain: string; error: string }[];
+  unknown: string[];
+}
+
+export async function commitBulkFulfill(input: {
+  activityId: string;
+  text: string;
+}): Promise<BulkCommitResult> {
+  const admin = await requireWritableAdmin("activity.fulfill");
+
+  const nothing = { fulfilled: 0, failed: 0, skipped: 0, errors: [], unknown: [] };
+  if (!getActivity(input.activityId)) return { ok: false, error: "活动不存在", ...nothing };
+
+  /*
+   * 预览和提交之间隔着人的确认时间，期间申请可能被撤回、被别的管理员
+   * 处理掉。所以提交前按当前库里的状态**重算**计划 —— 变掉的那几条
+   * 会落进 skipped 或 errors，而不是对着旧状态硬写。
+   */
+  const plan = planForActivity(input.activityId, input.text);
+
+  const result: BulkCommitResult = {
+    ok: true,
+    fulfilled: 0,
+    failed: 0,
+    skipped: plan.already.length,
+    errors: [],
+    unknown: plan.unknown,
+  };
+
+  for (const { success, targets } of [
+    { success: true, targets: plan.fulfill },
+    { success: false, targets: plan.fail },
+  ]) {
+    for (const target of targets) {
+      const app = db
+        .select()
+        .from(activityApplications)
+        .where(eq(activityApplications.id, target.applicationId))
+        .get();
+      if (!app) {
+        result.errors.push({ domain: target.domain, error: "申请不见了" });
+        continue;
+      }
+
+      const note =
+        target.note ?? (success ? "批量回填：注册成功" : "批量回填：注册失败");
+      const one = await fulfillOne(admin.user.id, app, success, note);
+
+      if (!one.ok) {
+        result.errors.push({ domain: target.domain, error: one.error ?? "写入失败" });
+        continue;
+      }
+      if (success) result.fulfilled += 1;
+      else result.failed += 1;
+    }
   }
 
   return result;
