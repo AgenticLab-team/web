@@ -1,0 +1,42 @@
+[Unit]
+# 蓝。和 agenticlab-green.service 是同一个应用的两份，端口和构建目录不同。
+#
+# 为什么要两份：见 scripts/deploy.sh 顶上那段。一句话 ——
+# 在线上直接构建会把正在跑的进程脚下的 .next 换掉，而重启又有几秒空窗。
+# 两份轮流上，nginx 平滑切过去，两个窗口一起消失。
+#
+# 两份**共用同一个代码目录和同一个数据库**，只有 NEXT_DIST_DIR 和 PORT 不同。
+# 不做成两棵目录树是故意的：那样 data/、.env.local、几个定时任务
+# 都要跟着分身，而它们本来就该只有一份。
+Description=Agentic Lab community site (blue :3000)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/agenticlab
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOSTNAME=127.0.0.1
+Environment=NEXT_DIST_DIR=.next-blue
+ExecStart=/usr/local/bin/node node_modules/next/dist/bin/next start
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+# 只需要读写自己的目录
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+# 两个构建目录都要给：部署时会由另一边来建这一边的产物。
+#
+# 前面那个减号是「不存在就跳过」。**没有它这个单元根本起不来**：
+# 第一次装的时候 .next-green 还不存在，而 systemd 建挂载命名空间时
+# 遇到列出来却不存在的路径会直接判启动失败 ——
+# 症状是一个和构建、和代码都无关的 226/NAMESPACE，很难往这上面想。
+ReadWritePaths=-/home/ubuntu/agenticlab/data -/home/ubuntu/agenticlab/.next-blue -/home/ubuntu/agenticlab/.next-green
+
+[Install]
+WantedBy=multi-user.target

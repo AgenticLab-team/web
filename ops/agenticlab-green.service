@@ -1,0 +1,33 @@
+[Unit]
+# 绿。和 agenticlab-blue.service 只差 PORT 和 NEXT_DIST_DIR 两行。
+#
+# 两个文件写死、不用 systemd 的模板单元（agenticlab@.service），是因为
+# 半夜出事的时候，`cat` 一下就能看全的东西，比一个要在脑子里
+# 展开 %i 的模板有用。
+Description=Agentic Lab community site (green :3001)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/agenticlab
+Environment=NODE_ENV=production
+Environment=PORT=3001
+Environment=HOSTNAME=127.0.0.1
+Environment=NEXT_DIST_DIR=.next-green
+ExecStart=/usr/local/bin/node node_modules/next/dist/bin/next start
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+# 减号 = 不存在就跳过。见 blue 那个文件里的说明 ——
+# 少了它，第一次启动会挂在 226/NAMESPACE 上
+ReadWritePaths=-/home/ubuntu/agenticlab/data -/home/ubuntu/agenticlab/.next-blue -/home/ubuntu/agenticlab/.next-green
+
+[Install]
+WantedBy=multi-user.target
