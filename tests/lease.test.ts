@@ -176,3 +176,85 @@ describe("**接线**", () => {
     assert.equal(/const existing = db\s*\n?\s*\.select/.test(code), false, "又变成先查再写了");
   });
 });
+
+/* ───────────────────────────────────────────────────────────────
+ * 优雅停止 —— 停一个实例不该要 90 秒
+ * ─────────────────────────────────────────────────────────────── */
+
+describe("**收到停止信号时要松手**", () => {
+  /*
+   * SSE 是一条永远不结束的响应，而 `next start` 会等手上的请求跑完再退 ——
+   * 于是它永远等不到，最后被 systemd 在 90 秒后 SIGKILL。
+   *
+   * 表现是每次部署慢一分半，而且被停掉的那一边留下一个 `failed` 单元。
+   * 那个 failed 不影响服务，但它是**误导性状态**：
+   * 以后真出事时，看 `systemctl list-units` 的人会先被它带走十分钟。
+   *
+   * 这是启用蓝绿之后第一次真部署时看出来的 —— 部署脚本本身没报错。
+   */
+  const boot = strip(src("instrumentation.ts"));
+  const live = strip(src("lib/notifications/live.ts"));
+
+  it("注册了 SIGTERM 处理", () => {
+    assert.match(boot, /process\.once\("SIGTERM", release\)/);
+  });
+
+  it("SIGINT 也要 —— 本地 Ctrl-C 是同一件事", () => {
+    assert.match(boot, /process\.once\("SIGINT", release\)/);
+  });
+
+  it("**用 once 不用 on** —— 停不掉时会再发一次信号", () => {
+    // 第二次进来时该断的已经断了，重复跑只会在日志里多一行噪音
+    assert.equal(/process\.on\("SIG/.test(boot), false);
+  });
+
+  it("**不自己 process.exit** —— 正在写库的那一笔会被拦腰截断", () => {
+    // 为了快一秒钟不值得。该由谁结束进程就由谁结束
+    assert.equal(boot.includes("process.exit"), false);
+  });
+
+  it("断流和停轮询都做", () => {
+    assert.match(boot, /closeAllStreams\(\)/);
+    assert.match(boot, /stopWatcher\(\)/);
+  });
+
+  it("**一条断不掉不能挡住其余的**", () => {
+    const fn = live.slice(live.indexOf("export function closeAllStreams"));
+    assert.match(fn, /try \{[\s\S]{0,120}onEvict\(\)[\s\S]{0,120}\} catch/);
+  });
+
+  it("断完要把订阅表清空 —— 留着的话下一轮还会往死连接里写", () => {
+    const fn = live.slice(live.indexOf("export function closeAllStreams"));
+    assert.match(fn, /s\.subscribers\.clear\(\)/);
+  });
+});
+
+describe("**systemd 单元：正常停止不该算失败**", () => {
+  const unit = (colour: string) =>
+    readFileSync(new URL(`../ops/agenticlab-${colour}.service`, import.meta.url), "utf8");
+
+  for (const colour of ["blue", "green"]) {
+    it(`${colour}：接受 143`, () => {
+      /*
+       * `next start` 收到 SIGTERM 之后以 143 退出（128+15，Node 的惯例），
+       * 而 systemd 默认把非零退出码当失败 ——
+       * 于是每一次正常的蓝绿切换之后，被停掉的那一边都留下一个 failed。
+       *
+       * 线上实测过：零流量停止耗时 0 秒，结果却是 `failed / exit-code 143`。
+       */
+      assert.match(unit(colour), /^SuccessExitStatus=143$/m);
+    });
+
+    it(`${colour}：停止超时收到 20 秒`, () => {
+      // 默认 90 秒。真有东西不肯松手时，一次部署不该卡在那儿一分半
+      assert.match(unit(colour), /^TimeoutStopSec=20$/m);
+    });
+
+    it(`${colour}：注释用 # —— systemd 不认 /* */`, () => {
+      const bad = unit(colour)
+        .split("\n")
+        .filter((l) => l.trim().startsWith("/*") || l.trim().startsWith("*"));
+      assert.deepEqual(bad, [], "单元文件里混进了 C 风格注释，systemd 会拒绝加载");
+    });
+  }
+});

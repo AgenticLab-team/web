@@ -232,6 +232,42 @@ export function startWatcher(): void {
   s.timer.unref?.();
 }
 
+/**
+ * 把所有 SSE 连接断开。
+ *
+ * ─────────────────────────────────────────
+ * 不断开的话，停一个实例要等 90 秒
+ * ─────────────────────────────────────────
+ *
+ * SSE 是一条永远不结束的响应。`next start` 收到 SIGTERM 之后会
+ * 等手上的请求跑完再退 —— 而这些请求按定义永远跑不完，
+ * 于是等到 systemd 的 `TimeoutStopSec` 到点被 SIGKILL。
+ *
+ * 表现是**每次部署慢一分半，而且被停掉的那一边留下一个 `failed` 单元**。
+ * 那个 failed 不影响服务，但它是误导性状态：
+ * 以后真出事时，看 `systemctl list-units` 的人会先被它带走十分钟。
+ *
+ * 断开对用户是无感的：`EventSource` 本来就会自动重连，
+ * 而重连时的补漏（Last-Event-ID / cursor）是这条链路一开始就做好的。
+ * 何况此刻 nginx 已经把流量切到另一边了 —— 他们重连就落在新实例上。
+ */
+export function closeAllStreams(): number {
+  const s = state();
+  let closed = 0;
+  for (const set of s.subscribers.values()) {
+    for (const entry of set) {
+      closed++;
+      try {
+        entry.onEvict();
+      } catch {
+        /* 一条断不掉不能挡住其余的 —— 目的是让进程退得掉 */
+      }
+    }
+  }
+  s.subscribers.clear();
+  return closed;
+}
+
 export function stopWatcher(): void {
   const s = state();
   if (s.timer) clearInterval(s.timer);

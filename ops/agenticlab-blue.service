@@ -22,6 +22,24 @@ Environment=NEXT_DIST_DIR=.next-blue
 ExecStart=/usr/local/bin/node node_modules/next/dist/bin/next start
 Restart=always
 RestartSec=3
+
+# 下面这两行是「停一个实例」这件事的全部难点。
+
+# `next start` 收到 SIGTERM 之后**以 143 退出**（128+15，Node 的惯例）。
+# systemd 默认把非零退出码当失败 —— 于是每一次正常的蓝绿切换之后，
+# 被停掉的那一边都留下一个 `failed` 单元。
+#
+# 那个 failed 不影响服务，但它是**误导性状态**：以后真出事时，
+# 看 `systemctl list-units` 的人会先被这个假失败带走十分钟。
+SuccessExitStatus=143
+
+# 默认 90 秒。有 SSE 长连接挂着时，优雅停止会一直等到超时再 SIGKILL ——
+# 那既让部署慢 90 秒，又把单元标成 `failed (timeout)`。
+#
+# 应用侧已经在收到信号时主动断开所有 SSE（见 instrumentation.ts），
+# 这里的 20 秒是兜底：万一还有什么东西不肯松手，
+# 也不该让一次部署卡在那儿。
+TimeoutStopSec=20
 StandardOutput=journal
 StandardError=journal
 
