@@ -14,6 +14,8 @@ import {
   sendableGroups,
   sentToday,
 } from "@/lib/broadcast/queries";
+import { audienceSize, dismissedCount, roleNameOf, targetableRoles } from "@/lib/broadcast/announce";
+import { describeAudience } from "@/lib/broadcast/announce-rules";
 import { MAX_SENDS_PER_DAY, MIN_SEND_GAP_MS, channelLabel } from "@/lib/broadcast/rules";
 import { db } from "@/lib/db";
 import { groups } from "@/lib/db/schema";
@@ -123,6 +125,7 @@ export default async function AdminBroadcastPage({
 
       <Section title="新建">
         <BroadcastComposer
+          roles={targetableRoles().map((r) => ({ id: r.id, name: r.name }))}
           canWechat={admin.has("broadcast.wechat")}
           groups={sendable.map((g) => ({
             convId: g.convId,
@@ -168,7 +171,17 @@ export default async function AdminBroadcastPage({
                     {row.approvedByName && ` · ${row.approvedByName} 复核`}
                     {row.approveNote && `：${row.approveNote}`}
                     {row.channel === "wechat" && ` · ${row.targetCount} 个群`}
-                    {row.sentCount > 0 && ` · 已送达 ${row.sentCount}`}
+                    {/*
+                      * 站内公告不说「已送达 1」—— 那个 1 是「发布成功」，
+                      * 不是「有人看到了」，而它长得就像送达人数。
+                      * 说的是发给谁、以及有多少人真的把它关掉了：
+                      * 点了关的人一定是看见了，这是唯一诚实的那个数。
+                      */}
+                    {row.channel === "site" && row.status === "sent" && (
+                      <> · {describeAudience(roleNameOf(row.targetRoleId), audienceSize(row.targetRoleId))}
+                        {`，${dismissedCount(row.id)} 人看过`}</>
+                    )}
+                    {row.channel === "wechat" && row.sentCount > 0 && ` · 已送达 ${row.sentCount}`}
                     {row.failedCount > 0 && (
                       <span style={{ color: "var(--danger)" }}> · 失败 {row.failedCount}</span>
                     )}

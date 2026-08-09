@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 
 import { useToast } from "@/components/ui/Toast";
 import { queueSend, saveDraft, submitForReview } from "@/lib/broadcast/actions";
+import { DISPLAYS } from "@/lib/broadcast/announce-rules";
 import { MAX_WECHAT_LENGTH } from "@/lib/broadcast/rules";
 
 /**
@@ -27,9 +28,12 @@ export interface GroupOption {
 
 export function BroadcastComposer({
   groups,
+  roles,
   canWechat,
 }: {
   groups: GroupOption[];
+  /** 可以定向到的身份组。留空就只能发全体 */
+  roles: { id: string; name: string }[];
   canWechat: boolean;
 }) {
   const router = useRouter();
@@ -41,6 +45,7 @@ export function BroadcastComposer({
   const [content, setContent] = useState("");
   const [display, setDisplay] = useState<"banner" | "modal" | "inbox">("banner");
   const [targets, setTargets] = useState<Set<string>>(new Set());
+  const [targetRole, setTargetRole] = useState<string | null>(null);
 
   const chosen = groups.filter((g) => targets.has(g.convId));
   const reach = chosen.reduce((sum, g) => sum + g.memberCount, 0);
@@ -53,6 +58,7 @@ export function BroadcastComposer({
         title,
         content,
         display: channel === "site" ? display : undefined,
+        targetRoleId: channel === "site" ? targetRole : undefined,
         targetConvIds: channel === "wechat" ? [...targets] : undefined,
       });
       if (!saved.ok || !saved.id) {
@@ -135,14 +141,9 @@ export function BroadcastComposer({
       </div>
 
       {channel === "site" ? (
+        <div className="space-y-2">
         <div className="flex flex-wrap gap-1.5">
-          {(
-            [
-              ["banner", "顶部横幅"],
-              ["modal", "弹窗"],
-              ["inbox", "站内信"],
-            ] as const
-          ).map(([key, label]) => (
+          {DISPLAYS.map(({ key, label }) => (
             <button
               key={key}
               type="button"
@@ -156,6 +157,48 @@ export function BroadcastComposer({
               {label}
             </button>
           ))}
+        </div>
+
+        {/* 选中那一档意味着什么，就写在下面 —— 三个词本身分不出轻重，
+            而「打断一次」用滥了下次就没人认真看 */}
+        <p className="t-caption2 leading-relaxed text-[var(--ink-tertiary)]">
+          {DISPLAYS.find((d) => d.key === display)?.detail}
+        </p>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="t-caption2 text-[var(--ink-quaternary)]">发给</span>
+          <button
+            type="button"
+            onClick={() => setTargetRole(null)}
+            className={`t-caption rounded-[var(--radius-pill)] px-2.5 py-1 transition-colors ${
+              targetRole === null
+                ? "bg-[var(--accent)] font-medium text-[var(--accent-ink)]"
+                : "bg-[var(--fill)] text-[var(--ink-secondary)]"
+            }`}
+          >
+            全体
+          </button>
+          {roles.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setTargetRole(r.id)}
+              className={`t-caption rounded-[var(--radius-pill)] px-2.5 py-1 transition-colors ${
+                targetRole === r.id
+                  ? "bg-[var(--accent)] font-medium text-[var(--accent-ink)]"
+                  : "bg-[var(--fill)] text-[var(--ink-secondary)]"
+              }`}
+            >
+              {r.name}
+            </button>
+          ))}
+        </div>
+        {/* 「版主请注意」这种话发给所有人，只会让所有人下次都跳过公告 */}
+        {targetRole !== null && (
+          <p className="t-caption2 text-[var(--ink-tertiary)]">
+            只有这个身份组的人看得到
+          </p>
+        )}
         </div>
       ) : (
         <div className="space-y-1.5">

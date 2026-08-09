@@ -48,6 +48,8 @@ export async function saveDraft(input: {
   title?: string;
   content: string;
   display?: "banner" | "modal" | "inbox";
+  /** 站内公告定向到某个身份组；留空 = 全体登录用户 */
+  targetRoleId?: string | null;
   targetConvIds?: string[];
   expiresAt?: number;
 }): Promise<BroadcastResult> {
@@ -69,6 +71,7 @@ export async function saveDraft(input: {
     title: input.title?.trim() || null,
     content: input.content.trim(),
     display: input.display ?? null,
+    targetRoleId: input.targetRoleId ?? null,
     targetConvIds: input.targetConvIds ?? null,
     expiresAt: input.expiresAt ?? null,
     // 改动之后要重新走复核 —— 冻结的哈希作废

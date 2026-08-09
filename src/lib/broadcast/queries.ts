@@ -19,6 +19,8 @@ import { dateKey, startOfDayMs } from "@/lib/time";
 export interface BroadcastRow {
   id: string;
   channel: string;
+  /** 站内公告定向到哪个身份组；null = 全体 */
+  targetRoleId: string | null;
   title: string | null;
   content: string;
   status: string;
@@ -83,6 +85,7 @@ export function listBroadcasts(
     return {
       id: row.id,
       channel: row.channel,
+      targetRoleId: row.targetRoleId ?? null,
       title: row.title,
       content: row.content,
       status: row.status,
