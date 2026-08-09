@@ -6,6 +6,7 @@ import { useTransition } from "react";
 
 import { useToast } from "@/components/ui/Toast";
 import { equipTitle } from "@/lib/titles/actions";
+import { setAutoRenew } from "@/lib/titles/renew-actions";
 import type { OwnedTitle } from "@/lib/titles/queries";
 import { rarityColor, rarityLabel } from "@/lib/titles/rules";
 
@@ -19,6 +20,9 @@ import { rarityColor, rarityLabel } from "@/lib/titles/rules";
  *   2. **再点一下就摘下**，同一个按钮。不用去找一个单独的「摘下」入口。
  *   3. **过期的仍然陈列出来，只是变灰**。「我曾经拿到过」也是履历，
  *      直接消失会让人以为系统弄丢了自己的东西。
+ *   4. 会到期的称号带自动续费开关，**默认关**。
+ *      默认开着的自动续费，会在某人早就不用它的时候每月悄悄扣分 ——
+ *      而积分是这个站里唯一的硬通货。
  */
 export function TitleShelf({ titles }: { titles: OwnedTitle[] }) {
   const router = useRouter();
@@ -33,6 +37,23 @@ export function TitleShelf({ titles }: { titles: OwnedTitle[] }) {
       </p>
     );
   }
+
+  /** 会到期的（租用 / 赛季）单独列出来 —— 到期要在到期之前看得见 */
+  const renewable = titles.filter((t) => t.expiresAt !== null && t.revokedAt === null);
+
+  const flipRenew = (title: OwnedTitle) => {
+    startTransition(async () => {
+      const result = await setAutoRenew({
+        userTitleId: title.userTitleId,
+        autoRenew: !title.autoRenew,
+      });
+      toast.show({
+        message: result.ok ? (result.note ?? "已保存") : (result.error ?? "操作失败"),
+        kind: result.ok ? "success" : "error",
+      });
+      if (result.ok) router.refresh();
+    });
+  };
 
   const toggle = (title: OwnedTitle) => {
     if (!title.active) return;
@@ -88,6 +109,46 @@ export function TitleShelf({ titles }: { titles: OwnedTitle[] }) {
           );
         })}
       </div>
+
+      {/* 会到期的称号单独列一行：到期这件事必须在到期之前就看得见 */}
+      {renewable.length > 0 && (
+        <div className="inset-group">
+          {renewable.map((title) => (
+            <div key={title.userTitleId} className="inset-row flex items-start gap-3 px-4 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="t-subhead">
+                  {title.icon} {title.name}
+                </p>
+                <p className="t-caption mt-0.5 leading-relaxed text-[var(--ink-tertiary)]">
+                  {title.expired
+                    ? "已到期"
+                    : `${title.daysLeft} 天后到期`}
+                  {title.renewPrice !== null && ` · 续一次 ${title.renewPrice} 分`}
+                  {title.autoRenew ? " · 到期自动续" : " · 到期就摘下"}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={title.autoRenew}
+                aria-label={`${title.name} 自动续费`}
+                disabled={pending || title.renewPrice === null}
+                onClick={() => flipRenew(title)}
+                className="relative mt-0.5 h-[31px] w-[51px] shrink-0 rounded-full transition disabled:opacity-40"
+                style={{
+                  background: title.autoRenew ? "var(--success)" : "var(--fill-strong, var(--fill))",
+                }}
+              >
+                <span
+                  className="absolute top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-sm transition-all"
+                  style={{ left: title.autoRenew ? "22px" : "2px" }}
+                />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <p className="t-caption2 px-1 text-[var(--ink-quaternary)]">
         可以持有多个，只能佩戴一个 —— 挂满一排等于都没挂。再点一下取消佩戴。

@@ -22,6 +22,18 @@ export interface OwnedTitle {
   rarity: string;
   source: string;
   expiresAt: number | null;
+  /** 到期是否自动续费；不会到期的称号恒为 false */
+  autoRenew: boolean;
+  /**
+   * 还剩几天到期；null = 不会到期。
+   *
+   * **在服务端算好传下去**，不让客户端组件在渲染里调 Date.now() ——
+   * 渲染期的不纯调用会让服务端与客户端算出不同的值，
+   * 而那种不一致只在某些时刻出现，查起来极其费劲。
+   */
+  daysLeft: number | null;
+  /** 续一次要多少分；null = 没定价，续不了 */
+  renewPrice: number | null;
   revokedAt: number | null;
   active: boolean;
   expired: boolean;
@@ -49,6 +61,10 @@ export function titlesOf(userId: string, now = Date.now()): OwnedTitle[] {
       rarity: t.rarity,
       source: ut.source,
       expiresAt: ut.expiresAt,
+      autoRenew: ut.autoRenew,
+      daysLeft:
+        ut.expiresAt === null ? null : Math.max(0, Math.ceil((ut.expiresAt - now) / 86_400_000)),
+      renewPrice: t.price,
       revokedAt: ut.revokedAt,
       active: isTitleActive(ut, now),
       expired: isTitleExpired(ut, now),

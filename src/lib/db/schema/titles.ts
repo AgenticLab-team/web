@@ -74,6 +74,17 @@ export const userTitles = sqliteTable(
 
     /** 租用/赛季称号的到期时间 */
     expiresAt: integer("expires_at"),
+    /**
+     * 到期是否自动续费。
+     *
+     * **默认关**，而且购买流程不会替人打开。
+     * 一个默认开着的自动续费，会在某个人早就不用这个称号的时候
+     * 每月悄悄扣掉三百分 —— 而积分是这个站里唯一的硬通货，
+     * 悄悄少掉的分会毁掉所有人对它的信任。想续的人自己开。
+     */
+    autoRenew: integer("auto_renew", { mode: "boolean" }).notNull().default(false),
+    /** 最近一次续费提醒发出去的时间，用来避免重复提醒 */
+    renewNotifiedAt: integer("renew_notified_at"),
     revokedAt: integer("revoked_at"),
     revokedBy: text("revoked_by"),
     revokeReason: text("revoke_reason"),

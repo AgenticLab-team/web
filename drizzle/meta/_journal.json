@@ -183,6 +183,13 @@
       "when": 1786244389032,
       "tag": "0025_digest",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1786244902558,
+      "tag": "0026_title_auto_renew",
+      "breakpoints": true
     }
   ]
 }

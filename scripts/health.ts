@@ -2,6 +2,7 @@
 import { checkAndDispatch } from "@/lib/alerts/dispatch";
 import { runHealthChecks, takeStorageSnapshot } from "@/lib/health";
 import { autoPruneIfNeeded } from "@/lib/storage/auto";
+import { settleAll } from "@/lib/titles/settle";
 
 async function main() {
   const reports = await runHealthChecks();
@@ -34,6 +35,18 @@ async function main() {
    * 用刚探到的结果判定告警，而不是回头查最新状态表 ——
    * 隧道断了之后 upstream_api 那一行会永远停在最后一次「正常」上。
    */
+  /*
+   * 称号结算。挂在这一轮里，不另开一个 timer ——
+   * 又一个 timer 就是又一个可能悄悄挂掉的东西。
+   */
+  const titles = settleAll();
+  if (titles.granted || titles.expired || titles.renewed || titles.reminded) {
+    console.log(
+      `\n称号 授予 ${titles.granted} · 到期 ${titles.expired} · 续费 ${titles.renewed}（失败 ${titles.renewFailed}）· 提醒 ${titles.reminded}`,
+    );
+    for (const line of titles.details.slice(0, 6)) console.log(`  ${line}`);
+  }
+
   const alerted = await checkAndDispatch(reports);
   if (alerted.fired || alerted.renotified || alerted.resolved) {
     console.log(
