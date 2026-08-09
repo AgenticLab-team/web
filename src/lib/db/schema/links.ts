@@ -29,6 +29,27 @@ export const links = sqliteTable(
     firstSharedAt: integer("first_shared_at").notNull(),
     lastSharedAt: integer("last_shared_at").notNull(),
 
+    /*
+     * 大模型根据上下文整理出来的标题与简介。
+     *
+     * **和抓取来的 title/note 分开存**，两个原因：
+     *   · 界面上要能说清楚哪一条是机器写的 —— 一个语气笃定的简介，
+     *     人默认它是可靠的，得让他知道来源
+     *   · 换了模型、发现某一批质量不行时，能整批清掉重来，
+     *     而不会连原始的 title 一起丢
+     */
+    aiTitle: text("ai_title"),
+    aiSummary: text("ai_summary"),
+    /**
+     * 问过模型的时间。
+     *
+     * 问过但模型说「看不出来」的条目，这里有值而 aiTitle 为空 ——
+     * 靠这个区分「还没问过」和「问过了，确实说不清」，
+     * 否则每次同步都会把同一批说不清的链接再问一遍。
+     */
+    aiCheckedAt: integer("ai_checked_at"),
+    aiModel: text("ai_model"),
+
     /** 管理员隐藏：广告、失效、不宜出现在列表里的 */
     hidden: integer("hidden", { mode: "boolean" }).notNull().default(false),
     hiddenReason: text("hidden_reason"),
