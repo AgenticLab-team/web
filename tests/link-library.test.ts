@@ -106,9 +106,9 @@ describe("入库", () => {
 
   it("**中文粘在后面的链接被摘干净**（真实数据形态）", () => {
     ingest.ingestMessages([
-      msg({ content: "https://cloud.siliconflow.cn/i/Cn0CsuOt现在硅基流动注册认证给16块钱" }),
+      msg({ content: "https://cloud.siliconflow.cn/i/Ex4mpl3Ab现在硅基流动注册认证给16块钱" }),
     ]);
-    assert.equal(allLinks()[0].url, "https://cloud.siliconflow.cn/i/Cn0CsuOt");
+    assert.equal(allLinks()[0].url, "https://cloud.siliconflow.cn/i/Ex4mpl3Ab");
   });
 
   it("说明取自消息里的话", () => {

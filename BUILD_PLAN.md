@@ -488,7 +488,7 @@ quota_used 只是缓存列，真值是 activity_quota_log —— 名额算错在
         「导航要求登录」和「中间件拦下」绑在一起
 - [x] 链接资源库
       - 从聊天记录自动收录。**URL 抽取必须在第一个 CJK 字符处停下** ——
-        真实数据里 `https://cloud.siliconflow.cn/i/Cn0CsuOt现在硅基流动注册…`
+        真实数据里 `https://cloud.siliconflow.cn/i/Ex4mpl3Ab现在硅基流动注册…`
         用 `\S+` 抓到的是一个看起来完全正常、点进去 404 的地址
       - 去重键抹掉 www./协议/末尾斜杠/追踪参数（utm_*、spm、from、share_* 等），
         展示地址保留原样 —— 同一个东西出现五次是资源库最没用的样子

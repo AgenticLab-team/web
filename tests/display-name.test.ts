@@ -35,7 +35,7 @@ describe("looksLikeWxId", () => {
   });
 
   it("认得出群聊 ID —— people 表里实测混进过群 ID 当「人」", () => {
-    assert.equal(looksLikeWxId("10000000001@chatroom"), true);
+    assert.equal(looksLikeWxId("20000000002@chatroom"), true);
   });
 
   it("正常昵称不误伤", () => {

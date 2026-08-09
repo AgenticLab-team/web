@@ -204,8 +204,8 @@ describe("锚点", () => {
   });
 
   it("带上 group/date 当兜底 —— 消息被裁剪掉时至少还能落到那一天", () => {
-    const link = messageLink("123", { convId: "10000000002@chatroom", date: "2026-08-04" });
-    assert.match(link, /group=45846230052%40chatroom/);
+    const link = messageLink("123", { convId: "20000000001@chatroom", date: "2026-08-04" });
+    assert.match(link, /group=20000000001%40chatroom/);
     assert.match(link, /date=2026-08-04/);
     assert.match(link, /m=123/);
   });

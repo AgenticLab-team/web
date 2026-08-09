@@ -32,7 +32,7 @@ import {
  * ─────────────────────────────────────────
  *
  * **一、抢标识。** 生产库里的微信 ID 基本都是自设 ID
- * （`a27740925`、`bhjynhnyj`），和登录名长得一模一样 ——
+ * （`a12345678`、`bhjynhnyj`），和登录名长得一模一样 ——
  * 不挡的话可以把自己的登录名设成别人的微信 ID。
  *
  * **二、枚举成员。** 一个「这个登录名有人用了吗」的接口，
@@ -201,7 +201,7 @@ describe("归一化", () => {
     assert.equal(identifierKind("wxid_abc"), "wxid");
     assert.equal(identifierKind("zhangsan"), "username");
     // 自设微信 ID 和登录名分不开 —— 所以查询是四列一起查
-    assert.equal(identifierKind("a27740925"), "username");
+    assert.equal(identifierKind("a12345678"), "username");
   });
 });
 
@@ -237,17 +237,17 @@ function user(over: Partial<typeof schema.users.$inferInsert> & { id: string }) 
 
 describe("**找人：四列一起查**", () => {
   it("微信 ID、登录名、手机号、邮箱都能找到同一个人", () => {
-    user({ id: "u1", wxId: "a27740925", username: "zhangsan", phone: "13800138000", email: "z@e.com" });
+    user({ id: "u1", wxId: "a12345678", username: "zhangsan", phone: "13800138000", email: "z@e.com" });
 
-    for (const input of ["a27740925", "zhangsan", "13800138000", "z@e.com"]) {
+    for (const input of ["a12345678", "zhangsan", "13800138000", "z@e.com"]) {
       assert.equal(identity.resolveIdentity(input)?.userId, "u1", `${input} 没找到`);
     }
   });
 
   it("大小写和空格无所谓", () => {
-    user({ id: "u1", wxId: "a27740925", username: "zhangsan" });
+    user({ id: "u1", wxId: "a12345678", username: "zhangsan" });
     assert.equal(identity.resolveIdentity("  ZhangSan  ")?.userId, "u1");
-    assert.equal(identity.resolveIdentity("A00000000")?.userId, "u1");
+    assert.equal(identity.resolveIdentity("A12345678")?.userId, "u1");
   });
 
   it("找不到就是找不到 —— 不区分原因", () => {
@@ -257,18 +257,18 @@ describe("**找人：四列一起查**", () => {
   });
 
   it("记下是靠哪一列找到的 —— 出问题时才看得出走的哪条路", () => {
-    user({ id: "u1", wxId: "a27740925", username: "zhangsan" });
-    assert.equal(identity.resolveIdentity("a27740925")?.via, "wxid");
+    user({ id: "u1", wxId: "a12345678", username: "zhangsan" });
+    assert.equal(identity.resolveIdentity("a12345678")?.via, "wxid");
     assert.equal(identity.resolveIdentity("zhangsan")?.via, "username");
   });
 });
 
 describe("**抢标识**", () => {
   it("不能把登录名设成别人的微信 ID", () => {
-    user({ id: "victim", wxId: "a27740925" });
+    user({ id: "victim", wxId: "a12345678" });
     user({ id: "attacker", wxId: "wx_attacker" });
 
-    const r = identity.checkUsernameAvailable("attacker", "a27740925");
+    const r = identity.checkUsernameAvailable("attacker", "a12345678");
     assert.equal(r.ok, false);
   });
 
@@ -282,13 +282,13 @@ describe("**抢标识**", () => {
   });
 
   it("**拒绝的措辞不说被谁占了** —— 说了就等于确认那个微信 ID 在这个社群里", () => {
-    user({ id: "victim", wxId: "a27740925", siteNickname: "张三" });
+    user({ id: "victim", wxId: "a12345678", siteNickname: "张三" });
     user({ id: "me", wxId: "wx_me" });
 
-    const r = identity.checkUsernameAvailable("me", "a27740925");
+    const r = identity.checkUsernameAvailable("me", "a12345678");
     assert.equal(r.ok, false);
     if (r.ok) return;
-    assert.doesNotMatch(r.reason, /张三|微信|成员|a27740925/);
+    assert.doesNotMatch(r.reason, /张三|微信|成员|a12345678/);
   });
 
   it("改成自己已经在用的那个不算被占", () => {

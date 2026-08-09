@@ -7,11 +7,11 @@
  *
  * 真实数据里长这样：
  *
- *   https://cloud.siliconflow.cn/i/Cn0CsuOt现在硅基流动注册认证给16块钱
+ *   https://cloud.siliconflow.cn/i/Ex4mpl3Ab现在硅基流动注册认证给16块钱
  *   https://typhoon.nmc.cn/web.html 可以使用此网站查询实时的台风情报
  *
  * 第一条如果用常见的 `https?://\S+` 去匹配，抓到的是
- * 「…Cn0CsuOt现在硅基流动注册认证给16块钱」——
+ * 「…Ex4mpl3Ab现在硅基流动注册认证给16块钱」——
  * 一个打不开的地址，而且**看起来完全正常**：它有协议、有域名、有路径，
  * 列表里显示出来也不刺眼，只有点进去才发现是 404。
  *

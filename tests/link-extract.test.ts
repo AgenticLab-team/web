@@ -19,8 +19,8 @@ import {
 
 describe("从中文里把链接摘干净", () => {
   it("**URL 后面紧跟中文时要在中文处停下**（真实数据）", () => {
-    const real = "https://cloud.siliconflow.cn/i/Cn0CsuOt现在硅基流动注册认证给16块钱";
-    assert.deepEqual(extractUrls(real), ["https://cloud.siliconflow.cn/i/Cn0CsuOt"]);
+    const real = "https://cloud.siliconflow.cn/i/Ex4mpl3Ab现在硅基流动注册认证给16块钱";
+    assert.deepEqual(extractUrls(real), ["https://cloud.siliconflow.cn/i/Ex4mpl3Ab"]);
   });
 
   it("有空格的正常情况（真实数据）", () => {

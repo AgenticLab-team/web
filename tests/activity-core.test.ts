@@ -34,7 +34,7 @@ describe("资格判定", () => {
     messages: 340,
     level: 4,
     bound_since: "2026-06-20",
-    in_group: ["10000000002@chatroom"],
+    in_group: ["20000000001@chatroom"],
   };
 
   it("全部满足时通过", () => {
@@ -77,7 +77,7 @@ describe("资格判定", () => {
   });
 
   it("集合型：在指定群里", () => {
-    const inGroup: Rule = { metric: "in_group", value: ["10000000002@chatroom"] };
+    const inGroup: Rule = { metric: "in_group", value: ["20000000001@chatroom"] };
     assert.equal(evaluateEligibility(inGroup, stats).eligible, true);
 
     const other: Rule = { metric: "in_group", value: ["别的群"] };

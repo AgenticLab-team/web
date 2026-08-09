@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import { messages } from "@/lib/db/schema";
 import { nekobot } from "@/lib/nekobot/client";
 
-const CONV = process.argv[2] ?? "10000000002@chatroom";
+const CONV = process.argv[2] ?? "20000000001@chatroom";
 const MIN = 15;
 
 async function main() {

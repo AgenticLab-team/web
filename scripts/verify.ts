@@ -11,7 +11,7 @@ import { buildMatchExpression, desegment } from "@/lib/db/fts";
 import { dailyStats, groups, messages } from "@/lib/db/schema";
 import { nekobot } from "@/lib/nekobot/client";
 
-const CONV = process.argv[2] ?? "10000000002@chatroom";
+const CONV = process.argv[2] ?? "20000000001@chatroom";
 
 async function main() {
   const group = db.select().from(groups).where(eq(groups.convId, CONV)).get();

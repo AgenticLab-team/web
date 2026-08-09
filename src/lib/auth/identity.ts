@@ -14,7 +14,7 @@ import { normalizeIdentifier, phoneShape, usernameShape } from "./login-name";
  * 四列一起查，靠形状分不开
  * ─────────────────────────────────────────
  *
- * 生产库里的微信 ID 基本都是自设 ID（`a27740925`、`bhjynhnyj`），
+ * 生产库里的微信 ID 基本都是自设 ID（`a12345678`、`bhjynhnyj`），
  * 和登录名长得一模一样。所以不能先猜类型再查一列 ——
  * 猜错了就是「密码明明是对的，但说错误」。
  *

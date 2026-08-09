@@ -159,7 +159,7 @@ module_grants_log  id, module_key, grants_before, grants_after,
     { "metric": "messages",         "scope": "any_group", "window": "30d", "op": ">=", "value": 200 },
     { "metric": "level",            "op": ">=", "value": 3 },
     { "metric": "bound_since",      "op": "<=", "value": "2026-07-25" },
-    { "metric": "in_group",         "value": ["10000000002@chatroom"] },
+    { "metric": "in_group",         "value": ["20000000001@chatroom"] },
     { "not": { "metric": "has_role", "value": "banned" } }
   ]
 }

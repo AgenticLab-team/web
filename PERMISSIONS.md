@@ -127,7 +127,7 @@ user_roles(user_id, role_id, scope_type, scope_id, expires_at)
 |---|---|---|
 | 全站管理员 | `null` | `null` |
 | 技术版版主 | `board` | `board_xxx` |
-| Agentic Lab #1 群管理 | `group` | `10000000002@chatroom` |
+| Agentic Lab #1 群管理 | `group` | `20000000001@chatroom` |
 | 某活动的审核员（临时） | `activity` | `act_xxx` + `expires_at` |
 
 判定时 `resource` 携带自己的归属（哪个版块 / 哪个群 / 哪个活动），与 scope 比对。
@@ -214,7 +214,7 @@ user.ban  当前有 4 人拥有：
 
 ```
 帖子 #1234「群里聊到的 MCP 鉴权方案」
-  visibility = group(10000000002@chatroom)  ← 来源：群聊转帖，默认锁定
+  visibility = group(20000000001@chatroom)  ← 来源：群聊转帖，默认锁定
   版块封顶  = group                          ← 群聊沉淀版
   ✓ 该群成员 (87 人)
   ✗ 其他成员      原因：visibility=group 且不在该群
