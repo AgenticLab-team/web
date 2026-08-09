@@ -6,7 +6,10 @@ import { contentHash } from "@/lib/broadcast/rules";
 import { db } from "@/lib/db";
 import { broadcasts, digestRuns, posts, users } from "@/lib/db/schema";
 import { env } from "@/lib/env";
+import { getSettingBool, getSettingInt } from "@/lib/settings/store";
 import {
+  MAX_ITEMS,
+  MAX_PER_AUTHOR,
   renderDigest,
   selectDigest,
   shouldPublish,
@@ -131,6 +134,7 @@ function candidatesOf(weekStart: string): DigestCandidate[] {
     reactionCount: row.reactionCount,
     viewCount: row.viewCount,
     createdAt: row.createdAt,
+    authorId: row.authorId,
     // 转帖来的帖子可见性本身就被锁住了，这里只做标记
     fromGroupChat: row.visibility === "group",
   }));
@@ -167,8 +171,31 @@ export function buildWeeklyDigest(
     };
   }
 
+  /*
+   * ─────────────────────────────────────────
+   * 这三个配置项在后台摆着，而一直没有任何地方读
+   * ─────────────────────────────────────────
+   *
+   * 「启用每周精选回推」关掉 —— 定时任务照样每周生成草稿。
+   * 「每期推送帖子数」改成 3 —— 照样出 5 条。
+   * 一个拨了没反应的旋钮比没有旋钮坏：它不是少了个功能，
+   * 是给了一个错误的答案，而管理员不会再去验证。
+   */
+  if (!getSettingBool("digest.enabled", false)) {
+    return {
+      weekStart,
+      ok: false,
+      // 说清楚是「被关掉了」，不是「这周没内容」—— 两者的下一步完全不同
+      reason: "每周精选回推没有启用（后台「启用每周精选回推」）",
+      itemCount: 0,
+      rejected: [],
+    };
+  }
+
   const selection = selectDigest(candidatesOf(weekStart), {
     alreadySent: alreadySent(weekStart),
+    max: getSettingInt("digest.top_n", MAX_ITEMS),
+    maxPerAuthor: getSettingInt("digest.max_per_author", MAX_PER_AUTHOR),
   });
   const verdict = shouldPublish(selection);
 

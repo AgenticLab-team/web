@@ -13,7 +13,44 @@ export interface SettingDef {
   min?: number;
   max?: number;
   requiresPermission?: string;
+  /**
+   * `planned` = 这个旋钮对应的功能还没做，拨它现在不会有任何反应。
+   *
+   * 不标的话它和真旋钮长得一模一样 —— 管理员拨过去、以为生效了，
+   * 而没有任何地方会告诉他没有。标出来之后后台会说明，
+   * 测试也不再把它当成「该接没接」。
+   */
+  status?: "planned";
 }
+
+/**
+ * ─────────────────────────────────────────
+ * 退役的配置项
+ * ─────────────────────────────────────────
+ *
+ * 从 `DEFAULT_SETTINGS` 里删掉**不够** —— 后台那一页列的是
+ * 库里的行，不是这份清单。删了清单不删库，结果是那个旋钮
+ * 照样摆在后台，而且再也没有人知道它是死的。
+ *
+ * 所以退役要走这里：seed 每次启动会把这些键从库里删掉。
+ *
+ * `why` 不是注释，是**给未来的人的答复** —— 「这个配置项去哪了」
+ * 这个问题一定会有人问，答案得在代码里，不在某次提交信息里。
+ */
+export const RETIRED_SETTINGS: readonly { key: string; why: string }[] = [
+  {
+    key: "digest.auto_send",
+    why: "精选**永远只生成草稿**，发送走群发那套复核流程。这是写死的设计（见 lib/digest/build.ts），不是可配的 —— 留着这个旋钮等于承诺一件代码明确拒绝做的事",
+  },
+  {
+    key: "digest.per_group_weekly_limit",
+    why: "精选每周产出一份草稿、发一次，「每群每周上限 1」是这个流程的固有性质，不是能拨的东西。真正的发送频率限制在群发那一层（发送间隔、每日上限）",
+  },
+  {
+    key: "site.name",
+    why: "站点名来自环境变量 SITE_NAME（env.site.name）—— 它在构建期和没有数据库的地方也要用。两处各存一份的结果是后台改了名字而页面标题不变",
+  },
+] as const;
 
 export const DEFAULT_SETTINGS: readonly SettingDef[] = [
   // ── 绑定与登录 ──────────────────────────────────────────────
@@ -355,6 +392,7 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
     category: "storage",
     label: "媒体 LRU 缓存上限（字节）",
     description: "原图永不长期落盘。默认 2GB",
+    status: "planned",
   },
   {
     key: "storage.thumb_max_edge",
@@ -362,6 +400,7 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
     type: "int",
     category: "storage",
     label: "缩略图长边像素",
+    status: "planned",
   },
   {
     key: "storage.disk_warn_pct",
@@ -496,14 +535,6 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
     category: "digest",
     label: "启用每周精选回推",
   },
-  {
-    key: "digest.auto_send",
-    value: "false",
-    type: "bool",
-    category: "digest",
-    label: "自动发送（关闭则生成草稿等管理员确认）",
-    description: "默认半自动。自动发到 12 个真实微信群，出一次错就是社死现场",
-  },
   { key: "digest.top_n", value: "5", type: "int", category: "digest", label: "每期推送帖子数" },
   {
     key: "digest.max_per_author",
@@ -511,13 +542,6 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
     type: "int",
     category: "digest",
     label: "同一作者最多入选篇数",
-  },
-  {
-    key: "digest.per_group_weekly_limit",
-    value: "1",
-    type: "int",
-    category: "digest",
-    label: "每群每周推送次数硬上限",
   },
 
   // ── 论坛 ────────────────────────────────────────────────────
@@ -566,10 +590,10 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
     type: "int",
     category: "forum",
     label: "回复被折叠的净反应阈值",
+    status: "planned",
   },
 
   // ── 站点 ────────────────────────────────────────────────────
-  { key: "site.name", value: "Agentic Lab", type: "string", category: "site", label: "站点名称" },
   {
     key: "site.registration_open",
     value: "true",

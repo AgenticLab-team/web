@@ -27,6 +27,16 @@ import type { Visibility } from "@/lib/db/schema/forum";
 export const MAX_ITEMS = 5;
 /** 一条帖子至少要有点动静才配进精选 —— 否则精选就只是「最近发了什么」 */
 export const MIN_ENGAGEMENT = 2;
+/**
+ * 同一个人最多占几条。
+ *
+ * 没有这条限制的话，一个高产的成员可以把整期精选占满 ——
+ * 而精选那条消息是发进所有群的，看起来就成了「本周某某专场」。
+ * 这不是他的错，是排序分只看单条帖子、不看整期长什么样。
+ *
+ * 2 条是留出空间又不至于把人挤掉的分寸：五条里最多两条同一个人。
+ */
+export const MAX_PER_AUTHOR = 2;
 
 /** 允许出现在精选里的可见性 —— 白名单，不是黑名单 */
 const BROADCASTABLE: readonly Visibility[] = ["public", "unlisted", "member"] as const;
@@ -40,6 +50,14 @@ export interface DigestCandidate {
   title: string;
   excerpt: string | null;
   authorName: string;
+  /**
+   * 作者 id。用来做「同一个人最多几条」这条限制。
+   *
+   * 用 id 而不是 authorName：显示名会重名，也会改；
+   * 而且匿名帖的 authorName 一律是「匿名」——
+   * 按名字算的话，两个不同人的匿名帖会被当成同一个人。
+   */
+  authorId: string | null;
   visibility: Visibility;
   status: string;
   featured: boolean;
@@ -85,6 +103,8 @@ export interface SelectOptions {
   alreadySent?: Set<string>;
   max?: number;
   minEngagement?: number;
+  /** 同一个作者最多占几条 —— 0 或负数表示不限 */
+  maxPerAuthor?: number;
 }
 
 export interface Selection {
@@ -134,7 +154,35 @@ export function selectDigest(
   }
 
   items.sort((a, b) => b.score - a.score || b.createdAt - a.createdAt);
-  return { items: items.slice(0, options.max ?? MAX_ITEMS), rejected };
+
+  /*
+   * ─────────────────────────────────────────
+   * 同一个人最多占几条
+   * ─────────────────────────────────────────
+   *
+   * **排完序之后再筛**，不是排序之前 —— 要留下的是每个人分最高的那几条，
+   * 而不是碰巧先遇到的那几条。
+   *
+   * 匿名帖（authorId 为空）不参与这条限制：它们本来就不署名，
+   * 「某某专场」的观感不存在，而按空 id 归成一堆会把不同人的匿名帖
+   * 算成同一个人。
+   */
+  const perAuthor = options.maxPerAuthor ?? MAX_PER_AUTHOR;
+  const kept: DigestItem[] = [];
+  const seen = new Map<string, number>();
+  for (const item of items) {
+    if (perAuthor > 0 && item.authorId) {
+      const n = seen.get(item.authorId) ?? 0;
+      if (n >= perAuthor) {
+        rejected.push({ id: item.id, reason: `同一个人这期已经有 ${perAuthor} 条了` });
+        continue;
+      }
+      seen.set(item.authorId, n + 1);
+    }
+    kept.push(item);
+  }
+
+  return { items: kept.slice(0, options.max ?? MAX_ITEMS), rejected };
 }
 
 // ── 文案 ────────────────────────────────────────────────────

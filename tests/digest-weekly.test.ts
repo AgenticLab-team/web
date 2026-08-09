@@ -32,6 +32,8 @@ function post(over: Partial<DigestCandidate> = {}): DigestCandidate {
     title: "一个帖子",
     excerpt: "摘要",
     authorName: "张三",
+    // 默认各是各的作者 —— 不写 authorId 的老用例不该被「同一个人最多几条」拦到
+    authorId: `u${Math.random().toString(36).slice(2, 8)}`,
     visibility: "member",
     status: "published",
     featured: false,
@@ -261,5 +263,71 @@ describe("周的边界", () => {
   it("周标签说人话", () => {
     assert.equal(weekLabel("2026-08-03"), "8 月 3 日那周");
     assert.equal(weekLabel("2026-12-28"), "12 月 28 日那周");
+  });
+});
+
+/* ───────────────────────────────────────────────────────────────
+ * 同一个人最多占几条
+ * ─────────────────────────────────────────────────────────────── */
+
+describe("**一期不该是某某专场**", () => {
+  /*
+   * 没有这条限制的话，一个高产的成员可以把整期占满 ——
+   * 而精选那条消息是发进所有群的，看起来就成了「本周某某专场」。
+   * 这不是他的错，是排序分只看单条帖子、不看整期长什么样。
+   */
+  const byOne = (n: number, author = "u_prolific") =>
+    Array.from({ length: n }, (_, i) =>
+      post({ id: `p${i}`, authorId: author, replyCount: 10 - i }),
+    );
+
+  it("同一个人最多两条", () => {
+    const { items } = selectDigest(byOne(5));
+    assert.equal(items.length, 2);
+    assert.deepEqual(items.map((i) => i.id), ["p0", "p1"]);
+  });
+
+  it("**留下的是他分最高的那几条** —— 先排序再筛，不是先筛再排序", () => {
+    const items = selectDigest([
+      post({ id: "low", authorId: "u1", replyCount: 1, reactionCount: 1 }),
+      post({ id: "mid", authorId: "u1", replyCount: 5 }),
+      post({ id: "high", authorId: "u1", replyCount: 9 }),
+    ]).items;
+    assert.deepEqual(items.map((i) => i.id), ["high", "mid"]);
+  });
+
+  it("被挤下去的要说得出为什么", () => {
+    const { rejected } = selectDigest(byOne(4));
+    const mine = rejected.filter((r) => /同一个人/.test(r.reason));
+    assert.equal(mine.length, 2);
+  });
+
+  it("别人不受影响", () => {
+    const { items } = selectDigest([
+      ...byOne(3, "u_a"),
+      post({ id: "other", authorId: "u_b", replyCount: 4 }),
+    ]);
+    assert.ok(items.some((i) => i.id === "other"), "别人的帖子被一起挤掉了");
+  });
+
+  it("**匿名帖不参与这条限制**", () => {
+    /*
+     * 匿名帖本来就不署名，「某某专场」的观感不存在；
+     * 而按空 id 归成一堆的话，不同人的匿名帖会被算成同一个人。
+     */
+    const anon = Array.from({ length: 4 }, (_, i) =>
+      post({ id: `a${i}`, authorId: null, authorName: "匿名", replyCount: 9 - i }),
+    );
+    assert.equal(selectDigest(anon).items.length, 4);
+  });
+
+  it("配成 0 就是不限 —— 后台把它调没了要真的不限", () => {
+    assert.equal(selectDigest(byOne(4), { maxPerAuthor: 0 }).items.length, 4);
+  });
+
+  it("这条限制在「最多几条」之前生效", () => {
+    // 先砍到每人两条，再取前 N —— 反过来的话限制形同虚设
+    const { items } = selectDigest([...byOne(5, "u_a")], { max: 5 });
+    assert.equal(items.length, 2);
   });
 });

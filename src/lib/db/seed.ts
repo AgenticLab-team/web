@@ -15,13 +15,15 @@ import { BUILTIN_ROLES, resolveRolePermissions } from "@/lib/rbac/roles";
 import { seedBoards } from "@/lib/forum/seed-boards";
 import { seedTitles } from "@/lib/titles/seed-titles";
 import { seedShopItems } from "@/lib/shop/seed-items";
-import { DEFAULT_FLAGS, DEFAULT_SETTINGS } from "@/lib/settings/defaults";
+import { DEFAULT_FLAGS, DEFAULT_SETTINGS, RETIRED_SETTINGS } from "@/lib/settings/defaults";
 
 export interface SeedReport {
   permissions: number;
   roles: number;
   rolePermissions: number;
   settings: number;
+  /** 这次启动清掉了几个退役的配置项 —— 数字不为零时值得在日志里看见 */
+  settingsRetired: number;
   flags: number;
   boards: number;
   titles: number;
@@ -38,6 +40,7 @@ export function seedDatabase(): SeedReport {
     roles: 0,
     rolePermissions: 0,
     settings: 0,
+    settingsRetired: 0,
     flags: 0,
     boards: 0,
     titles: 0,
@@ -123,6 +126,27 @@ export function seedDatabase(): SeedReport {
           })
           .run();
       }
+    }
+
+    /*
+     * ─────────────────────────────────────────
+     * 先把退役的配置项从库里删掉
+     * ─────────────────────────────────────────
+     *
+     * 后台那一页列的是**库里的行**，不是 DEFAULT_SETTINGS。
+     * 只从清单里删，那个旋钮照样摆在后台 ——
+     * 而且从此再没有人知道它是死的。
+     *
+     * 顺序要在插入之前：一个键如果同时出现在两张表里（改错了），
+     * 先删后插至少还原成「它在」，不会变成「时有时无」。
+     * 那种不一致查起来最费劲。
+     *
+     * 历史记录（setting_history）不动 —— 谁在什么时候把它拨成什么，
+     * 是审计要用的，不该跟着旋钮一起消失。
+     */
+    for (const retired of RETIRED_SETTINGS) {
+      const gone = tx.delete(settings).where(eq(settings.key, retired.key)).run();
+      if (gone.changes > 0) report.settingsRetired++;
     }
 
     // 配置项只在缺失时插入 —— 管理员改过的值绝不能被启动流程重置

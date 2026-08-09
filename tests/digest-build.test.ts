@@ -33,6 +33,7 @@ type DbModule = typeof import("@/lib/db");
 let dbm: DbModule;
 let schema: typeof import("@/lib/db/schema");
 let build: typeof import("@/lib/digest/build");
+let store: typeof import("@/lib/settings/store");
 
 /** 2026-08-03 是周一；这一周是 08-03 ~ 08-09 */
 const WEEK = "2026-08-03";
@@ -45,6 +46,7 @@ before(async () => {
   const { migrate } = await import("drizzle-orm/better-sqlite3/migrator");
   migrate(dbm.db, { migrationsFolder: "./drizzle" });
   build = await import("@/lib/digest/build");
+  store = await import("@/lib/settings/store");
 });
 
 after(() => rmSync(tmp, { recursive: true, force: true }));
@@ -57,7 +59,25 @@ beforeEach(() => {
     .insert(schema.users)
     .values({ id: "author", wxId: "wx_author", wxNickname: "张三", status: "active" })
     .run();
+
+  /*
+   * 「启用每周精选回推」默认是关的 —— 这些用例测的是**开着的时候**
+   * 选稿和落库对不对，所以先打开。
+   *
+   * 关着时的行为另有一组用例（见文件末尾）：那一条以前根本不存在，
+   * 因为这个开关一直没有任何地方读它。
+   */
+  setEnabled(true);
 });
+
+function setEnabled(on: boolean) {
+  dbm.db.delete(schema.settings).run();
+  dbm.db
+    .insert(schema.settings)
+    .values({ key: "digest.enabled", value: on ? "true" : "false", type: "bool", category: "digest" })
+    .run();
+  store.invalidateSettingsCache();
+}
 
 let seq = 0;
 function post(over: Record<string, unknown> = {}) {
@@ -321,5 +341,55 @@ describe("内容形态", () => {
 
     build.buildWeeklyDigest({ weekStart: WEEK });
     assert.ok(broadcastRows()[0].content.length <= rules.MAX_WECHAT_LENGTH);
+  });
+});
+
+/* ───────────────────────────────────────────────────────────────
+ * 那个一直没人读的开关
+ * ─────────────────────────────────────────────────────────────── */
+
+describe("**「启用每周精选回推」这个开关**", () => {
+  /*
+   * 它在后台摆了很久 —— 关掉，定时任务照样每周生成草稿。
+   * 一个拨了没反应的旋钮比没有旋钮坏：管理员拨完不会再去验证。
+   */
+  it("关掉之后不生成", () => {
+    setEnabled(false);
+    post();
+    post();
+    const result = build.buildWeeklyDigest({ weekStart: WEEK });
+    assert.equal(result.ok, false);
+    assert.equal(result.itemCount, 0);
+  });
+
+  it("**理由要说清是「被关掉了」，不是「这周没内容」**", () => {
+    // 两者的下一步完全不同：一个去后台打开，一个等下周
+    setEnabled(false);
+    post();
+    post();
+    const { reason } = build.buildWeeklyDigest({ weekStart: WEEK });
+    assert.match(reason, /没有启用/);
+  });
+
+  it("关掉时**不往 digest_runs 里写「这周不发」** —— 那是内容判定，不是开关", () => {
+    /*
+     * 写进去的话，之后把开关打开、再跑这一周，会撞上
+     * 「这一周已经判定为不发」而直接跳过 —— 而它根本没判定过。
+     */
+    setEnabled(false);
+    post();
+    post();
+    build.buildWeeklyDigest({ weekStart: WEEK });
+    assert.equal(dbm.db.select().from(schema.digestRuns).all().length, 0);
+  });
+
+  it("打开之后照常生成", () => {
+    setEnabled(false);
+    post();
+    post();
+    build.buildWeeklyDigest({ weekStart: WEEK });
+    setEnabled(true);
+    const result = build.buildWeeklyDigest({ weekStart: WEEK });
+    assert.equal(result.ok, true, result.reason);
   });
 });
