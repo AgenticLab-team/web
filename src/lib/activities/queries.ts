@@ -280,3 +280,40 @@ export function exportPendingList(activityId: string): string {
     .map((a) => `${a.normalizedKey ?? a.summary}\t${a.userName}\t${a.id}`)
     .join("\n");
 }
+
+/**
+ * 给注册商的批量注册框用的域名列表：**一行一个，不带任何别的东西**。
+ *
+ * `exportPendingList` 带着申请人和申请 id，是给人看的对照表；
+ * 把那份直接粘进注册商的批量框，会被当成一堆非法域名拒掉。
+ * 两份格式服务两个动作，合成一份就两头都不好用。
+ *
+ * scope 的两档：
+ *   - pending：还没回填过结果的（已通过 / 履约中）—— 日常用这个
+ *   - all：把已成功、已失败的也带上 —— 管理员要去注册商那边对总账时用
+ *
+ * 没进过审核的（待审、候补）不导出：导了就等于绕过审核直接注册。
+ */
+export function exportRegistrarList(activityId: string, scope: "pending" | "all"): string {
+  const statuses =
+    scope === "pending"
+      ? ["approved", "fulfilling"]
+      : ["approved", "fulfilling", "fulfilled", "failed"];
+
+  const rows = db
+    .select({ key: activityApplications.normalizedKey, status: activityApplications.status })
+    .from(activityApplications)
+    .where(eq(activityApplications.activityId, activityId))
+    // 先来先注册符合直觉；同一毫秒进来的用 id 定序 ——
+    // 两次导出顺序不一样的话，人会以为列表本身变了
+    .orderBy(activityApplications.createdAt, activityApplications.id)
+    .all();
+
+  const domains: string[] = [];
+  for (const row of rows) {
+    if (!row.key || !statuses.includes(row.status)) continue;
+    // 同一域名可能挂着一条在途、一条更早失败的申请 —— 列表里出现两遍会被注册两次
+    if (!domains.includes(row.key)) domains.push(row.key);
+  }
+  return domains.join("\n");
+}

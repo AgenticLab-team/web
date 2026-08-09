@@ -2,10 +2,16 @@ import type { Metadata } from "next";
 
 import { ActivityComposer, ActivityStatusActions } from "@/components/admin/ActivityComposer";
 import { ApplicationReview } from "@/components/admin/ApplicationReview";
+import { BulkFulfillPanel, RegistrarExport } from "@/components/admin/BulkDomainOps";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Empty, Section } from "@/components/ui/primitives";
-import { exportPendingList, listActivities, listApplications } from "@/lib/activities/queries";
+import {
+  exportPendingList,
+  exportRegistrarList,
+  listActivities,
+  listApplications,
+} from "@/lib/activities/queries";
 import { listModules } from "@/lib/activities/registry";
 import { requireAdmin } from "@/lib/admin/guard";
 
@@ -115,6 +121,22 @@ export default async function AdminActivitiesPage() {
                       格式：域名 · 申请人 · 申请 id。注册完之后回到下面逐条回填结果，
                       失败的会把名额还回来让候补的人补上。
                     </p>
+                  </details>
+                )}
+
+                {/* 批量的去程和回程：复制列表去注册商，注册完把结果粘回来 */}
+                {activity.moduleKey === "domain" && (
+                  <details className="rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2">
+                    <summary className="t-caption cursor-pointer list-none text-[var(--accent)]">
+                      批量注册与回填
+                    </summary>
+                    <div className="mt-2 space-y-3">
+                      <RegistrarExport
+                        pending={exportRegistrarList(activity.id, "pending")}
+                        all={exportRegistrarList(activity.id, "all")}
+                      />
+                      <BulkFulfillPanel activityId={activity.id} />
+                    </div>
                   </details>
                 )}
 
