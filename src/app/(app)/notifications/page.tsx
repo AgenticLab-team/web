@@ -1,4 +1,4 @@
-import { AtSign, Bell, MessageSquare, Shield, Sparkles } from "lucide-react";
+import { AtSign, Bell, MessageSquare, Radar, Shield, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -24,6 +24,7 @@ const ICONS: Record<string, typeof Bell> = {
   accepted: Sparkles,
   moderation: Shield,
   system: Bell,
+  keyword: Radar,
 };
 
 export default async function NotificationsPage({

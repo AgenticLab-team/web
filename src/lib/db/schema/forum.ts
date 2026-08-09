@@ -367,6 +367,8 @@ export const NOTIFICATION_TYPES = [
   "accepted",
   "moderation",
   "system",
+  /** 关键词雷达命中 */
+  "keyword",
 ] as const;
 
 /**

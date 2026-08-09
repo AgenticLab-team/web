@@ -174,7 +174,9 @@ describe("列表筛选", () => {
 
   it("除了「未读」，每一类通知都至少能被一个页签筛出来", () => {
     const covered = new Set(
-      (["mention", "reply", "account"] as const).flatMap((k) => [...(filterTypes(k) ?? [])]),
+      (["mention", "reply", "radar", "account"] as const).flatMap((k) => [
+        ...(filterTypes(k) ?? []),
+      ]),
     );
     const uncovered = NOTIFICATION_TYPES.filter((t) => !covered.has(t));
     // reaction / featured / accepted 只在「全部」里，这是有意的：

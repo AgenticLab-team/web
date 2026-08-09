@@ -31,7 +31,8 @@ export type NotificationType =
   | "featured"
   | "accepted"
   | "moderation"
-  | "system";
+  | "system"
+  | "keyword";
 
 export interface NotifyInput {
   userId: string;
@@ -242,10 +243,10 @@ export function notificationCounts(userId: string): Record<NotificationFilter, n
     .where(eq(notifications.userId, userId))
     .all();
 
-  const counts = { all: rows.length, unread: 0, mention: 0, reply: 0, account: 0 };
+  const counts = { all: rows.length, unread: 0, mention: 0, reply: 0, radar: 0, account: 0 };
   for (const row of rows) {
     if (row.readAt === null) counts.unread++;
-    for (const key of ["mention", "reply", "account"] as const) {
+    for (const key of ["mention", "reply", "radar", "account"] as const) {
       if (filterTypes(key)?.includes(row.type)) counts[key]++;
     }
   }

@@ -45,6 +45,7 @@ export const config = {
     "/notifications/:path*",
     "/members/:path*",
     "/links/:path*",
+    "/radar/:path*",
     "/shop/:path*",
     "/search/:path*",
     "/forum/new",

@@ -9,6 +9,7 @@ import { nekobot } from "@/lib/nekobot/client";
 import type { UpstreamMessage } from "@/lib/nekobot/types";
 import { ingestMessages, type IngestMessage } from "@/lib/links/ingest";
 import { isQualityMessage } from "@/lib/quality";
+import { scanMessages } from "@/lib/radar/engine";
 import { getSettingInt } from "@/lib/settings/store";
 import { dateKey, hourOf } from "@/lib/time";
 
@@ -174,6 +175,13 @@ export async function syncGroupMessages(
           ingestMessages(freshlyWritten);
         } catch (error) {
           console.error("资源库收录失败（不影响消息同步）：", error);
+        }
+
+        // 关键词雷达同理：附属功能不该有能力弄坏主链路
+        try {
+          scanMessages(freshlyWritten);
+        } catch (error) {
+          console.error("关键词雷达扫描失败（不影响消息同步）：", error);
         }
       }
     }

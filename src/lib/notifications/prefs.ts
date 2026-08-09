@@ -169,6 +169,12 @@ export const TYPE_META: TypeMeta[] = [
     section: "recognition",
   },
   {
+    type: "keyword",
+    label: "关键词雷达命中",
+    hint: "群里有人提到你订阅的词 —— 每个词每天最多提醒 5 次",
+    section: "interaction",
+  },
+  {
     type: "moderation",
     label: "处罚与申诉结果",
     hint: "内容被处理、申诉有结论时通知你",
@@ -196,13 +202,20 @@ export const SECTION_HINTS: Record<TypeMeta["section"], string> = {
 
 // ── 列表页的筛选 ────────────────────────────────────────────
 
-export type NotificationFilter = "all" | "unread" | "mention" | "reply" | "account";
+export type NotificationFilter =
+  | "all"
+  | "unread"
+  | "mention"
+  | "reply"
+  | "radar"
+  | "account";
 
 export const FILTER_LABELS: Record<NotificationFilter, string> = {
   all: "全部",
   unread: "未读",
   mention: "@ 我",
   reply: "回复",
+  radar: "雷达",
   account: "账号",
 };
 
@@ -211,6 +224,7 @@ const FILTER_TYPES: Record<NotificationFilter, readonly string[] | null> = {
   unread: null,
   mention: ["mention"],
   reply: ["reply_to_post", "reply_to_reply", "subscribed_reply"],
+  radar: ["keyword"],
   account: ["moderation", "system"],
 };
 
