@@ -570,3 +570,35 @@ describe("**关键词雷达也是一个搜索**", () => {
     assert.match(engine, /sender_wx_id IS NULL OR sender_wx_id NOT IN/);
   });
 });
+
+describe("**故意不过滤的地方，理由要写下来**", () => {
+  /*
+   * 这个项目的规矩：凡是故意跳过隐私过滤的路径，都要有
+   * （a）代码旁的理由注释、（b）一条锁住那段注释的测试。
+   *
+   * 这条规矩不是形式主义 —— 一次对抗性审计正是靠它区分出
+   * 「按天回看是有意的」和「关键词雷达是漏的」。
+   * 没有留痕的跳过，下一轮审计只能当成遗漏再报一次，
+   * 而每一次重新纠结都要花掉一个人半天。
+   */
+  it("按天回看：理由在", () => {
+    assert.match(src("lib/forum/convert-source.ts"), /按天翻那条路[\s\S]{0,200}不加/);
+  });
+
+  it("资源库：理由在，而且划出了边界", () => {
+    const body = src("lib/links/queries.ts");
+    assert.match(body, /不过[\s\S]{0,60}开关/);
+    // 边界要写明：能按发言人筛、或能搜到正文，它就变成搜索了
+    assert.match(body, /发言人|正文/);
+  });
+
+  it("**资源库确实还没有变成消息搜索**", () => {
+    /*
+     * 上面那条注释只有在这一条也成立时才算数。
+     * 哪天有人给它加了按发言人筛选，这条会红。
+     */
+    const body = strip(src("lib/links/queries.ts"));
+    assert.equal(body.includes("messages_fts"), false, "资源库开始搜消息正文了");
+    assert.equal(/sharerWxId.*needle|needle.*sharerWxId/.test(body), false, "资源库能按分享者搜了");
+  });
+});
