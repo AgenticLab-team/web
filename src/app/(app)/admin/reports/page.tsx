@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ReportActions } from "@/components/admin/ReportActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { TruncationNote } from "@/components/ui/Pagination";
 import { Empty, Pill } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { reportFacets, reportQueue, reportsForTarget } from "@/lib/admin/reports";
@@ -37,12 +38,18 @@ export default async function AdminReportsPage({
   const admin = await requireAdmin("moderation.queue");
   const params = await searchParams;
 
-  const rows = reportQueue({
+  /*
+   * 这个队列不做页码分页：行是按目标归组、按严重度排序出来的，
+   * offset 落在组的中间没有意义。它按设计只显示「最该处理的前一批」——
+   * 但截断必须说出来，所以先取全量（有上限护栏）再截，差额摆在列表尾部。
+   */
+  const fullQueue = reportQueue({
     reasonCode: params.reason,
     targetType: params.type,
     status: params.status,
-    limit: 100,
+    limit: 500,
   });
+  const rows = fullQueue.slice(0, 100);
   const facets = reportFacets();
 
   const href = (patch: Record<string, string | undefined>) => {
@@ -186,6 +193,8 @@ export default async function AdminReportsPage({
           })}
         </div>
       )}
+
+      <TruncationNote shown={rows.length} total={fullQueue.length} noun="个目标" />
     </>
   );
 }

@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { PostBulkTable } from "@/components/admin/PostBulkTable";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { Empty, Pill } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { listPostsForAdmin, orphanPosts, postFacets } from "@/lib/admin/posts";
@@ -32,17 +33,17 @@ const STATUS_LABELS: Record<string, string> = {
 export default async function AdminPostsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; board?: string; status?: string; group?: string }>;
+  searchParams: Promise<{ q?: string; board?: string; status?: string; group?: string; page?: string }>;
 }) {
   await requireAdmin("forum.post.delete.any");
   const params = await searchParams;
 
-  const { rows, total } = listPostsForAdmin({
+  const { rows, total, slice } = listPostsForAdmin({
     keyword: params.q,
     boardId: params.board,
     status: params.status,
     fromGroupChat: params.group === "1",
-    limit: 60,
+    page: params.page,
   });
   const facets = postFacets();
   const orphans = orphanPosts();
@@ -129,6 +130,15 @@ export default async function AdminPostsPage({
       ) : (
         <PostBulkTable rows={rows} />
       )}
+
+      <Pagination
+        slice={slice}
+        total={total}
+        noun="篇帖子"
+        basePath="/admin/posts"
+        params={{ q: params.q, board: params.board, status: params.status, group: params.group }}
+      />
+
 
       <p className="t-caption mt-4 px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">
         批量操作一次最多 {BULK_LIMIT} 条，且**每一条都会独立留处罚记录、独立通知作者** ——

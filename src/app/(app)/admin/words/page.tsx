@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
-import { desc } from "drizzle-orm";
+import { and, asc, desc, eq, gt, sql } from "drizzle-orm";
 
 import { WordList } from "@/components/admin/WordList";
 import { WordTester } from "@/components/admin/WordTester";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { db } from "@/lib/db";
 import { sensitiveWords } from "@/lib/db/schema";
+import { paginate } from "@/lib/pagination";
 
 export const metadata: Metadata = { title: "敏感词" };
 export const dynamic = "force-dynamic";
@@ -20,19 +22,47 @@ export const dynamic = "force-dynamic";
  * 几分钟内就能让论坛变成不可用 —— 而且是**静默**的，
  * 没人会来报告「我发不出去帖子」，他们只会不再发帖。
  */
-export default async function AdminWordsPage() {
+export default async function AdminWordsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireAdmin("moderation.words");
+  const params = await searchParams;
 
-  const words = db.select().from(sensitiveWords).orderBy(desc(sensitiveWords.hitCount)).all();
+  // 统计都在 SQL 里对全表算 —— 词库分页之后，页面上的数字不能只数当前页
+  const total = Number(
+    db.select({ n: sql<number>`count(*)` }).from(sensitiveWords).get()?.n ?? 0,
+  );
+  const blocking = Number(
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(sensitiveWords)
+      .where(and(eq(sensitiveWords.enabled, true), eq(sensitiveWords.kind, "block")))
+      .get()?.n ?? 0,
+  );
+  const suspicious = db
+    .select()
+    .from(sensitiveWords)
+    .where(and(eq(sensitiveWords.enabled, true), gt(sensitiveWords.hitCount, 50)))
+    .orderBy(desc(sensitiveWords.hitCount))
+    .all();
 
-  const blocking = words.filter((w) => w.enabled && w.kind === "block").length;
-  const suspicious = words.filter((w) => w.enabled && w.hitCount > 50);
+  const slice = paginate(params.page, total, 50);
+  const words = db
+    .select()
+    .from(sensitiveWords)
+    // hitCount 大量并列 0，必须补 id 才是全序 —— 否则翻页会漏词、重复词
+    .orderBy(desc(sensitiveWords.hitCount), asc(sensitiveWords.id))
+    .limit(slice.perPage)
+    .offset(slice.offset)
+    .all();
 
   return (
     <>
       <PageHeader
         title="敏感词"
-        subtitle={words.length === 0 ? "词库是空的" : `${words.length} 条 · ${blocking} 条拦截`}
+        subtitle={total === 0 ? "词库是空的" : `${total} 条 · ${blocking} 条拦截`}
       />
 
       <div className="mb-4 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
@@ -77,6 +107,7 @@ export default async function AdminWordsPage() {
             hitCount: w.hitCount,
           }))}
         />
+        <Pagination slice={slice} total={total} noun="条" basePath="/admin/words" />
       </Section>
 
       <p className="t-caption px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">

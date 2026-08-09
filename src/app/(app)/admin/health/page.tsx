@@ -4,10 +4,11 @@ import type { ReactNode } from "react";
 
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { TruncationNote } from "@/components/ui/Pagination";
 import { Empty, Group, Row, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { systemStatus } from "@/lib/admin/dashboard";
-import { listAlerts } from "@/lib/alerts/dispatch";
+import { alertCount, listAlerts } from "@/lib/alerts/dispatch";
 import {
   DEFAULT_RULES,
   alertComponentFor,
@@ -33,6 +34,7 @@ export default async function AdminHealthPage() {
 
   const status = systemStatus();
   const alerts = listAlerts(40);
+  const alertsTotal = alertCount();
   const firing = alerts.filter((a) => a.state === "firing");
   const undelivered = firing.filter((a) => a.notifyError !== null);
   const probeStale = status.staleSeconds !== null && status.staleSeconds > 900;
@@ -218,6 +220,7 @@ export default async function AdminHealthPage() {
             ))}
           </div>
         )}
+        <TruncationNote shown={alerts.length} total={alertsTotal} noun="条告警" />
       </Section>
     </>
   );

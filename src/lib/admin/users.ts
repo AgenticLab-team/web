@@ -21,6 +21,7 @@ import {
   userRoles,
   users,
 } from "@/lib/db/schema";
+import { paginate, type PageSlice } from "@/lib/pagination";
 import { levelProgress } from "@/lib/points/rules";
 import { effectivePermissions } from "@/lib/rbac/can";
 
@@ -53,11 +54,16 @@ export interface UserQuery {
   status?: string;
   kind?: string;
   roleKey?: string;
-  limit?: number;
-  offset?: number;
+  /** URL 上的原始 ?page= 值，解析与夹取交给 paginate —— 越界和乱写都要落到有内容的页 */
+  page?: unknown;
+  perPage?: number;
 }
 
-export function listUsers(query: UserQuery = {}): { rows: UserRow[]; total: number } {
+export function listUsers(query: UserQuery = {}): {
+  rows: UserRow[];
+  total: number;
+  slice: PageSlice;
+} {
   const conditions = [isNull(users.deletedAt)];
 
   if (query.keyword) {
@@ -93,18 +99,24 @@ export function listUsers(query: UserQuery = {}): { rows: UserRow[]; total: numb
   }
 
   const where = and(...conditions);
-  const total = db.select({ n: sql<number>`count(*)` }).from(users).where(where).get()?.n ?? 0;
+  // 总数单独 count —— 拿全量再数 length 的话，1800 个账号每次都整表进内存
+  const total = Number(
+    db.select({ n: sql<number>`count(*)` }).from(users).where(where).get()?.n ?? 0,
+  );
+  const slice = paginate(query.page, total, query.perPage ?? 50);
 
   const rows = db
     .select()
     .from(users)
     .where(where)
-    .orderBy(desc(users.lastActiveAt), desc(users.createdAt))
-    .limit(Math.min(query.limit ?? 40, 200))
-    .offset(query.offset ?? 0)
+    // 末位补 id 让排序全序：lastActiveAt 为 null 的一批账号顺序不定时，
+    // 翻页会出现同一个人出现在两页、另一个人哪页都不在
+    .orderBy(desc(users.lastActiveAt), desc(users.createdAt), desc(users.id))
+    .limit(slice.perPage)
+    .offset(slice.offset)
     .all();
 
-  if (rows.length === 0) return { rows: [], total };
+  if (rows.length === 0) return { rows: [], total, slice };
 
   const ids = rows.map((r) => r.id);
   const wxIds = rows.map((r) => r.wxId).filter(Boolean) as string[];
@@ -146,6 +158,7 @@ export function listUsers(query: UserQuery = {}): { rows: UserRow[]; total: numb
 
   return {
     total,
+    slice,
     rows: rows.map((row) => ({
       id: row.id,
       wxId: row.wxId,
@@ -175,6 +188,9 @@ export interface UserDetail {
   permissions: { key: string; source: string }[];
   groups: { convId: string; name: string; messages: number; left: boolean }[];
   ledger: (typeof pointsLedger.$inferSelect)[];
+  /** 流水与处罚只取最近几条，但总数要一起给 —— 不给的话截断是静默的 */
+  ledgerTotal: number;
+  moderationTotal: number;
   checkins: number;
   sessions: (typeof sessions.$inferSelect)[];
   credentials: { id: string; type: string; name: string | null; lastUsedAt: number | null }[];
@@ -244,6 +260,22 @@ export function getUserDetail(userId: string): UserDetail | null {
       .orderBy(desc(pointsLedger.createdAt))
       .limit(20)
       .all(),
+    ledgerTotal:
+      Number(
+        db
+          .select({ n: sql<number>`count(*)` })
+          .from(pointsLedger)
+          .where(eq(pointsLedger.userId, userId))
+          .get()?.n ?? 0,
+      ),
+    moderationTotal:
+      Number(
+        db
+          .select({ n: sql<number>`count(*)` })
+          .from(moderationActions)
+          .where(eq(moderationActions.targetUserId, userId))
+          .get()?.n ?? 0,
+      ),
     checkins:
       db.select({ n: sql<number>`count(*)` }).from(checkins).where(eq(checkins.userId, userId)).get()
         ?.n ?? 0,

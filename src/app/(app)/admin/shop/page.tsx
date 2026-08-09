@@ -4,9 +4,10 @@ import Link from "next/link";
 import { OrderActions } from "@/components/admin/OrderActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { Empty, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
-import { listItems, listOrders, pendingShipments } from "@/lib/shop/queries";
+import { listItems, pagedOrders, pendingShipments } from "@/lib/shop/queries";
 
 export const metadata: Metadata = { title: "商店与订单" };
 export const dynamic = "force-dynamic";
@@ -17,11 +18,18 @@ export const dynamic = "force-dynamic";
  * 待发货放最前面 —— 虚拟商品自动交付，只有实物会积压，
  * 而**积压久了就是失信**：用户花掉的分是真的没了，东西却没到。
  */
-export default async function AdminShopPage() {
+export default async function AdminShopPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const admin = await requireAdmin("shop.manage");
+  const params = await searchParams;
 
   const items = listItems(true);
-  const orders = listOrders({ limit: 60 });
+  // 副标题里的订单数必须是单独 count 出来的总数 ——
+  // 以前用 rows.length，列表截到 60 条，副标题就跟着谎报「共 60 笔」
+  const { rows: orders, total: orderTotal, slice } = pagedOrders({ page: params.page });
   const pending = pendingShipments();
 
   const drifted = items.filter((i) => i.drifted);
@@ -30,7 +38,7 @@ export default async function AdminShopPage() {
     <>
       <PageHeader
         title="商店与订单"
-        subtitle={`${items.length} 个商品 · ${orders.length} 笔订单`}
+        subtitle={`${items.length} 个商品 · ${orderTotal} 笔订单`}
       />
 
       {pending.length > 0 && (
@@ -146,6 +154,12 @@ export default async function AdminShopPage() {
             ))}
           </div>
         )}
+        <Pagination
+          slice={slice}
+          total={orderTotal}
+          noun="笔订单"
+          basePath="/admin/shop"
+        />
       </Section>
 
       <p className="t-caption px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">

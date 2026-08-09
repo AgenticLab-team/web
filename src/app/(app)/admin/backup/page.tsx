@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { TruncationNote } from "@/components/ui/Pagination";
 import { Empty, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { offsiteSummary } from "@/lib/backup/offsite";
@@ -201,6 +202,7 @@ export default async function AdminBackupPage() {
             ))}
           </div>
         )}
+        <TruncationNote shown={s.recent.length} total={s.runsTotal} noun="次动作" />
         <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
           失败的也留着 —— 备份最常见的失败方式是<strong>「一直在成功」</strong>，
           而分辨「没跑」和「跑了但失败」的唯一办法是两种都留痕。

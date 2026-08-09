@@ -5,7 +5,7 @@ import { gunzipSync } from "node:zlib";
 import { join, resolve } from "node:path";
 
 import Database from "better-sqlite3";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import {
   expiredRemotely,
@@ -336,6 +336,8 @@ export interface OffsiteSummary {
   drillDue: boolean;
   missingKeys: string[];
   recent: (typeof backupRuns.$inferSelect)[];
+  /** 备份动作总数 —— recent 只取最近 10 条，差额要在界面上说出来 */
+  runsTotal: number;
   localFiles: { name: string; bytes: number; modifiedAt: number }[];
 }
 
@@ -348,6 +350,7 @@ export function offsiteSummary(now = Date.now()): OffsiteSummary {
     drillDue: needsDrill(state, now),
     missingKeys: missingConfigKeys(process.env),
     recent: db.select().from(backupRuns).orderBy(desc(backupRuns.createdAt)).limit(10).all(),
+    runsTotal: Number(db.select({ n: sql<number>`count(*)` }).from(backupRuns).get()?.n ?? 0),
     localFiles: localFiles().map((l) => ({
       name: l.file.name,
       bytes: l.file.size,

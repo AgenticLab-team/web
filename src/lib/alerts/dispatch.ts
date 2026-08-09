@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 import {
   alertComponentFor,
@@ -289,6 +289,11 @@ export function listAlerts(limit = 50) {
     .limit(limit)
     .all()
     .map((a) => ({ ...a, componentLabel: componentLabel(a.component) }));
+}
+
+/** 告警总数 —— 历史列表截断时要能说「共多少条」，不然截断是静默的 */
+export function alertCount(): number {
+  return Number(db.select({ n: sql<number>`count(*)` }).from(alerts).get()?.n ?? 0);
 }
 
 export function firingAlerts() {

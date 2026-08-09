@@ -3,7 +3,7 @@ import "server-only";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db, sqlite } from "@/lib/db";
 import { adminTasks, storageSnapshots } from "@/lib/db/schema";
@@ -183,6 +183,17 @@ export function recentPruneTasks(limit = 10) {
     .orderBy(desc(adminTasks.createdAt))
     .limit(limit)
     .all();
+}
+
+/** 裁剪任务总数 —— 历史列表只显示最近几条，差额要在界面上说出来 */
+export function pruneTaskCount(): number {
+  return Number(
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(adminTasks)
+      .where(eq(adminTasks.kind, "storage.prune"))
+      .get()?.n ?? 0,
+  );
 }
 
 export function pendingPruneTask() {

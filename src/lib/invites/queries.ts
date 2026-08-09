@@ -5,6 +5,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { inviteUses, invites, users } from "@/lib/db/schema";
 import { ancestorsOf, buildTree, describeInvite, normalizeCode } from "@/lib/invites/rules";
+import { paginate, type PageSlice } from "@/lib/pagination";
 import { resolveDisplayName } from "@/lib/users/display-name";
 
 /**
@@ -172,7 +173,7 @@ export interface InviteUseRow {
   createdAt: number;
 }
 
-export function listInviteUses(limit = 100): InviteUseRow[] {
+export function listInviteUses(limit = 100, offset = 0): InviteUseRow[] {
   const rows = db
     .select({
       use: inviteUses,
@@ -184,8 +185,9 @@ export function listInviteUses(limit = 100): InviteUseRow[] {
     .from(inviteUses)
     .innerJoin(invites, eq(invites.id, inviteUses.inviteId))
     .leftJoin(users, eq(users.id, inviteUses.inviterId))
-    .orderBy(desc(inviteUses.createdAt))
+    .orderBy(desc(inviteUses.createdAt), desc(inviteUses.id))
     .limit(limit)
+    .offset(offset)
     .all();
 
   if (rows.length === 0) return [];
@@ -234,6 +236,43 @@ export function listInviteUses(limit = 100): InviteUseRow[] {
       createdAt: use.createdAt,
     };
   });
+}
+
+/** 后台「使用记录」的分页版 */
+export function pagedInviteUses(
+  query: { page?: unknown; perPage?: number } = {},
+): { rows: InviteUseRow[]; total: number; slice: PageSlice } {
+  const total = Number(db.select({ n: sql<number>`count(*)` }).from(inviteUses).get()?.n ?? 0);
+  const slice = paginate(query.page, total, query.perPage ?? 50);
+  return { rows: listInviteUses(slice.perPage, slice.offset), total, slice };
+}
+
+/**
+ * 滥用告警要的两个数，在 SQL 里对全表算。
+ *
+ * 以前是把最近 50 条拉出来在页面上 filter —— 分页之后这么算的话，
+ * 「N 笔奖励已被回滚」就只统计当前页，翻到第二页数字还会变，
+ * 而一个随翻页变化的告警数字比没有告警更糟。
+ */
+export function inviteUseStats(): { total: number; reverted: number; idle: number } {
+  const total = Number(db.select({ n: sql<number>`count(*)` }).from(inviteUses).get()?.n ?? 0);
+  const reverted = Number(
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(inviteUses)
+      .where(sql`${inviteUses.revertedAt} is not null`)
+      .get()?.n ?? 0,
+  );
+  // 「从没打过卡」以被邀请人的 lastCheckinDate 为准 —— 和页面上逐行的判定同一把尺
+  const idle = Number(
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(inviteUses)
+      .leftJoin(users, eq(users.id, inviteUses.invitedUserId))
+      .where(and(isNull(inviteUses.revertedAt), isNull(users.lastCheckinDate)))
+      .get()?.n ?? 0,
+  );
+  return { total, reverted, idle };
 }
 
 /**

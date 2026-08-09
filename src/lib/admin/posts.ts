@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { boards, posts, replies, users } from "@/lib/db/schema";
 import type { Visibility } from "@/lib/db/schema/forum";
 import { visibilityLabel } from "@/lib/admin/board-rules";
+import { paginate, type PageSlice } from "@/lib/pagination";
 import { resolveDisplayName } from "@/lib/users/display-name";
 
 /**
@@ -48,13 +49,15 @@ export interface PostQuery {
   /** 只看群聊转帖 */
   fromGroupChat?: boolean;
   days?: number;
-  limit?: number;
-  offset?: number;
+  /** URL 上的原始 ?page= 值 —— 越界与乱写由 paginate 兜底 */
+  page?: unknown;
+  perPage?: number;
 }
 
 export function listPostsForAdmin(query: PostQuery = {}): {
   rows: AdminPostRow[];
   total: number;
+  slice: PageSlice;
 } {
   const conditions = [];
 
@@ -78,6 +81,7 @@ export function listPostsForAdmin(query: PostQuery = {}): {
   const total = Number(
     db.select({ n: sql<number>`count(*)` }).from(posts).where(where).get()?.n ?? 0,
   );
+  const slice = paginate(query.page, total, query.perPage ?? 50);
 
   const rows = db
     .select({
@@ -91,13 +95,15 @@ export function listPostsForAdmin(query: PostQuery = {}): {
     .innerJoin(boards, eq(boards.id, posts.boardId))
     .leftJoin(users, eq(users.id, posts.authorId))
     .where(where)
-    .orderBy(desc(posts.createdAt))
-    .limit(Math.min(query.limit ?? 40, 200))
-    .offset(query.offset ?? 0)
+    // 群聊沉淀是批量转入的，createdAt 会成片相同 —— 补 id 才是全序，否则翻页丢行
+    .orderBy(desc(posts.createdAt), desc(posts.id))
+    .limit(slice.perPage)
+    .offset(slice.offset)
     .all();
 
   return {
     total,
+    slice,
     rows: rows.map(({ post, boardName, site, wx, wxId }) => ({
       id: post.id,
       title: post.title,

@@ -4,11 +4,13 @@ import { GroupConfig } from "@/components/admin/GroupConfig";
 import { SyncControls } from "@/components/admin/SyncControls";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { TruncationNote } from "@/components/ui/Pagination";
 import { Empty, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import {
   cursors,
   listGroupsForAdmin,
+  retryableJobCount,
   retryableJobs,
   syncOverview,
   upstreamStatus,
@@ -54,6 +56,7 @@ export default async function AdminGroupsPage() {
   const sync = syncOverview();
   const upstream = upstreamStatus();
   const failed = retryableJobs(10);
+  const failedTotal = retryableJobCount();
   const cursorRows = cursors();
 
   const stale = groups.filter((g) => g.freshness.level === "stale");
@@ -154,6 +157,7 @@ export default async function AdminGroupsPage() {
               </div>
             ))}
           </div>
+          <TruncationNote shown={failed.length} total={failedTotal} noun="个失败任务" />
         </Section>
       )}
 

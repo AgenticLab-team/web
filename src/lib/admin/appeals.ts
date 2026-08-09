@@ -4,6 +4,7 @@ import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { appeals, moderationActions, users } from "@/lib/db/schema";
+import { paginate, type PageSlice } from "@/lib/pagination";
 
 /**
  * 申诉队列。
@@ -63,10 +64,19 @@ export function actionLabel(action: string): string {
 }
 
 export function appealQueue(
-  query: { status?: string; limit?: number } = {},
+  query: { status?: string; page?: unknown; perPage?: number } = {},
   now = Date.now(),
-): AppealRow[] {
+): { rows: AppealRow[]; total: number; slice: PageSlice } {
   const punisher = { id: users.id, site: users.siteNickname, wx: users.wxNickname };
+
+  const where = query.status
+    ? eq(appeals.status, query.status as "open")
+    : eq(appeals.status, "open");
+
+  const total = Number(
+    db.select({ n: sql<number>`count(*)` }).from(appeals).where(where).get()?.n ?? 0,
+  );
+  const slice = paginate(query.page, total, query.perPage ?? 20);
 
   const rows = db
     .select({
@@ -78,13 +88,14 @@ export function appealQueue(
     .from(appeals)
     .innerJoin(moderationActions, eq(moderationActions.id, appeals.actionId))
     .leftJoin(users, eq(users.id, appeals.userId))
-    .where(query.status ? eq(appeals.status, query.status as "open") : eq(appeals.status, "open"))
+    .where(where)
     // 申诉一律**最老的排最前** —— 等待本身就是二次伤害，没有插队的理由
-    .orderBy(appeals.createdAt)
-    .limit(Math.min(query.limit ?? 100, 300))
+    .orderBy(appeals.createdAt, appeals.id)
+    .limit(slice.perPage)
+    .offset(slice.offset)
     .all();
 
-  if (rows.length === 0) return [];
+  if (rows.length === 0) return { rows: [], total, slice };
 
   const punisherIds = [...new Set(rows.map((r) => r.action.actorId))];
   const punisherNames = new Map(
@@ -96,7 +107,7 @@ export function appealQueue(
       .map((u) => [u.id, u.site ?? u.wx ?? u.id]),
   );
 
-  return rows.map((r) => ({
+  const mapped = rows.map((r) => ({
     id: r.appeal.id,
     userId: r.appeal.userId,
     userName: r.appellantSite ?? r.appellantWx ?? r.appeal.userId,
@@ -117,6 +128,8 @@ export function appealQueue(
     handledAt: r.appeal.handledAt,
     response: r.appeal.response,
   }));
+
+  return { rows: mapped, total, slice };
 }
 
 export function appealFacets() {

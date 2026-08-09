@@ -4,6 +4,7 @@ import { and, desc, eq, gte, inArray, like, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { auditLogs, users } from "@/lib/db/schema";
+import { paginate, type PageSlice } from "@/lib/pagination";
 import { dangerLevelOf, PERMISSIONS } from "@/lib/rbac/permissions";
 
 /**
@@ -23,8 +24,9 @@ export interface AuditFilter {
   /** 只看危险等级 >= N 的 */
   minDanger?: number;
   days?: number;
-  limit?: number;
-  offset?: number;
+  /** URL 上的原始 ?page= 值 —— 越界与乱写由 paginate 兜底 */
+  page?: unknown;
+  perPage?: number;
 }
 
 export interface AuditEntry {
@@ -60,7 +62,11 @@ export function labelForAction(action: string): string {
   return EXTRA_LABELS[action] ?? ACTION_LABELS.get(action) ?? action;
 }
 
-export function queryAuditLogs(filter: AuditFilter = {}): { entries: AuditEntry[]; total: number } {
+export function queryAuditLogs(filter: AuditFilter = {}): {
+  entries: AuditEntry[];
+  total: number;
+  slice: PageSlice;
+} {
   const conditions = [];
   if (filter.actorId) conditions.push(eq(auditLogs.actorId, filter.actorId));
   if (filter.action) conditions.push(like(auditLogs.action, `${filter.action}%`));
@@ -70,16 +76,19 @@ export function queryAuditLogs(filter: AuditFilter = {}): { entries: AuditEntry[
 
   const where = conditions.length ? and(...conditions) : undefined;
 
-  const total =
-    db.select({ n: sql<number>`count(*)` }).from(auditLogs).where(where).get()?.n ?? 0;
+  const total = Number(
+    db.select({ n: sql<number>`count(*)` }).from(auditLogs).where(where).get()?.n ?? 0,
+  );
+  const slice = paginate(filter.page, total, filter.perPage ?? 50);
 
   const rows = db
     .select()
     .from(auditLogs)
     .where(where)
-    .orderBy(desc(auditLogs.createdAt))
-    .limit(Math.min(filter.limit ?? 50, 200))
-    .offset(filter.offset ?? 0)
+    // 同一毫秒可能写进多条（批量操作逐条留痕）—— 补 id 才是全序，否则翻页会丢行
+    .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
+    .limit(slice.perPage)
+    .offset(slice.offset)
     .all();
 
   const actorIds = [...new Set(rows.map((r) => r.actorId).filter(Boolean))] as string[];
@@ -96,6 +105,7 @@ export function queryAuditLogs(filter: AuditFilter = {}): { entries: AuditEntry[
 
   return {
     total,
+    slice,
     entries: rows.map((row) => ({
       id: row.id,
       actorId: row.actorId,

@@ -350,7 +350,7 @@ describe("申诉队列", () => {
   it("**每行都带上原处罚的理由** —— 只看申诉人怎么说没法复核", () => {
     punishAndAppeal({ punisher: "u_mod", appealId: "ap1" });
 
-    const row = appealsMod.appealQueue({}, T0 + HOUR)[0];
+    const row = appealsMod.appealQueue({}, T0 + HOUR).rows[0];
     assert.equal(row.actionReason, "广告刷屏");
     assert.equal(row.actionKind, "hide");
     assert.equal(row.content, "我发的是自己的项目，不是广告");
@@ -358,7 +358,7 @@ describe("申诉队列", () => {
 
   it("**标出是谁下的处罚** —— 他不能复核自己的决定，界面要先说清楚", () => {
     punishAndAppeal({ punisher: "u_mod", appealId: "ap1" });
-    const row = appealsMod.appealQueue({}, T0 + HOUR)[0];
+    const row = appealsMod.appealQueue({}, T0 + HOUR).rows[0];
     assert.equal(row.punisherId, "u_mod");
     assert.equal(row.punisherName, "版主");
   });
@@ -367,7 +367,7 @@ describe("申诉队列", () => {
     punishAndAppeal({ punisher: "u_mod", appealId: "ap1", createdAt: T0 });
     punishAndAppeal({ punisher: "u_mod", appealId: "ap2", createdAt: T0 - 48 * HOUR });
 
-    const queue = appealsMod.appealQueue({}, T0 + HOUR);
+    const queue = appealsMod.appealQueue({}, T0 + HOUR).rows;
     assert.equal(queue[0].id, "ap2");
     assert.equal(queue[0].waitingHours, 49);
   });
@@ -379,8 +379,8 @@ describe("申诉队列", () => {
       .set({ status: "rejected", handledBy: "u_mod2", response: "维持原判" })
       .run();
 
-    assert.equal(appealsMod.appealQueue({}, T0 + HOUR).length, 0);
-    assert.equal(appealsMod.appealQueue({ status: "rejected" }, T0 + HOUR).length, 1);
+    assert.equal(appealsMod.appealQueue({}, T0 + HOUR).rows.length, 0);
+    assert.equal(appealsMod.appealQueue({ status: "rejected" }, T0 + HOUR).rows.length, 1);
   });
 
   it("**采纳率是制度体检指标** —— 长期 0% 说明申诉是走过场", () => {
