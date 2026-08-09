@@ -99,7 +99,8 @@
 - [x] 版主折叠低质回复的界面入口（`moderateReply` 支持 collapse，没接）+ 折叠展示
 - [ ] 楼中楼 / 树形视图切换（版块可设默认）
 - [x] 收藏夹分组（`bookmark_folders` 表已建，界面只有单一收藏）
-- [ ] 关注作者 / 标签 / 版块（`subscriptions.target_type` 已预留）
+- [x] 关注作者 / 版块（`subscriptions.target_type` 已预留）；标签那一路的扇出也做了，
+      **但生产上还一个标签都没有**，所以没做关注标签的按钮 —— 那会是又一个死开关
 - [ ] 服务端草稿（换设备接着写；现在只有 IndexedDB/localStorage 本地草稿）
 - [ ] 定时发布（`scheduled_at` 字段已在）
 - [ ] 帖内跳转到未读第一条 + 阅读进度条

@@ -50,14 +50,20 @@ export type PrefsMap = Record<string, ChannelPrefs>;
  * 新用户第一周需要知道有人回了自己 —— 那是他会不会再来的关键。
  * 默认关掉的通知等于没有通知，而用户根本不知道有个开关可以打开。
  *
- * 推送唯独 reaction 默认关：它是量最大的一类，直接打到锁屏上，
- * 第一晚就会被人在**系统层**把整个站的通知权限收回 ——
+ * 推送有两类默认关，理由是同一个：它们的量不受收件人控制，
+ * 直接打到锁屏上，第一晚就会被人在**系统层**把整个站的通知权限收回 ——
  * 那之后 @ 和回复也一条都到不了，而我们再也没有机会把它开回来。
+ *
+ * · reaction —— 量最大的一类
+ * · new_post —— 关注一个活跃版块就是每天十几条，
+ *   而它偏偏是「顺便看看」性质的，最不值得为它响一次
  */
+const PUSH_OFF_BY_DEFAULT: readonly string[] = ["reaction", "new_post"];
+
 export function defaultPrefs(): PrefsMap {
   const out: PrefsMap = {};
   for (const type of NOTIFICATION_TYPES) {
-    out[type] = { site: true, email: false, push: type !== "reaction" };
+    out[type] = { site: true, email: false, push: !PUSH_OFF_BY_DEFAULT.includes(type) };
   }
   return out;
 }
@@ -132,7 +138,7 @@ export interface TypeMeta {
   label: string;
   hint: string;
   /** 面板分组 */
-  section: "interaction" | "recognition" | "account";
+  section: "interaction" | "following" | "recognition" | "account";
 }
 
 /**
@@ -166,6 +172,12 @@ export const TYPE_META: TypeMeta[] = [
     label: "我关注的帖子有新回复",
     hint: "不是你发的，但你点过关注",
     section: "interaction",
+  },
+  {
+    type: "new_post",
+    label: "我关注的人 / 版块有新帖",
+    hint: "同一个来源的新帖会合并成一条，不会一帖一响",
+    section: "following",
   },
   {
     type: "reaction",
@@ -207,12 +219,14 @@ export const TYPE_META: TypeMeta[] = [
 
 export const SECTION_LABELS: Record<TypeMeta["section"], string> = {
   interaction: "有人找你",
+  following: "你关注的",
   recognition: "被认可",
   account: "与你的账号有关",
 };
 
 export const SECTION_HINTS: Record<TypeMeta["section"], string> = {
   interaction: "这几类通常是你真的想知道的",
+  following: "在「我的 → 我关注的」里管关注了谁",
   recognition: "量可能很大，嫌吵可以只留精华与采纳",
   account: "关不掉 —— 对你不利的消息不该能被静音",
 };
@@ -224,6 +238,7 @@ export type NotificationFilter =
   | "unread"
   | "mention"
   | "reply"
+  | "following"
   | "radar"
   | "account";
 
@@ -232,6 +247,7 @@ export const FILTER_LABELS: Record<NotificationFilter, string> = {
   unread: "未读",
   mention: "@ 我",
   reply: "回复",
+  following: "关注",
   radar: "雷达",
   account: "账号",
 };
@@ -241,6 +257,15 @@ const FILTER_TYPES: Record<NotificationFilter, readonly string[] | null> = {
   unread: null,
   mention: ["mention"],
   reply: ["reply_to_post", "reply_to_reply", "subscribed_reply"],
+  /*
+   * 「关注」单独一个页签，而 reaction / featured / accepted 没有。
+   *
+   * 区别在于：那三类说的是**别人对你做了什么**，
+   * 而 new_post 说的是**有新东西可以看** —— 它是这一页里唯一
+   * 「读物」性质的一类。单独筛出来就是一份轻量的关注流，
+   * 混在全部里则会被回复和 @ 冲走。
+   */
+  following: ["new_post"],
   radar: ["keyword"],
   account: ["moderation", "system"],
 };
@@ -267,3 +292,15 @@ export function matchesFilter(
 export function filterTypes(filter: NotificationFilter): readonly string[] | null {
   return FILTER_TYPES[filter];
 }
+
+/**
+ * 按类型筛的那几个页签（「全部」「未读」不算 —— 它们不看类型）。
+ *
+ * 从 FILTER_TYPES 推出来，不再手写第二份。
+ * 手写的那份在 notify.ts 里出现过两次，加一个页签要改三个地方，
+ * 而漏掉的表现是那一格的计数永远是 0 —— 页签看起来是空的，
+ * 点进去却有东西。
+ */
+export const TYPE_FILTERS = (Object.keys(FILTER_TYPES) as NotificationFilter[]).filter(
+  (key) => FILTER_TYPES[key] !== null,
+);

@@ -362,6 +362,8 @@ export const NOTIFICATION_TYPES = [
   "reply_to_post",
   "reply_to_reply",
   "subscribed_reply",
+  /** 关注的作者 / 版块 / 标签有新帖 */
+  "new_post",
   "reaction",
   "featured",
   "accepted",

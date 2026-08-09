@@ -16,7 +16,7 @@ import { checkContent, fileForReview } from "@/lib/moderation/word-gate";
 
 import { recountBoardPosts } from "./board-stats";
 import { buildViewerContext } from "./context";
-import { autoSubscribe, notifyNewReply } from "./notify";
+import { autoSubscribe, notifyNewPost, notifyNewReply } from "./notify";
 import { getPost } from "./queries";
 import { indexPost, indexReply } from "./search";
 import { canSeePost, normalizePostVisibility } from "./visibility";
@@ -251,6 +251,30 @@ export async function createPost(input: {
 
   // 发帖后自动订阅自己的帖子，有人回复才收得到通知
   autoSubscribe(user.id, created.id);
+
+  /*
+   * 扇给关注这个作者 / 版块 / 标签的人。
+   *
+   * 在这一行之前，**发新帖不通知任何人** —— 站里只有
+   * notifyNewReply，而 subscriptions.target_type 里的
+   * user / board / tag 三个值从来没有一行数据。
+   *
+   * 逐人可见性判定在 notifyNewPost 里面做，不在这里 ——
+   * 放在调用点的话，下一个调用点（转帖、定时发布）就会忘掉。
+   */
+  notifyNewPost({
+    postId: created.id,
+    title: safeTitle,
+    authorId: user.id,
+    // 匿名与否由 notifyNewPost 自己从帖子行上判 —— 调用点判的话，
+    // 下一个调用点（转帖、定时发布）会忘掉，而忘掉的后果是匿名失效
+    authorName: resolveDisplayName([user.siteNickname, user.wxNickname], {
+      wxId: user.wxId,
+      fallback: "有人",
+    }),
+    boardId: board.id,
+    boardName: board.name,
+  });
 
   audit({ actorId: user.id }, {
     action: "forum.post.create",

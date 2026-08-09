@@ -104,6 +104,14 @@ export const NAV: NavSection[] = [
         ready: true,
       },
       {
+        key: "following",
+        href: "/me/following",
+        label: "我关注的",
+        icon: "user-plus",
+        requiresAuth: true,
+        ready: true,
+      },
+      {
         key: "me",
         href: "/me",
         label: "我的",

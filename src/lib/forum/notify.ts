@@ -3,13 +3,20 @@ import "server-only";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { notifications, subscriptions } from "@/lib/db/schema";
+import { notifications, posts, subscriptions, users } from "@/lib/db/schema";
 import {
+  FILTER_LABELS,
+  TYPE_FILTERS,
   filterTypes,
   isEnabled,
   type NotificationFilter,
 } from "@/lib/notifications/prefs";
 import { getPrefs } from "@/lib/notifications/store";
+
+import { buildViewerContext } from "./context";
+import { noticeCopy, pickSource, type FollowTarget } from "./follow-rules";
+import { toVisibilityInfo } from "./queries";
+import { canSeePost } from "./visibility";
 
 /**
  * 通知与聚合。
@@ -32,7 +39,8 @@ export type NotificationType =
   | "accepted"
   | "moderation"
   | "system"
-  | "keyword";
+  | "keyword"
+  | "new_post";
 
 export interface NotifyInput {
   userId: string;
@@ -46,6 +54,13 @@ export interface NotifyInput {
   actorName?: string;
   refType?: string;
   refId?: string;
+  /**
+   * 合并后的标题怎么写。不传就用通用那套（「张三等 3 人…」）。
+   *
+   * 通用那套假设标题以人名开头 —— 「关注的版块有新帖」这类标题
+   * 套上去会变成「某人等 2 人综合讨论有新帖」，不成句。
+   */
+  aggregate?: (count: number) => string;
 }
 
 /** 合并后的标题：「张三等 3 人回复了你的帖子」 */
@@ -91,7 +106,9 @@ export function notify(input: NotifyInput): void {
     db.update(notifications)
       .set({
         count: sql`${notifications.count} + 1`,
-        title: aggregateTitle(input.title, input.actorName ?? null, existing.count + 1),
+        title: input.aggregate
+          ? input.aggregate(existing.count + 1)
+          : aggregateTitle(input.title, input.actorName ?? null, existing.count + 1),
         body: input.body,
         link: input.link ?? existing.link,
         actorId: input.actorId,
@@ -243,10 +260,16 @@ export function notificationCounts(userId: string): Record<NotificationFilter, n
     .where(eq(notifications.userId, userId))
     .all();
 
-  const counts = { all: rows.length, unread: 0, mention: 0, reply: 0, radar: 0, account: 0 };
+  // 页签清单从 FILTER_TYPES 推，不再手写 —— 手写的那份漏掉一个页签，
+  // 表现是那一格计数永远是 0：看起来是空的，点进去却有东西
+  const counts = Object.fromEntries(
+    (Object.keys(FILTER_LABELS) as NotificationFilter[]).map((key) => [key, 0]),
+  ) as Record<NotificationFilter, number>;
+
+  counts.all = rows.length;
   for (const row of rows) {
     if (row.readAt === null) counts.unread++;
-    for (const key of ["mention", "reply", "radar", "account"] as const) {
+    for (const key of TYPE_FILTERS) {
       if (filterTypes(key)?.includes(row.type)) counts[key]++;
     }
   }
@@ -295,4 +318,130 @@ export function isSubscribed(userId: string, postId: string): boolean {
     )
     .get();
   return Boolean(row);
+}
+
+/**
+ * 关注的作者 / 版块 / 标签发了新帖。
+ *
+ * ─────────────────────────────────────────
+ * 在这个函数之前，发新帖不通知任何人
+ * ─────────────────────────────────────────
+ *
+ * 站里只有 `notifyNewReply`。`subscriptions.target_type` 从一开始
+ * 就写着 `post | board | tag | user`，而另外三个值从来没有一行数据 ——
+ * 因为没有任何东西会去读它们。
+ *
+ * ─────────────────────────────────────────
+ * 逐人判可见性，这一条不能省
+ * ─────────────────────────────────────────
+ *
+ * 这条通知带着**标题**和链接，发给的是订阅者，
+ * 而订阅者不等于有权看的人。少了这一步，一个「仅自己可见」
+ * 或者限定身份的帖子，标题就直接出现在所有粉丝的通知栏里 ——
+ * 通知本身就是泄露，点不点进去都一样。
+ *
+ * 代价是每个收件人一次 `buildViewerContext`（角色 + 可见群）。
+ * 关注上限（见 follow-rules）压着人数，而这笔开销买的是
+ * 「不会把私密帖标题群发出去」——没有比这更值得花的查询。
+ */
+export function notifyNewPost(input: {
+  postId: string;
+  title: string;
+  authorId: string;
+  /** 匿名帖必须传 null —— 见下面那段 */
+  authorName: string | null;
+  boardId: string;
+  boardName: string;
+  tagIds?: string[];
+}) {
+  const post = db.select().from(posts).where(eq(posts.id, input.postId)).get();
+  if (!post) return;
+
+  // 草稿、待审、定时未到的都不扇出 —— 只有真的发出来的帖子才算发生了
+  if (post.status !== "published" || post.deletedAt) return;
+
+  /*
+   * 匿名帖跳过「关注作者」那一路。
+   *
+   * 收件人名单本身就是答案：「你关注的张三发了新帖」+ 一个匿名帖的
+   * 链接，匿名当场失效。版块和标签那两路还发，但作者名一律抹掉。
+   */
+  const anonymous = post.anonymous;
+  const authorName = anonymous ? null : input.authorName;
+
+  /** userId -> 命中了哪几种关注 */
+  const hits = new Map<string, FollowTarget[]>();
+  const add = (userId: string, target: FollowTarget) => {
+    if (userId === input.authorId) return; // 自己发的不通知自己
+    const list = hits.get(userId);
+    if (list) list.push(target);
+    else hits.set(userId, [target]);
+  };
+
+  const rowsFor = (targetType: FollowTarget, targetIds: string[]) =>
+    targetIds.length
+      ? db
+          .select({ userId: subscriptions.userId })
+          .from(subscriptions)
+          .where(
+            and(
+              eq(subscriptions.targetType, targetType),
+              inArray(subscriptions.targetId, targetIds),
+              isNull(subscriptions.mutedAt),
+            ),
+          )
+          .all()
+      : [];
+
+  if (!anonymous) {
+    for (const row of rowsFor("user", [input.authorId])) add(row.userId, "user");
+  }
+  for (const row of rowsFor("board", [input.boardId])) add(row.userId, "board");
+  for (const row of rowsFor("tag", input.tagIds ?? [])) add(row.userId, "tag");
+
+  if (hits.size === 0) return;
+
+  const info = toVisibilityInfo(post);
+  const recipients = db
+    .select()
+    .from(users)
+    .where(inArray(users.id, [...hits.keys()]))
+    .all();
+
+  for (const user of recipients) {
+    // 已经不能登录的人不必再收通知
+    if (user.status !== "active") continue;
+
+    // 这一步就是上面说的那一步
+    if (!canSeePost(info, buildViewerContext(user, input.boardId)).visible) continue;
+
+    const source = pickSource(hits.get(user.id) ?? []);
+    if (!source) continue;
+
+    const sourceId =
+      source === "user" ? input.authorId : source === "board" ? input.boardId : (input.tagIds?.[0] ?? "");
+    const sourceName = source === "board" ? input.boardName : (authorName ?? input.boardName);
+
+    const copy = noticeCopy({ source, sourceId, sourceName, authorName });
+
+    notify({
+      userId: user.id,
+      type: "new_post",
+      groupKey: copy.groupKey,
+      title: copy.title,
+      aggregate: copy.aggregate,
+      body: input.title,
+      link: `/forum/p/${input.postId}`,
+      /*
+       * 匿名帖不带 actor。
+       *
+       * actorId / actorName 会渲染成通知里的头像和名字 ——
+       * 传了就等于在通知栏里指名道姓，而这个帖子是匿名的。
+       */
+      actorId: anonymous ? undefined : input.authorId,
+      actorName: authorName ?? undefined,
+      refType: "post",
+      refId: input.postId,
+    });
+  }
 }

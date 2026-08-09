@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
+import { FollowButton } from "@/components/forum/FollowButton";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, PageNote, Section, StatTile } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -12,9 +13,13 @@ import {
   recentMentionsFor,
   replyReceivedCountFor,
 } from "@/lib/messages/interactions";
+import { db } from "@/lib/db";
+import { users } from "@/lib/db/schema";
+import { isFollowing } from "@/lib/forum/follow";
 import { personProfileFor } from "@/lib/members/person";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { dateKey } from "@/lib/time";
+import { eq } from "drizzle-orm";
 
 export const metadata: Metadata = { title: "成员主页" };
 export const dynamic = "force-dynamic";
@@ -54,9 +59,28 @@ export default async function PersonPage({
   const recentMentions = recentMentionsFor(wxId, convIds, 10);
   const groupName = new Map(profile.sharedGroups.map((g) => [g.convId, g.name]));
 
+  /*
+   * 关注按钮只在这个人**有站内账号**时出现。
+   *
+   * 关注的意思是「他发新帖时叫我」，而发帖需要账号 ——
+   * 给一个只在群里说话、没注册过的人挂一个关注按钮，
+   * 点了之后永远不会有任何动静。
+   */
+  const account = db.select({ id: users.id }).from(users).where(eq(users.wxId, wxId)).get();
+  const canFollowThem = Boolean(account) && account!.id !== user?.id;
+  const followingThem =
+    canFollowThem && user ? isFollowing(user.id, "user", account!.id) : false;
+
   return (
     <>
-      <PageHeader title="成员主页" />
+      <PageHeader
+        title="成员主页"
+        action={
+          canFollowThem ? (
+            <FollowButton target="user" targetId={account!.id} following={followingThem} />
+          ) : null
+        }
+      />
 
       <Card className="mb-4 flex items-center gap-4">
         <Avatar wxId={wxId} name={profile.name} src={profile.avatarUrl} size={56} />

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import { NOTIFICATION_TYPES } from "@/lib/db/schema";
@@ -7,6 +8,7 @@ import {
   FILTER_LABELS,
   SECTION_HINTS,
   SECTION_LABELS,
+  TYPE_FILTERS,
   TYPE_META,
   canUseEmail,
   defaultPrefs,
@@ -174,7 +176,7 @@ describe("列表筛选", () => {
 
   it("除了「未读」，每一类通知都至少能被一个页签筛出来", () => {
     const covered = new Set(
-      (["mention", "reply", "radar", "account"] as const).flatMap((k) => [
+      (["mention", "reply", "following", "radar", "account"] as const).flatMap((k) => [
         ...(filterTypes(k) ?? []),
       ]),
     );
@@ -205,5 +207,30 @@ describe("列表筛选", () => {
       assert.ok(FILTER_LABELS[key].length > 0);
       assert.notEqual(FILTER_LABELS[key], key);
     }
+  });
+});
+
+describe("**页签清单只有一份**", () => {
+  it("TYPE_FILTERS 是从 FILTER_TYPES 推出来的，不是手写的第二份", () => {
+    /*
+     * 加「关注」页签时，计数那边还手写着 ["mention","reply","radar","account"]——
+     * 漏掉一个的表现是那一格永远显示 0：页签看起来空的，点进去却有东西。
+     * 而这种 bug 只有真的关注了人的用户才会遇到。
+     */
+    assert.deepEqual(
+      [...TYPE_FILTERS].sort(),
+      (Object.keys(FILTER_LABELS) as NotificationFilter[])
+        .filter((k) => filterTypes(k) !== null)
+        .sort(),
+    );
+    assert.equal(TYPE_FILTERS.includes("all"), false);
+    assert.equal(TYPE_FILTERS.includes("unread"), false);
+  });
+
+  it("计数那边不再手写页签清单", () => {
+    const code = readFileSync(new URL("../src/lib/forum/notify.ts", import.meta.url), "utf8");
+    const fn = code.slice(code.indexOf("function notificationCounts"));
+    assert.match(fn.slice(0, 900), /TYPE_FILTERS/);
+    assert.doesNotMatch(fn.slice(0, 900), /"mention", "reply"/);
   });
 });
