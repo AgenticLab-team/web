@@ -4,9 +4,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { PrefsPanel } from "@/components/notifications/PrefsPanel";
+import { PushManager } from "@/components/notifications/PushManager";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { getCurrentUser } from "@/lib/auth/session";
+import { env } from "@/lib/env";
 import { canUseEmail } from "@/lib/notifications/prefs";
+import { hasActivePushSubscription } from "@/lib/notifications/push-store";
+import { configProblem } from "@/lib/notifications/webpush";
 import { getPrefs } from "@/lib/notifications/store";
 
 export const metadata: Metadata = { title: "通知设置" };
@@ -23,6 +27,10 @@ export default async function NotificationPrefsPage() {
   if (!user) redirect("/login?next=/me/notifications");
 
   const prefs = getPrefs(user.id);
+  // 配错和没配都当「不可用」传给客户端 —— 公钥有问题时让浏览器订阅
+  // 只会得到一个永远收不到东西的订阅，不如从一开始就如实说不可用
+  const pushUsable = configProblem() === null;
+  const showPush = pushUsable && hasActivePushSubscription(user.id);
 
   return (
     <>
@@ -36,7 +44,9 @@ export default async function NotificationPrefsPage() {
 
       <PageHeader title="通知设置" subtitle="决定什么事值得打断你" />
 
-      <PrefsPanel initial={prefs} />
+      <PrefsPanel initial={prefs} showPush={showPush} />
+
+      <PushManager vapidPublicKey={pushUsable ? env.webpush.publicKey : null} />
 
       {/* 邮件通道还没接。在接上之前不给开关 —— 一个打开了但什么都不会
           发生的开关，比没有这个开关更糟：用户会以为自己订阅了，然后错过一切 */}

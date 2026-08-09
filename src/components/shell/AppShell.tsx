@@ -8,6 +8,8 @@ import { unreadCount } from "@/lib/forum/notify";
 import { can } from "@/lib/rbac/can";
 import { resolveDisplayName } from "@/lib/users/display-name";
 
+import { LiveNotifications } from "@/components/notifications/LiveNotifications";
+
 import { Shortcuts } from "./Shortcuts";
 import { Sidebar, type ShellUser } from "./Sidebar";
 import { TabBar } from "./TabBar";
@@ -87,6 +89,8 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <TabBar items={tabs} badges={badges} />
+      {/* 只给登录用户挂实时通道 —— 访客连上也只会收到 401 */}
+      {user && <LiveNotifications />}
       <Shortcuts />
     </div>
   );

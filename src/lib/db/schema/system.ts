@@ -149,7 +149,7 @@ export const systemHealth = sqliteTable(
   {
     id: ulidPk(),
     component: text("component", {
-      enum: ["upstream_api", "frp_tunnel", "db", "disk", "offsite", "mail", "cron", "auth"],
+      enum: ["upstream_api", "frp_tunnel", "db", "disk", "offsite", "mail", "cron", "auth", "web_push"],
     }).notNull(),
     status: text("status", { enum: ["ok", "degraded", "down"] }).notNull(),
     detail: text("detail"),
