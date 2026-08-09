@@ -100,12 +100,6 @@ export const FLAGS: readonly FlagSpec[] = [
     navKeys: ["events"],
   },
   {
-    key: "weekly_digest",
-    label: "每周精选回推微信群",
-    effect: "现在只生成草稿、不回推 —— 回推那一步还没做，所以这个开关暂时只是个记号",
-    status: "planned",
-  },
-  {
     key: "rag_qa",
     label: "群聊 RAG 问答",
     effect: "功能还没做，开关现在不管任何事",
@@ -124,6 +118,24 @@ export const FLAGS: readonly FlagSpec[] = [
     status: "planned",
   },
 ];
+
+/**
+ * ─────────────────────────────────────────
+ * 退役的开关
+ * ─────────────────────────────────────────
+ *
+ * 从这份清单里删掉**不够** —— 后台那一页读的是库里的
+ * `feature_flags` 表。删了清单不删库，那个开关照样摆在后台，
+ * 而且再没有人知道它是死的。
+ *
+ * 和配置项、权限点走的是同一套办法：seed 启动时清掉。
+ */
+export const RETIRED_FLAGS: readonly { key: string; why: string }[] = [
+  {
+    key: "weekly_digest",
+    why: "它叫「每周精选回推微信群」，而**回推这件事代码明确拒绝做** —— 精选永远只备草稿，发送走群发那一整套复核流程。一个承诺了代码不打算做的事的开关，比没有更坏。周报的开关归进模块登记表（`module.digest.enabled`），和同步、雷达、裁剪并列",
+  },
+] as const;
 
 export const FLAG_KEYS = FLAGS.map((f) => f.key);
 

@@ -114,6 +114,23 @@ export const MODULES: ModuleSpec[] = [
     enforcedIn: ["src/lib/storage/auto.ts"],
   },
   {
+    key: "digest",
+    name: "每周精选",
+    summary: "每周一把上一周值得看的帖子挑出来，备成一份群发草稿",
+    /*
+     * 说清楚它**只备草稿**。
+     *
+     * 这一条以前有两个开关在管，而且两个各说各话：
+     * 配置项叫「启用每周精选回推」，功能开关叫「每周精选回推微信群」——
+     * 两个名字都在暗示它会自己发出去，而代码从头到尾只生成草稿，
+     * 发送走群发那一整套复核流程。
+     */
+    whenOff: "定时任务照常跑但不再挑稿，也不再备草稿。已经备好的草稿留着",
+    settingKey: "module.digest.enabled",
+    dependsOn: ["broadcast"],
+    enforcedIn: ["src/lib/digest/build.ts"],
+  },
+  {
     key: "alerts",
     name: "告警投递",
     summary: "组件挂了给站长发微信",

@@ -70,11 +70,32 @@ beforeEach(() => {
   setEnabled(true);
 });
 
+/**
+ * 周报现在是个正规模块，开关归 `module.digest.enabled`。
+ *
+ * 它还**依赖群发**（草稿要进群发队列等复核），而依赖被关掉时
+ * `isModuleEnabled` 会算成关 —— 所以这里把依赖也一并打开，
+ * 否则测的就不是「周报开关」而是「依赖链」。
+ */
 function setEnabled(on: boolean) {
   dbm.db.delete(schema.settings).run();
   dbm.db
     .insert(schema.settings)
-    .values({ key: "digest.enabled", value: on ? "true" : "false", type: "bool", category: "digest" })
+    .values({
+      key: "module.broadcast.enabled",
+      value: "true",
+      type: "bool",
+      category: "broadcast",
+    })
+    .run();
+  dbm.db
+    .insert(schema.settings)
+    .values({
+      key: "module.digest.enabled",
+      value: on ? "true" : "false",
+      type: "bool",
+      category: "digest",
+    })
     .run();
   store.invalidateSettingsCache();
 }
@@ -348,7 +369,7 @@ describe("内容形态", () => {
  * 那个一直没人读的开关
  * ─────────────────────────────────────────────────────────────── */
 
-describe("**「启用每周精选回推」这个开关**", () => {
+describe("**每周精选这个模块的开关**", () => {
   /*
    * 它在后台摆了很久 —— 关掉，定时任务照样每周生成草稿。
    * 一个拨了没反应的旋钮比没有旋钮坏：管理员拨完不会再去验证。

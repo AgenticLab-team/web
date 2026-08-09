@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import {
   FLAGS,
+  RETIRED_FLAGS,
   FLAG_KEYS,
   bucketOf,
   defaultEnabled,
@@ -362,5 +364,152 @@ describe("接线", () => {
     for (const forbidden of ["server-only", "@/lib/db", "drizzle-orm"]) {
       assert.equal(code.includes(forbidden), false, `规则层引了 ${forbidden}`);
     }
+  });
+});
+
+/* ───────────────────────────────────────────────────────────────
+ * 「标着 wired 的必须真的被判过」
+ *
+ * 另外三个注册表（权限点、配置项、数据库列）都有这一条，
+ * 而开关这一份一直没有 —— 它有 `status` 字段、界面上也分开显示，
+ * 但**没有任何东西逼那个字段说实话**。
+ *
+ * 一个标着 wired 而其实没接的开关，比一个老实标着 planned 的更坏：
+ * 管理员会真的拿它去关一个功能。
+ * ─────────────────────────────────────────────────────────────── */
+
+describe("**status 必须说实话**", () => {
+  const root = new URL("..", import.meta.url).pathname;
+
+  /** 全站（除注册表自己）判过哪些开关 */
+  const enforced = (() => {
+    const found = new Set<string>();
+    const walk = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        if (e.name === "node_modules" || e.name.startsWith(".")) continue;
+        const full = join(dir, e.name);
+        if (e.isDirectory()) walk(full);
+        else if (/\.(ts|tsx)$/.test(e.name) && !full.endsWith("flags/registry.ts")) {
+          const body = readFileSync(full, "utf8");
+          /*
+           * 认三种写法：
+           *   featureEnabled("x", user) / requireFeature("x", user)
+           *   导航项上的 flag: "x"
+           * 只认第一种的话，靠导航挂着的那些会被误报成没接。
+           */
+          for (const m of body.matchAll(/(?:featureEnabled|requireFeature)\(\s*"([a-z_]+)"/g)) {
+            found.add(m[1]);
+          }
+          for (const m of body.matchAll(/flag:\s*"([a-z_]+)"/g)) found.add(m[1]);
+        }
+      }
+    };
+    walk(join(root, "src"));
+    return found;
+  })();
+
+  for (const spec of FLAGS) {
+    if (spec.status === "planned") continue;
+    it(`${spec.key} 真的被判过`, () => {
+      assert.equal(
+        enforced.has(spec.key),
+        true,
+        `「${spec.label}」标着 wired，而全站没有一处判它 —— ` +
+          `管理员关掉它什么都不会发生。接上，或者标 status: "planned"`,
+      );
+    });
+  }
+
+  it("**没有一个 planned 其实已经接上了**", () => {
+    /*
+     * 反向也要盯：功能做完之后很容易忘了把标记改回来。
+     * 一个明明生效、却标着「还没做」的开关，会让管理员不敢拨。
+     */
+    const stale = FLAGS.filter((f) => f.status === "planned" && enforced.has(f.key)).map(
+      (f) => f.key,
+    );
+    assert.deepEqual(stale, [], `这些已经接上了，标记该改成 wired：${stale.join(", ")}`);
+  });
+
+  it("planned 清单就是这三个 —— 新增要有人过一眼", () => {
+    assert.deepEqual(
+      FLAGS.filter((f) => f.status === "planned").map((f) => f.key).sort(),
+      ["external_users", "rag_qa", "temp_mailbox"],
+    );
+  });
+
+  it("**每个 planned 都说清楚它现在不管任何事**", () => {
+    // 说不清的话，界面上那个「未生效」标记就只是个装饰
+    for (const spec of FLAGS.filter((f) => f.status === "planned")) {
+      assert.match(
+        spec.effect,
+        /还没做|不管任何事|只是个记号/,
+        `${spec.key} 标了 planned，但 effect 读起来像它在管事`,
+      );
+    }
+  });
+});
+
+describe("**退役的开关要退干净**", () => {
+  /*
+   * 和配置项、权限点走同一套办法：从清单里删掉不够 ——
+   * 后台那一页读的是库里的 `feature_flags` 表。
+   * 只删清单的话，那个开关照样摆在后台，
+   * 而且再没有人知道它是死的。
+   */
+  const keys = new Set(FLAGS.map((f) => f.key));
+
+  it("退役的不能还留在清单里", () => {
+    for (const r of RETIRED_FLAGS) {
+      assert.equal(keys.has(r.key), false, `${r.key} 同时在两张表里`);
+    }
+  });
+
+  it("**seed 会把它从库里删掉**", () => {
+    const seed = readFileSync(new URL("../src/lib/db/seed.ts", import.meta.url), "utf8");
+    assert.match(seed, /RETIRED_FLAGS/);
+    assert.match(seed, /delete\(featureFlags\)\.where\(eq\(featureFlags\.key, retired\.key\)\)/);
+  });
+
+  it("每个退役项都说清楚了为什么", () => {
+    for (const r of RETIRED_FLAGS) {
+      assert.ok(r.why.length > 20, `${r.key} 没说清楚`);
+    }
+  });
+
+  it("**weekly_digest 退了，因为它承诺了代码明确拒绝做的事**", () => {
+    /*
+     * 它叫「每周精选回推微信群」，而回推这件事代码从头到尾拒绝做：
+     * 精选永远只备草稿，发送走群发那一整套复核流程。
+     * 一个承诺了代码不打算做的事的开关，比没有更坏。
+     */
+    const r = RETIRED_FLAGS.find((x) => x.key === "weekly_digest");
+    assert.ok(r, "weekly_digest 该在退役清单里");
+    assert.match(r.why, /只备草稿|拒绝/);
+  });
+});
+
+describe("**周报归进了模块登记表**", () => {
+  it("模块表里有 digest 这一项", async () => {
+    const { MODULES } = await import("@/lib/modules/registry");
+    const spec = MODULES.find((m) => m.key === "digest");
+    assert.ok(spec, "周报没进模块表");
+    assert.equal(spec.settingKey, "module.digest.enabled");
+  });
+
+  it("**它依赖群发** —— 备出来的草稿发不出去就不如不备", async () => {
+    const { MODULES } = await import("@/lib/modules/registry");
+    const spec = MODULES.find((m) => m.key === "digest")!;
+    assert.deepEqual(spec.dependsOn, ["broadcast"]);
+  });
+
+  it("判定走 isModuleEnabled，不直接读那个配置项", () => {
+    /*
+     * 直接读配置项会绕过「依赖被关掉时也算关」这条规则 ——
+     * 那样会出现一个开关开着、依赖关着、代码却照跑的模块。
+     */
+    const build = readFileSync(new URL("../src/lib/digest/build.ts", import.meta.url), "utf8");
+    assert.match(build, /isModuleEnabled\("digest"\)/);
+    assert.equal(build.includes('getSettingBool("digest.enabled"'), false);
   });
 });

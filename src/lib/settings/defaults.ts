@@ -50,6 +50,10 @@ export const RETIRED_SETTINGS: readonly { key: string; why: string }[] = [
     key: "site.name",
     why: "站点名来自环境变量 SITE_NAME（env.site.name）—— 它在构建期和没有数据库的地方也要用。两处各存一份的结果是后台改了名字而页面标题不变",
   },
+  {
+    key: "digest.enabled",
+    why: "改名成 `module.digest.enabled`，归进模块登记表 —— 周报是个后台任务，和同步、雷达、裁剪是同一类东西，摆在同一页上才看得出「这个站有哪些定时任务在跑」。旧键留着的话，两个开关名字都在，谁也说不清拨哪个",
+  },
 ] as const;
 
 export const DEFAULT_SETTINGS: readonly SettingDef[] = [
@@ -561,11 +565,20 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
 
   // ── 每周精选回推 ────────────────────────────────────────────
   {
-    key: "digest.enabled",
-    value: "false",
+    key: "module.digest.enabled",
+    /*
+     * 默认开着，和其它模块一致（「默认关掉的功能等于没做」）。
+     *
+     * 它以前默认是关的 —— 那份谨慎是冲着**发送**去的，
+     * 而发送这一步这个模块根本不做：它只把草稿备好，
+     * 发不发、发给谁，全部走群发那一整套双人复核。
+     * 谨慎放在该放的地方，这一步就不必再关着了。
+     */
+    value: "true",
     type: "bool",
     category: "digest",
-    label: "启用每周精选回推",
+    label: "模块：每周精选",
+    description: "关掉后不再挑稿、不再备草稿。它只备草稿 —— 发送始终走群发那一套复核流程",
   },
   { key: "digest.top_n", value: "5", type: "int", category: "digest", label: "每期推送帖子数" },
   {
@@ -666,5 +679,4 @@ export const DEFAULT_FLAGS: readonly {
   { key: "events", enabled: true, description: "活动系统" },
   { key: "temp_mailbox", enabled: false, description: "临时邮箱" },
   { key: "rag_qa", enabled: false, description: "群聊 RAG 问答" },
-  { key: "weekly_digest", enabled: false, description: "每周精选回推微信群" },
 ];

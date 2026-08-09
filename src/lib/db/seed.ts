@@ -10,6 +10,7 @@ import {
   roles,
   settings,
 } from "./schema";
+import { RETIRED_FLAGS } from "@/lib/flags/registry";
 import { PERMISSIONS, RETIRED_PERMISSIONS } from "@/lib/rbac/permissions";
 import { BUILTIN_ROLES, resolveRolePermissions } from "@/lib/rbac/roles";
 import { seedBoards } from "@/lib/forum/seed-boards";
@@ -23,6 +24,8 @@ export interface SeedReport {
   rolePermissions: number;
   /** 这次启动清掉了几个退役的权限点 */
   permissionsRetired: number;
+  /** 这次启动清掉了几个退役的功能开关 */
+  flagsRetired: number;
   settings: number;
   /** 这次启动清掉了几个退役的配置项 —— 数字不为零时值得在日志里看见 */
   settingsRetired: number;
@@ -42,6 +45,7 @@ export function seedDatabase(): SeedReport {
     roles: 0,
     rolePermissions: 0,
     permissionsRetired: 0,
+    flagsRetired: 0,
     settings: 0,
     settingsRetired: 0,
     flags: 0,
@@ -186,6 +190,15 @@ export function seedDatabase(): SeedReport {
         .onConflictDoNothing()
         .run();
       if (result.changes > 0) report.settings++;
+    }
+
+    /*
+     * 退役的开关先从库里清掉 —— 后台那一页读的是库里的行，
+     * 不是代码里的清单。只删清单的话那个开关照样摆着。
+     */
+    for (const retired of RETIRED_FLAGS) {
+      const gone = tx.delete(featureFlags).where(eq(featureFlags.key, retired.key)).run();
+      if (gone.changes > 0) report.flagsRetired++;
     }
 
     for (const flag of DEFAULT_FLAGS) {

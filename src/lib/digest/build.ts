@@ -6,7 +6,8 @@ import { contentHash } from "@/lib/broadcast/rules";
 import { db } from "@/lib/db";
 import { broadcasts, digestRuns, posts, users } from "@/lib/db/schema";
 import { env } from "@/lib/env";
-import { getSettingBool, getSettingInt } from "@/lib/settings/store";
+import { isModuleEnabled } from "@/lib/modules/state";
+import { getSettingInt } from "@/lib/settings/store";
 import {
   MAX_ITEMS,
   MAX_PER_AUTHOR,
@@ -181,12 +182,19 @@ export function buildWeeklyDigest(
    * 一个拨了没反应的旋钮比没有旋钮坏：它不是少了个功能，
    * 是给了一个错误的答案，而管理员不会再去验证。
    */
-  if (!getSettingBool("digest.enabled", false)) {
+  /*
+   * 走 `isModuleEnabled` 而不是直接读那个配置项。
+   *
+   * 它多做一件事：**依赖被关掉时也算关**。周报依赖群发
+   * （草稿要进群发队列等复核），群发关掉的话，
+   * 备出来的草稿谁也发不出去 —— 那不如不备。
+   */
+  if (!isModuleEnabled("digest")) {
     return {
       weekStart,
       ok: false,
       // 说清楚是「被关掉了」，不是「这周没内容」—— 两者的下一步完全不同
-      reason: "每周精选回推没有启用（后台「启用每周精选回推」）",
+      reason: "每周精选这个模块没有启用（后台「模块」页里打开）",
       itemCount: 0,
       rejected: [],
     };
