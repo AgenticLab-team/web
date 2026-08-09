@@ -207,3 +207,9 @@
 （user.delete/merge/export、permission.override、
 module.install/config、broadcast.email、badge.manage），
 并且有一条测试把这个状态钉住 —— 新增 planned 要动那一行。
+
+- [x] **本机备份的恢复演练** —— 在此之前没有一份备份被证明过能用
+      （现有的演练只对异地跑，而异地还没配）。现在每次备份都演一次，
+      结果显示在后台「恢复演练」那一栏
+- [ ] 异地备份仍未配置：需要一个 S3 协议的对象存储
+      （R2 / B2 / MinIO 都行，每天几 MB 落在免费额度里）—— **等凭证**

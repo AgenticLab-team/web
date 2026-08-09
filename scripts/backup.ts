@@ -93,6 +93,8 @@ async function main() {
    * 后面这两步无论怎样都不该把它抹掉。
    */
   const { offsiteSummary, restoreDrill, syncOffsite } = await import("@/lib/backup/offsite");
+  const { localRestoreDrill } = await import("@/lib/backup/drill");
+  const { recordDrill } = await import("@/lib/backup/record");
   const { runSteps, summarize, tickFailureReport } = await import("@/lib/ops/tick");
 
   const report = await runSteps([
@@ -105,12 +107,37 @@ async function main() {
     },
     {
       // 到期就顺手演练一次 —— 没演练过的备份只是一堆字节
-      name: "恢复演练",
+      name: "异地演练",
       critical: false,
       timeoutMs: 120_000,
       run: async () => (offsiteSummary().drillDue ? restoreDrill() : null),
       describe: (r: Awaited<ReturnType<typeof restoreDrill>> | null) =>
         r ? `${r.ok ? "" : "✗ "}${r.note}` : "还不到演练时候",
+    },
+    {
+      /*
+       * 本机那一份也要演练，而且**每次都演**。
+       *
+       * 上面那条只对异地备份跑，而异地还没配 —— 也就是说
+       * 线上每天生成的这几份备份，到今天为止没有一份被证明过是能用的。
+       *
+       * 「能打开」和「恢复得回来」是两件事：一份备到一半的库
+       * 完整性检查照样过，一份只有十条消息的库非空、完整、毫无用处。
+       *
+       * 每次都演而不是隔几天演一次：它只要几秒（解压 20MB + 打开 + 四次
+       * count），而「上一次证明它能用是什么时候」这个问题
+       * 的答案越新越好。
+       */
+      name: "本机演练",
+      critical: false,
+      timeoutMs: 120_000,
+      run: async () => {
+        const startedAt = Date.now();
+        const outcome = localRestoreDrill(BACKUP_DIR, startedAt);
+        recordDrill(outcome, startedAt);
+        return outcome;
+      },
+      describe: (r: { ok: boolean; note: string }) => `${r.ok ? "" : "✗ "}${r.note}`,
     },
   ] as never);
 

@@ -35,6 +35,20 @@ export default async function AdminBackupPage() {
   const archives = s.localFiles.filter((f) => f.name.startsWith("archive/"));
 
   const lastDrill = s.recent.find((r) => r.kind === "drill" && r.status === "success");
+  /*
+   * 最近一次**本机**恢复演练。
+   *
+   * 单独拎出来是因为它回答的是一个不同的问题：
+   * 上面那个 `lastDrill` 里混着异地演练，而异地还没配 ——
+   * 只看它的话这一栏永远是空的，看的人会以为从来没人验过。
+   *
+   * 而本机演练每次备份都跑，它证明的是「今天这份备份恢复得回来」。
+   */
+  const localDrills = s.recent.filter(
+    (r) => r.kind === "drill" && (r.detail as { scope?: string } | null)?.scope === "local",
+  );
+  const lastLocalDrill = localDrills[0];
+  const lastLocalOk = localDrills.find((r) => r.status === "success");
 
   return (
     <>
@@ -93,6 +107,74 @@ export default async function AdminBackupPage() {
           </p>
         </Callout>
       )}
+
+      {/*
+        * 「上一次证明它能用是什么时候」。
+        *
+        * 这一栏比上面那些容量数字重要得多：备份最常见的失败方式
+        * 不是没跑，是**一直在成功**——日志里全是 ✓，
+        * 直到需要恢复的那天才发现那份文件打不开。
+        */}
+      <Section title="恢复演练">
+        {lastLocalDrill ? (
+          <Card>
+            <div className="flex items-start gap-2">
+              {lastLocalDrill.status === "success" ? (
+                <ShieldCheck
+                  className="mt-0.5 h-4 w-4 shrink-0 text-[var(--success)]"
+                  strokeWidth={2}
+                  aria-hidden
+                />
+              ) : (
+                <TriangleAlert
+                  className="mt-0.5 h-4 w-4 shrink-0 text-[var(--danger)]"
+                  strokeWidth={2}
+                  aria-hidden
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="t-body leading-tight">
+                  {lastLocalDrill.status === "success"
+                    ? "最新那份备份真的恢复出来过"
+                    : "上一次恢复演练没过"}
+                  <span className="t-caption ml-1.5 text-[var(--ink-tertiary)]">
+                    {relativeTime(lastLocalDrill.createdAt)}
+                  </span>
+                </p>
+                <p className="t-caption mt-0.5 leading-relaxed text-[var(--ink-secondary)]">
+                  {(lastLocalDrill.detail as { note?: string } | null)?.note ??
+                    lastLocalDrill.error ??
+                    ""}
+                </p>
+
+                {/*
+                  * 失败之后要能看到「上一次成功是什么时候」——
+                  * 「一直没成功过」和「昨天还好好的」是两种处境。
+                  */}
+                {lastLocalDrill.status !== "success" && (
+                  <p className="t-caption2 mt-1 text-[var(--ink-tertiary)]">
+                    {lastLocalOk
+                      ? `上一次成功是 ${relativeTime(lastLocalOk.createdAt)}`
+                      : "从来没有成功过 —— 这份备份到现在为止没被证明能用"}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <p className="t-caption2 mt-2.5 leading-relaxed text-[var(--ink-quaternary)]">
+              每次备份都会把最新那份解压、打开、跑一次完整性检查，
+              再拿关键表的行数和现库对一遍 ——
+              <strong>「能打开」和「恢复得回来」是两件事</strong>：
+              一份备到一半的库完整性检查照样过。
+            </p>
+          </Card>
+        ) : (
+          <Empty
+            title="还没有演练记录"
+            hint="下一次备份跑完就会有 —— 或者现在跑一次 npm run backup"
+          />
+        )}
+      </Section>
 
       <Section title="链路">
         <div className="space-y-2">
