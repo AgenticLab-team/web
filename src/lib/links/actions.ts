@@ -7,10 +7,12 @@ import { requireWritableAdmin } from "@/lib/admin/guard";
 import { audit } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { linkSaves, links } from "@/lib/db/schema";
-import { canSeeLink } from "@/lib/links/queries";
+import { linkSaves, linkVotes, links } from "@/lib/db/schema";
+import { canSeeLink, recountVotes } from "@/lib/links/queries";
 
 export interface LinkActionResult {
+  voted?: boolean;
+  voteCount?: number;
   ok: boolean;
   error?: string;
   saved?: boolean;
@@ -43,6 +45,43 @@ export async function toggleSaveLink(linkId: string): Promise<LinkActionResult> 
   db.insert(linkSaves).values({ userId: user.id, linkId }).onConflictDoNothing().run();
   revalidatePath("/links");
   return { ok: true, saved: true };
+}
+
+/**
+ * 给一条资源点赞 / 取消点赞。
+ *
+ * ─────────────────────────────────────────
+ * 计数从明细重算，不做 +1
+ * ─────────────────────────────────────────
+ *
+ * 这个项目对冗余计数有一条硬规矩。加减法在并发、重试、
+ * 用户连点之后会慢慢和明细对不上,而对不上的表现是「数字有点怪」——
+ * 没有人会为一个有点怪的数字去查明细。
+ *
+ * 重算一次是一条 `count(*)`，在这个量级上没有任何代价。
+ */
+export async function toggleVoteLink(linkId: string): Promise<LinkActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "请先登录" };
+  // 点赞是公开信号，但**能不能点仍然按可见性收口** —— 看不到的东西不该能点
+  if (!canSeeLink(user, linkId)) return { ok: false, error: "这条链接不在你可见的范围里" };
+
+  const existing = db
+    .select()
+    .from(linkVotes)
+    .where(and(eq(linkVotes.userId, user.id), eq(linkVotes.linkId, linkId)))
+    .get();
+
+  if (existing) {
+    db.delete(linkVotes).where(eq(linkVotes.id, existing.id)).run();
+  } else {
+    db.insert(linkVotes).values({ userId: user.id, linkId }).onConflictDoNothing().run();
+  }
+
+  const count = recountVotes(linkId);
+
+  revalidatePath("/links");
+  return { ok: true, voted: !existing, voteCount: count };
 }
 
 /** 管理员隐藏一条链接：广告、失效、不宜出现在列表里的 */

@@ -2,7 +2,7 @@
   "version": "6",
   "dialect": "sqlite",
   "id": "88e2590c-9896-4125-894d-7e4c5e27bc5f",
-  "prevId": "f5d94791-f271-4994-aca2-6a010f29807f",
+  "prevId": "4ffec384-9855-4a28-8ae5-863514972747",
   "tables": {
     "bind_codes": {
       "name": "bind_codes",

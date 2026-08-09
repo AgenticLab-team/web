@@ -21,4 +21,5 @@ export * from "./digest";
 export * from "./seasons";
 export * from "./preview";
 export * from "./matrix";
+export * from "./search";
 export * from "./push";

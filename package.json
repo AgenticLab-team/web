@@ -28,7 +28,8 @@
     "webpush-keys": "tsx scripts/webpush-keys.ts",
     "deploy": "bash scripts/deploy.sh",
     "grant-title": "tsx --conditions=react-server --env-file=.env.local scripts/grant-title.ts",
-    "enrich-links": "tsx --conditions=react-server scripts/enrich-links.ts"
+    "enrich-links": "tsx --conditions=react-server scripts/enrich-links.ts",
+    "embed-messages": "tsx --conditions=react-server --env-file=.env.local scripts/embed-messages.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

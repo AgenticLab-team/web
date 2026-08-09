@@ -4,7 +4,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { CurrentUser } from "@/lib/auth/session";
 import { db, sqlite } from "@/lib/db";
-import { groupMembers, linkSaves, links } from "@/lib/db/schema";
+import { groupMembers, linkSaves, linkVotes, links } from "@/lib/db/schema";
 import { domainLabel } from "@/lib/links/extract";
 
 /**
@@ -45,6 +45,9 @@ export interface LinkItem {
   visibleShares: number;
   sharers: string[];
   saved: boolean;
+  /** 点赞数（公开）与我点没点过（私人视角） */
+  voteCount: number;
+  voted: boolean;
 }
 
 export interface DomainFacet {
@@ -53,7 +56,11 @@ export interface DomainFacet {
   count: number;
 }
 
+export type LinkSort = "recent" | "votes";
+
 export interface LinkQuery {
+  /** 排序：默认按最近被分享；「最有用」按点赞数 */
+  sort?: LinkSort;
   domain?: string;
   q?: string;
   savedOnly?: boolean;
@@ -98,6 +105,7 @@ export function listLinks(user: CurrentUser | null, query: LinkQuery = {}): Link
     .prepare(
       `SELECT l.id, l.url, l.domain, l.title, l.note,
               l.ai_title AS aiTitle, l.ai_summary AS aiSummary, l.share_count AS shareCount,
+              l.vote_count AS voteCount,
               l.first_shared_at AS firstSharedAt, l.last_shared_at AS lastSharedAt,
               COUNT(m.id) AS visibleShares,
               MAX(m.shared_at) AS visibleLastAt,
@@ -117,6 +125,7 @@ export function listLinks(user: CurrentUser | null, query: LinkQuery = {}): Link
     note: string | null;
     aiTitle: string | null;
     aiSummary: string | null;
+    voteCount: number;
     shareCount: number;
     firstSharedAt: number;
     lastSharedAt: number;
@@ -134,6 +143,16 @@ export function listLinks(user: CurrentUser | null, query: LinkQuery = {}): Link
       .map((s) => s.linkId),
   );
 
+  // 一次查完自己点过的，避免每条一次查询
+  const votedIds = new Set(
+    db
+      .select({ linkId: linkVotes.linkId })
+      .from(linkVotes)
+      .where(eq(linkVotes.userId, user.id))
+      .all()
+      .map((v) => v.linkId),
+  );
+
   let items: LinkItem[] = rows.map((row) => ({
     id: row.id,
     url: row.url,
@@ -143,6 +162,8 @@ export function listLinks(user: CurrentUser | null, query: LinkQuery = {}): Link
     note: row.note,
     aiTitle: row.aiTitle,
     aiSummary: row.aiSummary,
+    voteCount: row.voteCount ?? 0,
+    voted: votedIds.has(row.id),
     shareCount: row.shareCount,
     firstSharedAt: row.firstSharedAt,
     // 时间也用可见范围里的 —— 和次数一个道理
@@ -171,6 +192,18 @@ export function listLinks(user: CurrentUser | null, query: LinkQuery = {}): Link
           (i.aiSummary ?? "").toLowerCase().includes(needle),
       );
     }
+  }
+
+  /*
+   * 按点赞排时用**点赞数在前、时间在后**的稳定序。
+   *
+   * 只按点赞数排的话，大量 0 票的条目顺序由数组原顺序决定 ——
+   * 那个顺序会随着新消息进来而变，人翻到第二屏就发现刚看过的又出现了。
+   */
+  if (query.sort === "votes") {
+    items = [...items].sort(
+      (a, b) => b.voteCount - a.voteCount || b.lastSharedAt - a.lastSharedAt,
+    );
   }
 
   return { items: items.slice(0, query.limit ?? 200), facets, total, savedCount };
@@ -245,4 +278,38 @@ export function canSeeLink(user: CurrentUser, linkId: string): boolean {
     )
     .get(linkId, ...convIds);
   return row !== undefined;
+}
+
+/**
+ * 从明细重算某条链接的点赞数并写回。
+ *
+ * 这个项目对冗余计数有一条硬规矩:**从明细重算，不做 +1/-1**。
+ * 加减法在并发、重试、用户连点之后会慢慢和明细对不上,
+ * 而对不上的表现是「数字有点怪」—— 没有人会为一个有点怪的数字去查明细。
+ *
+ * 重算一次是一条 count(*)，在这个量级上没有任何代价。
+ */
+export function recountVotes(linkId: string): number {
+  const count =
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(linkVotes)
+      .where(eq(linkVotes.linkId, linkId))
+      .get()?.n ?? 0;
+
+  db.update(links).set({ voteCount: count }).where(eq(links.id, linkId)).run();
+  return count;
+}
+
+/** 我给哪些链接点过赞 —— 一次查完，避免每条一次查询 */
+export function myVotes(userId: string, linkIds: string[]): Set<string> {
+  if (linkIds.length === 0) return new Set();
+  return new Set(
+    db
+      .select({ linkId: linkVotes.linkId })
+      .from(linkVotes)
+      .where(and(eq(linkVotes.userId, userId), inArray(linkVotes.linkId, linkIds)))
+      .all()
+      .map((r) => r.linkId),
+  );
 }

@@ -1,13 +1,15 @@
-import { Archive, Search as SearchIcon, User } from "lucide-react";
+import { Archive, Search as SearchIcon, Sparkles, User } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
 import { MessageHitList } from "@/components/search/MessageHitList";
+import { SemanticHits, SemanticNotice } from "@/components/search/SemanticHits";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Empty, Pill } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { myMessageCount, searchMessages } from "@/lib/search/messages";
+import { semanticSearch } from "@/lib/search/semantic";
 import { todayKey } from "@/lib/time";
 
 export const metadata: Metadata = { title: "检索" };
@@ -22,13 +24,32 @@ export const dynamic = "force-dynamic";
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; group?: string; mine?: string; from?: string; to?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    group?: string;
+    mine?: string;
+    from?: string;
+    to?: string;
+    /** 「意思差不多的」—— 语义检索，走嵌入而不是分词 */
+    mode?: string;
+  }>;
 }) {
   const params = await searchParams;
   const user = await getCurrentUser();
   const groups = visibleGroupsFor(user);
   const query = (params.q ?? "").trim();
   const onlyMine = params.mine === "1";
+
+  const semantic = params.mode === "semantic";
+
+  /*
+   * 两条路都走同一个可见性收口，但**只跑要用的那一条**。
+   *
+   * 语义检索每次都要打一次嵌入接口（几百毫秒），
+   * 关键词检索是本地 FTS（几毫秒）—— 为了「万一用户切过去」
+   * 而两条都跑，等于给每次关键词搜索都加上一次网络往返。
+   */
+  const semanticResult = semantic && query ? await semanticSearch(user, query, 12) : null;
 
   const result = searchMessages(user, {
     query,
@@ -41,7 +62,13 @@ export default async function SearchPage({
 
   const href = (patch: Record<string, string | undefined>) => {
     const next = new URLSearchParams();
-    const merged = { q: query, group: params.group, mine: onlyMine ? "1" : undefined, ...patch };
+    const merged = {
+      q: query,
+      group: params.group,
+      mine: onlyMine ? "1" : undefined,
+      mode: semantic ? "semantic" : undefined,
+      ...patch,
+    };
     for (const [key, value] of Object.entries(merged)) {
       if (value) next.set(key, value);
     }
@@ -99,6 +126,25 @@ export default async function SearchPage({
         </div>
       )}
 
+      {/*
+        * 两种搜法并排放，而不是藏在设置里。
+        *
+        * 「关键词」和「意思差不多的」解决的是不同的问题:
+        * 记得原话用前者,只记得当时在聊什么用后者。
+        * 藏起来的话没有人会发现第二种存在。
+        */}
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        <Pill href={href({ mode: undefined })} active={!semantic}>
+          按关键词
+        </Pill>
+        <Pill href={href({ mode: "semantic" })} active={semantic}>
+          <span className="flex items-center gap-1">
+            <Sparkles className="h-3 w-3" strokeWidth={2.2} aria-hidden />
+            意思差不多的
+          </span>
+        </Pill>
+      </div>
+
       <div className="mb-6 flex flex-wrap gap-1.5">
         <Pill href={href({ mine: onlyMine ? undefined : "1" })} active={onlyMine}>
           <span className="flex items-center gap-1">
@@ -126,13 +172,32 @@ export default async function SearchPage({
         </div>
       ) : !query ? (
         <Empty
-          title="输入关键词开始搜"
+          title={semantic ? "描述一下当时在聊什么" : "输入关键词开始搜"}
           hint={
-            mineCount > 0
-              ? `你在群里说过 ${mineCount.toLocaleString("zh-CN")} 条，试试搜自己说过的话`
-              : "只会搜到你所在群的内容"
+            semantic
+              ? "不用记得原话 —— 「有人推荐过的那个部署工具」这种说法也搜得到"
+              : mineCount > 0
+                ? `你在群里说过 ${mineCount.toLocaleString("zh-CN")} 条，试试搜自己说过的话`
+                : "只会搜到你所在群的内容"
           }
         />
+      ) : semantic ? (
+        <>
+          <SemanticNotice
+            error={semanticResult?.error ?? null}
+            pending={semanticResult?.pending ?? 0}
+          />
+          {semanticResult && semanticResult.hits.length > 0 ? (
+            <SemanticHits hits={semanticResult.hits} />
+          ) : (
+            !semanticResult?.error && (
+              <Empty
+                title="没找到意思接近的对话"
+                hint="换个说法试试，或者切回「按关键词」"
+              />
+            )
+          )}
+        </>
       ) : result.hits.length === 0 ? (
         <Empty title="没有找到相关内容" hint="换个说法，或者试试更短的词" />
       ) : (
@@ -140,7 +205,15 @@ export default async function SearchPage({
       )}
 
       <p className="t-caption mt-4 px-1 leading-relaxed text-[var(--ink-tertiary)]">
-        只搜你所在的群。点开任意一条可以就地看前后文 —— 群聊的意思大半在上下文里。
+        只搜你所在的群。
+        {semantic ? (
+          <>
+            「意思差不多的」按<strong>整段对话</strong>匹配，不是按单句 ——
+            群聊里一半的消息不到 8 个字，单句拿去比对没有可检索性。
+          </>
+        ) : (
+          <>点开任意一条可以就地看前后文 —— 群聊的意思大半在上下文里。</>
+        )}
       </p>
     </>
   );

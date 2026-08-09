@@ -1,9 +1,10 @@
-import { ExternalLink, Link2 } from "lucide-react";
+import { ExternalLink, Link2, ThumbsUp } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { relativeTime } from "@/components/forum/PostList";
 import { SaveButton } from "@/components/links/SaveButton";
+import { VoteButton } from "@/components/links/VoteButton";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Empty, Pill, Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -30,18 +31,24 @@ export const dynamic = "force-dynamic";
 export default async function LinksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ d?: string; q?: string; saved?: string }>;
+  searchParams: Promise<{ d?: string; q?: string; saved?: string; sort?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/links");
 
   const params = await searchParams;
   const savedOnly = params.saved === "1";
-  const result = listLinks(user, { domain: params.d, q: params.q, savedOnly });
+  const byVotes = params.sort === "votes";
+  const result = listLinks(user, {
+    domain: params.d,
+    q: params.q,
+    savedOnly,
+    sort: byVotes ? "votes" : "recent",
+  });
 
   const query = (over: Record<string, string | undefined>) => {
     const next = new URLSearchParams();
-    const merged = { d: params.d, q: params.q, saved: params.saved, ...over };
+    const merged = { d: params.d, q: params.q, saved: params.saved, sort: params.sort, ...over };
     for (const [k, v] of Object.entries(merged)) if (v) next.set(k, v);
     const qs = next.toString();
     return qs ? `/links?${qs}` : "/links";
@@ -75,6 +82,25 @@ export default async function LinksPage({
               className="t-body w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3.5 py-2.5 outline-none transition focus:ring-2 focus:ring-[var(--accent)]"
             />
           </form>
+
+          {/*
+            * 排序放在筛选之前。
+            *
+            * 「最有用」是这个页面真正的价值 —— 两百条链接里
+            * 真正值得看的就那么十几条,而只有点赞数能把它们浮上来。
+            * 按时间排只回答「最近有人分享什么」，那是另一个问题。
+            */}
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            <Pill href={query({ sort: undefined })} active={!byVotes}>
+              最近分享
+            </Pill>
+            <Pill href={query({ sort: "votes" })} active={byVotes}>
+              <span className="flex items-center gap-1">
+                <ThumbsUp className="h-3 w-3" strokeWidth={2.2} aria-hidden />
+                最有用
+              </span>
+            </Pill>
+          </div>
 
           <div className="-mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
             <span className="shrink-0">
@@ -171,6 +197,11 @@ export default async function LinksPage({
                         </p>
                       </div>
 
+                      <VoteButton
+                        linkId={item.id}
+                        initialVoted={item.voted}
+                        initialCount={item.voteCount}
+                      />
                       <SaveButton linkId={item.id} initial={item.saved} />
                     </div>
                   </article>

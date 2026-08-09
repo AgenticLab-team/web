@@ -26,6 +26,14 @@ export const links = sqliteTable(
 
     /** 被分享过几次（冗余列，真值是 link_mentions 的行数） */
     shareCount: integer("share_count").notNull().default(1),
+    /**
+     * 点赞数（冗余列，真值是 link_votes 的行数）。
+     *
+     * 这个项目对冗余计数有一条硬规矩:**从明细重算，不做 +1/-1**。
+     * 加减法在并发、重试、回滚之后会慢慢和明细对不上,
+     * 而对不上的表现是「数字有点怪」—— 没有人会为此去查。
+     */
+    voteCount: integer("vote_count").notNull().default(0),
     firstSharedAt: integer("first_shared_at").notNull(),
     lastSharedAt: integer("last_shared_at").notNull(),
 
@@ -90,6 +98,35 @@ export const linkMentions = sqliteTable(
 );
 
 /** 我收藏的链接 */
+/**
+ * 资源点赞。
+ *
+ * ─────────────────────────────────────────
+ * 和收藏是两件事，所以是两张表
+ * ─────────────────────────────────────────
+ *
+ * 收藏（link_saves）是**私人书签**:「我以后要用」，别人看不见。
+ * 点赞是**公开信号**:「这个真的有用」，是给下一个翻资源库的人看的。
+ *
+ * 合成一张表加个 type 字段也能做,但那样两者的**可见性规则**
+ * 就被绑在了一起 —— 而它们恰恰相反:收藏必须私密，点赞必须公开。
+ * 一张表里放两套可见性,迟早会有人在某个查询里漏掉那个 type 条件。
+ */
+export const linkVotes = sqliteTable(
+  "link_votes",
+  {
+    id: ulidPk(),
+    userId: text("user_id").notNull(),
+    linkId: text("link_id").notNull(),
+    createdAt: now("created_at"),
+  },
+  (t) => [
+    // 一个人对一条链接只能点一次 —— 连点两下不该变成两票
+    uniqueIndex("link_votes_user_idx").on(t.userId, t.linkId),
+    index("link_votes_link_idx").on(t.linkId),
+  ],
+);
+
 export const linkSaves = sqliteTable(
   "link_saves",
   {

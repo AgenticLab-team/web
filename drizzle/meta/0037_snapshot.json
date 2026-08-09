@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "e2d6f4dc-fe31-49c8-8d09-075ec156dfd0",
-  "prevId": "88e2590c-9896-4125-894d-7e4c5e27bc5f",
+  "id": "ddd4e68e-96a2-4e9c-b74b-5c5adbda4e28",
+  "prevId": "e979eb45-33fd-41b9-9043-96d1ac10dc06",
   "tables": {
     "bind_codes": {
       "name": "bind_codes",
@@ -751,6 +751,13 @@
         },
         "email_verified_at": {
           "name": "email_verified_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "password_opt_out_at": {
+          "name": "password_opt_out_at",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
@@ -1978,6 +1985,111 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "message_mentions": {
+      "name": "message_mentions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "message_id": {
+          "name": "message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "conv_id": {
+          "name": "conv_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ts": {
+          "name": "ts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "wx_id": {
+          "name": "wx_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "candidates": {
+          "name": "candidates",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "synced_at": {
+          "name": "synced_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "message_mentions_msg_pos_idx": {
+          "name": "message_mentions_msg_pos_idx",
+          "columns": [
+            "message_id",
+            "position"
+          ],
+          "isUnique": true
+        },
+        "message_mentions_wx_ts_idx": {
+          "name": "message_mentions_wx_ts_idx",
+          "columns": [
+            "wx_id",
+            "ts"
+          ],
+          "isUnique": false
+        },
+        "message_mentions_conv_ts_idx": {
+          "name": "message_mentions_conv_ts_idx",
+          "columns": [
+            "conv_id",
+            "ts"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "messages": {
       "name": "messages",
       "columns": {
@@ -2062,6 +2174,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "reply_to_id": {
+          "name": "reply_to_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "tier": {
           "name": "tier",
           "type": "text",
@@ -2114,6 +2233,13 @@
           "name": "messages_tier_idx",
           "columns": [
             "tier"
+          ],
+          "isUnique": false
+        },
+        "messages_reply_to_idx": {
+          "name": "messages_reply_to_idx",
+          "columns": [
+            "reply_to_id"
           ],
           "isUnique": false
         }
@@ -8223,6 +8349,34 @@
           "notNull": true,
           "autoincrement": false
         },
+        "ai_title": {
+          "name": "ai_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ai_summary": {
+          "name": "ai_summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ai_checked_at": {
+          "name": "ai_checked_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ai_model": {
+          "name": "ai_model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "hidden": {
           "name": "hidden",
           "type": "integer",
@@ -8865,6 +9019,130 @@
           "name": "matrix_snapshots_time_idx",
           "columns": [
             "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "message_windows": {
+      "name": "message_windows",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "window_key": {
+          "name": "window_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "conv_id": {
+          "name": "conv_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "start_ts": {
+          "name": "start_ts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "end_ts": {
+          "name": "end_ts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "message_count": {
+          "name": "message_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "message_ids": {
+          "name": "message_ids",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "text": {
+          "name": "text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "vector": {
+          "name": "vector",
+          "type": "blob",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dimensions": {
+          "name": "dimensions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "embedded_at": {
+          "name": "embedded_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "message_windows_key_idx": {
+          "name": "message_windows_key_idx",
+          "columns": [
+            "window_key"
+          ],
+          "isUnique": true
+        },
+        "message_windows_conv_idx": {
+          "name": "message_windows_conv_idx",
+          "columns": [
+            "conv_id",
+            "start_ts"
+          ],
+          "isUnique": false
+        },
+        "message_windows_pending_idx": {
+          "name": "message_windows_pending_idx",
+          "columns": [
+            "embedded_at"
           ],
           "isUnique": false
         }
