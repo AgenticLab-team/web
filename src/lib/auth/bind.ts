@@ -25,6 +25,10 @@ import { getSetting, getSettingInt } from "@/lib/settings/store";
  *      后发的人赢的话，看到码再发一遍就能抢走别人的会话
  *   3. TTL 只有 5 分钟、一次性、绑定后展示明确确认页
  *   4. 生成频率限流
+ *
+ * 「一次性」不排斥**同一个 nonce 把自己的码接回来**（见 startBind）：
+ * 复用只发生在持有原 httpOnly cookie 的那个浏览器上，
+ * 码没有换过主人，安全性质与刷新页面显示同一个码等同。
  */
 
 function randomCode(): string {
@@ -39,6 +43,10 @@ export interface StartBindResult {
   expiresAt: number;
   fallbackAfterSeconds: number;
   groupPrefix: string;
+  /** 是不是接回了上一次没走完的绑定，而不是新发的码 */
+  resumed: boolean;
+  /** 码最初签发的时间。恢复提示要靠它说出「你 N 分钟前的登录」 */
+  issuedAt: number;
 }
 
 export class RateLimitError extends Error {
@@ -51,9 +59,69 @@ export class RateLimitError extends Error {
   }
 }
 
-export function startBind(opts: { ip?: string }): StartBindResult {
+/**
+ * 已匹配的码在匹配后多久内还能被接回。
+ *
+ * 场景：用户在群里发完码、微信内置浏览器就被杀了 —— 码已经 used，
+ * 会话还没建。这时不能按码的 expiresAt 判（发码晚的话它可能已经过了），
+ * 要按**匹配时间**另开一扇 5 分钟的窗：人刚做完最后一步，
+ * 回来就该直接进门，而不是被要求从头再来。
+ */
+export const RESUME_WINDOW_MS = 5 * 60_000;
+
+export function startBind(opts: { ip?: string; resumeNonce?: string }): StartBindResult {
   const ttl = getSettingInt("auth.bind_code.ttl_seconds", 300) * 1000;
   const now = Date.now();
+
+  /*
+   * 先试着接回上一次，再考虑发新码。
+   *
+   * 微信内置浏览器杀后台是常态，用户「关掉再打开」不是异常路径。
+   * 原来每次打开登录页都发一个新码，生产上一天 392 个码里 235 个
+   * 从没匹配上 —— 其中很大一部分就是同一个人反复打开页面：
+   * 旧码作废、新码接着没人发，轮询窗口里还堆满了死码。
+   *
+   * 复用的判定分两种，窗口刻意不同：
+   *   - pending：码还没被发出去，能用到它自己的 expiresAt 为止
+   *   - used：码已经在群里发过、匹配上了，只差建会话 ——
+   *     按匹配时间开 RESUME_WINDOW_MS 的窗（见上面的说明）
+   *
+   * 复用**不检查限流也不占限流额度**：它不产生新行，
+   * 刷不爆验证码表，也不该把反复打开页面的人推向 429。
+   */
+  if (opts.resumeNonce) {
+    const prior = db
+      .select()
+      .from(bindCodes)
+      .where(eq(bindCodes.sessionNonce, opts.resumeNonce))
+      .get();
+
+    const resumable =
+      prior !== undefined &&
+      ((prior.status === "pending" && prior.expiresAt > now) ||
+        (prior.status === "used" && (prior.matchedAt ?? 0) > now - RESUME_WINDOW_MS));
+
+    if (prior && resumable) {
+      return {
+        code: prior.code,
+        nonce: prior.sessionNonce,
+        /*
+         * 已匹配的码不再需要被抄写，倒计时只剩展示作用 ——
+         * 但前端会在倒计时归零时把整页判成「已过期」并停掉轮询，
+         * 所以这里得把展示用的时限撑到窗口末尾，别让界面抢在轮询
+         * 拿到 bound 之前宣布死亡。
+         */
+        expiresAt:
+          prior.status === "used"
+            ? Math.max(prior.expiresAt, (prior.matchedAt ?? now) + RESUME_WINDOW_MS)
+            : prior.expiresAt,
+        fallbackAfterSeconds: getSettingInt("auth.bind_code.fallback_after_seconds", 15),
+        groupPrefix: getSetting("auth.bind_code.group_prefix", "登录"),
+        resumed: true,
+        issuedAt: prior.createdAt,
+      };
+    }
+  }
 
   // 这个接口在公网上裸奔，不限流就能被刷爆验证码表，
   // 也会把大量待验证码塞进轮询窗口，拖慢所有人的绑定。
@@ -108,6 +176,9 @@ export function startBind(opts: { ip?: string }): StartBindResult {
       code,
       sessionNonce: nonce,
       issuedIp: opts.ip,
+      // 显式写入而不用列默认值 —— 返回值里的 issuedAt 和行里的 createdAt
+      // 必须是同一个数，恢复时要拿它算「你 N 分钟前的登录」
+      createdAt: now,
       expiresAt: now + ttl,
     })
     .run();
@@ -118,6 +189,8 @@ export function startBind(opts: { ip?: string }): StartBindResult {
     expiresAt: now + ttl,
     fallbackAfterSeconds: getSettingInt("auth.bind_code.fallback_after_seconds", 15),
     groupPrefix: getSetting("auth.bind_code.group_prefix", "登录"),
+    resumed: false,
+    issuedAt: now,
   };
 }
 

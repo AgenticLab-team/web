@@ -8,11 +8,20 @@ interface StartResponse {
   expiresAt: number;
   fallbackAfterSeconds: number;
   groupPrefix: string;
+  /** 服务端接回了上一次没走完的绑定（微信杀后台后重开的场景） */
+  resumed?: boolean;
+  /** 码最初签发的时间 —— 恢复提示靠它说出「你 N 分钟前」 */
+  issuedAt?: number;
 }
 
 type Phase =
   | { kind: "loading" }
-  | { kind: "waiting"; data: StartResponse }
+  /**
+   * resumedAgoMin：「你 N 分钟前的登录」里的 N。null 表示不是恢复。
+   * 在取码返回的那一刻算好存进 phase，而不是渲染时现算 ——
+   * 渲染期间不能调 Date.now()，每秒重算又会让提示像个二级倒计时。
+   */
+  | { kind: "waiting"; data: StartResponse; resumedAgoMin: number | null }
   | { kind: "not_member"; wxId: string }
   | { kind: "expired" }
   | { kind: "error"; message: string };
@@ -60,7 +69,15 @@ export function BindFlow({ next }: { next?: string } = {}) {
         const body = await res.json().catch(() => ({}));
         return { kind: "error", message: body.error ?? "无法开始绑定" };
       }
-      return { kind: "waiting", data: await res.json() };
+      const data: StartResponse = await res.json();
+      return {
+        kind: "waiting",
+        data,
+        resumedAgoMin:
+          data.resumed && data.issuedAt
+            ? Math.max(1, Math.round((Date.now() - data.issuedAt) / 60_000))
+            : null,
+      };
     } catch {
       return { kind: "error", message: "网络异常，请重试" };
     }
@@ -128,6 +145,12 @@ export function BindFlow({ next }: { next?: string } = {}) {
       }
     };
 
+    /*
+     * 立刻先查一次，不等第一个 2 秒。
+     * 恢复的场景里码可能早已匹配完成（人在群里发完码页面才被杀），
+     * 这一次查询就能直接进门 —— 让他多看两秒「正在等待验证」是白等。
+     */
+    void poll();
     const id = setInterval(poll, 2000);
     return () => {
       cancelled = true;
@@ -179,11 +202,23 @@ export function BindFlow({ next }: { next?: string } = {}) {
   }
 
   const { code, groupPrefix } = phase.data;
+  const { resumedAgoMin } = phase;
   const minutes = Math.floor(remaining / 60);
   const seconds = String(remaining % 60).padStart(2, "0");
 
   return (
     <div className="animate-rise space-y-7">
+      {/*
+        恢复提示放在验证码上方。没有它的话，从微信切回来的人分不清
+        「这是刚才那个码」还是「又发了个新码」—— 分不清的人会把两个都发一遍，
+        而多发的那条可能替别人认领了会话。
+      */}
+      {resumedAgoMin !== null && (
+        <p className="rounded-[var(--radius-card)] bg-[var(--color-accent-soft)] px-4 py-3 text-[14px] leading-relaxed">
+          你 {resumedAgoMin} 分钟前的登录还没完成，下面这个验证码<strong>还有效</strong> ——
+          发过了就等一下，还没发就继续在群里发它。
+        </p>
+      )}
       <div className="space-y-3 text-center">
         <p className="text-[13px] font-medium uppercase tracking-[0.08em] text-[var(--color-ink-tertiary)]">
           你的验证码

@@ -10,7 +10,8 @@ import { after, before, beforeEach, describe, it } from "node:test";
  * 绑定审批队列 —— 接上真库之后。
  *
  * 重点在两处:活跃度算得对不对（它是审批的全部依据）、
- * 限速能不能从审计日志里数出来（那是真正拦住风控的那道）。
+ * 「今天已经通过几个」能不能从审计日志里数出来
+ * （服务端不再拦之后，这个数字是界面上仅剩的风控提醒）。
  */
 
 const tmp = mkdtempSync(join(tmpdir(), "al-bindq-"));
@@ -136,7 +137,7 @@ describe("活跃度", () => {
   });
 });
 
-describe("**限速从审计日志里数**", () => {
+describe("**「今天已经通过几个」从审计日志里数**", () => {
   const logAccept = (at: number) =>
     dbm.db
       .insert(schema.auditLogs)
