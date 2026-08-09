@@ -42,6 +42,7 @@ export default async function ShopPage() {
         <Callout title={`你还有 ${cards} 张补签卡没用`}>
           <p className="t-caption mt-0.5 text-[var(--ink-tertiary)]">
             断签的那天可以补回来 —— 连胜不会因为一次忘记就归零。
+            去<a href="/me/points" className="text-[var(--accent)]">积分</a>页面用。
           </p>
         </Callout>
       )}

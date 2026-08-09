@@ -5,7 +5,9 @@ import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { BackLink, Empty, Group, PageNote, Section, StatTile } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
+import { MakeupPanel } from "@/components/points/MakeupPanel";
 import { recentCheckins } from "@/lib/points/checkin";
+import { makeupState } from "@/lib/points/makeup";
 import { auditBalance, listLedger } from "@/lib/points/ledger";
 import { configuredLevels } from "@/lib/points/levels";
 import { levelProgress } from "@/lib/points/rules";
@@ -19,6 +21,7 @@ export default async function PointsPage() {
 
   const ledger = listLedger(user.id, 60);
   const checkins = recentCheckins(user.id, 90);
+  const makeup = makeupState(user);
   // 门槛走配置 —— 「我的等级」和实际判定必须用同一份表
   const progress = levelProgress(user.pointsTotal, configuredLevels());
   const audit = auditBalance(user.id);
@@ -59,6 +62,20 @@ export default async function PointsPage() {
               等级按<strong className="font-medium">累计获得</strong>算，花掉积分不会掉级
             </p>
           </div>
+        </Section>
+      )}
+
+      {/* 补签摆在打卡记录**上面**：人是先看到缺口才想补的，
+          而缺口就在下面那张表里 */}
+      {makeup.cards > 0 && (
+        <Section title="补签">
+          <MakeupPanel
+            cards={makeup.cards}
+            candidates={makeup.candidates}
+            streak={makeup.streak}
+            usedThisMonth={makeup.usedThisMonth}
+            monthlyLimit={makeup.monthlyLimit}
+          />
         </Section>
       )}
 
