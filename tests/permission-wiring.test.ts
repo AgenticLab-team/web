@@ -106,6 +106,56 @@ describe("**标着 planned 的要么真没接，要么就该改回 wired**", () 
   });
 });
 
+describe("**planned 里只该剩「功能真没做」的**", () => {
+  /*
+   * ─────────────────────────────────────────
+   * 两种 planned，处理方式完全相反
+   * ─────────────────────────────────────────
+   *
+   *   · 功能还没做 —— 等着就行
+   *   · 功能做了，但代码用的是另一个更粗的权限点在管 ——
+   *     这种更值得警惕：它意味着**细粒度授权做不到**
+   *
+   * 第二类一共有过 8 个。逐个查完之后：
+   *
+   *   接上 2 个（group.stats.read、group.sync.trigger）——
+   *     它们是真的分权：看群统计 ≠ 改群配置，触发同步 ≠ 改群配置
+   *   退役 6 个 —— 每一个都已经有更具体的机制在管同一件事，
+   *     多留一个勾就是多一套判断，而多套一旦分叉，最松的那套就是漏的口
+   *
+   * 所以现在这张表该只剩第一类。写死在这里：新增一个 planned
+   * 要动这一行，也就要有人过一眼它属于哪一类。
+   */
+  it("清单就是这 8 个，全是功能没做", () => {
+    const planned = PERMISSION_LIST.filter((p) => p.status === "planned").map((p) => p.key);
+    assert.deepEqual(
+      [...planned].sort(),
+      [
+        "badge.manage",
+        "broadcast.email",
+        "module.config",
+        "module.install",
+        "permission.override",
+        "user.delete",
+        "user.export",
+        "user.merge",
+      ],
+      "planned 清单变了 —— 新增的话先想清楚它是「功能没做」还是「被更粗的权限管着」",
+    );
+  });
+
+  it("**没有一个 planned 是「被更粗的权限管着」** —— 那一类要么接上要么退役", () => {
+    /*
+     * 那一类的描述里会写「今天由 X 一起管」。留着这种描述
+     * 等于承认细粒度授权在那儿做不到，而承认之后什么也不会发生。
+     */
+    const vague = PERMISSION_LIST.filter(
+      (p) => p.status === "planned" && /今天由|一起管|只判登录|在管/.test(p.description ?? ""),
+    ).map((p) => p.key);
+    assert.deepEqual(vague, [], `这些是「被更粗的权限管着」，不是「功能没做」：${vague.join(", ")}`);
+  });
+});
+
 describe("planned 的要说清楚为什么", () => {
   for (const perm of PERMISSION_LIST.filter((p) => p.status === "planned")) {
     it(`${perm.key} 有说明或者显然是功能没做`, () => {

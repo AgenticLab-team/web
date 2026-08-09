@@ -21,19 +21,26 @@ const MEMBER: readonly PermissionKey[] = [
   "forum.post.delete.own",
   "group.messages.read",
   "group.stats.read",
-  "activity.view",
-  "activity.apply",
 ];
 
 /**
  * 未登录访客。
  *
- * 这里**故意不放「浏览论坛」** —— 论坛对访客开不开由
- * `site.forum_public` 那个配置说了算，不是由权限点。
- * 两处都能管的话，管理员关掉了开关而这里还给着权限，
- * 谁也说不清最后哪一个赢。
+ * ─────────────────────────────────────────
+ * 这张表是空的，而且**空得有道理**
+ * ─────────────────────────────────────────
+ *
+ * 访客能看到什么，全部由更具体的机制在管：
+ *
+ *   · 论坛 —— `site.forum_public` 那个配置
+ *   · 活动 —— `events` 功能开关
+ *   · 榜单 —— 一直公开（「未登录访客还是可以看见大榜单的」）
+ *   · 其余 —— `PROTECTED_PREFIXES` 直接拦在门禁层
+ *
+ * 往这里加权限点，就是给同一件事加第二个说了算的地方 ——
+ * 而两处一旦不一致，没有人说得清最后哪一个赢。
  */
-const GUEST: readonly PermissionKey[] = ["activity.view"];
+const GUEST: readonly PermissionKey[] = [];
 
 /** 外部用户：可以参与论坛，但永远看不到任何群消息派生内容 */
 const EXTERNAL: readonly PermissionKey[] = [
@@ -41,7 +48,6 @@ const EXTERNAL: readonly PermissionKey[] = [
   "forum.reply.create",
   "forum.post.edit.own",
   "forum.post.delete.own",
-  "activity.view",
 ];
 
 const MODERATOR: readonly PermissionKey[] = [
@@ -53,7 +59,6 @@ const MODERATOR: readonly PermissionKey[] = [
   "forum.post.lock",
   "forum.post.move",
   "moderation.queue",
-  "moderation.action",
   "user.detail.read",
   "user.note.write",
 ];
@@ -68,12 +73,10 @@ const GROUP_ADMIN: readonly PermissionKey[] = [
   "user.detail.read",
   "user.note.write",
   "moderation.queue",
-  "moderation.action",
   "announce.site",
 ];
 
 const AUDITOR: readonly PermissionKey[] = [
-  "activity.view",
   "user.list",
   "user.detail.read",
   "points.read",

@@ -192,3 +192,18 @@
 - [x] **语义检索结果有出口了** —— 它以前**一条路都没有**：
       看到一段有用的对话，只能自己记住群名和时间再去翻
 - [x] 补齐 `.hairline-t`（这一组本来只有 b 和 r）
+
+## 权限：「被更粗的权限管着」这一类清完了
+
+这一类一共 8 个。逐个查完之后：
+
+- **接上 2 个** —— `group.stats.read`、`group.sync.trigger`。
+  它们是真的分权：看群统计 ≠ 改群配置，触发同步 ≠ 改群配置
+- **退役 6 个** —— `forum.view`、`forum.react`、`moderation.action`、
+  `digest.manage`、`activity.apply`、`activity.view`。
+  每一个都已经有更具体的机制在管同一件事
+
+现在 planned 里只剩 8 个「功能真没做」的
+（user.delete/merge/export、permission.override、
+module.install/config、broadcast.email、badge.manage），
+并且有一条测试把这个状态钉住 —— 新增 planned 要动那一行。

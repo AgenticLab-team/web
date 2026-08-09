@@ -128,13 +128,10 @@ export const PERMISSIONS = [
 
   // ── 审核 ────────────────────────────────────────────────────
   { key: "moderation.queue", category: "moderation", label: "处理举报队列" },
-  { key: "moderation.action", category: "moderation", label: "执行处罚", scopable: true, dangerLevel: 1, description: "处罚今天判的是 user.suspend", status: "planned" },
   { key: "moderation.appeal", category: "moderation", label: "处理申诉", dangerLevel: 1 },
   { key: "moderation.words", category: "moderation", label: "管理敏感词库", dangerLevel: 1 },
 
   // ── 活动与模块 ──────────────────────────────────────────────
-  { key: "activity.view", category: "activity", label: "查看活动", description: "活动页今天由功能开关在管", status: "planned" },
-  { key: "activity.apply", category: "activity", label: "报名 / 申请活动", description: "报名今天只判登录", status: "planned" },
   { key: "activity.manage", category: "activity", label: "创建 / 编辑活动", dangerLevel: 1 },
   { key: "activity.review", category: "activity", label: "审核活动申请", scopable: true, dangerLevel: 1 },
   { key: "activity.fulfill", category: "activity", label: "履约与批量回填", scopable: true, dangerLevel: 2 },
@@ -164,7 +161,6 @@ export const PERMISSIONS = [
     dangerLevel: 2,
   },
   { key: "broadcast.email", category: "broadcast", label: "群发邮件", dangerLevel: 3, status: "planned" },
-  { key: "digest.manage", category: "broadcast", label: "管理每周精选推送", dangerLevel: 1, description: "每周精选今天由 announce.site 一起管", status: "planned" },
 
   // ── 系统 ────────────────────────────────────────────────────
   { key: "system.dashboard", category: "system", label: "查看后台总览" },
@@ -223,6 +219,22 @@ export const RETIRED_PERMISSIONS: readonly { key: string; why: string }[] = [
   {
     key: "forum.react",
     why: "点赞收藏只判登录。要拦一个人的话，拦的应该是这个人（封禁 / 禁言），不是这个动作 —— 一个只能看不能点赞的账号，既解决不了骚扰，也解释不清是什么状态",
+  },
+  {
+    key: "moderation.action",
+    why: "每一种处罚都已经各有各的权限点：删帖 / 锁帖走 `forum.post.*`（还带版块作用域），封号走 `user.suspend`，举报处置走 `moderation.queue`。再加一个「执行处罚」就是第四套 —— 而它不对应任何一个具体动作，勾上之后没有人说得清多了什么能力",
+  },
+  {
+    key: "digest.manage",
+    why: "每周精选由定时任务生成**草稿**，之后的复核与发送走群发那一整套（`announce.site` / `broadcast.wechat`），参数在设置页归 `system.settings`。站内没有第四个「管周报」的面，也不该有",
+  },
+  {
+    key: "activity.apply",
+    why: "报名资格是**每个活动自己的规则**（门槛、所在群、注册天数，见 activities/rules），不是一个全站开关。加一个全局权限点，结果是两处都能拦而没人说得清哪个先生效",
+  },
+  {
+    key: "activity.view",
+    why: "活动模块整体开关由功能开关 `events` 在管。要按人群区分谁看得到哪个活动，正确的位置是活动自己的可见范围，不是一个「能不能看活动」的全站勾",
   },
 ] as const;
 
