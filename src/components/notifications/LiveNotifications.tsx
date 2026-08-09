@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+
+import { markNotificationsRead } from "@/lib/forum/notify-actions";
 
 import { setLiveUnread } from "./live-store";
 
@@ -25,6 +27,20 @@ import { setLiveUnread } from "./live-store";
  * 补漏回放的事件带 replay 标记：断了十分钟的人回来不该被十条吐司
  * 糊一脸，折叠成一条「离线期间有 N 条」；角标用服务端算好的绝对值，
  * 事件重复到达也不会数错。
+ *
+ * ─────────────────────────────────────────
+ * 点了吐司就等于读过了
+ * ─────────────────────────────────────────
+ *
+ * 这里的游标只是「从哪个时刻开始补」，它不是「读到哪了」——
+ * 后者的真值只有服务端的 readAt 一份。曾经这条吐司是个光秃秃的
+ * `<Link>`：点进去看完那条回复，通知在库里仍然是未读，
+ * 而回放又是含端点的（见 route.ts），于是每刷新一次页面
+ * 同一条通知就原样再弹一次，点几次刷几次都不会停。
+ *
+ * 所以点击必须写下 readAt —— 和通知中心那一行走同一个 action、
+ * 同一份真值。折叠成「离线期间有 N 条」的那种不标：
+ * 那 N 条用户一条都没看到，替他标掉等于把未读悄悄吞了。
  */
 
 const CURSOR_KEY = "al:ntf:cursor";
@@ -42,6 +58,11 @@ interface LiveEvent {
 
 interface Toast {
   key: string;
+  /**
+   * 这条吐司对应的通知 id，点掉时用它标已读。
+   * 折叠成「离线期间有 N 条」时为 null —— 那 N 条一条都没露过面。
+   */
+  id: string | null;
   title: string;
   link: string;
 }
@@ -67,6 +88,7 @@ function writeCursor(value: number): void {
 
 export function LiveNotifications() {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [, startTransition] = useTransition();
   const router = useRouter();
   const pathname = usePathname();
   // 连接的生命周期不能跟着 pathname 变（重连会丢 Last-Event-ID 语境），
@@ -145,6 +167,8 @@ export function LiveNotifications() {
             replayBuffer = 0;
             pushToast({
               key: `replay:${Date.now()}`,
+              // 只补上来一条时它就是 data 本身，点掉它是准确的；多条时不替用户做主
+              id: n === 1 ? data.id : null,
               title: n === 1 ? data.title : `离线期间有 ${n} 条新通知`,
               link: n === 1 ? (data.link ?? "/notifications") : "/notifications",
             });
@@ -154,6 +178,7 @@ export function LiveNotifications() {
 
         pushToast({
           key: dedupeKey,
+          id: data.id,
           title: data.title,
           link: data.link ?? "/notifications",
         });
@@ -195,6 +220,23 @@ export function LiveNotifications() {
     };
   }, [router]);
 
+  /*
+   * 点掉一条吐司：收起来，并把「已读」写进服务端那份唯一真值。
+   *
+   * 不等服务端回来再收起 —— 点完紧接着就是页面跳走，
+   * 那次更新会发生在一个已经不存在的页面上（和通知中心那一行同样的道理）。
+   */
+  const dismiss = (toast: Toast) => {
+    setToasts((prev) => prev.filter((t) => t.key !== toast.key));
+    const id = toast.id;
+    if (!id) return;
+    startTransition(async () => {
+      const result = await markNotificationsRead(id);
+      // 角标不在这棵树里，revalidate 碰不到它 —— 直接写进小仓库
+      if (result.ok) setLiveUnread(result.unread);
+    });
+  };
+
   if (toasts.length === 0) return null;
 
   return (
@@ -208,7 +250,7 @@ export function LiveNotifications() {
         <Link
           key={toast.key}
           href={toast.link}
-          onClick={() => setToasts((prev) => prev.filter((t) => t.key !== toast.key))}
+          onClick={() => dismiss(toast)}
           className="chrome w-full max-w-96 rounded-[var(--radius-control)] border border-[var(--separator)] px-4 py-3 shadow-lg transition active:opacity-70"
         >
           <span className="t-subhead block truncate">{toast.title}</span>

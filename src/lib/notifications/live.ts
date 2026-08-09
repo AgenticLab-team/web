@@ -109,17 +109,47 @@ export function unreadCountOf(userId: string): number {
 }
 
 /**
- * 断线补漏的查询：某人从 since 起（含）的所有动静，旧的在前。
+ * 断线补漏的查询：某人从 since 起（含）**还没读过**的动静，旧的在前。
  *
  * 含端点（>=）是有意的：客户端的游标就是最后一条的 updatedAt，
- * 同一毫秒可能还有它没见过的第二条。代价是边界上重发一条，
- * 客户端按 id 幂等处理；漏发没有任何机制能补救。
+ * 同一毫秒可能还有它没见过的第二条。漏发没有任何机制能补救，
+ * 所以宁可在边界上重发。
+ *
+ * ─────────────────────────────────────────
+ * 为什么这里必须看 readAt
+ * ─────────────────────────────────────────
+ *
+ * 「边界重发一条由客户端按 id 幂等消化」这句话曾经是假的：客户端那份
+ * 幂等记忆（seen 集合）只活在 effect 的闭包里，**整页重新加载就没了**。
+ * 而游标恰好就等于最后一条的 updatedAt，>= 又必然把它带回来 ——
+ * 于是「弹过的通知，每刷新一次原样再弹一次」，刷几次弹几次。
+ *
+ * 真正的修法不是把 >= 改成 >（那会丢同毫秒的第二条），
+ * 而是认清**「这条我已经知道了」的真值只有一份，就是 readAt**。
+ * localStorage 里的游标只回答「从哪个时刻开始补」，它回答不了
+ * 「哪几条已经消化过」—— 让它兼任第二份「读到哪了」，两份必然分叉，
+ * 分叉的表现就是重复弹窗。
+ *
+ * 已读的一律不补，无论用户是在通知中心点掉的、在另一台设备上点掉的、
+ * 还是点着吐司进帖子的：他已经知道这件事了。
  */
 export function listSince(userId: string, since: number, limit = 100): LiveNotification[] {
   const rows = db
     .select()
     .from(notifications)
-    .where(and(eq(notifications.userId, userId), gte(notifications.updatedAt, since)))
+    .where(
+      and(
+        eq(notifications.userId, userId),
+        gte(notifications.updatedAt, since),
+        /*
+         * 已读过滤必须落在 SQL 里，不能取回来再 filter：
+         * 后者 limit 先被一堆已读旧闻占满，真正要补的未读反而被截掉 ——
+         * 表现是断线期间被 @ 了却什么都没补上，比重复弹窗糟得多。
+         * 走 notifications_user_idx(user_id, read_at, updated_at)，不额外加索引。
+         */
+        isNull(notifications.readAt),
+      ),
+    )
     .orderBy(asc(notifications.updatedAt))
     .limit(limit)
     .all();

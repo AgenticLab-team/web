@@ -98,13 +98,18 @@ describe("listSince：补漏查询的游标语义", () => {
     assert.deepEqual(got.map((n) => n.title), ["我的"]);
   });
 
-  it("带的未读数是绝对值 —— 客户端角标靠它幂等", () => {
+  it("已读的不补 —— 否则每刷新一次就再弹一次（见 notification-replay.test.ts）", () => {
+    /*
+     * 游标就是最后一条的 updatedAt，含端点的查询必然把它再带回来一次。
+     * 客户端那份幂等记忆活不过整页重载，所以去重只能落在 readAt 上。
+     */
     insertNotification({ userId: "u1", title: "未读1", updatedAt: 1000 });
     insertNotification({ userId: "u1", title: "已读", updatedAt: 2000, readAt: 2500 });
     insertNotification({ userId: "u1", title: "未读2", updatedAt: 3000 });
 
     const got = live.listSince("u1", 0);
-    assert.equal(got.length, 3);
+    assert.deepEqual(got.map((n) => n.title), ["未读1", "未读2"]);
+    // 未读数仍是服务端算的绝对值 —— 客户端角标靠它幂等
     for (const item of got) assert.equal(item.unread, 2);
   });
 
