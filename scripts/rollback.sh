@@ -17,7 +17,9 @@
 # 用法：bash scripts/rollback.sh
 set -euo pipefail
 
-HOST="${DEPLOY_HOST:-ubuntu@agenticlab.sh}"
+# shellcheck source=scripts/_host.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_host.sh"
+HOST="$(resolve_deploy_host)"
 URL="${DEPLOY_URL:-https://agenticlab.sh}"
 UPSTREAM_CONF=/etc/nginx/conf.d/agenticlab-upstream.conf
 

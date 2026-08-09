@@ -11,7 +11,9 @@
 # 用法：bash scripts/install-bluegreen.sh
 set -euo pipefail
 
-HOST="${DEPLOY_HOST:-ubuntu@agenticlab.sh}"
+# shellcheck source=scripts/_host.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_host.sh"
+HOST="$(resolve_deploy_host)"
 REMOTE="${DEPLOY_PATH:-/home/ubuntu/agenticlab}"
 
 step() { printf '\n\033[1m→ %s\033[0m\n' "$1"; }
@@ -28,6 +30,18 @@ ssh "$HOST" '
   sudo systemctl enable agenticlab-blue.service agenticlab-green.service >/dev/null
   echo "  蓝绿两个单元已就位"
 '
+
+step "先送两个配置文件上去"
+# **只送这两个，不做全量同步。**
+#
+# 线上现在那份 next.config.ts 还不认 NEXT_DIST_DIR ——
+# 不先换掉的话，下面那句 `NEXT_DIST_DIR=.next-blue npm run build`
+# 会被静默忽略，直接建进**正在服务的那个 .next**，
+# 于是这个专门为了消掉构建期 502 而写的脚本，自己制造一次构建期 502。
+#
+# 而之所以不顺手 rsync 整个仓库：这一步是纯粹的基建变更，
+# 不该夹带任何代码改动。装完之后线上跑的还是同一个版本。
+scp -q next.config.ts tsconfig.json "$HOST:$REMOTE/"
 
 step "两个构建目录先建出来"
 # 单元文件里那三个路径都带了「不存在就跳过」的减号，所以少一个也起得来；

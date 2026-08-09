@@ -8,7 +8,7 @@
 
 | 项目 | 值 |
 |---|---|
-| 服务器 | `ubuntu@agenticlab.sh` (203.0.113.10) |
+| 服务器 | 见 `.deploy-host`（已 gitignore）。**源站地址不写进仓库** ——<br>站点躲在 Cloudflare 后面、源站只对 CF 网段开 80/443，<br>而这套防护的前提就是没人知道它。别写 `agenticlab.sh`：<br>它现在解析到 Cloudflare，而 **CF 不代理 SSH** |
 | 代码 | `/home/ubuntu/agenticlab` |
 | 数据库 | `/home/ubuntu/agenticlab/data/agenticlab.db`（SQLite + FTS5） |
 | 运行时 | Node 22.23.2（`/usr/local/bin/node`） |
@@ -18,6 +18,8 @@
 | 备份 | `agenticlab-backup.timer`，每日 04:00。本机快照失败直接退出；<br>**推异地与恢复演练标为非致命** —— 「异地还没配」不该和<br>「本机备份没做成」共用一个红灯 |
 | 每周精选 | `agenticlab-digest.timer`，每周一 09:00 —— **只生成草稿，不发送** |
 | 反代 | nginx，80 → 443 强制跳转 |
+| 边缘 | Cloudflare（代理开启）。源站 ufw 只放行 CF 网段的 80/443，<br>外加 22（SSH）和 7000（frp）。**3000 端口原本是 `*:3000`**，<br>也就是 Next 直接对公网可达、绕过 nginx 和 CF —— 现在被挡住了 |
+| 真实客户端 IP | `set_real_ip_from` CF 网段 + `real_ip_header CF-Connecting-IP`，<br>并且 `X-Forwarded-For` 传的是 `$remote_addr` 而不是<br>`$proxy_add_x_forwarded_for`。**后者会把客户端自己发来的<br>XFF 原样保留**，而应用取的是第一个 —— 那样按 IP 限流<br>当场失效、审计日志可以随便伪造。改网段重跑<br>`bash scripts/lockdown-cloudflare.sh` |
 | 证书 | Let's Encrypt，`agenticlab.sh` + `www`，2026-11-06 到期，自动续期 |
 | 上游 | frp 隧道 → `127.0.0.1:8090`（NekoBot） |
 
@@ -25,7 +27,7 @@
 
 ```bash
 # 本地开发（先开隧道，上游只在服务器内网可达）
-ssh -N -L 8090:127.0.0.1:8090 ubuntu@agenticlab.sh &
+ssh -N -L 8090:127.0.0.1:8090 "$(cat .deploy-host)" &
 npm run dev
 
 npm run bootstrap          # 迁移 + 种子 + 拉群列表（幂等）

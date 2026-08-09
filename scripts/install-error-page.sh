@@ -9,7 +9,9 @@
 # 用法：bash scripts/install-error-page.sh
 set -euo pipefail
 
-HOST="${DEPLOY_HOST:-ubuntu@agenticlab.sh}"
+# shellcheck source=scripts/_host.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_host.sh"
+HOST="$(resolve_deploy_host)"
 
 echo "→ 传页面"
 ssh "$HOST" 'sudo mkdir -p /var/www/agenticlab'
