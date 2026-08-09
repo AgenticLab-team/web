@@ -45,3 +45,6 @@ next-env.d.ts
 *.db
 *.db-shm
 *.db-wal
+
+# agent worktrees —— 它们各自是独立的 git 仓库，不该进主仓
+.claude/worktrees/
