@@ -1,4 +1,4 @@
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Search as SearchIcon } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -7,7 +7,7 @@ import { MessagePicker } from "@/components/forum/MessagePicker";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Empty, Pill } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
-import { messagesOfDay } from "@/lib/forum/convert-source";
+import { messagesOfDay, searchMessagesForConvert } from "@/lib/forum/convert-source";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { shiftDateKey, todayKey } from "@/lib/time";
 
@@ -23,21 +23,31 @@ export const dynamic = "force-dynamic";
 export default async function ConvertPage({
   searchParams,
 }: {
-  searchParams: Promise<{ group?: string; date?: string }>;
+  searchParams: Promise<{ group?: string; date?: string; q?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const { group, date } = await searchParams;
+  const { group, date, q } = await searchParams;
+  const query = (q ?? "").trim();
   const myGroups = visibleGroupsFor(user);
   if (myGroups.length === 0) notFound();
 
   const convId = myGroups.find((g) => g.convId === group)?.convId ?? myGroups[0].convId;
   const day = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayKey();
-  const day_ = messagesOfDay(user, convId, day);
-  if (day_ === null) notFound();
-  const rows = day_.rows;
-  const dropped = day_.dropped;
+
+  /*
+   * 搜到东西就按搜索来，否则按天。
+   *
+   * 两条路走同一个权限收口、返回同一种结构，
+   * 所以下面的挑选界面一个字都不用改 —— 它拿到的都是「一串可选的消息」。
+   */
+  const source = query
+    ? searchMessagesForConvert(user, convId, query)
+    : messagesOfDay(user, convId, day);
+  if (source === null) notFound();
+  const rows = source.rows;
+  const dropped = source.dropped;
 
   const groupName = myGroups.find((g) => g.convId === convId)?.name ?? convId;
 
@@ -59,14 +69,62 @@ export default async function ConvertPage({
       <div className="-mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
         {myGroups.map((g) => (
           <span key={g.convId} className="shrink-0">
-            <Pill href={`/forum/convert?group=${encodeURIComponent(g.convId)}&date=${day}`} active={g.convId === convId}>
+            {/* 切群时把搜索词带上 —— 丢掉的话人得重新打一遍，而他多半以为是自己点错了 */}
+            <Pill
+              href={`/forum/convert?group=${encodeURIComponent(g.convId)}${
+                query ? `&q=${encodeURIComponent(query)}` : `&date=${day}`
+              }`}
+              active={g.convId === convId}
+            >
               {g.name}
             </Pill>
           </span>
         ))}
       </div>
 
-      <div className="mb-5 flex items-center justify-between gap-2">
+      {/*
+        * 搜索框用检索页那一套（同样的外形、同样的 FTS）。
+        *
+        * 原来这一页只能选群 + 选日期，而人想整理的东西通常是
+        * 「上个月有人讲过怎么做那个部署」—— 记得内容，不记得日期。
+        * 只能一天天翻，而群聊一天几百条，翻三天就放弃了。
+        */}
+      <form method="get" action="/forum/convert" className="mb-3">
+        <input type="hidden" name="group" value={convId} />
+        <div className="flex items-center gap-2 rounded-[var(--radius-card)] bg-[var(--surface)] px-4 py-3 hairline">
+          <SearchIcon
+            className="h-4 w-4 shrink-0 text-[var(--ink-tertiary)]"
+            strokeWidth={2}
+            aria-hidden
+          />
+          <input
+            name="q"
+            defaultValue={query}
+            placeholder={`在「${groupName}」里搜，不用记得是哪天`}
+            enterKeyHint="search"
+            aria-label="搜这个群的消息"
+            className="t-body w-full bg-transparent outline-none placeholder:text-[var(--ink-quaternary)]"
+          />
+        </div>
+      </form>
+
+      {query && (
+        <div className="mb-3 flex flex-wrap items-baseline gap-2">
+          <span className="t-subhead">
+            「{query}」· {rows.length} 条
+            {rows.length >= 120 && "（只显示最近 120 条）"}
+          </span>
+          <Link
+            href={`/forum/convert?group=${encodeURIComponent(convId)}&date=${day}`}
+            className="t-caption text-[var(--accent)] transition active:opacity-60"
+          >
+            回到按天翻
+          </Link>
+        </div>
+      )}
+
+      {/* 搜索态下不显示翻天的控件 —— 两套导航同时在会让人不确定自己在看什么 */}
+      <div className={`mb-5 flex items-center justify-between gap-2 ${query ? "hidden" : ""}`}>
         <Link
           href={`/forum/convert?group=${encodeURIComponent(convId)}&date=${shiftDateKey(day, -1)}`}
           className="t-footnote rounded-[var(--radius-pill)] bg-[var(--fill)] px-3 py-1.5"
@@ -101,7 +159,11 @@ export default async function ConvertPage({
       )}
 
       {rows.length === 0 ? (
-        <Empty title={`${groupName} 这天没有消息`} hint="换个日期看看" />
+        query ? (
+          <Empty title={`「${query}」在这个群里没搜到`} hint="换个说法，或者回到按天翻" />
+        ) : (
+          <Empty title={`${groupName} 这天没有消息`} hint="换个日期看看" />
+        )
       ) : (
         <MessagePicker convId={convId} groupName={groupName} messages={rows} />
       )}
