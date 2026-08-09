@@ -1,6 +1,7 @@
 "use server";
 
 import { and, eq, isNull } from "drizzle-orm";
+import { checkDuration } from "@/lib/moderation/duration-rules";
 import { revalidatePath } from "next/cache";
 
 import { audit } from "@/lib/audit";
@@ -96,6 +97,15 @@ export async function setUserStatus(input: {
   userId: string;
   status: "active" | "suspended" | "banned";
   reason: string;
+  /**
+   * 封多久（秒）。null / 不传 = 永久。
+   *
+   * `moderation_actions` 上的 duration_seconds 和 expires_at
+   * 两列一直是零引用 —— 也就是说在这之前**每一次封禁都是永久的**，
+   * 而被封的人看到的是一句没有期限的「已封禁」。
+   * 一个不知道什么时候结束的处罚，和永久封禁在心理上是一回事。
+   */
+  durationSeconds?: number | null;
 }): Promise<AdminActionResult> {
   const admin = await requireWritableAdmin("user.suspend");
 
@@ -106,6 +116,9 @@ export async function setUserStatus(input: {
     reason: input.reason,
   });
   if (!check.ok) return fail(check.error!);
+
+  const duration = checkDuration(input.durationSeconds ?? null, Date.now());
+  if (!duration.ok) return fail(duration.error);
 
   const target = db.select().from(users).where(eq(users.id, input.userId)).get();
   if (!target) return fail("用户不存在");
@@ -147,6 +160,13 @@ export async function setUserStatus(input: {
       targetUserId: input.userId,
       action: input.status === "banned" ? "ban" : input.status === "suspended" ? "suspend" : "unban",
       reason,
+      /*
+       * 期限只对封禁 / 暂停有意义 —— 「解封 7 天」不成句。
+       * 到期由 releaseExpiredBans 扫（挂在五分钟一轮的定时任务上）：
+       * 只写一个 expires_at 而没有人去扫它，等于把「7 天」写成一句安慰话。
+       */
+      durationSeconds: input.status === "active" ? null : duration.durationSeconds,
+      expiresAt: input.status === "active" ? null : duration.expiresAt,
     })
     .run();
 
@@ -159,7 +179,7 @@ export async function setUserStatus(input: {
       fallback: input.userId,
     }),
     before: { status: target.status },
-    after: { status: input.status },
+    after: { status: input.status, expiresAt: duration.expiresAt },
     reason,
   });
 

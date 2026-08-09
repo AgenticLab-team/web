@@ -3,6 +3,7 @@ import "server-only";
 import { desc, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import { describeRemaining } from "@/lib/moderation/duration-rules";
 import { appeals, moderationActions } from "@/lib/db/schema";
 
 /**
@@ -14,7 +15,7 @@ import { appeals, moderationActions } from "@/lib/db/schema";
  */
 
 /** 我收到的处罚与申诉状态。被处罚的人有权知道自己的完整记录 */
-export function myModerationRecord(userId: string) {
+export function myModerationRecord(userId: string, now = Date.now()) {
   const actions = db
     .select()
     .from(moderationActions)
@@ -33,5 +34,16 @@ export function myModerationRecord(userId: string) {
   return actions.map((action) => ({
     ...action,
     appeal: byAction.get(action.id) ?? null,
+    /*
+     * 「还有多久」在查询层算。
+     *
+     * 页面里读时钟既不纯（React 编译器会拦），而且一页里早晚两行
+     * 会用上不同的「现在」—— 两条同时到期的记录会一条显示
+     * 「还有 1 天」、另一条显示「已经到期」。
+     */
+    remaining:
+      action.action === "ban" || action.action === "suspend"
+        ? describeRemaining(action.expiresAt, now)
+        : null,
   }));
 }

@@ -14,6 +14,7 @@
  */
 import { checkAndDispatch } from "@/lib/alerts/dispatch";
 import { publishDueScheduled } from "@/lib/forum/schedule";
+import { releaseExpiredBans } from "@/lib/moderation/expiry";
 import { settleAutoRoles } from "@/lib/rbac/role-settle";
 import { settleExpiredPins } from "@/lib/forum/pin-settle";
 import {
@@ -90,6 +91,16 @@ async function main() {
       run: () => settleDueSeasons(),
       describe: (rows: ReturnType<typeof settleDueSeasons>) =>
         rows.length === 0 ? "无待结算" : rows.map((r) => `${r.seasonKey}:${r.reason}`).join("；"),
+    },
+    {
+      /*
+       * 到期解封。没有这一步的话，「封 7 天」只是一句安慰话 ——
+       * 被封的人到了第八天仍然进不来，而界面上写着已经到期。
+       */
+      name: "到期解封",
+      run: () => releaseExpiredBans(),
+      describe: (r: ReturnType<typeof releaseExpiredBans>) =>
+        r.unbanned || r.skipped ? `解除 ${r.unbanned}${r.skipped ? ` · 跳过 ${r.skipped}` : ""}` : "无到期",
     },
     {
       /*

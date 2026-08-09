@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { PRESETS } from "@/lib/moderation/duration-rules";
 import { useState, useTransition } from "react";
 
 import { useToast } from "@/components/ui/Toast";
@@ -179,6 +180,8 @@ function PointsPanel({ userId }: { userId: string }) {
 }
 
 function StatusPanel({ userId, status }: { userId: string; status: string }) {
+  // 默认 7 天：默认值是一种表态，而多数处罚本来就不该是终身的
+  const [duration, setDuration] = useState<number | null>(7 * 86_400);
   const { pending, run } = useAction();
   const [reason, setReason] = useState("");
 
@@ -191,6 +194,36 @@ function StatusPanel({ userId, status }: { userId: string; status: string }) {
   return (
     <Panel>
       <ReasonInput value={reason} onChange={setReason} />
+
+      {/*
+        * 期限。
+        *
+        * duration_seconds 和 expires_at 两列一直是零引用 ——
+        * 也就是说在这之前**每一次封禁都是永久的**，而被封的人
+        * 看到的是一句没有期限的「账号被封禁」。一个不知道什么时候
+        * 结束的处罚，和永久封禁在心理上是一回事：他不会等，他会走。
+        *
+        * 默认选 7 天而不是永久 —— 默认值是一种表态，
+        * 而多数处罚本来就不该是终身的。
+        */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="t-caption shrink-0 text-[var(--ink-tertiary)]">期限</span>
+        {PRESETS.map((preset) => (
+          <button
+            key={preset.label}
+            type="button"
+            onClick={() => setDuration(preset.seconds)}
+            className={`t-caption rounded-[var(--radius-pill)] px-2.5 py-1 font-medium transition ${
+              duration === preset.seconds
+                ? "bg-[var(--ink)] text-[var(--canvas)]"
+                : "bg-[var(--fill)] text-[var(--ink-secondary)]"
+            }`}
+          >
+            {preset.label}
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-wrap gap-2">
         {options.map((option) => (
           <button
@@ -198,7 +231,17 @@ function StatusPanel({ userId, status }: { userId: string; status: string }) {
             type="button"
             disabled={pending || !reason.trim()}
             onClick={() =>
-              run(() => setUserStatus({ userId, status: option.value, reason }), "状态已更新")
+              run(
+                () =>
+                  setUserStatus({
+                    userId,
+                    status: option.value,
+                    reason,
+                    // 「恢复正常」没有期限可言
+                    durationSeconds: option.value === "active" ? null : duration,
+                  }),
+                "状态已更新",
+              )
             }
             className={`t-subhead flex-1 rounded-[var(--radius-control)] px-4 py-2 font-medium disabled:opacity-40 ${
               option.danger
@@ -210,8 +253,11 @@ function StatusPanel({ userId, status }: { userId: string; status: string }) {
           </button>
         ))}
       </div>
-      <p className="t-caption text-[var(--ink-tertiary)]">
+      <p className="t-caption leading-relaxed text-[var(--ink-tertiary)]">
         封禁会立即下线该用户的全部设备，并通知本人。他可以在「处罚与申诉」里申诉。
+        {duration === null
+          ? "选了永久的话，只能由人手动解除。"
+          : "到期会自动解除，并通知本人 —— 他在「处罚与申诉」里看得到还剩多久。"}
       </p>
     </Panel>
   );

@@ -56,6 +56,31 @@ export default async function MyModerationPage() {
                     已撤销
                   </span>
                 )}
+                {/*
+                  * 还剩多久。
+                  *
+                  * 在这之前每一次封禁都是永久的（duration_seconds 和
+                  * expires_at 两列零引用），被封的人看到的是一句没有期限的
+                  * 「账号被封禁」—— 而一个不知道什么时候结束的处罚，
+                  * 和永久封禁在心理上是一回事：他不会等，他会走。
+                  *
+                  * 「还有 3 天」比一个要自己去算的时间戳有用得多。
+                  */}
+                {!record.revertedAt && record.remaining && (
+                    <span
+                      className="t-caption rounded-[var(--radius-pill)] px-2 py-0.5 font-medium"
+                      style={{
+                        background:
+                          record.expiresAt === null
+                            ? "color-mix(in srgb, var(--danger) 14%, transparent)"
+                            : "var(--fill)",
+                        color:
+                          record.expiresAt === null ? "var(--danger)" : "var(--ink-secondary)",
+                      }}
+                    >
+                      {record.remaining}
+                  </span>
+                )}
                 <span className="flex-1" />
                 <span className="tabular t-caption text-[var(--ink-tertiary)]">
                   {relativeTime(record.createdAt)}
