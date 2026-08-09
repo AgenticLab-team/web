@@ -1,14 +1,19 @@
 import type { Metadata } from "next";
 
 import { FriendRequestQueue, StalledBindQueue } from "@/components/admin/BindQueue";
+import { JoinQueue } from "@/components/admin/JoinQueue";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { PageNote, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import {
+  applicantActivity,
+  boundAccountOf,
   currentAcceptBudget,
   pendingFriendRequests,
   stalledBinds,
 } from "@/lib/auth/bind-queue-queries";
+import { recentJoinRequests } from "@/lib/join/actions";
+import { judgeApplicant } from "@/lib/join/rules";
 
 export const metadata: Metadata = { title: "绑定审批" };
 export const dynamic = "force-dynamic";
@@ -39,12 +44,42 @@ export default async function AdminBindsPage() {
   ]);
   const stalled = stalledBinds();
 
+  /*
+   * 申请人的「情况」在这一侧算 —— 提交页对所有情况只回一句一模一样的话。
+   * 复用绑定队列那份活跃度查询：问题是同一个（这个人在不在我们群里）。
+   */
+  const joins = await recentJoinRequests();
+  const joinRows = joins.map((r) => ({
+    id: r.id,
+    wxId: r.wxId,
+    reason: r.reason,
+    contact: r.contact,
+    createdAt: r.createdAt,
+    status: r.status,
+    note: r.note,
+    standing: judgeApplicant({
+      groups: applicantActivity(r.wxId).groups,
+      hasAccount: boundAccountOf(r.wxId) !== null,
+    }),
+  }));
+
   return (
     <>
       <PageHeader
         title="绑定审批"
-        subtitle={`${friends.length} 个好友申请 · ${stalled.length} 个人卡在登录上`}
+        subtitle={`${joinRows.filter((r) => r.status === "pending").length} 份加入申请 · ${friends.length} 个好友申请 · ${stalled.length} 个人卡在登录上`}
       />
+
+      {/*
+        * 加入申请排在最前。
+        *
+        * 这三块解决的是同一个处境（有人进不来），但紧迫程度不同：
+        * 申请加入的人**连门都还没摸到**，而卡住的绑定和好友申请
+        * 至少已经在流程里了。
+        */}
+      <Section title="申请加入">
+        <JoinQueue rows={joinRows} canHandle={admin.has("user.bind.approve")} />
+      </Section>
 
       <Section title="卡住的绑定">
         <StalledBindQueue

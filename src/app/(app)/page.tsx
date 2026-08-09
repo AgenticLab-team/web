@@ -202,7 +202,15 @@ export default async function HomePage() {
               <Empty
                 title="群聊内容与分群数据仅对成员开放"
                 hint="登录后可以看到自己所在群的动态、检索历史消息，并参与社区讨论。"
-                action={<EmptyAction href="/login">用微信身份登录</EmptyAction>}
+                action={
+                  <>
+                    <EmptyAction href="/login">用微信身份登录</EmptyAction>
+                    {/* 还不是成员的人也要有条路 —— 否则这一页对他是死胡同 */}
+                    <Link href="/join" className="t-caption mt-3 block text-[var(--accent)]">
+                      还不在群里？申请加入
+                    </Link>
+                  </>
+                }
               />
             </Section>
           )}

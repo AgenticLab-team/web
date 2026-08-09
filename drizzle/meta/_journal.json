@@ -253,6 +253,13 @@
       "when": 1786261613116,
       "tag": "0038_link_votes",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1786268494446,
+      "tag": "0039_join_requests",
+      "breakpoints": true
     }
   ]
 }

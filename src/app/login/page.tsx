@@ -6,6 +6,7 @@ import { PasswordLoginForm } from "@/components/auth/PasswordLoginForm";
 import { PasskeyLoginButton } from "@/components/passkey/PasskeyLoginButton";
 import { safeRedirect } from "@/lib/auth/routes";
 import { getCurrentUser } from "@/lib/auth/session";
+import Link from "next/link";
 
 export const metadata: Metadata = { title: "登录" };
 export const dynamic = "force-dynamic";
@@ -47,7 +48,21 @@ export default async function LoginPage({
         <PasswordLoginForm next={target} />
       </div>
 
-      <footer className="t-caption mt-10 text-center leading-relaxed text-[var(--ink-tertiary)]">
+      {/*
+        * 给「还不是成员」的人一条路。
+        *
+        * 这一页所有的路都假设你已经在群里 —— 而一个不在群里的人
+        * 走到这里只会反复取验证码然后发现没地方发。
+        * 生产上一天 392 个码里有一批就是这么来的。
+        */}
+      <p className="t-caption mt-8 text-center text-[var(--ink-tertiary)]">
+        还不在群里？
+        <Link href="/join" className="ml-1 text-[var(--accent)]">
+          申请加入
+        </Link>
+      </p>
+
+      <footer className="t-caption mt-6 text-center leading-relaxed text-[var(--ink-tertiary)]">
         首次登录后可以设置 Passkey，下次一步进入。
         <br />
         建议同时设一个密码 —— Passkey 换设备就用不了，
