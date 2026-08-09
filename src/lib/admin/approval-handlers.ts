@@ -11,12 +11,14 @@ import { isDangerousSetting, validateSettingValue } from "@/lib/settings/validat
 import { resolveDisplayName } from "@/lib/users/display-name";
 
 /**
- * 登记可复核的动作。
+ * 登记可进留痕队列的动作。
  *
- * 只有这里出现过的动作能被提出复核 —— 见 approval-registry 里的说明。
+ * 只有这里出现过的动作能被提出 —— 见 approval-registry 里的说明。
+ * 复核降级为可选留痕之后这条注册表反而更要紧：队列不再有第二个人
+ * 把关，「表里只可能出现登记过的动作」是仅剩的硬约束。
  *
  * 每个 handler 的 `describe` 要写成一句人话，不是把 payload 打印出来：
- * **复核一段看不懂的 JSON 等于没复核**，而看起来像复核过更糟糕。
+ * **批准一段看不懂的 JSON 等于闭着眼点确定**，而看起来批过更糟糕。
  */
 
 interface SettingPayload {
@@ -36,8 +38,8 @@ registerApproval<SettingPayload>({
       return { ok: false, error: "参数不完整" };
     }
     if (!isDangerousSetting(p.key)) {
-      // 普通配置不该走复核 —— 让复核队列里塞满琐事，重要的就被淹没了
-      return { ok: false, error: "这一项不需要双人复核，直接改就行" };
+      // 普通配置不该进留痕队列 —— 队列里塞满琐事，重要的就被淹没了
+      return { ok: false, error: "这一项不是危险项，去设置页直接改就行" };
     }
 
     const current = db.select().from(settings).where(eq(settings.key, p.key)).get();
@@ -66,7 +68,7 @@ registerApproval<SettingPayload>({
     try {
       updateSetting(payload.key, payload.value, {
         actorId: ctx.actorId,
-        reason: "双人复核通过后执行",
+        reason: "经留痕队列批准后执行",
       });
       return { ok: true };
     } catch (error) {
@@ -90,7 +92,7 @@ registerApproval<AdminGrantPayload>({
     const p = payload as Partial<AdminGrantPayload>;
     if (typeof p?.userId !== "string") return { ok: false, error: "缺少用户" };
     if (p.roleKey !== "admin" && p.roleKey !== "owner") {
-      return { ok: false, error: "只有管理员和站长需要复核" };
+      return { ok: false, error: "只有授予管理员和站长值得进留痕队列，普通身份组直接授就行" };
     }
     if (!db.select().from(users).where(eq(users.id, p.userId)).get()) {
       return { ok: false, error: "用户不存在" };
@@ -131,7 +133,7 @@ registerApproval<AdminGrantPayload>({
         userId: payload.userId,
         roleId: role.id,
         grantedBy: ctx.actorId,
-        grantReason: "双人复核通过后执行",
+        grantReason: "经留痕队列批准后执行",
       })
       .run();
 

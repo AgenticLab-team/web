@@ -35,25 +35,25 @@ const activity = (o: Partial<ApplicantActivity> = {}): ApplicantActivity => ({
   ...o,
 });
 
-describe("**通过好友申请是限速的**", () => {
+describe("**好友申请的额度只算账、不拦**", () => {
   it("没通过过的时候可以通过", () => {
     const b = acceptBudget([], NOW);
     assert.equal(b.remaining, ACCEPT_DAILY_CAP);
     assert.equal(b.waitMs, 0);
   });
 
-  it("**一天有上限** —— 机器人加好友被风控过", () => {
+  it("数得出今天通过了几个 —— 风控是真的，人得看见数字", () => {
     const times = Array.from({ length: ACCEPT_DAILY_CAP }, (_, i) => NOW - i * 3600_000);
     const b = acceptBudget(times, NOW);
     assert.equal(b.remaining, 0);
     assert.match(b.reason, /风控/);
   });
 
-  it("**两次之间要隔开** —— 连点二十下和脚本没有区别", () => {
+  it("间隔太密时提示出来", () => {
     const b = acceptBudget([NOW - 60_000], NOW);
-    assert.equal(b.remaining > 0, true, "额度还有");
-    assert.ok(b.waitMs > 0, "却让它立刻又通过了一个");
-    assert.match(b.reason, /分钟/);
+    assert.equal(b.remaining > 0, true);
+    assert.ok(b.waitMs > 0);
+    assert.match(b.reason, /风控/, "提示里没说清楚为什么要悠着点");
   });
 
   it("隔够了就放行", () => {
@@ -81,8 +81,8 @@ describe("**通过好友申请是限速的**", () => {
     assert.deepEqual(a, b);
   });
 
-  it("上限定得低 —— 高了就等于没限", () => {
-    assert.ok(ACCEPT_DAILY_CAP <= 10, `一天 ${ACCEPT_DAILY_CAP} 个太多了`);
+  it("参考值定得保守 —— 它是给人看的判断依据", () => {
+    assert.ok(ACCEPT_DAILY_CAP <= 10, `一天 ${ACCEPT_DAILY_CAP} 个作为提示门槛太宽了`);
     assert.ok(ACCEPT_MIN_GAP_MS >= 60_000);
   });
 });
@@ -213,20 +213,27 @@ describe("接线", () => {
   const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
   const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
-  it("**限速在服务端，不只在按钮上** —— 按钮能被连点，页面可能是过期的", () => {
+  it("**服务端不再拦** —— 站长要求管理接口不设限速", () => {
+    /*
+     * 这条是方向锁:防止以后有人「顺手」把限速加回来。
+     * 风控的判断交给人,前提是数字看得见 —— 见下一条。
+     */
     const code = strip(src("lib/auth/bind-queue-actions.ts"));
-    const fn = code.slice(code.indexOf("function acceptFriendRequestAction"));
-    assert.match(fn.slice(0, 600), /currentAcceptBudget\(\)/);
-    assert.match(fn.slice(0, 600), /budget\.remaining === 0 \|\| budget\.waitMs > 0/);
+    const fn = code.slice(
+      code.indexOf("function acceptFriendRequestAction"),
+      code.indexOf("function manualBindAction"),
+    );
+    assert.doesNotMatch(fn, /return fail\(budget/, "限速拦截被加回来了");
+    assert.doesNotMatch(fn, /waitMs > 0/, "限速拦截被加回来了");
   });
 
-  it("**限速检查在调上游之前** —— 之后检查就等于没检查", () => {
+  it("**但通过之后要回显今天的累计** —— 不拦了，人就得看得见", () => {
     const code = strip(src("lib/auth/bind-queue-actions.ts"));
-    const fn = code.slice(code.indexOf("function acceptFriendRequestAction"));
-    const budgetAt = fn.indexOf("currentAcceptBudget");
-    const callAt = fn.indexOf("nekobot.acceptFriendRequest");
-    assert.ok(budgetAt > 0 && callAt > 0);
-    assert.ok(budgetAt < callAt, "先调了上游再查限速");
+    const fn = code.slice(
+      code.indexOf("function acceptFriendRequestAction"),
+      code.indexOf("function manualBindAction"),
+    );
+    assert.match(fn, /currentAcceptBudget\(\)/, "连点的人看不到自己点了几下");
   });
 
   it("**上游失败不记审计** —— 记了的话失败的尝试会白白吃掉今天的额度", () => {

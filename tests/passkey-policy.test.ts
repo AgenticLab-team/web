@@ -9,6 +9,7 @@ import {
   lockoutRisk,
   passwordLoginVerdict,
   privilegedPermissions,
+  selfLoginStatus,
 } from "@/lib/auth/passkey-policy";
 
 /**
@@ -241,6 +242,71 @@ describe("说给人听的那句话", () => {
     );
     assert.match(text, /管理员甲/);
     assert.match(text, /登不进来/);
+  });
+});
+
+describe("一个人自己的登录处境（selfLoginStatus）", () => {
+  const me = (o: Partial<Parameters<typeof selfLoginStatus>[0]> = {}) =>
+    selfLoginStatus({
+      privileged: false,
+      hasPasskey: false,
+      hasPassword: false,
+      enforced: true,
+      ...o,
+    });
+
+  it("普通人、什么都没设：只剩验证码，且要提醒这条路依赖机器人", () => {
+    const s = me();
+    assert.deepEqual(s.paths, ["微信群验证码"]);
+    assert.ok(s.caution, "只剩一条依赖风控的门路却一声不吭");
+    assert.match(s.caution!, /风控/);
+    assert.equal(s.danger, null, "这不是「现在就进不来」，别用红色吓人");
+  });
+
+  it("有 Passkey 的人不设密码是站得住的选择 —— 页面不该再劝", () => {
+    const s = me({ hasPasskey: true });
+    assert.equal(s.passwordlessViable, true);
+    assert.equal(s.caution, null);
+    assert.equal(s.danger, null);
+  });
+
+  it("**只剩验证码的人选择不设密码站不住** —— 钥匙全押在风控没来上", () => {
+    assert.equal(me().passwordlessViable, false);
+  });
+
+  it("**管理员设了密码却没 Passkey：红色** —— 密码是对的也进不来", () => {
+    const s = me({ privileged: true, hasPassword: true });
+    assert.ok(s.danger);
+    assert.ok(!s.paths.includes("密码"), "进不来的门路不能列在「你能怎么登录」里");
+  });
+
+  it("**同样的人，开关没开就不是红色** —— 判定必须跟着开关走", () => {
+    const s = me({ privileged: true, hasPassword: true, enforced: false });
+    assert.equal(s.danger, null);
+    assert.ok(s.paths.includes("密码"));
+  });
+
+  it("管理员没密码没 Passkey：黄色预警「设了密码那天会进不来」", () => {
+    const s = me({ privileged: true });
+    assert.equal(s.danger, null, "他今天没被挡 —— 报红是谎报，谎报教人忽略警告");
+    assert.ok(s.caution);
+    assert.match(s.caution!, /Passkey/);
+  });
+
+  it("**管理员有 Passkey 也有密码：密码不算门路** —— 强制开关下密码被拒", () => {
+    /*
+     * passwordLoginVerdict 在 enforced && privileged 时对有 Passkey 的人
+     * 也拒绝密码登录（让他去用 Passkey）。这里必须问同一个判定 ——
+     * 各自另抄一份条件的话，安全页会把一条走不通的路列成绿色。
+     */
+    const s = me({ privileged: true, hasPasskey: true, hasPassword: true });
+    assert.ok(!s.paths.includes("密码"));
+    assert.ok(s.paths.includes("Passkey"));
+  });
+
+  it("普通人有密码：密码就是一条路", () => {
+    const s = me({ hasPassword: true });
+    assert.deepEqual(s.paths, ["密码", "微信群验证码"]);
   });
 });
 

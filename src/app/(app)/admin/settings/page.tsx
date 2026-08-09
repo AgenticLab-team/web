@@ -20,7 +20,8 @@ export const dynamic = "force-dynamic";
  * 而一页几十个数字里，真正被动过的只有三五个 —— 那三五个才是
  * 排查问题时该看的。所以被改过的项要标出来，最近的变更要摆在最前。
  *
- * 危险项（改错会静默影响所有人）在这里只读，必须走双人复核。
+ * 危险项（改错会静默影响所有人）2026-08 起也能直接改（站长指令：
+ * 不强制复核）—— 危险性用常驻警告表达，不再用锁输入框表达。
  */
 export default async function AdminSettingsPage() {
   await requireAdmin("system.settings");

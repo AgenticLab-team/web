@@ -31,6 +31,17 @@ export const users = sqliteTable(
     email: text("email").unique(),
     emailVerifiedAt: integer("email_verified_at"),
 
+    /**
+     * 明确表过态：「这个账号就是不设密码」。
+     *
+     * 没有这一列的话，「还没设密码」和「决定不设密码」在数据上
+     * 长得一模一样 —— 于是安全页只能对着后者反复劝设密码，
+     * 而被反复劝的人最后会把真正重要的提醒也一起无视掉。
+     * 存时间戳而不是布尔：翻旧账时「什么时候决定的」就是证据。
+     * 设置密码时必须清掉它（见 password-actions），两个状态不能并存。
+     */
+    passwordOptOutAt: integer("password_opt_out_at"),
+
     kind: text("kind", { enum: ["member", "external", "bot", "system"] })
       .notNull()
       .default("member"),

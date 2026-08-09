@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `password_opt_out_at` integer;

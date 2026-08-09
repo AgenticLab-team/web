@@ -258,7 +258,8 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
     value: "500",
     type: "int",
     category: "points",
-    label: "触发双人复核的积分调整额度",
+    // 它挡的是权限（points.adjust.large），不是复核 —— 旧标签一直写错了
+    label: "需要更高权限的积分调整额度",
   },
 
   // ── 反作弊 ──────────────────────────────────────────────────

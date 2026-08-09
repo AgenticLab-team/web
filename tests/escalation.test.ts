@@ -103,15 +103,12 @@ describe("批准", () => {
     assert.equal(checkApprove({ ...base, note: " " }).ok, false);
   });
 
-  it("**不能批准自己提交的申请**", () => {
-    const r = checkApprove({ ...base, actorId: "u_requester" });
-    assert.equal(r.ok, false);
-    assert.match(r.error!, /自己提交/);
+  it("**自己批自己提交的申请也放行**（2026-08 站长指令）", () => {
+    assert.equal(checkApprove({ ...base, actorId: "u_requester" }).ok, true);
   });
 
-  it("**不能批准自己帖子的提升申请**", () => {
-    // 自己转的帖自己批，硬约束就形同虚设
-    assert.equal(checkApprove({ ...base, actorId: "u_author" }).ok, false);
+  it("自己帖子的提升申请也能批 —— 同上，去掉的是「换个人」这道", () => {
+    assert.equal(checkApprove({ ...base, actorId: "u_author" }).ok, true);
   });
 
   it("**原作者同意没凑齐就不能批**", () => {
@@ -120,6 +117,16 @@ describe("批准", () => {
     const r = checkApprove({ ...base, consentGranted: 1 });
     assert.equal(r.ok, false);
     assert.match(r.error!, /还差 2 位/);
+  });
+
+  it("**自批放行了，但同意这条一寸没松** —— 它保护的是群里说话的人", () => {
+    /*
+     * 放松「不能自批」时最容易顺手把这条也带走：
+     * 同一个函数、相邻的几行。这条测试就是防那次「顺手」。
+     */
+    const r = checkApprove({ ...base, actorId: "u_requester", consentGranted: 0 });
+    assert.equal(r.ok, false);
+    assert.match(r.error!, /原作者同意/);
   });
 
   it("不需要任何同意时（没有原作者信息）可以直接批", () => {
@@ -155,8 +162,8 @@ describe("驳回", () => {
     assert.equal(checkReject({ ...base, note: "" }).ok, false);
   });
 
-  it("不能处理自己提交的申请", () => {
-    assert.equal(checkReject({ ...base, actorId: "u_requester" }).ok, false);
+  it("自己驳回自己提交的申请也放行 —— 和撤回殊途同归", () => {
+    assert.equal(checkReject({ ...base, actorId: "u_requester" }).ok, true);
   });
 });
 

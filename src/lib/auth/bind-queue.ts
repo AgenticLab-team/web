@@ -16,21 +16,21 @@
  * 而只是一个默认值。
  *
  * ─────────────────────────────────────────
- * 通过好友申请是限速的，这不是性能考虑
+ * 通过好友申请的额度：只算账，不拦
  * ─────────────────────────────────────────
  *
- * 机器人加好友已经触发过微信风控。nekobot/client.ts 里那句
- * 「只在管理员后台手动、限速地使用」写了很久,而这条路从来没建出来 ——
- * 于是 acceptFriendRequest 一个调用点都没有。
+ * 机器人加好友已经触发过微信风控,所以这里算得出「今天通过了几个」。
+ * 但**服务端不拦** —— 站长明确要求管理接口不设限速,「我有数」。
  *
- * 建出来的时候限速必须一起建。一个「手动的」操作在界面上点起来
- * 和自动的一样快,人一口气点二十下不需要任何决心。
+ * 保留计算是因为那个风险是真的:它防的是猫娘账号被封,
+ * 不是不信任管理员的判断。把判断交回给人的前提是**人得看见数字**,
+ * 所以这几个函数产出的是提示语,而不是拒绝理由。
  */
 
-/** 一天最多通过几个好友申请 */
+/** 一天通过几个以内算安全 —— 只用于提示，服务端不拦 */
 export const ACCEPT_DAILY_CAP = 5;
 
-/** 两次通过之间至少隔多久 —— 连点二十下和脚本没有区别 */
+/** 两次通过之间建议隔多久 —— 同上，只是提示 */
 export const ACCEPT_MIN_GAP_MS = 5 * 60_000;
 
 export const DAY_MS = 86_400_000;
@@ -38,7 +38,7 @@ export const DAY_MS = 86_400_000;
 export interface AcceptBudget {
   usedToday: number;
   remaining: number;
-  /** 还要等多久才能通过下一个；0 表示现在就能 */
+  /** 距建议的安全间隔还差多久；0 表示已经隔够了 */
   waitMs: number;
   reason: string;
 }
@@ -59,7 +59,7 @@ export function acceptBudget(recentAcceptTimes: number[], now: number): AcceptBu
       usedToday: withinDay.length,
       remaining: 0,
       waitMs: DAY_MS - (now - Math.min(...withinDay)),
-      reason: `今天已经通过 ${withinDay.length} 个了，机器人加好友被风控过，明天再说`,
+      reason: `今天已经通过 ${withinDay.length} 个了 —— 微信对机器人频繁加好友有风控，悠着点`,
     };
   }
   if (waitMs > 0) {
@@ -67,7 +67,7 @@ export function acceptBudget(recentAcceptTimes: number[], now: number): AcceptBu
       usedToday: withinDay.length,
       remaining,
       waitMs,
-      reason: `离上一个通过还不到 ${Math.round(ACCEPT_MIN_GAP_MS / 60_000)} 分钟，再等 ${Math.ceil(waitMs / 60_000)} 分钟`,
+      reason: `离上一个通过还不到 ${Math.round(ACCEPT_MIN_GAP_MS / 60_000)} 分钟 —— 密集通过容易触发风控`,
     };
   }
   return {

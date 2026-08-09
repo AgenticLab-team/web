@@ -16,9 +16,13 @@ import { approvals } from "@/lib/db/schema";
 import { dangerLevelOf } from "@/lib/rbac/permissions";
 
 /**
- * 双人复核的写操作。
+ * 危险操作留痕的写操作。
  *
- * 只有登记过的动作能被提出（见 approval-registry）。
+ * 2026-08 起不再是双人复核：自己提、自己批也放行（站长指令，
+ * 判定见 approval-rules）。队列、历史、审计全都保留 ——
+ * 拿掉的只是「必须换一个人」这道闸。
+ *
+ * 注册表那条线一步没松：只有登记过的动作能被提出（见 approval-registry）。
  * 表里存的是「哪个动作 + 什么参数」，不是「执行什么代码」——
  * 后者等于在数据库里开一个延迟执行的远程调用入口。
  */
@@ -83,7 +87,7 @@ export async function requestApproval(input: {
   return {
     ok: true,
     id: row.id,
-    note: `已提交，需要另一个人复核。${Math.round(APPROVAL_TTL_MS / 3600_000)} 小时内有效。`,
+    note: `已记录。可以直接自己批准执行，也可以留给别人看一眼。${Math.round(APPROVAL_TTL_MS / 3600_000)} 小时内有效。`,
   };
 }
 

@@ -236,10 +236,10 @@ export const ADMIN_NAV: AdminNavSection[] = [
       {
         key: "approvals",
         href: "/admin/approvals",
-        label: "危险操作复核",
+        label: "危险操作留痕",
         icon: "shield-check",
         permission: "system.approval",
-        description: "改错了不会有人立刻发现的那些操作",
+        description: "改错了不会有人立刻发现的那些操作（可选，不强制）",
         ready: true,
       },
       {
