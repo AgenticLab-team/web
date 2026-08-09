@@ -3,7 +3,7 @@
 import {
   Activity, CloudUpload, Coins, Eye, FileText, Filter, Flag, Gauge, Gift, HardDrive, LayoutList,
   Megaphone, MessageSquare, Puzzle, Scale, ScrollText, Shield, ShieldCheck, ShoppingBag, Sliders,
-  Ticket, Users,
+  Ticket, UserRoundPlus, Users,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -15,6 +15,7 @@ const ICONS: Record<string, LucideIcon> = {
   gauge: Gauge,
   "scroll-text": ScrollText,
   users: Users,
+  "user-plus": UserRoundPlus,
   shield: Shield,
   ticket: Ticket,
   flag: Flag,

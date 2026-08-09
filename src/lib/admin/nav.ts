@@ -86,7 +86,16 @@ export const ADMIN_NAV: AdminNavSection[] = [
         label: "用户管理",
         icon: "users",
         permission: "user.list",
-        description: "档案、积分、封禁、绑定审批",
+        description: "档案、积分、封禁、登录与设备",
+        ready: true,
+      },
+      {
+        key: "binds",
+        href: "/admin/binds",
+        label: "绑定审批",
+        icon: "user-plus",
+        permission: "user.bind.approve",
+        description: "卡住的绑定、好友申请与申请人活跃度",
         ready: true,
       },
       {
