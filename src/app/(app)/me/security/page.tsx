@@ -1,8 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { ChevronLeft } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -10,7 +8,7 @@ import { PasswordSetup } from "@/components/auth/PasswordSetup";
 import { PasskeySetup } from "@/components/passkey/PasskeySetup";
 import { SessionList } from "@/components/passkey/SessionList";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Group, Row, Section } from "@/components/ui/primitives";
+import { BackLink, Card, Empty, Group, Row, Section } from "@/components/ui/primitives";
 import { listLoginHistory, listSessions } from "@/lib/auth/devices";
 import { isPrivileged, selfLoginStatus } from "@/lib/auth/passkey-policy";
 import { hasPassword } from "@/lib/auth/password-login";
@@ -55,17 +53,11 @@ export default async function SecurityPage() {
 
   return (
     <>
-      <Link
-        href="/me"
-        className="t-subhead -ml-1 mt-6 inline-flex items-center gap-0.5 text-[var(--accent)] transition active:opacity-60"
-      >
-        <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
-        我的
-      </Link>
+      <BackLink href="/me">我的</BackLink>
 
       <PageHeader title="登录与安全" />
 
-      <div className="mb-5 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
+      <Card className="mb-5">
         <p className="t-subhead">你现在的登录方式：{status.paths.join("、")}</p>
         {status.danger && (
           <p className="t-caption mt-1.5 leading-relaxed" style={{ color: "var(--danger)" }}>
@@ -77,7 +69,7 @@ export default async function SecurityPage() {
             {status.caution}
           </p>
         )}
-      </div>
+      </Card>
 
       <Section title="Passkey">
         <PasskeySetup items={passkeys} />
@@ -96,6 +88,9 @@ export default async function SecurityPage() {
       </Section>
 
       <Section title="最近登录记录">
+        {history.length === 0 ? (
+          <Empty title="还没有登录记录" />
+        ) : (
         <Group>
           {history.map((entry) => (
             <Row key={entry.id}>
@@ -118,12 +113,8 @@ export default async function SecurityPage() {
               </div>
             </Row>
           ))}
-          {history.length === 0 && (
-            <Row>
-              <span className="t-subhead text-[var(--ink-secondary)]">还没有记录</span>
-            </Row>
-          )}
         </Group>
+        )}
         <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
           失败的尝试也会记下来。看到不是你本人的登录，
           先下线全部设备，再重新设置 Passkey。

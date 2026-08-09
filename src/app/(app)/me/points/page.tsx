@@ -1,11 +1,9 @@
-import { ChevronLeft } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Empty, Group, Section, StatTile } from "@/components/ui/primitives";
+import { BackLink, Empty, Group, PageNote, Section, StatTile } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { recentCheckins } from "@/lib/points/checkin";
 import { auditBalance, listLedger } from "@/lib/points/ledger";
@@ -25,13 +23,7 @@ export default async function PointsPage() {
 
   return (
     <>
-      <Link
-        href="/me"
-        className="t-subhead -ml-1 mt-6 inline-flex items-center gap-0.5 text-[var(--accent)] transition active:opacity-60"
-      >
-        <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
-        我的
-      </Link>
+      <BackLink href="/me">我的</BackLink>
 
       <PageHeader title="积分" subtitle={`${progress.current.name} · L${progress.current.level}`} />
 
@@ -131,10 +123,10 @@ export default async function PointsPage() {
         </p>
       )}
 
-      <p className="t-caption px-1 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         积分只由服务端按规则发放。同一分钟内的多条发言折叠成一条，
         重复内容也只算一次 —— 刷屏拿不到分。
-      </p>
+      </PageNote>
     </>
   );
 }

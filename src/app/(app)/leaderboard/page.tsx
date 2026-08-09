@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { LeaderboardList } from "@/components/LeaderboardList";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Pill, Section } from "@/components/ui/primitives";
+import {
+  Callout,
+  Empty,
+  EmptyAction,
+  PageNote,
+  Pill,
+  PillRow,
+  Section,
+} from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getLeaderboard, getMyRank, PERIODS, type Period } from "@/lib/queries/leaderboard";
 import { allSyncedGroupIds, visibleGroupsFor } from "@/lib/queries/visibility";
@@ -77,50 +84,38 @@ export default async function LeaderboardPage({
       {/* 赛季的意义全在「还剩几天」被看见的那一刻 ——
           不显示倒计时的话，它和「本月」没有区别 */}
       {period === "season" && season && (
-        <div
-          className="mb-4 rounded-[var(--radius-card)] p-4 hairline"
-          style={{ background: "color-mix(in srgb, var(--accent) 7%, var(--surface))" }}
-        >
-          <p className="t-subhead font-medium">
-            {season.name} · 还剩 {season.daysLeft} 天
-          </p>
+        <Callout tone="accent" title={`${season.name} · 还剩 ${season.daysLeft} 天`}>
           <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">
             赛季只重置<strong>排名</strong>，不动任何人的积分 ——
             攒下的分永远是你的。赛季结束时前三名会拿到称号。
           </p>
-        </div>
+        </Callout>
       )}
 
-      <div className="mb-3 flex flex-wrap gap-1.5">
+      <PillRow wrap>
         {PERIODS.map((p) => (
           <Pill key={p.key} href={hrefFor(p.key, activeScope)} active={p.key === period}>
             {p.label}
           </Pill>
         ))}
-      </div>
+      </PillRow>
 
       {/* 分群范围只对成员出现，且只列自己所在的群 —— 群名对访客始终不可见 */}
-      <div className="-mx-4 mb-6 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
-        <span className="shrink-0">
-          <Pill href={hrefFor(period)} active={!activeScope}>
-            全社区
-          </Pill>
-        </span>
+      <PillRow>
+        <Pill href={hrefFor(period)} active={!activeScope}>
+          全社区
+        </Pill>
         {myGroups.length > 1 && (
-          <span className="shrink-0">
-            <Pill href={hrefFor(period, "mine")} active={activeScope === "mine"}>
-              我的群
-            </Pill>
-          </span>
+          <Pill href={hrefFor(period, "mine")} active={activeScope === "mine"}>
+            我的群
+          </Pill>
         )}
         {myGroups.map((g) => (
-          <span key={g.convId} className="shrink-0">
-            <Pill href={hrefFor(period, g.convId)} active={activeScope === g.convId}>
-              {g.name}
-            </Pill>
-          </span>
+          <Pill key={g.convId} href={hrefFor(period, g.convId)} active={activeScope === g.convId}>
+            {g.name}
+          </Pill>
         ))}
-      </div>
+      </PillRow>
 
       {/* 自己不在前 50 时单独把名次拎出来，否则这个人永远看不到自己 */}
       {myRank && !inTop && (
@@ -133,21 +128,16 @@ export default async function LeaderboardPage({
         <LeaderboardList entries={entries} highlightWxId={user?.wxId} showDelta={period !== "all"} />
       </Section>
 
-      <p className="t-caption px-1 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         高质量消息 = 长度 ≥ 15 字的文本或引用回复，口径与群里机器人报的排名一致。
         {period !== "all" && "箭头是相对上一个同长度周期的名次变化。"}
-      </p>
+      </PageNote>
 
       {!user && (
-        <div className="inset-group mt-6 px-6 py-7 text-center">
-          <p className="t-callout mb-1.5">想看自己所在群的榜单？</p>
-          <Link
-            href="/login"
-            className="t-subhead mt-3 inline-flex rounded-[var(--radius-control)] bg-[var(--accent)] px-5 py-2.5 font-medium text-[var(--accent-ink)]"
-          >
-            登录
-          </Link>
-        </div>
+        <Empty
+          title="想看自己所在群的榜单？"
+          action={<EmptyAction href="/login">登录</EmptyAction>}
+        />
       )}
     </>
   );

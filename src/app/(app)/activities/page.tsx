@@ -1,8 +1,9 @@
+import { Check, Dot } from "lucide-react";
 import type { Metadata } from "next";
 
 import { ApplyForm } from "@/components/activities/ApplyForm";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Empty, Section } from "@/components/ui/primitives";
+import { Card, Empty, Section } from "@/components/ui/primitives";
 import { evaluateEligibility, type Rule } from "@/lib/activities/eligibility";
 import { listActivities, listApplications } from "@/lib/activities/queries";
 import { getModule } from "@/lib/activities/registry";
@@ -59,7 +60,7 @@ export default async function ActivitiesPage() {
           return (
             <Section key={activity.id} title={activity.title}>
               <div className="space-y-3">
-                <div className="rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
+                <Card>
                   <p className="t-caption flex flex-wrap items-center gap-1.5 text-[var(--ink-tertiary)]">
                     <span
                       className="t-caption2 rounded-[var(--radius-pill)] bg-[var(--fill)] px-1.5 py-0.5 font-medium"
@@ -87,17 +88,23 @@ export default async function ActivitiesPage() {
                       {eligibility.outcomes.map((o, i) => (
                         <li
                           key={i}
-                          className="t-caption2"
+                          className="t-caption2 flex items-center gap-1"
                           style={{
                             color: o.passed ? "var(--ink-tertiary)" : "var(--warning)",
                           }}
                         >
-                          {o.passed ? "✓" : "·"} {o.message}
+                          {/* 达标/未达标的记号用 lucide 线条，和全站图标同一套 —— 字符 ✓ 在各平台粗细不一 */}
+                          {o.passed ? (
+                            <Check className="h-3 w-3 shrink-0" strokeWidth={2.2} aria-hidden />
+                          ) : (
+                            <Dot className="h-3 w-3 shrink-0" strokeWidth={3} aria-hidden />
+                          )}
+                          {o.message}
                         </li>
                       ))}
                     </ul>
                   )}
-                </div>
+                </Card>
 
                 {!user ? (
                   <p className="t-caption px-1 text-[var(--ink-tertiary)]">登录后可以参加</p>

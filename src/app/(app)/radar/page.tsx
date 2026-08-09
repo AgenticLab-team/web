@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import { RadarManager } from "@/components/radar/RadarManager";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Section } from "@/components/ui/primitives";
+import { Card, Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { MAX_HITS_PER_DAY, MAX_KEYWORDS_PER_USER } from "@/lib/radar/match";
@@ -43,12 +43,12 @@ export default async function RadarPage() {
       />
 
       {groups.length === 0 ? (
-        <div className="rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
+        <Card>
           <p className="t-subhead">你还没有加入任何已接入的群</p>
           <p className="t-caption mt-1 leading-relaxed text-[var(--ink-tertiary)]">
             雷达只在你自己所在的群里匹配 —— 没有群就没有可扫的范围。
           </p>
-        </div>
+        </Card>
       ) : (
         <Section>
           <RadarManager initial={subs} />

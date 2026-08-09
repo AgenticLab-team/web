@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Section, StatTile } from "@/components/ui/primitives";
+import { Card, PageNote, Section, StatTile } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import {
   mentionCountFor,
@@ -58,7 +58,7 @@ export default async function PersonPage({
     <>
       <PageHeader title="成员主页" />
 
-      <div className="mb-4 flex items-center gap-4 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
+      <Card className="mb-4 flex items-center gap-4">
         <Avatar wxId={wxId} name={profile.name} src={profile.avatarUrl} size={56} />
         <div className="min-w-0 flex-1">
           <p className="t-title3 font-semibold">{profile.name}</p>
@@ -66,9 +66,9 @@ export default async function PersonPage({
             {profile.sharedGroups.map((g) => g.name).join(" · ")}
           </p>
         </div>
-      </div>
+      </Card>
 
-      <div className="mb-4 grid grid-cols-3 gap-2">
+      <div className="mb-4 grid grid-cols-3 gap-2.5">
         <StatTile label="发言" value={profile.messages} />
         <StatTile label="被 @" value={mentionCount} />
         <StatTile label="被回复" value={replyCount} />
@@ -100,13 +100,13 @@ export default async function PersonPage({
         </Section>
       )}
 
-      <p className="t-caption mt-4 flex gap-1.5 px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote className="flex gap-1.5">
         <EyeOff className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
         <span>
           这一页只对<strong>同群成员</strong>可见，且只统计你们的共同群 ——
           这里没有任何你在微信里看不到的东西。
         </span>
-      </p>
+      </PageNote>
     </>
   );
 }

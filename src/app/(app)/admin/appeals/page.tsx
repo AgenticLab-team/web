@@ -5,7 +5,7 @@ import { AppealActions } from "@/components/admin/AppealActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Pagination } from "@/components/ui/Pagination";
-import { Empty, Pill } from "@/components/ui/primitives";
+import { Callout, Card, Empty, Pill, PillRow } from "@/components/ui/primitives";
 import { actionLabel, appealFacets, appealQueue } from "@/lib/admin/appeals";
 import { requireAdmin } from "@/lib/admin/guard";
 
@@ -41,23 +41,24 @@ export default async function AdminAppealsPage({
         subtitle={facets.open === 0 ? "没有待处理的申诉" : `${facets.open} 条待处理`}
       />
 
-      <div className="mb-4 rounded-[var(--radius-card)] bg-[var(--surface)] px-4 py-3 hairline">
-        <p className="t-subhead">
-          {facets.acceptRate === null ? (
+      <Callout
+        title={
+          facets.acceptRate === null ? (
             <>还没有处理过申诉</>
           ) : (
             <>
               已处理 {facets.handled} 条，采纳率{" "}
               <span className="tabular font-medium">{facets.acceptRate}%</span>
             </>
-          )}
-        </p>
+          )
+        }
+      >
         <p className="t-caption mt-1 text-[var(--ink-tertiary)]">
           采纳率长期为 0 说明申诉是走过场；长期很高说明处罚本身太随意。它不是考核指标。
         </p>
-      </div>
+      </Callout>
 
-      <div className="mb-5 flex flex-wrap gap-1.5">
+      <PillRow wrap>
         <Pill href="/admin/appeals" active={!params.status}>
           待处理 {facets.open}
         </Pill>
@@ -72,7 +73,7 @@ export default async function AdminAppealsPage({
               {s.value === "accepted" ? "已采纳" : "已驳回"} {s.count}
             </Pill>
           ))}
-      </div>
+      </PillRow>
 
       {rows.length === 0 ? (
         <Empty title="没有待处理的申诉" hint="有处罚就必须有申诉入口，空着说明处罚都被接受了" />
@@ -91,10 +92,7 @@ export default async function AdminAppealsPage({
                   : null;
 
             return (
-              <article
-                key={row.id}
-                className="space-y-3 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline"
-              >
+              <Card as="article" key={row.id} className="space-y-3">
                 <header className="flex flex-wrap items-baseline gap-1.5">
                   <Link href={`/admin/users/${row.userId}`} className="t-body font-medium">
                     {row.userName}
@@ -139,7 +137,7 @@ export default async function AdminAppealsPage({
                     {row.status === "accepted" ? "已采纳" : "已驳回"}：{row.response}
                   </p>
                 )}
-              </article>
+              </Card>
             );
           })}
         </div>

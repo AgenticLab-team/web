@@ -6,7 +6,15 @@ import { relativeTime } from "@/components/forum/PostList";
 import { SaveButton } from "@/components/links/SaveButton";
 import { VoteButton } from "@/components/links/VoteButton";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Empty, Pill, Section } from "@/components/ui/primitives";
+import {
+  Card,
+  Empty,
+  PageNote,
+  Pill,
+  PillRow,
+  SearchField,
+  Section,
+} from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { listLinks } from "@/lib/links/queries";
 
@@ -74,13 +82,7 @@ export default async function LinksPage({
         <>
           <form action="/links" className="mb-3">
             {params.d && <input type="hidden" name="d" value={params.d} />}
-            <input
-              type="search"
-              name="q"
-              defaultValue={params.q ?? ""}
-              placeholder="搜标题、地址、说明"
-              className="t-body w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3.5 py-2.5 outline-none transition focus:ring-2 focus:ring-[var(--accent)]"
-            />
+            <SearchField defaultValue={params.q ?? ""} placeholder="搜标题、地址、说明" />
           </form>
 
           {/*
@@ -90,7 +92,7 @@ export default async function LinksPage({
             * 真正值得看的就那么十几条,而只有点赞数能把它们浮上来。
             * 按时间排只回答「最近有人分享什么」，那是另一个问题。
             */}
-          <div className="mb-3 flex flex-wrap gap-1.5">
+          <PillRow wrap>
             <Pill href={query({ sort: undefined })} active={!byVotes}>
               最近分享
             </Pill>
@@ -100,30 +102,28 @@ export default async function LinksPage({
                 最有用
               </span>
             </Pill>
-          </div>
+          </PillRow>
 
-          <div className="-mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
-            <span className="shrink-0">
-              <Pill href={query({ d: undefined, saved: undefined })} active={!params.d && !savedOnly}>
-                全部
-              </Pill>
-            </span>
+          <PillRow>
+            <Pill href={query({ d: undefined, saved: undefined })} active={!params.d && !savedOnly}>
+              全部
+            </Pill>
             {result.savedCount > 0 && (
-              <span className="shrink-0">
-                <Pill href={query({ saved: savedOnly ? undefined : "1" })} active={savedOnly}>
-                  我收藏的<span className="tabular ml-1 opacity-55">{result.savedCount}</span>
-                </Pill>
-              </span>
+              <Pill href={query({ saved: savedOnly ? undefined : "1" })} active={savedOnly}>
+                我收藏的<span className="tabular ml-1 opacity-55">{result.savedCount}</span>
+              </Pill>
             )}
             {result.facets.map((facet) => (
-              <span key={facet.domain} className="shrink-0">
-                <Pill href={query({ d: params.d === facet.domain ? undefined : facet.domain })} active={params.d === facet.domain}>
-                  {facet.label}
-                  <span className="tabular ml-1 opacity-55">{facet.count}</span>
-                </Pill>
-              </span>
+              <Pill
+                key={facet.domain}
+                href={query({ d: params.d === facet.domain ? undefined : facet.domain })}
+                active={params.d === facet.domain}
+              >
+                {facet.label}
+                <span className="tabular ml-1 opacity-55">{facet.count}</span>
+              </Pill>
             ))}
-          </div>
+          </PillRow>
 
           <Section>
             {result.items.length === 0 ? (
@@ -134,10 +134,7 @@ export default async function LinksPage({
             ) : (
               <div className="space-y-2">
                 {result.items.map((item) => (
-                  <article
-                    key={item.id}
-                    className="rounded-[var(--radius-card)] bg-[var(--surface)] p-3.5 hairline"
-                  >
+                  <Card as="article" key={item.id}>
                     <div className="flex gap-2.5">
                       <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--fill)]">
                         <Link2 className="h-4 w-4 text-[var(--ink-tertiary)]" strokeWidth={2} aria-hidden />
@@ -204,7 +201,7 @@ export default async function LinksPage({
                       />
                       <SaveButton linkId={item.id} initial={item.saved} />
                     </div>
-                  </article>
+                  </Card>
                 ))}
               </div>
             )}
@@ -212,11 +209,11 @@ export default async function LinksPage({
         </>
       )}
 
-      <p className="t-caption px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         链接从群聊里自动收录，去掉了追踪参数并合并了重复的。
         <strong>只收录你所在的群里出现过的</strong>，而且不显示来自哪个群 ——
         「被分享 N 次」数的也只是你看得到的那些次。
-      </p>
+      </PageNote>
     </>
   );
 }

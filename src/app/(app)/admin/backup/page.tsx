@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { TruncationNote } from "@/components/ui/Pagination";
-import { Empty, Section } from "@/components/ui/primitives";
+import { Callout, Card, Empty, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { offsiteSummary } from "@/lib/backup/offsite";
 import { DRILL_AFTER_MS, STATUS_LABELS, statusTone } from "@/lib/backup/rules";
@@ -28,9 +28,7 @@ export default async function AdminBackupPage() {
   await requireAdmin("system.dashboard");
 
   const s = offsiteSummary();
-  const tone = statusTone(s.status);
-  const color =
-    tone === "success" ? "var(--success)" : tone === "warning" ? "var(--warning)" : "var(--danger)";
+  const tone = statusTone(s.status) as "success" | "warning" | "danger";
 
   const localBytes = s.localFiles.reduce((n, f) => n + f.bytes, 0);
   const backups = s.localFiles.filter((f) => f.name.startsWith("backups/"));
@@ -46,26 +44,22 @@ export default async function AdminBackupPage() {
       />
 
       {/* 结论摆最前面：明天服务器没了，站还回不回得来 */}
-      <div
-        className="mb-4 flex gap-3 rounded-[var(--radius-card)] p-4 hairline"
-        style={{ background: `color-mix(in srgb, ${color} 9%, var(--surface))` }}
-      >
-        <span className="mt-0.5" style={{ color }}>
-          {tone === "success" ? (
+      <Callout
+        tone={tone}
+        title={STATUS_LABELS[s.status]}
+        icon={
+          tone === "success" ? (
             <ShieldCheck className="h-5 w-5" strokeWidth={2} aria-hidden />
           ) : s.status === "unconfigured" ? (
             <CloudOff className="h-5 w-5" strokeWidth={2} aria-hidden />
           ) : (
             <TriangleAlert className="h-5 w-5" strokeWidth={2} aria-hidden />
-          )}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="t-headline font-semibold" style={{ color }}>
-            {STATUS_LABELS[s.status]}
-          </p>
-          <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">{s.detail}</p>
+          )
+        }
+      >
+        <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">{s.detail}</p>
 
-          {s.missingKeys.length > 0 && (
+        {s.missingKeys.length > 0 && (
             <div className="mt-2.5">
               <p className="t-caption2 text-[var(--ink-tertiary)]">
                 在服务器的 <code className="font-mono">.env.local</code> 里补上这几项，
@@ -83,18 +77,11 @@ export default async function AdminBackupPage() {
                 每天几 MB，基本落在免费额度里。
               </p>
             </div>
-          )}
-        </div>
-      </div>
+        )}
+      </Callout>
 
       {s.drillDue && (
-        <div
-          className="mb-4 rounded-[var(--radius-card)] p-4 hairline"
-          style={{ background: "color-mix(in srgb, var(--warning) 8%, var(--surface))" }}
-        >
-          <p className="t-subhead font-medium" style={{ color: "var(--warning)" }}>
-            该做一次恢复演练了
-          </p>
+        <Callout tone="warning" title="该做一次恢复演练了">
           <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">
             <strong>没演练过的备份只是一堆字节。</strong>
             真要用的时候才发现打不开，那时候原库已经没了 ——
@@ -104,7 +91,7 @@ export default async function AdminBackupPage() {
           <p className="t-caption2 mt-2 font-mono text-[var(--ink-tertiary)]">
             npm run offsite -- --drill
           </p>
-        </div>
+        </Callout>
       )}
 
       <Section title="链路">
@@ -232,7 +219,7 @@ function Step({
   note: string;
 }) {
   return (
-    <div className="flex gap-3 rounded-[var(--radius-card)] bg-[var(--surface)] p-3.5 hairline">
+    <Card className="flex gap-3">
       <span
         className="mt-0.5 shrink-0"
         style={{ color: ok ? "var(--success)" : "var(--ink-quaternary)" }}
@@ -246,6 +233,6 @@ function Step({
         </p>
         <p className="t-caption2 mt-1 leading-relaxed text-[var(--ink-quaternary)]">{note}</p>
       </div>
-    </div>
+    </Card>
   );
 }

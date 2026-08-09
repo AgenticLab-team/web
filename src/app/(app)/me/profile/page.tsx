@@ -1,13 +1,11 @@
-import { ChevronLeft } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { BioEditor } from "@/components/members/BioEditor";
 import { DirectoryToggle } from "@/components/members/DirectoryToggle";
 import { SkillEditor } from "@/components/members/SkillEditor";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Section } from "@/components/ui/primitives";
+import { BackLink, Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isDirectoryHidden, mySkills } from "@/lib/members/queries";
 
@@ -30,13 +28,7 @@ export default async function ProfilePage() {
 
   return (
     <>
-      <Link
-        href="/me"
-        className="t-subhead -ml-1 mt-6 inline-flex items-center gap-0.5 text-[var(--accent)] transition active:opacity-60"
-      >
-        <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
-        我的
-      </Link>
+      <BackLink href="/me">我的</BackLink>
 
       <PageHeader title="个人资料" subtitle="决定别人能不能找到你" />
 

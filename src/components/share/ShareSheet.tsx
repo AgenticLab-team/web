@@ -178,7 +178,7 @@ export function ShareSheet({
           )}
 
           {fallback && (
-            <div className="border-t border-[var(--hairline)] p-2">
+            <div className="border-t border-[var(--separator)] p-2">
               {/*
                 * 剪贴板不可用时的兜底。
                 *

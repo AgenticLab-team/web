@@ -4,7 +4,7 @@ import Link from "next/link";
 import { EscalationActions } from "@/components/admin/EscalationActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Empty, Pill } from "@/components/ui/primitives";
+import { Callout, Card, Empty, Pill, PillRow } from "@/components/ui/primitives";
 import { escalationFacets, escalationQueue } from "@/lib/admin/escalation";
 import { requireAdmin } from "@/lib/admin/guard";
 import { MAX_ESCALATION, statusLabel } from "@/lib/moderation/escalation-rules";
@@ -42,7 +42,7 @@ export default async function AdminEscalationPage({
         subtitle={facets.pending === 0 ? "没有待审核的申请" : `${facets.pending} 条待审核`}
       />
 
-      <div className="mb-4 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
+      <Callout>
         <p className="t-subhead leading-relaxed">
           群聊转帖默认锁在原群范围，想让更多人看到只能走这条队列 ——
           最高到「{visibilityLabel(MAX_ESCALATION)}」，<strong>永远不会公开</strong>。
@@ -59,9 +59,9 @@ export default async function AdminEscalationPage({
             </>
           )}
         </p>
-      </div>
+      </Callout>
 
-      <div className="mb-5 flex flex-wrap gap-1.5">
+      <PillRow wrap>
         <Pill href="/admin/escalation" active={!params.status}>
           待审核 {facets.pending}
         </Pill>
@@ -76,7 +76,7 @@ export default async function AdminEscalationPage({
               {statusLabel(s.value)} {s.count}
             </Pill>
           ))}
-      </div>
+      </PillRow>
 
       {rows.length === 0 ? (
         <Empty
@@ -98,10 +98,7 @@ export default async function AdminEscalationPage({
                   : null;
 
             return (
-              <article
-                key={row.id}
-                className="space-y-3 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline"
-              >
+              <Card as="article" key={row.id} className="space-y-3">
                 <header className="flex flex-wrap items-baseline gap-1.5">
                   <Link href={`/forum/p/${row.postId}`} className="t-body font-medium">
                     {row.postTitle}
@@ -170,7 +167,7 @@ export default async function AdminEscalationPage({
                     {statusLabel(row.status)}：{row.reviewNote}
                   </p>
                 )}
-              </article>
+              </Card>
             );
           })}
         </div>

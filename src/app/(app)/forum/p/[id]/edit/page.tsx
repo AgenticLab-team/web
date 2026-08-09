@@ -1,10 +1,9 @@
-import { ChevronLeft } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { EditPostForm } from "@/components/forum/EditPostForm";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { BackLink } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
 import { postCapabilities } from "@/lib/forum/manage";
@@ -26,13 +25,7 @@ export default async function EditPostPage({ params }: { params: Promise<{ id: s
 
   return (
     <>
-      <Link
-        href={`/forum/p/${post.id}`}
-        className="t-subhead -ml-1 mt-6 inline-flex items-center gap-0.5 text-[var(--accent)] transition active:opacity-60"
-      >
-        <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
-        返回帖子
-      </Link>
+      <BackLink href={`/forum/p/${post.id}`}>返回帖子</BackLink>
 
       <PageHeader title="编辑帖子" />
 

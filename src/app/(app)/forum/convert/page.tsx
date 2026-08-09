@@ -1,11 +1,10 @@
-import { ChevronLeft } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { MessagePicker } from "@/components/forum/MessagePicker";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Empty, Pill } from "@/components/ui/primitives";
+import { BackLink, Callout, Empty, PageNote, Pill, PillRow } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { messagesOfDay } from "@/lib/forum/convert-source";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
@@ -43,28 +42,24 @@ export default async function ConvertPage({
 
   return (
     <>
-      <Link
-        href="/forum"
-        className="t-subhead -ml-1 mt-6 inline-flex items-center gap-0.5 text-[var(--accent)] transition active:opacity-60"
-      >
-        <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
-        论坛
-      </Link>
+      <BackLink href="/forum">论坛</BackLink>
 
       <PageHeader
         title="整理成帖子"
         subtitle="把群里聊出来的东西留下来"
       />
 
-      <div className="-mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
+      <PillRow>
         {myGroups.map((g) => (
-          <span key={g.convId} className="shrink-0">
-            <Pill href={`/forum/convert?group=${encodeURIComponent(g.convId)}&date=${day}`} active={g.convId === convId}>
-              {g.name}
-            </Pill>
-          </span>
+          <Pill
+            key={g.convId}
+            href={`/forum/convert?group=${encodeURIComponent(g.convId)}&date=${day}`}
+            active={g.convId === convId}
+          >
+            {g.name}
+          </Pill>
         ))}
-      </div>
+      </PillRow>
 
       <div className="mb-5 flex items-center justify-between gap-2">
         <Link
@@ -88,16 +83,12 @@ export default async function ConvertPage({
 
       {/* 裁剪过的一天和冷清的一天长得一模一样 —— 必须说出来 */}
       {dropped > 0 && (
-        <p
-          className="t-caption mb-3 rounded-[var(--radius-card)] px-3.5 py-2.5 leading-relaxed hairline"
-          style={{
-            background: "color-mix(in srgb, var(--warning) 8%, var(--surface))",
-            color: "var(--ink-secondary)",
-          }}
-        >
-          这一天有 {dropped} 条正文已因存储裁剪被归档，不在下面的列表里 ——
-          你看到的不是完整的一天，转出来的帖子也会是残缺的。
-        </p>
+        <Callout tone="warning">
+          <p className="t-caption leading-relaxed text-[var(--ink-secondary)]">
+            这一天有 {dropped} 条正文已因存储裁剪被归档，不在下面的列表里 ——
+            你看到的不是完整的一天，转出来的帖子也会是残缺的。
+          </p>
+        </Callout>
       )}
 
       {rows.length === 0 ? (
@@ -106,10 +97,10 @@ export default async function ConvertPage({
         <MessagePicker convId={convId} groupName={groupName} messages={rows} />
       )}
 
-      <p className="t-caption mt-4 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         转出来的帖子<strong className="font-medium">只有本群成员看得到</strong>。
         想让更多人看到，需要被引用的每一位原作者都同意，再由管理员确认。
-      </p>
+      </PageNote>
     </>
   );
 }

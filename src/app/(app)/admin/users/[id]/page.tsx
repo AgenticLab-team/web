@@ -1,6 +1,4 @@
-import { ChevronLeft } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
@@ -8,7 +6,7 @@ import { UserActions } from "@/components/admin/UserActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { TruncationNote } from "@/components/ui/Pagination";
-import { Group, Row, Section, StatTile } from "@/components/ui/primitives";
+import { BackLink, Empty, Group, Row, Section, StatTile } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { getUserDetail } from "@/lib/admin/users";
 import { describeDevice } from "@/lib/auth/devices";
@@ -67,13 +65,7 @@ export default async function AdminUserDetail({ params }: { params: Promise<{ id
 
   return (
     <>
-      <Link
-        href="/admin/users"
-        className="t-subhead -ml-1 inline-flex items-center gap-0.5 text-[var(--accent)] transition active:opacity-60"
-      >
-        <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
-        用户管理
-      </Link>
+      <BackLink href="/admin/users">用户管理</BackLink>
 
       <PageHeader title={detail.name} subtitle={`${STATUS_LABEL[user.status] ?? user.status} · ${user.kind}`} />
 
@@ -190,6 +182,9 @@ export default async function AdminUserDetail({ params }: { params: Promise<{ id
       )}
 
       <Section title="积分流水">
+        {detail.ledger.length === 0 ? (
+          <Empty title="还没有积分变动" />
+        ) : (
         <Group>
           {detail.ledger.slice(0, 10).map((entry) => (
             <Row key={entry.id}>
@@ -207,12 +202,8 @@ export default async function AdminUserDetail({ params }: { params: Promise<{ id
               </span>
             </Row>
           ))}
-          {detail.ledger.length === 0 && (
-            <Row>
-              <span className="t-subhead text-[var(--ink-secondary)]">还没有积分变动</span>
-            </Row>
-          )}
         </Group>
+        )}
         <TruncationNote
           shown={Math.min(detail.ledger.length, 10)}
           total={detail.ledgerTotal}
@@ -221,6 +212,9 @@ export default async function AdminUserDetail({ params }: { params: Promise<{ id
       </Section>
 
       <Section title={`登录设备（${detail.sessions.length}）`}>
+        {detail.sessions.length === 0 ? (
+          <Empty title="没有活跃会话" />
+        ) : (
         <Group>
           {detail.sessions.map((session) => (
             <Row key={session.id}>
@@ -235,12 +229,8 @@ export default async function AdminUserDetail({ params }: { params: Promise<{ id
               </span>
             </Row>
           ))}
-          {detail.sessions.length === 0 && (
-            <Row>
-              <span className="t-subhead text-[var(--ink-secondary)]">没有活跃会话</span>
-            </Row>
-          )}
         </Group>
+        )}
         {detail.credentials.length > 0 && (
           <p className="t-caption mt-2 px-1 text-[var(--ink-tertiary)]">
             凭证：{detail.credentials.map((c) => c.name ?? c.type).join("、")}

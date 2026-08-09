@@ -7,6 +7,7 @@ import { ChevronRight } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { TitleIcon } from "@/components/titles/TitleIcon";
 import { TitleShelf } from "@/components/titles/TitleShelf";
 import { Empty, Group, Row, Section, StatTile } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -122,13 +123,16 @@ export default async function MePage() {
               <span className="truncate">{name}</span>
               {equipped && (
                 <span
-                  className="t-caption shrink-0 rounded-[var(--radius-pill)] px-1.5 py-0.5 font-medium"
+                  className="t-caption flex shrink-0 items-center gap-1 rounded-[var(--radius-pill)] px-1.5 py-0.5 font-medium"
                   style={{
                     background: `color-mix(in srgb, ${rarityColor(equipped.rarity)} 14%, transparent)`,
                     color: rarityColor(equipped.rarity),
                   }}
                 >
-                  {equipped.icon} {equipped.name}
+                  {/* 称号图标走 TitleIcon 映射成 SVG —— 成员目录已经这么做了，
+                      「我的」页直接渲染 emoji 的话，同一个称号在两页长得不一样 */}
+                  <TitleIcon icon={equipped.icon} className="h-3 w-3" />
+                  {equipped.name}
                 </span>
               )}
             </p>

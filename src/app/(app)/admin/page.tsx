@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Group, Row, Section, StatTile } from "@/components/ui/primitives";
+import { Empty, Group, Row, Section, StatTile } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import {
   activityStats,
@@ -62,13 +62,32 @@ export default async function AdminDashboard() {
           「累计消息 41,622」看着漂亮但没人会因为它做任何事 */}
       <Section title="待处理">
         <div className="grid grid-cols-3 gap-2.5">
-          <PendingTile label="举报" value={pending.reports} href="/admin/reports" />
-          <PendingTile label="申诉" value={pending.appeals} href="/admin/appeals" />
-          <PendingTile label="积分异常" value={pending.anomalies} href="/admin/points" />
+          {/* 数字是入口：有待办的染黄，点进去就是队列 */}
+          <StatTile
+            label="举报"
+            value={pending.reports}
+            href="/admin/reports"
+            tone={pending.reports > 0 ? "warning" : undefined}
+          />
+          <StatTile
+            label="申诉"
+            value={pending.appeals}
+            href="/admin/appeals"
+            tone={pending.appeals > 0 ? "warning" : undefined}
+          />
+          <StatTile
+            label="积分异常"
+            value={pending.anomalies}
+            href="/admin/points"
+            tone={pending.anomalies > 0 ? "warning" : undefined}
+          />
         </div>
       </Section>
 
       <Section title="系统健康">
+        {status.components.length === 0 ? (
+          <Empty title="还没有探测记录" hint="定时任务可能还没跑过 —— 查 agenticlab-health.timer" />
+        ) : (
         <Group>
           {status.components.map((component) => (
             <Row key={component.component}>
@@ -100,12 +119,8 @@ export default async function AdminDashboard() {
             </Row>
           ))}
 
-          {status.components.length === 0 && (
-            <Row>
-              <span className="t-subhead text-[var(--ink-secondary)]">还没有探测记录</span>
-            </Row>
-          )}
         </Group>
+        )}
 
         <div className="mt-2 space-y-1 px-1">
           {/* 探测本身停了比某个组件挂了更危险 —— 后者会告警，前者悄无声息 */}
@@ -132,7 +147,9 @@ export default async function AdminDashboard() {
       </Section>
 
       <Section title="今日活跃">
-        <div className="grid grid-cols-3 gap-2.5">
+        {/* 宽栏（78rem）下一行摆得开 6 个 —— 拆成两行的话，
+            下半行右侧是一整片空白，正是「空白区太多」的那种页面 */}
+        <div className="grid grid-cols-3 gap-2.5 lg:grid-cols-6">
           <StatTile label="日活" value={activity.dau} hint={`周活 ${activity.wau}`} accent />
           <StatTile
             label="今日消息"
@@ -140,8 +157,6 @@ export default async function AdminDashboard() {
             hint={`高质量 ${activity.qualityRateToday}%`}
           />
           <StatTile label="打卡" value={activity.checkinsToday} hint={`发出 ${activity.pointsGrantedToday} 分`} />
-        </div>
-        <div className="mt-2.5 grid grid-cols-3 gap-2.5">
           <StatTile label="新绑定" value={activity.newBindings7d} hint="近 7 天" />
           <StatTile label="新帖" value={activity.postsToday} />
           <StatTile label="新回复" value={activity.repliesToday} />
@@ -226,26 +241,5 @@ export default async function AdminDashboard() {
         </Section>
       )}
     </>
-  );
-}
-
-function PendingTile({ label, value, href }: { label: string; value: number; href: string }) {
-  const urgent = value > 0;
-  return (
-    <Link
-      href={href}
-      className={`rounded-[var(--radius-card)] p-4 transition active:scale-[0.98] ${
-        urgent ? "bg-[var(--warning)]/12" : "bg-[var(--surface)]"
-      }`}
-    >
-      <p
-        className={`tabular t-title1 leading-none ${
-          urgent ? "text-[var(--warning)]" : "text-[var(--ink-tertiary)]"
-        }`}
-      >
-        {value}
-      </p>
-      <p className="t-footnote mt-2 text-[var(--ink-secondary)]">{label}</p>
-    </Link>
   );
 }

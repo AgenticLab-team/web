@@ -5,7 +5,7 @@ import { ApplicationReview } from "@/components/admin/ApplicationReview";
 import { BulkFulfillPanel, RegistrarExport } from "@/components/admin/BulkDomainOps";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Empty, Section } from "@/components/ui/primitives";
+import { Card, Empty, PageNote, Section } from "@/components/ui/primitives";
 import {
   exportPendingList,
   exportRegistrarList,
@@ -65,7 +65,7 @@ export default async function AdminActivitiesPage() {
 
           return (
             <Section key={activity.id} title={activity.title}>
-              <div className="space-y-3 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
+              <Card className="space-y-3">
                 <header className="flex flex-wrap items-center gap-1.5">
                   <span
                     className="t-caption2 rounded-[var(--radius-pill)] px-1.5 py-0.5 font-medium"
@@ -174,18 +174,18 @@ export default async function AdminActivitiesPage() {
                     ))}
                   </div>
                 )}
-              </div>
+              </Card>
             </Section>
           );
         })
       )}
 
-      <p className="t-caption px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         名额扣减是一条带条件的 UPDATE，条件与写入在同一条语句里 ——
         <strong>60 个名额被 300 人同时抢也不会超卖</strong>。
         候补不占名额；撤回、判无效、履约失败都会把名额还回来，
         不还的话一个填错的申请会永久占掉一个名额而没人看得出为什么。
-      </p>
+      </PageNote>
     </>
   );
 }

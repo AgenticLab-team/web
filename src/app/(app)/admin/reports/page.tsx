@@ -5,7 +5,7 @@ import { ReportActions } from "@/components/admin/ReportActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { TruncationNote } from "@/components/ui/Pagination";
-import { Empty, Pill } from "@/components/ui/primitives";
+import { Card, Empty, Pill, PillRow, StatTile } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { reportFacets, reportQueue, reportsForTarget } from "@/lib/admin/reports";
 import { severityLabel } from "@/lib/moderation/rules";
@@ -67,27 +67,23 @@ export default async function AdminReportsPage({
         subtitle={facets.pending === 0 ? "队列是空的" : `${facets.pending} 件待处理`}
       />
 
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Metric label="超时未处理" value={facets.overdue} tone={facets.overdue > 0 ? "danger" : undefined} />
-        <Metric label="紧急" value={facets.urgent} tone={facets.urgent > 0 ? "warning" : undefined} />
-        <Metric label="无人认领" value={facets.unassigned} />
-        <Metric label="待处理" value={facets.pending} />
+      <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <StatTile label="超时未处理" value={facets.overdue} tone={facets.overdue > 0 ? "danger" : undefined} />
+        <StatTile label="紧急" value={facets.urgent} tone={facets.urgent > 0 ? "warning" : undefined} />
+        <StatTile label="无人认领" value={facets.unassigned} />
+        <StatTile label="待处理" value={facets.pending} />
       </div>
 
-      <div className="-mx-4 mb-5 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
-        <span className="shrink-0">
-          <Pill href={href({ reason: undefined })} active={!params.reason}>
-            全部理由
-          </Pill>
-        </span>
+      <PillRow>
+        <Pill href={href({ reason: undefined })} active={!params.reason}>
+          全部理由
+        </Pill>
         {facets.reasons.map((f) => (
-          <span key={f.code} className="shrink-0">
-            <Pill href={href({ reason: f.code })} active={params.reason === f.code}>
-              {f.label} {f.count}
-            </Pill>
-          </span>
+          <Pill key={f.code} href={href({ reason: f.code })} active={params.reason === f.code}>
+            {f.label} {f.count}
+          </Pill>
         ))}
-      </div>
+      </PillRow>
 
       {rows.length === 0 ? (
         <Empty
@@ -108,9 +104,10 @@ export default async function AdminReportsPage({
                 : null;
 
             return (
-              <article
+              <Card
+                as="article"
                 key={row.key}
-                className="space-y-3 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline"
+                className="space-y-3"
                 style={
                   row.overdue
                     ? { boxShadow: "inset 3px 0 0 0 var(--danger)" }
@@ -188,7 +185,7 @@ export default async function AdminReportsPage({
                   assigned={row.assignedTo !== null}
                   conflict={conflict}
                 />
-              </article>
+              </Card>
             );
           })}
         </div>
@@ -196,25 +193,5 @@ export default async function AdminReportsPage({
 
       <TruncationNote shown={rows.length} total={fullQueue.length} noun="个目标" />
     </>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone?: "danger" | "warning";
-}) {
-  const color = tone === "danger" ? "var(--danger)" : tone === "warning" ? "var(--warning)" : undefined;
-  return (
-    <div className="rounded-[var(--radius-card)] bg-[var(--surface)] px-3 py-2.5 hairline">
-      <p className="tabular t-title3 leading-none" style={color ? { color } : undefined}>
-        {value}
-      </p>
-      <p className="t-caption mt-1 text-[var(--ink-tertiary)]">{label}</p>
-    </div>
   );
 }

@@ -5,7 +5,7 @@ import { InviteManager } from "@/components/admin/InviteManager";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Pagination } from "@/components/ui/Pagination";
-import { Empty, Section } from "@/components/ui/primitives";
+import { Callout, Empty, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { inviteUseStats, listInvites, pagedInviteUses, pendingRewards } from "@/lib/invites/queries";
 
@@ -45,7 +45,7 @@ export default async function AdminInvitesPage({
         subtitle={`${invites.length} 个码 · 已邀请 ${useTotal} 人`}
       />
 
-      <div className="mb-4 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
+      <Callout>
         <p className="t-subhead leading-relaxed">
           现阶段<strong>只有群成员能登录</strong>，邀请是为外部用户预留的通道 ——
           码和结算已经就位，开不开由功能开关决定。
@@ -57,33 +57,33 @@ export default async function AdminInvitesPage({
           被邀请人被封时奖励会自动冲正：不回滚的话「刷号被抓也不亏」。
           <strong>只奖励直接邀请，没有多级</strong> —— 多级是传销的结构。
         </p>
-      </div>
+      </Callout>
 
       {(stats.idle > 0 || stats.reverted > 0) && (
-        <div
-          className="mb-4 rounded-[var(--radius-card)] p-4 hairline"
-          style={{ background: "color-mix(in srgb, var(--warning) 9%, var(--surface))" }}
+        <Callout
+          tone="warning"
+          title={
+            <>
+              {stats.idle > 0 && `${stats.idle} 个被邀请的人从没打过卡`}
+              {stats.idle > 0 && stats.reverted > 0 && " · "}
+              {stats.reverted > 0 && `${stats.reverted} 笔奖励已被回滚`}
+            </>
+          }
         >
-          <p className="t-subhead font-medium" style={{ color: "var(--warning)" }}>
-            {stats.idle > 0 && `${stats.idle} 个被邀请的人从没打过卡`}
-            {stats.idle > 0 && stats.reverted > 0 && " · "}
-            {stats.reverted > 0 && `${stats.reverted} 笔奖励已被回滚`}
-          </p>
           <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">
             从没打过卡的人不会产生奖励，所以这本身不是损失 ——
             但如果集中在同一个码上，那多半是有人在拉号。
           </p>
-        </div>
+        </Callout>
       )}
 
       {pending.length > 0 && (
-        <div className="mb-4 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
-          <p className="t-subhead">{pending.length} 笔奖励待结算</p>
+        <Callout title={`${pending.length} 笔奖励待结算`}>
           <p className="t-caption mt-1 text-[var(--ink-tertiary)]">
             被邀请人已经打过卡但奖励还没发。正常情况下打卡时就结算了 ——
             这个数长期不为零说明结算没跑，可以用下面的按钮补一次。
           </p>
-        </div>
+        </Callout>
       )}
 
       <Section title="邀请码">

@@ -5,7 +5,7 @@ import { PruneRunner } from "@/components/admin/PruneRunner";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { TruncationNote } from "@/components/ui/Pagination";
-import { Empty, Section } from "@/components/ui/primitives";
+import { Callout, Card, Empty, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import {
   DISK_LEVEL_LABELS,
@@ -57,47 +57,33 @@ export default async function AdminStoragePage() {
 
       {/* ① 找不回来才是真事故 */}
       {s.droppedWithoutArchive && (
-        <div
-          className="mb-4 flex gap-2.5 rounded-[var(--radius-card)] p-4 hairline"
-          style={{ background: "color-mix(in srgb, var(--danger) 10%, var(--surface))" }}
+        <Callout
+          tone="danger"
+          icon={<AlertTriangle className="h-4 w-4" strokeWidth={2.2} aria-hidden />}
+          title={`有 ${totalDropped.toLocaleString()} 条正文被丢掉了，但归档目录里一个文件都没有`}
         >
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2.2} style={{ color: "var(--danger)" }} aria-hidden />
-          <div className="min-w-0">
-            <p className="t-subhead font-medium" style={{ color: "var(--danger)" }}>
-              有 {totalDropped.toLocaleString()} 条正文被丢掉了，但归档目录里一个文件都没有
-            </p>
-            <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">
-              那些内容现在只可能在上游还有。先确认归档目录（
-              <code className="font-mono">ARCHIVE_DIR</code>）有没有被清理脚本或者一次手滑的
-              rm 干掉，再决定要不要从上游回捞。
-            </p>
-          </div>
-        </div>
+          <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">
+            那些内容现在只可能在上游还有。先确认归档目录（
+            <code className="font-mono">ARCHIVE_DIR</code>）有没有被清理脚本或者一次手滑的
+            rm 干掉，再决定要不要从上游回捞。
+          </p>
+        </Callout>
       )}
 
       {s.drift > 0 && (
-        <div
-          className="mb-4 rounded-[var(--radius-card)] p-4 hairline"
-          style={{ background: "color-mix(in srgb, var(--warning) 9%, var(--surface))" }}
-        >
-          <p className="t-subhead font-medium" style={{ color: "var(--warning)" }}>
-            {s.drift.toLocaleString()} 条消息的层标记和它的实际年龄对不上
-          </p>
+        <Callout tone="warning" title={`${s.drift.toLocaleString()} 条消息的层标记和它的实际年龄对不上`}>
           <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">
             说明裁剪任务没跑过、跑挂了，或者刚改过分层天数。
             这个数字本身没有危害 —— 但它是「任务真的在跑」的唯一凭据。
           </p>
-        </div>
+        </Callout>
       )}
 
       {/* ② 空间花在哪了 */}
       <Section title="分层现状">
         <div className="space-y-2">
           {s.tiers.map((t) => (
-            <div
-              key={t.tier}
-              className="rounded-[var(--radius-card)] bg-[var(--surface)] p-3.5 hairline"
-            >
+            <Card key={t.tier}>
               <p className="t-body flex flex-wrap items-baseline gap-1.5">
                 <span className="font-medium">{TIER_LABELS[t.tier]}</span>
                 <span className="t-caption2 text-[var(--ink-quaternary)]">
@@ -129,7 +115,7 @@ export default async function AdminStoragePage() {
                 {t.dropped > 0 && ` · 已丢正文 ${t.dropped.toLocaleString()} 条`}
                 {t.oldestTs && ` · 最早 ${new Date(t.oldestTs).toLocaleDateString("zh-CN")}`}
               </p>
-            </div>
+            </Card>
           ))}
         </div>
 

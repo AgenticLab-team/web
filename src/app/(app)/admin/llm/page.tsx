@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 
 import { EnrichRunner } from "@/components/admin/EnrichRunner";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Section } from "@/components/ui/primitives";
+import { PageNote, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { enrichProgress } from "@/lib/links/enrich";
 import { probeChat, probeEmbedding, type LlmProbe } from "@/lib/llm/health";
@@ -113,13 +113,13 @@ export default async function AdminLlmPage() {
         </div>
       </Section>
 
-      <p className="t-caption flex items-start gap-1.5 px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote className="flex items-start gap-1.5">
         <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
         <span>
           密钥只存在服务器的 <code className="font-mono">.env.local</code> 里，不进仓库、不在这一页显示。
           换密钥改那个文件后重启服务即可，这一页会立刻反映出来。
         </span>
-      </p>
+      </PageNote>
     </>
   );
 }

@@ -1,4 +1,4 @@
-import { ChevronLeft, Lock, MessageSquare, Pin, Star, Trash2 } from "lucide-react";
+import { Lock, Pin, Star, Trash2 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -22,7 +22,7 @@ import { ReportButton } from "@/components/forum/ReportButton";
 import { ReplyForm } from "@/components/forum/ReplyForm";
 import { ReplyRow } from "@/components/forum/ReplyRow";
 import { ResumeReading } from "@/components/forum/ResumeReading";
-import { Section } from "@/components/ui/primitives";
+import { BackLink, Empty, EmptyAction, Pill, Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
 import { postCapabilities } from "@/lib/forum/manage";
@@ -146,13 +146,7 @@ export default async function PostPage({
 
   const body = (
     <>
-      <Link
-        href={`/forum/${post.boardKey}`}
-        className="t-subhead -ml-1 mt-6 inline-flex items-center gap-0.5 text-[var(--accent)] transition active:opacity-60"
-      >
-        <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
-        {post.boardName}
-      </Link>
+      <BackLink href={`/forum/${post.boardKey}`}>{post.boardName}</BackLink>
 
       <article className="animate-rise pt-6">
         {deleted && (
@@ -293,16 +287,14 @@ export default async function PostPage({
       >
         {allReplies.length > 0 && (
           <div className="mb-3 flex items-center justify-between gap-3">
-            <Link
+            {/* 和全站的筛选 Pill 同一个构件 —— 这里以前是手写的另一款药丸，
+                选中态用 accent 而别处用 ink，同一种交互两种长相 */}
+            <Pill
               href={onlyAuthor ? `/forum/p/${post.id}` : `/forum/p/${post.id}?only=op`}
-              className={`t-footnote rounded-[var(--radius-pill)] px-3 py-1 font-medium transition ${
-                onlyAuthor
-                  ? "bg-[var(--accent)] text-[var(--accent-ink)]"
-                  : "bg-[var(--fill)] text-[var(--ink-secondary)]"
-              }`}
+              active={onlyAuthor}
             >
               只看楼主
-            </Link>
+            </Pill>
             {onlyAuthor && (
               <span className="t-caption text-[var(--ink-tertiary)]">
                 楼主共 {replies.length} 条回复
@@ -402,20 +394,10 @@ export default async function PostPage({
         {user ? (
           !deleted && <ReplyForm postId={post.id} locked={locked} />
         ) : (
-          <div className="inset-group px-6 py-7 text-center">
-            <MessageSquare
-              className="mx-auto mb-2 h-5 w-5 text-[var(--ink-quaternary)]"
-              strokeWidth={1.8}
-              aria-hidden
-            />
-            <p className="t-subhead text-[var(--ink-secondary)]">登录后参与讨论</p>
-            <Link
-              href="/login"
-              className="t-subhead mt-4 inline-flex rounded-[var(--radius-control)] bg-[var(--accent)] px-5 py-2.5 font-medium text-[var(--accent-ink)]"
-            >
-              登录
-            </Link>
-          </div>
+          <Empty
+            title="登录后参与讨论"
+            action={<EmptyAction href="/login">登录</EmptyAction>}
+          />
         )}
       </Section>
     </>

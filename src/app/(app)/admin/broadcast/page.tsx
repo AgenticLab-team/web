@@ -5,7 +5,7 @@ import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { recentDigests } from "@/lib/digest/build";
 import { Pagination } from "@/components/ui/Pagination";
-import { Empty, Section } from "@/components/ui/primitives";
+import { Callout, Card, Empty, PageNote, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import {
   deliveriesOf,
@@ -71,21 +71,20 @@ export default async function AdminBroadcastPage({
       />
 
       {(today >= MAX_SENDS_PER_DAY || gapLeft > 0) && (
-        <div
-          className="mb-4 rounded-[var(--radius-card)] p-4 hairline"
-          style={{ background: "color-mix(in srgb, var(--warning) 9%, var(--surface))" }}
-        >
-          <p className="t-subhead font-medium" style={{ color: "var(--warning)" }}>
-            {today >= MAX_SENDS_PER_DAY
+        <Callout
+          tone="warning"
+          title={
+            today >= MAX_SENDS_PER_DAY
               ? `今天的群发次数已经用完（${MAX_SENDS_PER_DAY} 次）`
-              : `距上次群发还不到半小时，还要等 ${gapLeft} 分钟`}
-          </p>
+              : `距上次群发还不到半小时，还要等 ${gapLeft} 分钟`
+          }
+        >
           <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">
             这不是流程繁琐 —— 机器人已经因为高频操作被微信风控过一次（加好友那次），
             而群发比加好友显眼得多。发太勤的另一个后果是大家开始屏蔽这个群，
             那比被风控更难挽回。
           </p>
-        </div>
+        </Callout>
       )}
 
       {/* 每周精选是定时任务备好的草稿 —— 摆在最前面，
@@ -143,10 +142,7 @@ export default async function AdminBroadcastPage({
               const failedOnes = deliveries.filter((d) => d.status === "failed");
 
               return (
-                <article
-                  key={row.id}
-                  className="space-y-2.5 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline"
-                >
+                <Card as="article" key={row.id} className="space-y-2.5">
                   <header className="flex flex-wrap items-center gap-1.5">
                     <span className="t-caption2 rounded-[var(--radius-pill)] bg-[var(--fill)] px-1.5 py-0.5 font-medium text-[var(--ink-secondary)]">
                       {channelLabel(row.channel)}
@@ -196,7 +192,7 @@ export default async function AdminBroadcastPage({
                     status={row.status}
                     contentDrifted={row.contentDrifted}
                   />
-                </article>
+                </Card>
               );
             })}
           </div>
@@ -209,12 +205,12 @@ export default async function AdminBroadcastPage({
         />
       </Section>
 
-      <p className="t-caption px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         <strong>网站永远不会代用户发消息</strong> —— 只有系统与管理员的公告会发出去，
         而且每一条都要另一个人复核。起草人自己看不到「通过复核」按钮：
         自己批自己的话，这套流程只是给一个人多点了一次鼠标。
         发送逐个群进行并留出间隔，一秒钟连发十二条是最典型的风控触发姿势。
-      </p>
+      </PageNote>
     </>
   );
 }

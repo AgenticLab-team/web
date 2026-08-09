@@ -1,12 +1,10 @@
 import { desc, eq, inArray } from "drizzle-orm";
-import { ChevronLeft } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Empty, Section } from "@/components/ui/primitives";
+import { BackLink, Empty, PageNote, Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { resolveDisplayName } from "@/lib/users/display-name";
@@ -67,13 +65,7 @@ export default async function HistoryPage({ params }: { params: Promise<{ id: st
 
   return (
     <>
-      <Link
-        href={`/forum/p/${id}`}
-        className="t-subhead -ml-1 mt-6 inline-flex items-center gap-0.5 text-[var(--accent)] transition active:opacity-60"
-      >
-        <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
-        返回帖子
-      </Link>
+      <BackLink href={`/forum/p/${id}`}>返回帖子</BackLink>
 
       <PageHeader
         title="编辑历史"
@@ -149,10 +141,10 @@ export default async function HistoryPage({ params }: { params: Promise<{ id: st
         ))
       )}
 
-      <p className="t-caption px-1 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         编辑历史对所有能看到这篇帖子的人开放。
         这样别人回复你之后，你就没法悄悄把原帖改成另一个意思。
-      </p>
+      </PageNote>
     </>
   );
 }

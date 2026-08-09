@@ -1,11 +1,17 @@
-import { Archive, Search as SearchIcon, Sparkles, User } from "lucide-react";
+import { Archive, Sparkles, User } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { MessageHitList } from "@/components/search/MessageHitList";
 import { SemanticHits, SemanticNotice } from "@/components/search/SemanticHits";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Empty, Pill } from "@/components/ui/primitives";
+import {
+  Empty,
+  EmptyAction,
+  PageNote,
+  Pill,
+  PillRow,
+  SearchField,
+} from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { myMessageCount, searchMessages } from "@/lib/search/messages";
@@ -93,38 +99,24 @@ export default async function SearchPage({
       <form action="/search" className="mb-4">
         {params.group && <input type="hidden" name="group" value={params.group} />}
         {onlyMine && <input type="hidden" name="mine" value="1" />}
-        <div className="flex items-center gap-2 rounded-[var(--radius-card)] bg-[var(--surface)] px-4 py-3 hairline">
-          <SearchIcon
-            className="h-4 w-4 shrink-0 text-[var(--ink-tertiary)]"
-            strokeWidth={2}
-            aria-hidden
-          />
-          <input
-            name="q"
-            defaultValue={query}
-            placeholder="搜群聊记录，两个字也搜得到"
-            autoFocus={!query}
-            enterKeyHint="search"
-            className="t-body w-full bg-transparent outline-none placeholder:text-[var(--ink-quaternary)]"
-          />
-        </div>
+        <SearchField
+          defaultValue={query}
+          placeholder="搜群聊记录，两个字也搜得到"
+          autoFocus={!query}
+        />
       </form>
 
       {groups.length > 0 && (
-        <div className="-mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
-          <span className="shrink-0">
-            <Pill href={href({ group: undefined })} active={!params.group}>
-              全部群
-            </Pill>
-          </span>
+        <PillRow>
+          <Pill href={href({ group: undefined })} active={!params.group}>
+            全部群
+          </Pill>
           {groups.map((g) => (
-            <span key={g.convId} className="shrink-0">
-              <Pill href={href({ group: g.convId })} active={params.group === g.convId}>
-                {g.name}
-              </Pill>
-            </span>
+            <Pill key={g.convId} href={href({ group: g.convId })} active={params.group === g.convId}>
+              {g.name}
+            </Pill>
           ))}
-        </div>
+        </PillRow>
       )}
 
       {/*
@@ -134,7 +126,7 @@ export default async function SearchPage({
         * 记得原话用前者,只记得当时在聊什么用后者。
         * 藏起来的话没有人会发现第二种存在。
         */}
-      <div className="mb-3 flex flex-wrap gap-1.5">
+      <PillRow wrap>
         <Pill href={href({ mode: undefined })} active={!semantic}>
           按关键词
         </Pill>
@@ -144,9 +136,9 @@ export default async function SearchPage({
             意思差不多的
           </span>
         </Pill>
-      </div>
+      </PillRow>
 
-      <div className="mb-6 flex flex-wrap gap-1.5">
+      <PillRow wrap>
         <Pill href={href({ mine: onlyMine ? undefined : "1" })} active={onlyMine}>
           <span className="flex items-center gap-1">
             <User className="h-3 w-3" strokeWidth={2.2} aria-hidden />
@@ -159,18 +151,13 @@ export default async function SearchPage({
             按天回看
           </span>
         </Pill>
-      </div>
+      </PillRow>
 
       {result.noAccess ? (
-        <div className="inset-group px-6 py-10 text-center">
-          <p className="t-callout text-[var(--ink-secondary)]">群聊检索仅对社群成员开放</p>
-          <Link
-            href="/login"
-            className="t-subhead mt-5 inline-flex rounded-[var(--radius-control)] bg-[var(--accent)] px-5 py-2.5 font-medium text-[var(--accent-ink)]"
-          >
-            登录
-          </Link>
-        </div>
+        <Empty
+          title="群聊检索仅对社群成员开放"
+          action={<EmptyAction href="/login">登录</EmptyAction>}
+        />
       ) : !query ? (
         <Empty
           title={semantic ? "描述一下当时在聊什么" : "输入关键词开始搜"}
@@ -205,7 +192,7 @@ export default async function SearchPage({
         <MessageHitList hits={result.hits} />
       )}
 
-      <p className="t-caption mt-4 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         只搜你所在的群。
         {semantic ? (
           <>
@@ -215,7 +202,7 @@ export default async function SearchPage({
         ) : (
           <>点开任意一条可以就地看前后文 —— 群聊的意思大半在上下文里。</>
         )}
-      </p>
+      </PageNote>
     </>
   );
 }

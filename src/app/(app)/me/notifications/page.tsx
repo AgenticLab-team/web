@@ -1,11 +1,10 @@
-import { ChevronLeft } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { PrefsPanel } from "@/components/notifications/PrefsPanel";
 import { PushManager } from "@/components/notifications/PushManager";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { BackLink } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { env } from "@/lib/env";
 import { canUseEmail } from "@/lib/notifications/prefs";
@@ -34,13 +33,7 @@ export default async function NotificationPrefsPage() {
 
   return (
     <>
-      <Link
-        href="/me"
-        className="t-subhead -ml-1 mt-6 inline-flex items-center gap-0.5 text-[var(--accent)] transition active:opacity-60"
-      >
-        <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
-        我的
-      </Link>
+      <BackLink href="/me">我的</BackLink>
 
       <PageHeader title="通知设置" subtitle="决定什么事值得打断你" />
 

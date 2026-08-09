@@ -1,10 +1,9 @@
-import { ChevronLeft } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ComposeForm } from "@/components/forum/ComposeForm";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { BackLink, Empty } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
 import { listBoards } from "@/lib/forum/queries";
@@ -40,25 +39,17 @@ export default async function NewPostPage({
     return (
       <>
         <PageHeader title="发帖" />
-        <div className="inset-group px-6 py-10 text-center">
-          <p className="t-callout text-[var(--ink-secondary)]">你还没有可以发帖的版块</p>
-          <p className="t-footnote mt-1.5 text-[var(--ink-tertiary)]">
-            部分版块有等级门槛，多参与讨论就能解锁
-          </p>
-        </div>
+        <Empty
+          title="你还没有可以发帖的版块"
+          hint="部分版块有等级门槛，多参与讨论就能解锁"
+        />
       </>
     );
   }
 
   return (
     <>
-      <Link
-        href="/forum"
-        className="t-subhead -ml-1 mt-6 inline-flex items-center gap-0.5 text-[var(--accent)] transition active:opacity-60"
-      >
-        <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
-        论坛
-      </Link>
+      <BackLink href="/forum">论坛</BackLink>
 
       <PageHeader title="发帖" />
 
