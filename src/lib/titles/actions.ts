@@ -3,7 +3,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/lib/admin/guard";
+import { requireWritableAdmin } from "@/lib/admin/guard";
 import { audit } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -72,7 +72,7 @@ export async function grantTitle(input: {
   titleKey: string;
   reason: string;
 }): Promise<TitleResult> {
-  const admin = await requireAdmin("user.title.grant");
+  const admin = await requireWritableAdmin("user.title.grant");
 
   const title = db.select().from(titles).where(eq(titles.key, input.titleKey)).get();
   if (!title) return fail("称号不存在");
@@ -137,7 +137,7 @@ export async function revokeTitle(input: {
   userTitleId: string;
   reason: string;
 }): Promise<TitleResult> {
-  const admin = await requireAdmin("user.title.grant");
+  const admin = await requireWritableAdmin("user.title.grant");
 
   const reason = input.reason.trim();
   if (!reason) return fail("必须填写理由");

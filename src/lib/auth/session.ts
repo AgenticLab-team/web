@@ -7,6 +7,8 @@ import { cookies } from "next/headers";
 
 import { db } from "@/lib/db";
 import { sessions, users } from "@/lib/db/schema";
+import { resolvePreview, type ActivePreview } from "@/lib/rbac/preview";
+import { PREVIEW_COOKIE, PREVIEW_WRITE_BLOCKED } from "@/lib/rbac/preview-rules";
 import { getSettingInt } from "@/lib/settings/store";
 
 export const SESSION_COOKIE = "al_session";
@@ -70,9 +72,55 @@ export function resolveSession(token: string | undefined): CurrentUser | null {
   return row.user;
 }
 
+/**
+ * 当前登录的人。**预览态下返回的是被预览的那个人。**
+ *
+ * 这是整站唯一的身份入口，所以预览必须在这里接进去 ——
+ * 接在别处就意味着有些页面切了视角、有些没切，
+ * 而一个只切了一半的视角比没有更容易得出错误结论。
+ *
+ * 真实身份没有丢，在 currentPreview() 里 —— 审计、写操作拦截
+ * 都用那个，永远记在真人头上。
+ */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const store = await cookies();
+  const preview = resolvePreview(store.get(PREVIEW_COOKIE)?.value);
+  if (preview) return preview.subject;
   return resolveSession(store.get(SESSION_COOKIE)?.value);
+}
+
+/** 当前是不是在预览态；不是则返回 null */
+export async function currentPreview(): Promise<ActivePreview | null> {
+  const store = await cookies();
+  return resolvePreview(store.get(PREVIEW_COOKIE)?.value);
+}
+
+/** 真实登录的那个人 —— 预览态下也是他，不受影响 */
+export async function getRealUser(): Promise<CurrentUser | null> {
+  const store = await cookies();
+  return resolveSession(store.get(SESSION_COOKIE)?.value);
+}
+
+/**
+ * 预览态下写操作一律拦下。
+ *
+ * 放在这里而不是各个 action 里自己判断，是因为**「靠自觉一定会漏」**——
+ * 漏掉一处的后果是：管理员以别人的身份写了数据，
+ * 而审计日志记的是被预览的那个人。从那以后这个站的日志一条都不能信。
+ *
+ * requireAdmin 里已经调了它，覆盖了后台的全部写入口；
+ * 后台之外的 server action 由 tests/preview-coverage.test.ts 逐个核对。
+ */
+export async function assertNotPreviewing(): Promise<void> {
+  const preview = await currentPreview();
+  if (preview) throw new PreviewWriteError();
+}
+
+export class PreviewWriteError extends Error {
+  constructor() {
+    super(PREVIEW_WRITE_BLOCKED);
+    this.name = "PreviewWriteError";
+  }
 }
 
 export async function setSessionCookie(token: string) {

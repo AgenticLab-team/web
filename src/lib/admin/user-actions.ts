@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 
 import { audit } from "@/lib/audit";
 import { revokeAllSessions } from "@/lib/auth/session";
-import { requireAdmin } from "@/lib/admin/guard";
+import { revokePreviewsOf } from "@/lib/rbac/preview";
+import { requireAdmin, requireWritableAdmin } from "@/lib/admin/guard";
 import {
   checkNote,
   checkPointsAdjust,
@@ -96,7 +97,7 @@ export async function setUserStatus(input: {
   status: "active" | "suspended" | "banned";
   reason: string;
 }): Promise<AdminActionResult> {
-  const admin = await requireAdmin("user.suspend");
+  const admin = await requireWritableAdmin("user.suspend");
 
   const reason = input.reason.trim();
   const check = checkStatusChange({
@@ -118,6 +119,14 @@ export async function setUserStatus(input: {
   // 封禁要立即生效，不能等会话自然过期
   if (shouldRevokeSessions(input.status)) {
     revokeAllSessions(input.userId, "ban", admin.user.id);
+    /*
+     * 他自己开着的预览也要一起掐掉。
+     *
+     * 只踢会话不掐预览的话，被封的人手上那个 30 分钟的预览令牌还是活的 ——
+     * 他会以别人的身份继续浏览，而封禁看起来已经生效了。
+     * （被预览方被封的情况在 resolvePreview 里挡住了，这里挡的是预览方。）
+     */
+    revokePreviewsOf(input.userId);
   }
 
   /*
@@ -166,7 +175,7 @@ export async function grantRole(input: {
   scopeId?: string;
   expiresAt?: number;
 }): Promise<AdminActionResult> {
-  const admin = await requireAdmin("role.grant");
+  const admin = await requireWritableAdmin("role.grant");
 
   const reason = input.reason.trim();
 
@@ -223,7 +232,7 @@ export async function revokeRole(input: {
   userRoleId: string;
   reason: string;
 }): Promise<AdminActionResult> {
-  const admin = await requireAdmin("role.grant");
+  const admin = await requireWritableAdmin("role.grant");
 
   const reason = input.reason.trim();
 
@@ -275,6 +284,8 @@ export async function revokeUserSessions(input: {
   if (!check.ok) return fail(check.error!);
 
   const result = revokeAllSessions(input.userId, "admin", admin.user.id);
+  // 「把这个人踢下线」要包括他正开着的预览，否则那条路还留着
+  revokePreviewsOf(input.userId);
 
   audit({ actorId: admin.user.id }, {
     action: "user.session.revoke",
@@ -293,7 +304,7 @@ export async function addUserNote(input: {
   userId: string;
   content: string;
 }): Promise<AdminActionResult> {
-  const admin = await requireAdmin("user.note.write");
+  const admin = await requireWritableAdmin("user.note.write");
   const content = input.content.trim();
   const check = checkNote(input.content);
   if (!check.ok) return fail(check.error!);

@@ -3,7 +3,7 @@
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/lib/admin/guard";
+import { requireWritableAdmin } from "@/lib/admin/guard";
 import { APPROVAL_HANDLERS_LOADED } from "@/lib/admin/approval-handlers";
 import {
   APPROVAL_TTL_MS,
@@ -46,7 +46,7 @@ export async function requestApproval(input: {
   if (!handler) {
     return fail("这个动作没有登记，拒绝受理");
   }
-  const admin = await requireAdmin(handler.permission);
+  const admin = await requireWritableAdmin(handler.permission);
 
   const validation = handler.validate(input.payload);
   const check = checkRequest({
@@ -97,7 +97,7 @@ export async function approveAndExecute(input: {
   const handler = getApprovalHandler(row.action);
   if (!handler) return fail("这个动作已经不再登记，拒绝执行");
 
-  const admin = await requireAdmin(handler.approvePermission);
+  const admin = await requireWritableAdmin(handler.approvePermission);
 
   const check = checkApprove({
     actorId: admin.user.id,
@@ -174,7 +174,7 @@ export async function rejectApproval(input: {
   if (!row) return fail("找不到这条待复核记录");
 
   const handler = getApprovalHandler(row.action);
-  const admin = await requireAdmin(handler?.approvePermission ?? "system.approval");
+  const admin = await requireWritableAdmin(handler?.approvePermission ?? "system.approval");
 
   const check = checkReject({
     actorId: admin.user.id,
@@ -209,7 +209,7 @@ export async function rejectApproval(input: {
 }
 
 export async function withdrawApproval(input: { id: string }): Promise<ApprovalResult> {
-  const admin = await requireAdmin("system.dashboard");
+  const admin = await requireWritableAdmin("system.dashboard");
 
   const row = db.select().from(approvals).where(eq(approvals.id, input.id)).get();
   if (!row) return fail("找不到这条待复核记录");
@@ -243,7 +243,7 @@ export async function withdrawApproval(input: { id: string }): Promise<ApprovalR
 
 /** 把过期的标出来。不标的话它们会一直挂在待办里，看起来永远有活没干完 */
 export async function sweepExpired(): Promise<ApprovalResult> {
-  const admin = await requireAdmin("system.approval");
+  const admin = await requireWritableAdmin("system.approval");
 
   const now = Date.now();
   const expired = db

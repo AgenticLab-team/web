@@ -147,6 +147,13 @@ export const PERMISSIONS = [
   { key: "system.flags", category: "system", label: "开关功能模块", dangerLevel: 2 },
   { key: "system.storage", category: "system", label: "存储裁剪与运维", dangerLevel: 2 },
   { key: "system.approval", category: "system", label: "复核危险操作", dangerLevel: 2 },
+  {
+    key: "system.impersonate",
+    category: "system",
+    label: "以他人身份预览",
+    description: "只读地切成别人的视角。权限只减不增，且预览态下不能写入任何数据。",
+    dangerLevel: 3,
+  },
   { key: "invite.manage", category: "system", label: "管理邀请码", dangerLevel: 1 },
 ] as const satisfies readonly PermissionDef[];
 

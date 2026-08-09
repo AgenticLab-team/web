@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/lib/admin/guard";
+import { requireWritableAdmin } from "@/lib/admin/guard";
 import { audit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { adminTasks } from "@/lib/db/schema";
@@ -44,7 +44,7 @@ const fail = (error: string): PruneActionResult => ({ ok: false, error });
 
 /** 出预览，落一个 awaiting_confirm 的任务行 */
 export async function createPruneTask(): Promise<PruneActionResult> {
-  const admin = await requireAdmin("system.settings");
+  const admin = await requireWritableAdmin("system.settings");
 
   const config = loadTierConfig();
   const problems = validateTierConfig(config);
@@ -88,7 +88,7 @@ export async function executePruneTask(input: {
   /** 只做可逆步骤 */
   reversibleOnly?: boolean;
 }): Promise<PruneActionResult> {
-  const admin = await requireAdmin("system.settings");
+  const admin = await requireWritableAdmin("system.settings");
 
   const task = db.select().from(adminTasks).where(eq(adminTasks.id, input.taskId)).get();
   if (!task) return fail("任务不存在");
@@ -152,7 +152,7 @@ export async function executePruneTask(input: {
 }
 
 export async function cancelPruneTask(taskId: string): Promise<PruneActionResult> {
-  const admin = await requireAdmin("system.settings");
+  const admin = await requireWritableAdmin("system.settings");
   const task = db.select().from(adminTasks).where(eq(adminTasks.id, taskId)).get();
   if (!task || task.status !== "awaiting_confirm") return fail("任务不在等待确认状态");
 

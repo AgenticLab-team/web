@@ -3,7 +3,7 @@
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/lib/admin/guard";
+import { requireWritableAdmin } from "@/lib/admin/guard";
 import { audit } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -47,7 +47,7 @@ export async function toggleSaveLink(linkId: string): Promise<LinkActionResult> 
 
 /** 管理员隐藏一条链接：广告、失效、不宜出现在列表里的 */
 export async function hideLink(linkId: string, reason: string): Promise<LinkActionResult> {
-  const admin = await requireAdmin("forum.post.delete.any");
+  const admin = await requireWritableAdmin("forum.post.delete.any");
 
   const before = db.select().from(links).where(eq(links.id, linkId)).get();
   if (!before) return { ok: false, error: "链接不存在" };

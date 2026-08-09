@@ -1,3 +1,4 @@
+import { PreviewBanner } from "@/components/admin/PreviewBanner";
 import { AppShell } from "@/components/shell/AppShell";
 import { ToastProvider } from "@/components/ui/Toast";
 
@@ -8,6 +9,8 @@ import { ToastProvider } from "@/components/ui/Toast";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <ToastProvider>
+      {/* 横幅在外壳之外，且在最前面 —— 预览态下它必须比任何页面内容先出现 */}
+      <PreviewBanner />
       <AppShell>{children}</AppShell>
     </ToastProvider>
   );

@@ -3,7 +3,7 @@
 import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/lib/admin/guard";
+import { requireAdmin, requireWritableAdmin } from "@/lib/admin/guard";
 import { audit } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -54,7 +54,7 @@ export async function saveActivity(input: {
   eligibility: Rule | null;
   config: Record<string, unknown>;
 }): Promise<ActivityResult> {
-  const admin = await requireAdmin("activity.manage");
+  const admin = await requireWritableAdmin("activity.manage");
 
   if (!isKnownModule(input.moduleKey)) {
     // 指向不存在的模块会在用户点开活动页时才炸
@@ -132,7 +132,7 @@ export async function setActivityStatus(input: {
   status: ActivityStatus;
   reason?: string;
 }): Promise<ActivityResult> {
-  const admin = await requireAdmin("activity.manage");
+  const admin = await requireWritableAdmin("activity.manage");
 
   const activity = getActivity(input.id);
   if (!activity) return fail("活动不存在");
@@ -394,7 +394,7 @@ export async function fulfillApplication(input: {
   success: boolean;
   note: string;
 }): Promise<ActivityResult> {
-  const admin = await requireAdmin("activity.fulfill");
+  const admin = await requireWritableAdmin("activity.fulfill");
 
   const app = db
     .select()

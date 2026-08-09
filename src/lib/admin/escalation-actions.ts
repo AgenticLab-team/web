@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/lib/admin/guard";
+import { requireWritableAdmin } from "@/lib/admin/guard";
 import { hasPendingRequest } from "@/lib/admin/escalation";
 import { audit } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -84,7 +84,7 @@ export async function approveEscalation(input: {
   id: string;
   note: string;
 }): Promise<EscalationResult> {
-  const admin = await requireAdmin("forum.visibility.review");
+  const admin = await requireWritableAdmin("forum.visibility.review");
 
   const row = db.select().from(visibilityRequests).where(eq(visibilityRequests.id, input.id)).get();
   if (!row) return fail("申请不存在");
@@ -162,7 +162,7 @@ export async function rejectEscalation(input: {
   id: string;
   note: string;
 }): Promise<EscalationResult> {
-  const admin = await requireAdmin("forum.visibility.review");
+  const admin = await requireWritableAdmin("forum.visibility.review");
 
   const row = db.select().from(visibilityRequests).where(eq(visibilityRequests.id, input.id)).get();
   if (!row) return fail("申请不存在");

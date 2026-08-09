@@ -197,6 +197,13 @@
       "when": 1786248383509,
       "tag": "0027_seasons",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1786251246437,
+      "tag": "0028_preview_sessions",
+      "breakpoints": true
     }
   ]
 }

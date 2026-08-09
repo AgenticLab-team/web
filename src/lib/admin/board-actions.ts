@@ -3,7 +3,7 @@
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/lib/admin/guard";
+import { requireWritableAdmin } from "@/lib/admin/guard";
 import {
   checkBoardConfig,
   checkBoardDelete,
@@ -52,7 +52,7 @@ export async function createBoard(input: {
   postMinLevel: number;
   reason: string;
 }): Promise<BoardResult> {
-  const admin = await requireAdmin("forum.board.manage");
+  const admin = await requireWritableAdmin("forum.board.manage");
 
   const keyCheck = checkBoardKey(input.key);
   if (!keyCheck.ok) return fail(keyCheck.error!);
@@ -109,7 +109,7 @@ export async function updateBoard(input: {
   locked?: boolean;
   reason: string;
 }): Promise<BoardResult> {
-  const admin = await requireAdmin("forum.board.manage");
+  const admin = await requireWritableAdmin("forum.board.manage");
 
   const before = db.select().from(boards).where(eq(boards.id, input.id)).get();
   if (!before) return fail("版块不存在");
@@ -199,7 +199,7 @@ export async function deleteBoard(input: {
   moveTo?: string;
   reason: string;
 }): Promise<BoardResult> {
-  const admin = await requireAdmin("forum.board.manage");
+  const admin = await requireWritableAdmin("forum.board.manage");
 
   if (!input.reason.trim()) return fail("必须填写理由");
 
@@ -264,7 +264,7 @@ export async function deleteBoard(input: {
 }
 
 export async function reorderBoard(input: { id: string; sort: number }): Promise<BoardResult> {
-  const admin = await requireAdmin("forum.board.manage");
+  const admin = await requireWritableAdmin("forum.board.manage");
   db.update(boards).set({ sort: input.sort, updatedAt: Date.now() }).where(eq(boards.id, input.id)).run();
 
   audit({ actorId: admin.user.id }, {
@@ -286,7 +286,7 @@ export async function mergeTags(input: {
   toId: string;
   reason: string;
 }): Promise<BoardResult> {
-  const admin = await requireAdmin("forum.tag.manage");
+  const admin = await requireWritableAdmin("forum.tag.manage");
 
   if (!input.reason.trim()) return fail("必须填写理由");
 
@@ -347,7 +347,7 @@ export async function renameTag(input: {
   name: string;
   reason: string;
 }): Promise<BoardResult> {
-  const admin = await requireAdmin("forum.tag.manage");
+  const admin = await requireWritableAdmin("forum.tag.manage");
 
   const name = input.name.trim();
   if (!name) return fail("标签名不能为空");
@@ -380,7 +380,7 @@ export async function renameTag(input: {
 }
 
 export async function setTagLocked(input: { id: string; locked: boolean }): Promise<BoardResult> {
-  const admin = await requireAdmin("forum.tag.manage");
+  const admin = await requireWritableAdmin("forum.tag.manage");
   db.update(tags).set({ locked: input.locked }).where(eq(tags.id, input.id)).run();
 
   audit({ actorId: admin.user.id }, {
@@ -396,7 +396,7 @@ export async function setTagLocked(input: { id: string; locked: boolean }): Prom
 
 /** 清理没有任何帖子在用的标签。锁定的不动 —— 那往往是预留的官方标签 */
 export async function cleanupTags(input: { reason: string }): Promise<BoardResult> {
-  const admin = await requireAdmin("forum.tag.manage");
+  const admin = await requireWritableAdmin("forum.tag.manage");
   if (!input.reason.trim()) return fail("必须填写理由");
 
   const orphans = orphanTags();

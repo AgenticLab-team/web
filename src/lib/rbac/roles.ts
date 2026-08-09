@@ -87,6 +87,17 @@ const ADMIN_DENIES: readonly PermissionKey[] = [
   "user.delete",
   "user.merge",
   "module.install",
+  /*
+   * 以他人身份预览留给站长。
+   *
+   * 权限上它伤不到管理员自己（预览只减不增，看到的不会超过他本来能看的），
+   * 但**隐私上会**：切成一个普通成员之后，看到的是他的群列表、
+   * 他的通知、他的私人视角 —— 而「群列表属于隐私」是这个站的明规矩。
+   *
+   * 其余 dangerLevel 3 的权限点都在这张表里，这一条没有理由例外。
+   * 需要放开的话在后台权限矩阵里单独授予，那一步本身会进审计日志。
+   */
+  "system.impersonate",
 ];
 
 const ADMIN = PERMISSION_KEYS.filter(

@@ -3,7 +3,7 @@
 import { eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/lib/admin/guard";
+import { requireWritableAdmin } from "@/lib/admin/guard";
 import { audit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { moderationActions, posts } from "@/lib/db/schema";
@@ -47,7 +47,7 @@ export async function bulkModeratePosts(input: {
   action: BulkAction;
   reason: string;
 }): Promise<BulkResult> {
-  const admin = await requireAdmin("forum.post.delete.any");
+  const admin = await requireWritableAdmin("forum.post.delete.any");
 
   const check = checkBulk({ ids: input.ids, action: input.action, reason: input.reason });
   if (!check.ok) return { ok: false, error: check.error };

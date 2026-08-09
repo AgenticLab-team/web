@@ -3,7 +3,7 @@
 import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/lib/admin/guard";
+import { requireAdmin, requireWritableAdmin } from "@/lib/admin/guard";
 import { audit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { inviteUses, invites } from "@/lib/db/schema";
@@ -38,7 +38,7 @@ export async function createInvite(input: {
   note: string;
   grantKind?: "member" | "external";
 }): Promise<InviteResult> {
-  const admin = await requireAdmin("invite.manage");
+  const admin = await requireWritableAdmin("invite.manage");
 
   const check = checkCreate(input);
   if (!check.ok) return fail(check.error!);
@@ -78,7 +78,7 @@ export async function revokeInvite(input: {
   id: string;
   reason: string;
 }): Promise<InviteResult> {
-  const admin = await requireAdmin("invite.manage");
+  const admin = await requireWritableAdmin("invite.manage");
   if (!input.reason.trim()) return fail("必须填写理由");
 
   const row = db.select().from(invites).where(eq(invites.id, input.id)).get();
@@ -116,7 +116,7 @@ export async function redeemInvite(input: {
   code: string;
   userId: string;
 }): Promise<InviteResult> {
-  const admin = await requireAdmin("invite.manage");
+  const admin = await requireWritableAdmin("invite.manage");
 
   const invite = findByCode(input.code);
   const check = checkRedeem({

@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/lib/admin/guard";
+import { requireAdmin, requireWritableAdmin } from "@/lib/admin/guard";
 import { audit } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -68,7 +68,7 @@ export async function saveItem(input: {
   config: Record<string, unknown>;
   enabled: boolean;
 }): Promise<ShopResult> {
-  const admin = await requireAdmin("shop.manage");
+  const admin = await requireWritableAdmin("shop.manage");
 
   const check = checkItem(input);
   if (!check.ok) return fail(check.error!);
@@ -113,7 +113,7 @@ export async function updateOrderStatus(input: {
   note: string;
   trackingNo?: string;
 }): Promise<ShopResult> {
-  const admin = await requireAdmin("shop.order.handle");
+  const admin = await requireWritableAdmin("shop.order.handle");
 
   const order = db.select().from(orders).where(eq(orders.id, input.id)).get();
   if (!order) return fail("订单不存在");

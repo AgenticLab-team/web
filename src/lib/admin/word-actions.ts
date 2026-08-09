@@ -3,7 +3,7 @@
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/lib/admin/guard";
+import { requireAdmin, requireWritableAdmin } from "@/lib/admin/guard";
 import { audit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { sensitiveWords } from "@/lib/db/schema";
@@ -33,7 +33,7 @@ export async function addWord(input: {
   replacement?: string;
   reason: string;
 }): Promise<WordActionResult> {
-  const admin = await requireAdmin("moderation.words");
+  const admin = await requireWritableAdmin("moderation.words");
 
   if (!input.reason.trim()) return fail("必须填写理由");
 
@@ -75,7 +75,7 @@ export async function updateWord(input: {
   replacement?: string;
   enabled: boolean;
 }): Promise<WordActionResult> {
-  const admin = await requireAdmin("moderation.words");
+  const admin = await requireWritableAdmin("moderation.words");
 
   const row = db.select().from(sensitiveWords).where(eq(sensitiveWords.id, input.id)).get();
   if (!row) return fail("词条不存在");
@@ -109,7 +109,7 @@ export async function updateWord(input: {
 }
 
 export async function removeWord(input: { id: string; reason: string }): Promise<WordActionResult> {
-  const admin = await requireAdmin("moderation.words");
+  const admin = await requireWritableAdmin("moderation.words");
   if (!input.reason.trim()) return fail("必须填写理由");
 
   const row = db.select().from(sensitiveWords).where(eq(sensitiveWords.id, input.id)).get();

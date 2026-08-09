@@ -3,7 +3,7 @@
 import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/lib/admin/guard";
+import { requireWritableAdmin } from "@/lib/admin/guard";
 import { audit } from "@/lib/audit";
 import {
   getBroadcast,
@@ -51,7 +51,7 @@ export async function saveDraft(input: {
   targetConvIds?: string[];
   expiresAt?: number;
 }): Promise<BroadcastResult> {
-  const admin = await requireAdmin(
+  const admin = await requireWritableAdmin(
     input.channel === "wechat" ? "broadcast.wechat" : "announce.site",
   );
 
@@ -132,7 +132,7 @@ export async function saveDraft(input: {
 
 /** 提交复核。**这一刻内容被冻结** —— 之后再改，复核和发送都会被拒 */
 export async function submitForReview(input: { id: string }): Promise<BroadcastResult> {
-  const admin = await requireAdmin("announce.site");
+  const admin = await requireWritableAdmin("announce.site");
 
   const row = getBroadcast(input.id);
   if (!row) return fail("找不到这条群发");
@@ -162,7 +162,7 @@ export async function approveBroadcast(input: {
   id: string;
   note: string;
 }): Promise<BroadcastResult> {
-  const admin = await requireAdmin("broadcast.approve");
+  const admin = await requireWritableAdmin("broadcast.approve");
 
   const row = getBroadcast(input.id);
   if (!row) return fail("找不到这条群发");
@@ -204,7 +204,7 @@ export async function rejectBroadcast(input: {
   id: string;
   note: string;
 }): Promise<BroadcastResult> {
-  const admin = await requireAdmin("broadcast.approve");
+  const admin = await requireWritableAdmin("broadcast.approve");
   if (!input.note.trim()) return fail("驳回也要写明原因");
 
   const row = getBroadcast(input.id);
@@ -237,7 +237,7 @@ export async function rejectBroadcast(input: {
  * 所有闸门在这里就检查完，不是等到真发的时候。
  */
 export async function queueSend(input: { id: string }): Promise<BroadcastResult> {
-  const admin = await requireAdmin(
+  const admin = await requireWritableAdmin(
     (getBroadcast(input.id)?.channel ?? "site") === "wechat"
       ? "broadcast.wechat"
       : "announce.site",
@@ -330,7 +330,7 @@ export async function queueSend(input: { id: string }): Promise<BroadcastResult>
 }
 
 export async function cancelBroadcast(input: { id: string }): Promise<BroadcastResult> {
-  const admin = await requireAdmin("announce.site");
+  const admin = await requireWritableAdmin("announce.site");
   const row = getBroadcast(input.id);
   if (!row) return fail("找不到这条群发");
   if (row.status === "sent" || row.status === "sending") {
@@ -352,7 +352,7 @@ export async function cancelBroadcast(input: { id: string }): Promise<BroadcastR
 
 /** 撤回某一个群里的那条。窗口很短，失败是常态 */
 export async function revokeDelivery(input: { deliveryId: string }): Promise<BroadcastResult> {
-  const admin = await requireAdmin("broadcast.wechat");
+  const admin = await requireWritableAdmin("broadcast.wechat");
 
   const row = db
     .select()

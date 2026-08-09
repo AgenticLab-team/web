@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/lib/admin/guard";
+import { requireWritableAdmin } from "@/lib/admin/guard";
 import { retryableJobs, runningJobs } from "@/lib/admin/groups";
 import { audit } from "@/lib/audit";
 import { db } from "@/lib/db";
@@ -38,7 +38,7 @@ export async function updateGroupConfig(input: {
   syncExcluded: boolean;
   reason: string;
 }): Promise<GroupActionResult> {
-  const admin = await requireAdmin("group.manage");
+  const admin = await requireWritableAdmin("group.manage");
 
   const reason = input.reason.trim();
   if (!reason) return fail("必须填写理由");
@@ -118,7 +118,7 @@ export async function updateGroupConfig(input: {
  * 而游标已经动过了，那一段消息就永远补不回来。
  */
 export async function triggerSync(input: { kind: string; scope?: string }): Promise<GroupActionResult> {
-  const admin = await requireAdmin("group.manage");
+  const admin = await requireWritableAdmin("group.manage");
 
   const check = checkManualTrigger(runningJobs());
   if (!check.ok) return fail(check.error!);
@@ -148,7 +148,7 @@ export async function triggerSync(input: { kind: string; scope?: string }): Prom
 }
 
 export async function retrySyncJob(input: { id: string }): Promise<GroupActionResult> {
-  const admin = await requireAdmin("group.manage");
+  const admin = await requireWritableAdmin("group.manage");
 
   const job = db.select().from(syncJobs).where(eq(syncJobs.id, input.id)).get();
   if (!job) return fail("任务不存在");
@@ -185,7 +185,7 @@ export async function retrySyncJob(input: { id: string }): Promise<GroupActionRe
 
 /** 一键重试所有可重试的失败任务 */
 export async function retryAllFailed(): Promise<GroupActionResult> {
-  const admin = await requireAdmin("group.manage");
+  const admin = await requireWritableAdmin("group.manage");
 
   const running = checkManualTrigger(runningJobs());
   if (!running.ok) return fail(running.error!);

@@ -3,7 +3,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/lib/admin/guard";
+import { requireWritableAdmin } from "@/lib/admin/guard";
 import { audit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { reports } from "@/lib/db/schema";
@@ -43,7 +43,7 @@ export async function claimReports(input: {
   /** 不传就是认领给自己 */
   assignTo?: string;
 }): Promise<ReportActionResult> {
-  const admin = await requireAdmin("moderation.queue");
+  const admin = await requireWritableAdmin("moderation.queue");
 
   const group = loadGroup(input.targetType, input.targetId);
   if (group.length === 0) return fail("找不到这批举报");
@@ -86,7 +86,7 @@ export async function resolveReports(input: {
   outcome: "resolved" | "rejected" | "duplicate";
   resolution: string;
 }): Promise<ReportActionResult> {
-  const admin = await requireAdmin("moderation.queue");
+  const admin = await requireWritableAdmin("moderation.queue");
 
   const group = loadGroup(input.targetType, input.targetId);
   if (group.length === 0) return fail("找不到这批举报");
