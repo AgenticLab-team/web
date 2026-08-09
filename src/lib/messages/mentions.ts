@@ -167,6 +167,61 @@ function matchExact(roster: RosterEntry[], name: string): RosterEntry[] {
 }
 
 /**
+ * 群昵称里「名字 + 分隔符 + 后缀」的那个后缀，是最常被改掉的部分。
+ *
+ * 微信群昵称的惯例是 `名字@单位`、`名字-城市`、`名字|职位` ——
+ * 真实数据里到处都是（`程建都@律师`、`🐳明立-北京-AI教育`）。
+ * 而人换工作、换城市时改的正是后半截，名字本身不动。
+ *
+ * 这些分隔符**不含 CJK 字符也不含字母数字**：宁可少认，
+ * 也不能把「@李」认成「@李四」。
+ */
+const NICKNAME_SUFFIX_SEP = /^[@\-|·・_+/（([【\s]/;
+
+/**
+ * 定界的 @ 对不上名册时，试一次「他把昵称后缀改掉了」。
+ *
+ * ─────────────────────────────────────────
+ * 这条规则是量出来的，不是想出来的
+ * ─────────────────────────────────────────
+ *
+ * 生产库里 24 条对不上的 @ 里，有 9 条是同一个人：正文是
+ * `@jmr@nothing`，而他今天在那个群叫 `jmr` —— 他把 `@nothing`
+ * 这个后缀去掉了。这 9 条全是站长自己的，也正是他看到
+ * 「被 @ 是 0」的原因。
+ *
+ * 本来有 `aliases`（曾用名）这条路，但它靠的是上游报的改名事件 ——
+ * 而上游根本没报过这一次。**只依赖别人愿意告诉我们的事实，
+ * 就会漏掉所有他没说的。**
+ *
+ * 安全边界有三层，缺一条都不敢认：
+ *   ① 只在**定界**的 @ 上用（微信自己插的，不是手打的）——
+ *      手打的边界本来就靠猜，再叠一层猜就是在编
+ *   ② 名字后面必须紧跟分隔符。`@李` 不会被认成 `@李四`
+ *   ③ **只认唯一命中**。两个人的名字都能当前缀时一律不认 ——
+ *      认错人比认不出更糟：那条通知会送到一个完全无关的人手里，
+ *      而他还以为有人在叫他
+ */
+function matchRenamedSuffix(roster: RosterEntry[], token: string): RosterEntry[] {
+  let best: { length: number; hits: RosterEntry[] } | null = null;
+
+  for (const member of roster) {
+    const { primary, secondary } = namesOf(member);
+    for (const name of [primary, ...secondary]) {
+      if (!name || name.length < 2) continue; // 一个字的名字当前缀太容易撞
+      if (name.length >= token.length) continue;
+      if (!token.startsWith(name)) continue;
+      if (!NICKNAME_SUFFIX_SEP.test(token.slice(name.length))) continue;
+
+      if (!best || name.length > best.length) best = { length: name.length, hits: [member] };
+      else if (name.length === best.length && !best.hits.includes(member)) best.hits.push(member);
+    }
+  }
+
+  return best?.hits ?? [];
+}
+
+/**
  * 手打 @ 的边界反推：拿名册里每个名字去比 @ 后面的正文前缀。
  * 取最长命中，且命中后必须干净收尾（空白/标点/结尾）——
  * 名册里有 "jmr" 不代表 "@jmrx" 是在 @ 他。
@@ -223,9 +278,19 @@ export function resolveMentions(
         continue;
       }
 
-      const hits = matchExact(roster, token.name);
+      let hits = matchExact(roster, token.name);
+
+      /*
+       * 对不上就再试一次「他把昵称后缀改掉了」。
+       *
+       * 定界了却对不上名册，最常见的原因不是「这个人退群了」，
+       * 而是他把 `名字@单位` 里的后缀改了 —— 生产库里 24 条对不上的
+       * @ 有 9 条都是这一种。判据和安全边界见 matchRenamedSuffix。
+       */
+      if (hits.length === 0) hits = matchRenamedSuffix(roster, token.name);
+
       if (hits.length === 0) {
-        // 定界了却对不上名册：多半是被 @ 的人后来改了名或退了群。
+        // 真的对不上：多半是被 @ 的人退了群。
         // 如实标 unknown，字面昵称留作证据
         records.push({
           name: token.name,

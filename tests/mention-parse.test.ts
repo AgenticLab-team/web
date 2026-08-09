@@ -213,3 +213,96 @@ describe("手打 @（无定界符）", () => {
     assert.equal(m.wxId, "wxid_p");
   });
 });
+
+describe("**他把群昵称的后缀改掉了**", () => {
+  /*
+   * 这一组是量出来的，不是想出来的。
+   *
+   * 生产库里 24 条对不上的 @ 有 9 条是同一个人：正文是 `@jmr@nothing`，
+   * 而他今天在那个群叫 `jmr` —— 他把 `@nothing` 这个后缀去掉了。
+   * 这 9 条全是站长自己的，也正是他看到「被 @ 是 0」的原因。
+   *
+   * 微信群昵称的惯例就是 `名字@单位`、`名字-城市`、`名字|职位`，
+   * 而人换工作、换城市时改的正是后半截。
+   */
+  it("**`@jmr@nothing` 认得出今天叫 jmr 的那个人**", () => {
+    const r = roster([{ wxId: "wxid_jmr", displayName: "jmr" }]);
+    const [m] = resolveMentions(`@jmr@nothing${SEP}你要找的那个`, r);
+    assert.equal(m.status, "resolved");
+    assert.equal(m.wxId, "wxid_jmr");
+    // 字面昵称要留着 —— 它是当时写的是什么的唯一证据
+    assert.equal(m.name, "jmr@nothing");
+  });
+
+  it("横杠、竖线、括号这些分隔符一样认", () => {
+    const r = roster([{ wxId: "wxid_m", displayName: "明立" }]);
+    for (const suffix of ["-北京-AI教育", "|产品", "（腾讯）", "_zju"]) {
+      const [m] = resolveMentions(`@明立${suffix}${SEP}在吗`, r);
+      assert.equal(m.status, "resolved", suffix);
+      assert.equal(m.wxId, "wxid_m", suffix);
+    }
+  });
+
+  it("**`@李四` 不会被认成名册里的「李」**", () => {
+    /*
+     * 名字后面必须紧跟分隔符。少了这一条，任何一个短名字
+     * 都会把所有以它开头的昵称吸过来。
+     */
+    const r = roster([{ wxId: "wxid_li", displayName: "李" }]);
+    const [m] = resolveMentions(`@李四${SEP}在吗`, r);
+    assert.equal(m.status, "unknown");
+  });
+
+  it("**一个字的名字不参与这条规则** —— 当前缀太容易撞", () => {
+    const r = roster([{ wxId: "wxid_a", displayName: "A" }]);
+    const [m] = resolveMentions(`@A@somewhere${SEP}在吗`, r);
+    assert.equal(m.status, "unknown");
+  });
+
+  it("取最长的那个名字", () => {
+    const r = roster([
+      { wxId: "wxid_short", displayName: "jm" },
+      { wxId: "wxid_long", displayName: "jmr" },
+    ]);
+    const [m] = resolveMentions(`@jmr@nothing${SEP}hi`, r);
+    assert.equal(m.wxId, "wxid_long");
+  });
+
+  it("**两个人都对得上就一个都不认**", () => {
+    /*
+     * 认错人比认不出更糟：那条通知会送到一个完全无关的人手里，
+     * 而他还以为有人在叫他。
+     */
+    const r = roster([
+      { wxId: "wxid_1", displayName: "同名" },
+      { wxId: "wxid_2", displayName: "同名" },
+    ]);
+    const [m] = resolveMentions(`@同名@某公司${SEP}hi`, r);
+    assert.notEqual(m.status, "resolved");
+    assert.equal(m.wxId, null);
+  });
+
+  it("**精确匹配优先** —— 真有人就叫这个全名时不许被前缀截走", () => {
+    const r = roster([
+      { wxId: "wxid_full", displayName: "jmr@nothing" },
+      { wxId: "wxid_short", displayName: "jmr" },
+    ]);
+    const [m] = resolveMentions(`@jmr@nothing${SEP}hi`, r);
+    assert.equal(m.wxId, "wxid_full");
+  });
+
+  it("**手打的 @ 不走这条规则** —— 边界本来就靠猜，再叠一层就是在编", () => {
+    const r = roster([{ wxId: "wxid_jmr", displayName: "jmr" }]);
+    // 没有定界符：走的是名册反推那条路，而 `@jmr@nothing` 里
+    // `jmr` 后面跟的是 @，不是干净收尾
+    const [m] = resolveMentions("@jmr@nothing 你要找的那个", r);
+    assert.notEqual(m?.status, "resolved");
+  });
+
+  it("对不上就还是 unknown，字面昵称留作证据", () => {
+    const r = roster([{ wxId: "wxid_x", displayName: "完全无关" }]);
+    const [m] = resolveMentions(`@某某@某公司${SEP}hi`, r);
+    assert.equal(m.status, "unknown");
+    assert.equal(m.name, "某某@某公司");
+  });
+});
