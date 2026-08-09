@@ -6,14 +6,10 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { messageWindows, messages, people } from "@/lib/db/schema";
 import { assertGroupAccess } from "@/lib/queries/visibility";
-import {
-  attribution,
-  canShareWindow,
-  clampContent,
-  trimForImage,
-  type ShareMessage,
-} from "@/lib/share/rules";
+import { canShareWindow, trimForImage, type ShareMessage } from "@/lib/share/rules";
 import { resolveDisplayName } from "@/lib/users/display-name";
+
+import { WindowCard } from "./card";
 
 export const runtime = "nodejs";
 
@@ -85,48 +81,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     },
   );
 
-  return new ImageResponse(
-    (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          background: "#0b0b0d",
-          padding: "48px 52px",
-          fontFamily: "sans-serif",
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", flex: 1, gap: 18 }}>
-          {omitted > 0 && (
-            <div style={{ color: "#6b6b73", fontSize: 22 }}>…前面还有 {omitted} 条</div>
-          )}
-          {shown.map((m, i) => (
-            <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <div style={{ color: "#8a8a94", fontSize: 22 }}>{m.senderName}</div>
-              <div style={{ color: "#f2f2f5", fontSize: 30, lineHeight: 1.4 }}>
-                {clampContent(m.content)}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* 出处：让拿到图的人知道这是成员社区的内部内容，不是公开发布的东西 */}
-        <div
-          style={{
-            display: "flex",
-            borderTop: "1px solid #26262c",
-            paddingTop: 20,
-            marginTop: 24,
-            color: "#6b6b73",
-            fontSize: 22,
-          }}
-        >
-          {attribution({ memberOnly: true })}
-        </div>
-      </div>
-    ),
-    { width: 1080, height: 1350 },
-  );
+  // 画面在 ./card.tsx —— 拆出去是为了让测试能真的画一遍，
+  // 这张图过去就是在渲染那一步 500 的
+  return new ImageResponse(<WindowCard shown={shown} omitted={omitted} />, {
+    width: 1080,
+    height: 1350,
+  });
 }

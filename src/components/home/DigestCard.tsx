@@ -35,7 +35,15 @@ export function DigestCard({ digest, loggedIn }: { digest: Digest; loggedIn: boo
       digest.chatQualityYesterday > 0 && {
         key: "chat",
         text: `昨天群里有 ${digest.chatQualityYesterday} 条值得看的发言`,
-        href: "/messages",
+        /*
+         * 指到「按天回看」的**那一天**。
+         *
+         * 这里原来写的是 /messages —— 站里根本没有这个路由，点进去 404。
+         * 这一条比「链接不好看」严重：首页上唯一一块「回来的理由」，
+         * 人点开第一个数字就撞上一个不存在的页面。
+         * 而且必须带上日期，落到今天的空页面等于告诉他刚才那行是假的。
+         */
+        href: `/archive?date=${digest.chatDateKey}`,
         strong: false,
       },
   ].filter(Boolean) as { key: string; text: string; href: string; strong: boolean }[];

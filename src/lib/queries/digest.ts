@@ -32,6 +32,14 @@ export interface Digest {
   newPosts: number;
   /** 昨天你所在的群里有多少条高质量发言 */
   chatQualityYesterday: number;
+  /**
+   * 上面那个数字说的是哪一天（YYYY-MM-DD，东八区）。
+   *
+   * 页面要用它拼「去回看那一天」的链接，所以日期必须在这里算好带出去 ——
+   * 让渲染的时候自己去读 Date.now() 既过不了 React Compiler 那关，
+   * 也可能和统计口径差一天（跨过零点那次请求）。
+   */
+  chatDateKey: string;
   /** 最新的几篇帖子，直接给入口 */
   latest: { id: string; title: string; boardName: string; authorName: string; createdAt: number }[];
 }
@@ -58,6 +66,9 @@ export function buildDigest(user: CurrentUser | null, convIds: string[]): Digest
       )
     : 0;
 
+  // 「昨天」只算一次：分两处各算一次的话，跨零点的那一次请求会前后不一致
+  const chatDateKey = shiftDateKey(todayKey(), -1);
+
   const chatQualityYesterday =
     convIds.length > 0
       ? Number(
@@ -68,7 +79,7 @@ export function buildDigest(user: CurrentUser | null, convIds: string[]): Digest
               and(
                 inArray(messages.convId, convIds),
                 eq(messages.isQuality, true),
-                sql`${messages.ts} >= ${startOfDayMs(shiftDateKey(todayKey(), -1))}`,
+                sql`${messages.ts} >= ${startOfDayMs(chatDateKey)}`,
                 sql`${messages.ts} < ${startOfDayMs(todayKey())}`,
               ),
             )
@@ -103,6 +114,7 @@ export function buildDigest(user: CurrentUser | null, convIds: string[]): Digest
     repliesToMe,
     newPosts: visible.filter((r) => r.post.createdAt > since).length,
     chatQualityYesterday,
+    chatDateKey,
     latest: visible.slice(0, 3).map((r) => ({
       id: r.post.id,
       title: r.post.title,
