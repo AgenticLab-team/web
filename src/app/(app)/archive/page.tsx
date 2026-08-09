@@ -48,8 +48,10 @@ export default async function ArchivePage({
 
   const convId = groups.find((g) => g.convId === group)?.convId ?? groups[0].convId;
   const day = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayKey();
-  const rows = messagesOfDay(user, convId, day);
-  if (rows === null) notFound();
+  const day_ = messagesOfDay(user, convId, day);
+  if (day_ === null) notFound();
+  const rows = day_.rows;
+  const dropped = day_.dropped;
 
   const groupName = groups.find((g) => g.convId === convId)?.name ?? "群聊";
   const link = (d: string, g = convId) => `/archive?group=${encodeURIComponent(g)}&date=${d}`;
@@ -92,6 +94,20 @@ export default async function ArchivePage({
           <ChevronRight className="h-4 w-4" strokeWidth={2.2} aria-hidden />
         </Link>
       </div>
+
+      {/* 裁剪过的一天和冷清的一天长得一模一样 —— 必须说出来 */}
+      {dropped > 0 && (
+        <p
+          className="t-caption mb-3 rounded-[var(--radius-card)] px-3.5 py-2.5 leading-relaxed hairline"
+          style={{
+            background: "color-mix(in srgb, var(--warning) 8%, var(--surface))",
+            color: "var(--ink-secondary)",
+          }}
+        >
+          这一天有 {dropped} 条正文已因存储裁剪被归档，不在下面的列表里 ——
+          归档文件在服务器上，需要时可以捞回来。
+        </p>
+      )}
 
       {rows.length === 0 ? (
         <Empty title="这天没有消息" hint="换个日期看看" />

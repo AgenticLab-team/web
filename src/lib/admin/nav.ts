@@ -48,6 +48,15 @@ export const ADMIN_NAV: AdminNavSection[] = [
         ready: true,
       },
       {
+        key: "storage",
+        href: "/admin/storage",
+        label: "存储与裁剪",
+        icon: "hard-drive",
+        permission: "system.dashboard",
+        description: "空间花在哪，裁掉的还找不找得回来",
+        ready: true,
+      },
+      {
         key: "audit",
         href: "/admin/audit",
         label: "审计日志",

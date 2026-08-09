@@ -305,7 +305,19 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
     type: "bool",
     category: "storage",
     label: "冷层只保留高质量消息",
-    description: "上游 NekoBot 才是数据源，本地是缓存，冷数据可放心裁剪、需要时回源",
+    description:
+      "设计上「本地是缓存、需要时回源」，但上游自己也只有约两个月历史 —— " +
+      "这个前提今天还证明不了。所以丢正文之前必须先归档，见下一项",
+  },
+  {
+    key: "storage.archive_before_drop",
+    value: "true",
+    type: "bool",
+    category: "storage",
+    label: "丢弃正文前先归档成文件",
+    description:
+      "关掉就是直接删除，且不可逆。关掉时裁剪会先抽样验证上游确实回得来，" +
+      "验不过就整步跳过 —— 磁盘占着总比记录没了强",
   },
   {
     key: "storage.media_cache_max_bytes",

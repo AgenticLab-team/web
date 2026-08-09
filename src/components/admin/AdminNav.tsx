@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  Activity, Coins, Eye, FileText, Filter, Flag, Gauge, Gift, LayoutList, Megaphone, MessageSquare,
-  Puzzle, Scale, ScrollText, Shield, ShieldCheck, ShoppingBag, Sliders, Ticket, Users,
+  Activity, Coins, Eye, FileText, Filter, Flag, Gauge, Gift, HardDrive, LayoutList, Megaphone,
+  MessageSquare, Puzzle, Scale, ScrollText, Shield, ShieldCheck, ShoppingBag, Sliders, Ticket, Users,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -31,6 +31,7 @@ const ICONS: Record<string, LucideIcon> = {
   gift: Gift,
   "shopping-bag": ShoppingBag,
   activity: Activity,
+  "hard-drive": HardDrive,
 };
 
 /**

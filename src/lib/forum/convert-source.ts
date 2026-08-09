@@ -19,6 +19,18 @@ export interface PickableMessage {
   ts: number;
 }
 
+export interface DayMessages {
+  rows: PickableMessage[];
+  /**
+   * 这一天有多少条正文已经被存储裁剪丢掉了。
+   *
+   * 必须报出来：**裁剪过的一天和冷清的一天在结果里长得一模一样**，
+   * 而在前者上做「群聊沉淀」会产出一篇残缺的记录，
+   * 且没有任何迹象说明它是残缺的。
+   */
+  dropped: number;
+}
+
 /**
  * 取某天某群的消息，供转帖时挑选。
  *
@@ -29,7 +41,7 @@ export function messagesOfDay(
   user: CurrentUser | null,
   convId: string,
   date: string,
-): PickableMessage[] | null {
+): DayMessages | null {
   if (!assertGroupAccess(user, convId)) return null;
 
   const rows = db
@@ -46,7 +58,7 @@ export function messagesOfDay(
     .orderBy(asc(messages.ts))
     .all();
 
-  if (rows.length === 0) return [];
+  if (rows.length === 0) return { rows: [], dropped: 0 };
 
   const profiles = new Map(
     db
@@ -56,7 +68,12 @@ export function messagesOfDay(
       .map((p) => [p.wxId, p]),
   );
 
-  return rows.map((row) => ({
+  // 正文被裁剪掉的不塞进列表 —— 空气泡比缺一条更让人困惑
+  const usable = rows.filter((row) => row.content !== "");
+
+  return {
+    dropped: rows.length - usable.length,
+    rows: usable.map((row) => ({
     id: row.id,
     senderWxId: row.senderWxId,
     senderName: resolveDisplayName([profiles.get(row.senderWxId)?.name, row.senderName], {
@@ -67,5 +84,6 @@ export function messagesOfDay(
     content: row.content,
     type: row.type,
     ts: row.ts,
-  }));
+  })),
+  };
 }

@@ -34,8 +34,10 @@ export default async function ConvertPage({
 
   const convId = myGroups.find((g) => g.convId === group)?.convId ?? myGroups[0].convId;
   const day = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayKey();
-  const rows = messagesOfDay(user, convId, day);
-  if (rows === null) notFound();
+  const day_ = messagesOfDay(user, convId, day);
+  if (day_ === null) notFound();
+  const rows = day_.rows;
+  const dropped = day_.dropped;
 
   const groupName = myGroups.find((g) => g.convId === convId)?.name ?? convId;
 
@@ -83,6 +85,20 @@ export default async function ConvertPage({
           后一天
         </Link>
       </div>
+
+      {/* 裁剪过的一天和冷清的一天长得一模一样 —— 必须说出来 */}
+      {dropped > 0 && (
+        <p
+          className="t-caption mb-3 rounded-[var(--radius-card)] px-3.5 py-2.5 leading-relaxed hairline"
+          style={{
+            background: "color-mix(in srgb, var(--warning) 8%, var(--surface))",
+            color: "var(--ink-secondary)",
+          }}
+        >
+          这一天有 {dropped} 条正文已因存储裁剪被归档，不在下面的列表里 ——
+          你看到的不是完整的一天，转出来的帖子也会是残缺的。
+        </p>
+      )}
 
       {rows.length === 0 ? (
         <Empty title={`${groupName} 这天没有消息`} hint="换个日期看看" />

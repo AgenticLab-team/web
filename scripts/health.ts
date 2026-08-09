@@ -1,6 +1,7 @@
 /** 跑一轮健康探测、落库、判定并投递告警。 npm run health */
 import { checkAndDispatch } from "@/lib/alerts/dispatch";
 import { runHealthChecks, takeStorageSnapshot } from "@/lib/health";
+import { autoPruneIfNeeded } from "@/lib/storage/auto";
 
 async function main() {
   const reports = await runHealthChecks();
@@ -15,6 +16,18 @@ async function main() {
   );
   for (const t of s.byTable.slice(0, 6)) {
     console.log(`    ${t.name.padEnd(22)} ${(t.bytes / 1048576).toFixed(2)} MB`);
+  }
+
+  /*
+   * 水位到线就自动泄压 —— 但只做可逆的那两步。
+   * 阈值不是用来看的，是用来触发的；而自动触发不该碰不可逆的操作。
+   */
+  const auto = await autoPruneIfNeeded(s.diskPct);
+  console.log(`\n裁剪 ${auto.reason}`);
+  if (auto.result) {
+    console.log(
+      `  改层 ${auto.result.retiered} · 退索引 ${auto.result.unindexed}`,
+    );
   }
 
   /*

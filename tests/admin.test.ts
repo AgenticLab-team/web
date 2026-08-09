@@ -97,10 +97,11 @@ describe("按权限过滤", () => {
   });
 
   it("只有仪表盘权限时只看得到只读的总览入口", () => {
-    // 健康与告警和仪表盘同级：都是「看系统在不在」，不改任何东西
+    // 健康告警、存储概览和仪表盘同级：都是「看系统在不在」，不改任何东西。
+    // 存储页上的裁剪按钮另有 system.settings 把关，不在导航这一层
     const sections = visibleAdminNav((p) => p === "system.dashboard");
     const keys = sections.flatMap((s) => s.items.map((i) => i.key));
-    assert.deepEqual(keys, ["dashboard", "health"]);
+    assert.deepEqual(keys, ["dashboard", "health", "storage"]);
   });
 
   it("**审计员只看得到只读入口**", () => {
