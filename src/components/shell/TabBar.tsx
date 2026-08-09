@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { useLiveUnread } from "@/components/notifications/live-store";
 import { activeNavKey, type NavItem } from "@/lib/nav";
 
 import { NavIcon } from "./icons";
@@ -24,6 +25,10 @@ export function TabBar({
 }) {
   const pathname = usePathname();
   const active = activeNavKey(pathname);
+  // 实时通道给过数就用它，否则用服务端渲染时的值 —— 详见 live-store.ts
+  const liveUnread = useLiveUnread();
+  const badgeOf = (key: string) =>
+    key === "notifications" && liveUnread !== null ? liveUnread : badges[key];
 
   if (items.length === 0) return null;
 
@@ -57,10 +62,10 @@ export function TabBar({
                     className="h-[1.375rem] w-[1.375rem]"
                     strokeWidth={isActive ? 2.2 : 1.75}
                   />
-                  {badges[item.key] > 0 && (
+                  {badgeOf(item.key) > 0 && (
                     <span
                       className="absolute -right-1.5 -top-0.5 h-[0.4375rem] w-[0.4375rem] rounded-full bg-[var(--accent)]"
-                      aria-label={`${badges[item.key]} 条未读`}
+                      aria-label={`${badgeOf(item.key)} 条未读`}
                     />
                   )}
                 </span>

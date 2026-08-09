@@ -34,19 +34,31 @@ export interface ChannelPrefs {
   site: boolean;
   /** 邮件通道**还没接** —— 见 canUseEmail() */
   email: boolean;
+  /**
+   * Web Push（锁屏推送）。整个通道是订阅制的 —— 没订阅的设备
+   * 这个开关无事发生，所以它**不受 ALWAYS_ON 约束**：
+   * 「关不掉」保护的是站内那份记录还在，不是逼着往锁屏上打。
+   */
+  push: boolean;
 }
 
 export type PrefsMap = Record<string, ChannelPrefs>;
 
 /**
- * 默认全开。
+ * 站内默认全开。
  *
  * 新用户第一周需要知道有人回了自己 —— 那是他会不会再来的关键。
  * 默认关掉的通知等于没有通知，而用户根本不知道有个开关可以打开。
+ *
+ * 推送唯独 reaction 默认关：它是量最大的一类，直接打到锁屏上，
+ * 第一晚就会被人在**系统层**把整个站的通知权限收回 ——
+ * 那之后 @ 和回复也一条都到不了，而我们再也没有机会把它开回来。
  */
 export function defaultPrefs(): PrefsMap {
   const out: PrefsMap = {};
-  for (const type of NOTIFICATION_TYPES) out[type] = { site: true, email: false };
+  for (const type of NOTIFICATION_TYPES) {
+    out[type] = { site: true, email: false, push: type !== "reaction" };
+  }
   return out;
 }
 
@@ -80,6 +92,9 @@ export function normalizePrefs(raw: unknown): PrefsMap {
     base[type] = {
       site: typeof v.site === "boolean" ? v.site : true,
       email: typeof v.email === "boolean" ? v.email : false,
+      // 缺字段回落到**该类型的默认值**而非一律 true ——
+      // reaction 的推送默认关，老记录缺这一项时不该被悄悄打开
+      push: typeof v.push === "boolean" ? v.push : base[type].push,
     };
   }
 
@@ -89,12 +104,14 @@ export function normalizePrefs(raw: unknown): PrefsMap {
   return base;
 }
 
-/** 这条通知该不该产生 */
+/** 这条通知该不该产生（site）／该不该往这个通道投（email、push） */
 export function isEnabled(prefs: PrefsMap, type: string, channel: keyof ChannelPrefs = "site"): boolean {
   if (channel === "site" && isAlwaysOn(type)) return true;
   if (channel === "email" && !canUseEmail()) return false;
   const entry = prefs[type];
-  if (!entry) return true; // 没见过的类型默认发，漏发比多发糟
+  // 没见过的类型：站内默认发（漏发比多发糟），推送默认不发 ——
+  // 站内漏一条只是晚点看到，锁屏上多打一类没人要的会让整个通道被系统级关掉
+  if (!entry) return channel === "site";
   return entry[channel];
 }
 

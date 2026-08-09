@@ -285,7 +285,7 @@ describe("多个订阅与多个人", () => {
     const store = await import("@/lib/notifications/store");
     store.savePrefs("alice", {
       ...store.getPrefs("alice"),
-      keyword: { site: false, email: false },
+      keyword: { site: false, email: false, push: false },
     });
 
     const result = engine.scanMessages([msg()], NOW);

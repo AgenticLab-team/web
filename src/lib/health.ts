@@ -12,6 +12,8 @@ import { db, sqlite } from "@/lib/db";
 import { storageSnapshots, systemHealth } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { NekoBotError, nekobot } from "@/lib/nekobot/client";
+import { pushSubscriptionSummary } from "@/lib/notifications/push-store";
+import { configProblem, webPushConfigured } from "@/lib/notifications/webpush";
 import { offsiteSummary } from "@/lib/backup/offsite";
 import { getSettingInt } from "@/lib/settings/store";
 
@@ -185,6 +187,34 @@ export function probeAuthPolicy(): HealthReport {
   };
 }
 
+/**
+ * Web Push 的配置状态。
+ *
+ * 与 probeOffsite 同一条原则：「没配置」报 degraded 而不是 ok ——
+ * 推送没配时用户看到的订阅界面会如实说「暂未开通」，但运维侧
+ * 也必须有一个一直亮着的黄灯，否则「忘了配」和「不打算配」没法区分。
+ *
+ * 比没配更危险的是**配错**（比如轮换时只换了公钥）：那种状态下每次
+ * 投递都被推送服务拒掉，而站内一切正常，没有任何页面会变红 ——
+ * 所以配了但校验不过要报 down，它是真故障，不是缺口。
+ */
+export function probeWebPush(): HealthReport {
+  const problem = configProblem();
+  if (problem === null) {
+    const subs = pushSubscriptionSummary();
+    return {
+      component: "web_push",
+      status: "ok",
+      detail: `已配置 · ${subs.active} 个订阅在投${subs.disabled ? ` · ${subs.disabled} 个已停用` : ""}`,
+    };
+  }
+  return {
+    component: "web_push",
+    status: webPushConfigured() ? "down" : "degraded",
+    detail: problem,
+  };
+}
+
 /** 跑一轮完整探测并落库 */
 export async function runHealthChecks(): Promise<HealthReport[]> {
   const reports = [
@@ -193,6 +223,7 @@ export async function runHealthChecks(): Promise<HealthReport[]> {
     probeDisk(),
     probeOffsite(),
     probeAuthPolicy(),
+    probeWebPush(),
   ];
   for (const report of reports) {
     db.insert(systemHealth)
@@ -203,7 +234,8 @@ export async function runHealthChecks(): Promise<HealthReport[]> {
           | "db"
           | "disk"
           | "offsite"
-          | "auth",
+          | "auth"
+          | "web_push",
         status: report.status,
         detail: report.detail,
         latencyMs: report.latencyMs,

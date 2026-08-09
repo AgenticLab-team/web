@@ -405,6 +405,9 @@ export const notifications = sqliteTable(
   (t) => [
     index("notifications_user_idx").on(t.userId, t.readAt, t.updatedAt),
     index("notifications_group_idx").on(t.userId, t.groupKey, t.readAt),
+    // 实时通知的轮询按「全表 updatedAt >= 水位线」扫增量（lib/notifications/live.ts），
+    // 没有这个索引它每 3 秒全表扫一次
+    index("notifications_updated_idx").on(t.updatedAt),
   ],
 );
 

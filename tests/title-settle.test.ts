@@ -157,7 +157,7 @@ describe("成就称号真的会被授予", () => {
     // 用户把 system 关掉也照发：解锁通知属于「与账号有关」那一类
     prefsStore.savePrefs("alice", {
       ...prefsStore.getPrefs("alice"),
-      system: { site: false, email: false },
+      system: { site: false, email: false, push: false },
     });
     title({ conditionKind: "streakBest", conditionValue: 30 });
     settle.grantAchievementsFor("alice", NOW);

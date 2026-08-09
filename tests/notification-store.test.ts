@@ -73,7 +73,7 @@ function rows(userId = ALICE) {
 function mute(type: string) {
   store.savePrefs(ALICE, {
     ...store.getPrefs(ALICE),
-    [type]: { site: false, email: false },
+    [type]: { site: false, email: false, push: false },
   });
 }
 
@@ -109,7 +109,7 @@ describe("开关真的接上了", () => {
   it("重新打开之后又能收到（但补不回关掉的那段）", () => {
     mute("reaction");
     send();
-    store.savePrefs(ALICE, { ...store.getPrefs(ALICE), reaction: { site: true, email: false } });
+    store.savePrefs(ALICE, { ...store.getPrefs(ALICE), reaction: { site: true, email: false, push: false } });
     send();
     assert.equal(rows().length, 1, "打开后新的没进来，或者关掉的被补回来了");
   });
@@ -139,7 +139,7 @@ describe("缓存不会让开关看起来是假的", () => {
 
   it("重新打开也是立刻生效", () => {
     mute("reaction");
-    store.savePrefs(ALICE, { ...store.getPrefs(ALICE), reaction: { site: true, email: false } });
+    store.savePrefs(ALICE, { ...store.getPrefs(ALICE), reaction: { site: true, email: false, push: false } });
     send();
     assert.equal(rows().length, 1);
   });

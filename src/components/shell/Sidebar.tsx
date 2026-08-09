@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useLiveUnread } from "@/components/notifications/live-store";
 import { activeNavKey, type NavSection } from "@/lib/nav";
 
 import { NavIcon } from "./icons";
@@ -30,6 +31,10 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const active = activeNavKey(pathname);
+  // 实时通道给过数就用它，否则用服务端渲染时的值 —— 详见 live-store.ts
+  const liveUnread = useLiveUnread();
+  const badgeOf = (key: string) =>
+    key === "notifications" && liveUnread !== null ? liveUnread : badges[key];
 
   return (
     <aside className="hairline-r fixed inset-y-0 left-0 z-30 hidden w-[var(--sidebar-width)] flex-col lg:flex">
@@ -68,9 +73,9 @@ export function Sidebar({
                         strokeWidth={isActive ? 2.1 : 1.75}
                       />
                       <span className="t-subhead flex-1 font-medium">{item.label}</span>
-                      {badges[item.key] > 0 && (
+                      {badgeOf(item.key) > 0 && (
                         <span className="tabular flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[0.6875rem] font-semibold text-[var(--accent-ink)]">
-                          {badges[item.key] > 99 ? "99+" : badges[item.key]}
+                          {badgeOf(item.key) > 99 ? "99+" : badgeOf(item.key)}
                         </span>
                       )}
                     </Link>
