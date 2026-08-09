@@ -192,6 +192,16 @@ export const ADMIN_NAV: AdminNavSection[] = [
         ready: true,
       },
       {
+        key: "ledger",
+        href: "/admin/points/ledger",
+        label: "积分流水",
+        icon: "receipt",
+        // points.read 这个权限一直没人用 —— 它管的就是这一页
+        permission: "points.read",
+        description: "全站流水、风控队列、冲正",
+        ready: true,
+      },
+      {
         key: "groups",
         href: "/admin/groups",
         label: "群与数据源",

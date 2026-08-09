@@ -127,25 +127,27 @@ export function revertPoints(ledgerId: string, operatorId: string, reason: strin
     refId: original.refId ?? undefined,
     operatorId,
   });
-  if (!result.ok) return result;
+  if (!result.ok || !result.ledgerId) return result;
 
-  const reversal = db
-    .select()
-    .from(pointsLedger)
-    .where(eq(pointsLedger.userId, original.userId))
-    .orderBy(desc(pointsLedger.createdAt))
-    .get();
-
-  if (reversal) {
-    db.update(pointsLedger)
-      .set({ revertsId: original.id })
-      .where(eq(pointsLedger.id, reversal.id))
-      .run();
-    db.update(pointsLedger)
-      .set({ revertedBy: reversal.id })
-      .where(eq(pointsLedger.id, original.id))
-      .run();
-  }
+  /*
+   * 用 grantPoints 返回的那个 id 去连关系，**不要回头再查一次**。
+   *
+   * 原来这里是「按 user_id 取 created_at 最新的一条」当成刚写的那笔。
+   * created_at 精度是毫秒，而结算是成批跑的 —— 同一毫秒里给同一个人
+   * 写两条完全可能。撞上那一次，两条关系会挂到**别的流水**上：
+   * 被冲正的那笔没被标记，于是还能再冲正一次（钱凭空多一份），
+   * 而无辜的那笔被标成已冲正、再也冲不了。
+   *
+   * id 本来就在手里，没有任何理由去猜。
+   */
+  db.update(pointsLedger)
+    .set({ revertsId: original.id })
+    .where(eq(pointsLedger.id, result.ledgerId))
+    .run();
+  db.update(pointsLedger)
+    .set({ revertedBy: result.ledgerId })
+    .where(eq(pointsLedger.id, original.id))
+    .run();
 
   return result;
 }

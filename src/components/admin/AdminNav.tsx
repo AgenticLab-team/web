@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, CloudUpload, Coins, Eye, FileText, Filter, Flag, Gauge, Gift, HardDrive, LayoutList, Megaphone, MessageSquare, Puzzle, Scale, ScrollText, Shield, ShieldCheck, ShoppingBag, Sliders, Sparkles, Ticket, ToggleLeft, UserRoundPlus, Users, type LucideIcon } from "lucide-react";
+import { Activity, CloudUpload, Coins, Eye, FileText, Filter, Flag, Gauge, Gift, HardDrive, LayoutList, Megaphone, MessageSquare, Puzzle, Receipt, Scale, ScrollText, Shield, ShieldCheck, ShoppingBag, Sliders, Sparkles, Ticket, ToggleLeft, UserRoundPlus, Users, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -23,6 +23,7 @@ const ICONS: Record<string, LucideIcon> = {
   megaphone: Megaphone,
   sliders: Sliders,
   "toggle-left": ToggleLeft,
+  receipt: Receipt,
   "shield-check": ShieldCheck,
   puzzle: Puzzle,
   filter: Filter,
