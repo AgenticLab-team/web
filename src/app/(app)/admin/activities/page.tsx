@@ -6,6 +6,8 @@ import { BulkFulfillPanel, RegistrarExport } from "@/components/admin/BulkDomain
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, Empty, PageNote, Section } from "@/components/ui/primitives";
+import { domainExportCounts } from "@/lib/activities/export";
+import type { ExportScope } from "@/lib/activities/export-rules";
 import {
   exportPendingList,
   exportRegistrarList,
@@ -135,6 +137,7 @@ export default async function AdminActivitiesPage() {
                         pending={exportRegistrarList(activity.id, "pending")}
                         all={exportRegistrarList(activity.id, "all")}
                       />
+                      <DomainCsvDownload id={activity.id} counts={domainExportCounts(activity.id)} />
                       <BulkFulfillPanel activityId={activity.id} />
                     </div>
                   </details>
@@ -181,11 +184,61 @@ export default async function AdminActivitiesPage() {
       )}
 
       <PageNote>
+        导出的 CSV 里<strong>没有微信 ID</strong>：后台里看得到它是在登录态下看一眼，
+        而一份 CSV 落到本地之后就再也不受这套权限管了。昵称加用户 ID
+        足够认人，而用户 ID 拿到系统外面没有用 —— 这正是要的。每次导出都记审计。
+      </PageNote>
+
+      <PageNote>
         名额扣减是一条带条件的 UPDATE，条件与写入在同一条语句里 ——
         <strong>60 个名额被 300 人同时抢也不会超卖</strong>。
         候补不占名额；撤回、判无效、履约失败都会把名额还回来，
         不还的话一个填错的申请会永久占掉一个名额而没人看得出为什么。
       </PageNote>
     </>
+  );
+}
+
+/**
+ * 下载域名清单。
+ *
+ * 三个普通的 `<a download>`，一行客户端 JS 都不用 —— 下载本来就是
+ * 浏览器自己会的事。做成按钮 + fetch + Blob 的话，要多写一份
+ * 加载态、一份失败态，还会在微信 webview 里遇上 Blob 下载不了的老问题。
+ *
+ * 数字写在按钮上：「待注册」是 0 条的时候直接告诉他 0，
+ * 比让他下一个空文件再回来问「是不是坏了」强。
+ */
+function DomainCsvDownload({ id, counts }: { id: string; counts: Record<ExportScope, number> }) {
+  const scopes: { scope: ExportScope; label: string }[] = [
+    { scope: "pending", label: "待注册" },
+    { scope: "fulfilled", label: "已注册" },
+    { scope: "all", label: "全部" },
+  ];
+
+  return (
+    <div>
+      <p className="t-caption2 text-[var(--ink-tertiary)]">
+        下载表格（含申请人、状态、时间、失败原因）—— 上面那份只有域名，是给注册商粘的
+      </p>
+      <div className="mt-1.5 flex flex-wrap gap-2">
+        {scopes.map(({ scope, label }) => (
+          <a
+            key={scope}
+            href={`/api/admin/activities/${id}/domains?scope=${scope}`}
+            download
+            // 空的那一档也留着但点不动：藏起来的话人会以为功能没了
+            aria-disabled={counts[scope] === 0}
+            className={`t-caption rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-1.5 font-medium ${
+              counts[scope] === 0
+                ? "pointer-events-none text-[var(--ink-quaternary)]"
+                : "text-[var(--accent)]"
+            }`}
+          >
+            {label}（{counts[scope]}）
+          </a>
+        ))}
+      </div>
+    </div>
   );
 }

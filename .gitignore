@@ -15,6 +15,10 @@
 
 # next.js
 /.next/
+# 线上是蓝绿两份构建产物（见 next.config.ts 的 distDir），
+# 而且临时排查时也常见 .next-xxx 这种目录 —— 一律不进仓库。
+# 只写 /.next/ 的话它们全都是「未跟踪」，迟早被一次 git add -A 带进去。
+/.next-*/
 /out/
 
 # production
