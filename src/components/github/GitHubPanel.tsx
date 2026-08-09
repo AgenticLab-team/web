@@ -166,7 +166,7 @@ export function GitHubPanel(props: GithubPanelProps) {
         {confirming ? (
           <div className="inset-row flex min-h-11 items-center gap-2 px-4 py-3">
             <span className="t-footnote flex-1 text-[var(--ink-secondary)]">
-              解绑会清掉已缓存的仓库和提醒记录
+              解绑会清掉已同步的仓库和提醒
             </span>
             <button
               type="button"

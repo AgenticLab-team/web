@@ -423,21 +423,6 @@ describe("名单（真库）", () => {
     assert.equal(pq.privacyOf("u_a").hideFromLeaderboard, true);
   });
 
-  it("只报总数，不报是谁 —— 那份名单本身就是它要保护的东西", () => {
-    hide("u_a", "hideFromLeaderboard", true);
-    hide("u_b", "searchableByOthers", false);
-    const counts = pq.hiddenPeopleCount();
-    assert.deepEqual(counts, { leaderboard: 1, search: 1 });
-    assert.equal(Object.values(counts).every((v) => typeof v === "number"), true);
-  });
-
-  it("批量查不会漏人", () => {
-    hide("u_a", "hideFromLeaderboard", true);
-    const map = pq.privacyOfMany(["u_a", "u_b", "u_missing"]);
-    assert.equal(map.size, 3);
-    assert.equal(map.get("u_a")!.hideFromLeaderboard, true);
-    assert.equal(map.get("u_missing")!.hideFromLeaderboard, false, "查不到的人要给默认值");
-  });
 });
 
 describe("**管理员不受这两个开关的限制**", () => {

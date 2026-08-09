@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq, inArray, isNotNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import type { CurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -75,7 +75,13 @@ export function privacyOf(userId: string): PrivacySettings {
  * 只能靠相信，而只能靠相信的隐私开关跟没有是一样的。
  */
 export function leaderboardHiddenWxIds(viewer: CurrentUser | null): string[] {
-  // 管理员看到的是完整的榜 —— 但界面上会把这些行标出来，见 LeaderboardList
+  /*
+   * 管理员看到的是完整的榜。
+   *
+   * ⚠ 界面上**还没有**把「别人看不到的那几行」标出来 ——
+   * 不标的话管理员会以为公开的榜就长这样，然后照着一个只有他
+   * 自己看得到的名次去发公告、发奖。记在 BUILD_PLAN 里了。
+   */
   if (bypassesPrivacy(viewer)) return [];
 
   const rows = db
@@ -88,28 +94,6 @@ export function leaderboardHiddenWxIds(viewer: CurrentUser | null): string[] {
   return rows
     .map((r) => r.wxId)
     .filter((wxId): wxId is string => wxId !== null && wxId !== viewer?.wxId);
-}
-
-/**
- * 哪些人把自己从榜单上藏起来了 —— 不排除任何人。
- *
- * 只给管理员的界面用：他看到的是完整的榜，
- * 而这一串让界面能把「别人看不到的那几行」标出来。
- *
- * **不标的话，管理员会以为公开的榜就长这样** ——
- * 然后照着一个只有他自己看得到的名次去发公告、发奖。
- */
-export function leaderboardHiddenAll(): Set<string> {
-  return new Set(
-    db
-      .select({ wxId: users.wxId })
-      .from(userPrivacy)
-      .innerJoin(users, eq(users.id, userPrivacy.userId))
-      .where(eq(userPrivacy.hideFromLeaderboard, true))
-      .all()
-      .map((r) => r.wxId)
-      .filter((wxId): wxId is string => wxId !== null),
-  );
 }
 
 /**
@@ -141,45 +125,3 @@ export function unsearchableWxIds(viewer: CurrentUser | null): string[] {
     .filter((wxId): wxId is string => wxId !== null && wxId !== viewer?.wxId);
 }
 
-/**
- * 现在有多少人把自己藏起来了。
- *
- * 给「隐私」那一页显示一句「你不是一个人」用 ——
- * 一个开关如果看起来只有自己在用，多数人不敢用。
- * 只给总数，不给是谁 —— 那份名单本身就是它要保护的东西。
- */
-export function hiddenPeopleCount(): { leaderboard: number; search: number } {
-  const rows = db
-    .select({
-      hideFromLeaderboard: userPrivacy.hideFromLeaderboard,
-      searchableByOthers: userPrivacy.searchableByOthers,
-    })
-    .from(userPrivacy)
-    .innerJoin(users, eq(users.id, userPrivacy.userId))
-    .where(isNotNull(users.wxId))
-    .all();
-
-  return {
-    leaderboard: rows.filter((r) => r.hideFromLeaderboard).length,
-    search: rows.filter((r) => !r.searchableByOthers).length,
-  };
-}
-
-/** 管理端用：一次问一批人藏没藏。避免在循环里一个个查 */
-export function privacyOfMany(userIds: string[]): Map<string, PrivacySettings> {
-  if (userIds.length === 0) return new Map();
-  const rows = db
-    .select({
-      userId: userPrivacy.userId,
-      hideFromLeaderboard: userPrivacy.hideFromLeaderboard,
-      searchableByOthers: userPrivacy.searchableByOthers,
-    })
-    .from(userPrivacy)
-    .where(inArray(userPrivacy.userId, userIds))
-    .all();
-
-  const map = new Map<string, PrivacySettings>();
-  for (const id of userIds) map.set(id, withDefaults(null));
-  for (const row of rows) map.set(row.userId, withDefaults(row));
-  return map;
-}

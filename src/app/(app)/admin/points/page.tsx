@@ -188,8 +188,7 @@ export default async function AdminPointsPage() {
       </Section>
 
       <PageNote>
-        所有发行参数（每日上限、互动权重与折算、连胜上限、手续费比例）都在
-        系统设置里，改动会进 setting_history 可回滚。
+        所有发行参数（每日上限、互动权重与折算、连胜上限、手续费比例）都在系统设置里，改错了可以回滚。
         调参前先看这一页 —— 凭感觉调的结果通常是「先发太多，再一刀砍死」。
       </PageNote>
     </>

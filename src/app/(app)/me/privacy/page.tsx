@@ -5,7 +5,7 @@ import { PrivacyToggle } from "@/components/me/PrivacyToggle";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { BackLink, PageNote, Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
-import { hiddenPeopleCount, privacyOf } from "@/lib/privacy/queries";
+import { privacyOf } from "@/lib/privacy/queries";
 import { PRIVACY_SWITCHES, switchIsOn } from "@/lib/privacy/rules";
 
 export const metadata: Metadata = { title: "隐私" };
@@ -40,7 +40,6 @@ export default async function PrivacyPage() {
   if (!user) redirect("/login?next=/me/privacy");
 
   const settings = privacyOf(user.id);
-  const others = hiddenPeopleCount();
 
   return (
     <>
@@ -50,18 +49,11 @@ export default async function PrivacyPage() {
 
       {PRIVACY_SWITCHES.map((spec) => {
         const on = switchIsOn(spec.key, settings[spec.key]);
-        /*
-         * 「有多少人也关了」只在自己没关的时候显示 ——
-         * 一个开关如果看起来只有自己在用，多数人不敢用。
-         * 只给数字不给名单：那份名单本身就是它要保护的东西。
-         */
-        const peers = spec.key === "hideFromLeaderboard" ? others.leaderboard : others.search;
 
         return (
           <Section key={spec.key} title={spec.label}>
             <p className="t-caption mb-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
               {spec.exposure}
-              {on && peers > 0 && ` · 已经有 ${peers} 个人关掉了这一项`}
             </p>
             <PrivacyToggle
               switchKey={spec.key}
@@ -75,16 +67,10 @@ export default async function PrivacyPage() {
       })}
 
       <PageNote>
-        这两个开关是<strong>立刻生效</strong>的，不用等同步、也不用等缓存过期。
-        改完之后你自己看到的东西不会变 —— 你永远看得到自己，
-        否则你没有任何办法确认它真的生效了，而只能靠相信的隐私开关，
-        跟没有是一样的。
-      </PageNote>
-
-      <PageNote>
-        想连成员目录也不出现，去<a href="/me/profile" className="text-[var(--accent)]">个人资料</a>
-        里关「出现在成员目录里」。那一项管的是「谁能找到你这个人」，
-        这一页管的是「谁能找到你说过的话」。
+        改完立刻生效。你自己看到的东西不会变 —— 你永远看得到自己。
+        想连成员目录也不出现，去
+        <a href="/me/profile" className="text-[var(--accent)]">个人资料</a>
+        里关「出现在成员目录里」。
       </PageNote>
     </>
   );

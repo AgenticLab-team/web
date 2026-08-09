@@ -101,7 +101,7 @@ export default async function AdminActivitiesPage() {
                       color: "var(--danger)",
                     }}
                   >
-                    名额缓存列与流水对不上 —— 这在限量活动里是致命的，先别继续放名额。
+                    名额对不上账 —— 这在限量活动里是致命的，先别继续放名额。
                   </p>
                 )}
 
@@ -184,16 +184,8 @@ export default async function AdminActivitiesPage() {
       )}
 
       <PageNote>
-        导出的 CSV 里<strong>没有微信 ID</strong>：后台里看得到它是在登录态下看一眼，
-        而一份 CSV 落到本地之后就再也不受这套权限管了。昵称加用户 ID
-        足够认人，而用户 ID 拿到系统外面没有用 —— 这正是要的。每次导出都记审计。
-      </PageNote>
-
-      <PageNote>
-        名额扣减是一条带条件的 UPDATE，条件与写入在同一条语句里 ——
-        <strong>60 个名额被 300 人同时抢也不会超卖</strong>。
-        候补不占名额；撤回、判无效、履约失败都会把名额还回来，
-        不还的话一个填错的申请会永久占掉一个名额而没人看得出为什么。
+        导出的表格里不含微信 ID，每次导出都会留痕。
+        候补不占名额；撤回、判无效、履约失败都会把名额还回来。
       </PageNote>
     </>
   );

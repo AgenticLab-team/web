@@ -187,7 +187,7 @@ export default async function AdminGroupsPage() {
                       {group.liveMessages !== group.messageCount && (
                         <span style={{ color: "var(--warning)" }}>
                           {" "}
-                          （缓存记的是 {group.messageCount.toLocaleString("zh-CN")}）
+                          （记录里是 {group.messageCount.toLocaleString("zh-CN")}）
                         </span>
                       )}{" "}
                       · 日均 {group.dailyAverage.toFixed(1)} · {group.memberCount} 人 · 阈值{" "}

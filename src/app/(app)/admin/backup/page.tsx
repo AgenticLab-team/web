@@ -101,7 +101,7 @@ export default async function AdminBackupPage() {
             title="本机快照"
             ok
             detail={`${backups.length} 份数据库备份 · ${formatBytes(backups.reduce((n, f) => n + f.bytes, 0))}`}
-            note="走 SQLite 在线备份 API，不是 cp —— WAL 模式下直接复制会拿到不一致的快照"
+            note="在线快照，不会拿到写到一半的数据"
           />
           <Step
             icon={<Archive className="h-4 w-4" strokeWidth={2} aria-hidden />}
@@ -119,7 +119,7 @@ export default async function AdminBackupPage() {
             title="异地副本"
             ok={s.status === "ok"}
             detail={s.detail}
-            note="传完立刻读回来对哈希 —— PUT 返回 200 只证明请求没报错"
+            note="传完立刻读回来核对 —— 「上传成功」只证明请求没报错，不证明存对了"
           />
           <Step
             icon={<ShieldCheck className="h-4 w-4" strokeWidth={2} aria-hidden />}

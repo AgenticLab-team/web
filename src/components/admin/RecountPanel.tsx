@@ -45,8 +45,8 @@ export function RecountPanel({ pending: pendingTask }: { pending: { id: string; 
         按流水重算余额
       </p>
       <p className="t-caption mt-1 leading-relaxed text-[var(--ink-tertiary)]">
-        流水是唯一真值，余额只是缓存列。上面的风控队列报「对不上账」时，
-        这里是修它的地方 —— 而不是去直接改库（直接改库正是造成不一致的原因）。
+        以流水为准重算余额。上面的风控队列报「对不上账」时，从这里修 ——
+        直接改库正是造成对不上账的原因。
       </p>
 
       {!taskId && !done && (
@@ -95,8 +95,8 @@ export function RecountPanel({ pending: pendingTask }: { pending: { id: string; 
           {wide && (
             <p className="t-caption mt-2 flex items-start gap-1.5 leading-relaxed text-[var(--danger)]">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2.2} aria-hidden />
-              这次会动一半以上的账号 —— 更可能是流水本身缺了一批，
-              而不是缓存错了。先确认流水是完整的再执行，否则会把所有人的分抹掉。
+              这次会动一半以上的账号 —— 更可能是流水本身缺了一批。
+              先确认流水完整再执行，否则会把所有人的分抹掉。
             </p>
           )}
 

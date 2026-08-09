@@ -173,8 +173,8 @@ export default async function AuditPage({
       />
 
       <PageNote>
-        审计日志<strong className="font-medium">只增不改不删</strong>，
-        系统里没有任何删除它的接口 —— 包括站长。
+        审计日志<strong className="font-medium">只增不改不删</strong>，任何人都删不掉 ——
+        包括站长自己。
       </PageNote>
     </>
   );

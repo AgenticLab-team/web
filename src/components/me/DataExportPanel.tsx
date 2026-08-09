@@ -120,7 +120,7 @@ export function DataExportPanel({ willTruncate }: { willTruncate: boolean }) {
       >
         {message ??
           (working
-            ? "正在从数据库里一段一段读，消息多的话要几十秒"
+            ? "正在打包，消息多的话要几十秒"
             : willTruncate
               ? "你的消息很多，这次只会导出最近的那一批，具体数字写在包里的 manifest.json"
               : "每半小时可以导一次，一天最多三次")}

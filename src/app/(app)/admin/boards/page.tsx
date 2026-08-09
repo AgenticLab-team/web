@@ -43,7 +43,7 @@ export default async function AdminBoardsPage() {
       />
 
       {drifted.length > 0 && (
-        <Callout tone="warning" title={`${drifted.length} 个版块的缓存计数与真实帖子数不一致`}>
+        <Callout tone="warning" title={`${drifted.length} 个版块的帖子数对不上`}>
           <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">
             {drifted.map((b) => `${b.name} ${b.cachedCount}→${b.livePosts}`).join("、")}。
             在服务器上跑 <code className="font-mono">npm run recount-boards</code> 修正。
