@@ -131,6 +131,11 @@ export interface HistoryEntry {
   createdAt: number;
 }
 
+/** 变更历史总条数 —— 「最近的变更」只显示几条，总量要一并给出 */
+export function settingHistoryCount(): number {
+  return Number(db.select({ n: sql<number>`count(*)` }).from(settingHistory).get()?.n ?? 0);
+}
+
 export function settingHistoryOf(key?: string, limit = 40): HistoryEntry[] {
   const rows = db
     .select()

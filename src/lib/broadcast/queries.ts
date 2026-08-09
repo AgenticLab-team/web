@@ -4,6 +4,7 @@ import { and, desc, eq, gte, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { broadcastDeliveries, broadcasts, groups, users } from "@/lib/db/schema";
+import { paginate, type PageSlice } from "@/lib/pagination";
 import { contentHash, statusLabel } from "@/lib/broadcast/rules";
 import { resolveDisplayName } from "@/lib/users/display-name";
 import { dateKey, startOfDayMs } from "@/lib/time";
@@ -44,7 +45,7 @@ export interface BroadcastRow {
 }
 
 export function listBroadcasts(
-  query: { channel?: string; status?: string; limit?: number } = {},
+  query: { channel?: string; status?: string; limit?: number; offset?: number } = {},
 ): BroadcastRow[] {
   const conditions = [];
   if (query.channel) conditions.push(eq(broadcasts.channel, query.channel as "site"));
@@ -54,8 +55,9 @@ export function listBroadcasts(
     .select()
     .from(broadcasts)
     .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(desc(broadcasts.createdAt))
+    .orderBy(desc(broadcasts.createdAt), desc(broadcasts.id))
     .limit(Math.min(query.limit ?? 50, 200))
+    .offset(query.offset ?? 0)
     .all();
 
   if (rows.length === 0) return [];
@@ -106,6 +108,20 @@ export function listBroadcasts(
       finishedAt: row.finishedAt,
     };
   });
+}
+
+/**
+ * 后台「记录」区的分页版。
+ *
+ * 公告一天最多发几次，但记录**只增不减** —— 一年就是几百条，
+ * 静默截断成 30 条的话，「上个月那条发出去了没有」这种问题就查不了了。
+ */
+export function pagedBroadcasts(
+  query: { page?: unknown; perPage?: number } = {},
+): { rows: BroadcastRow[]; total: number; slice: PageSlice } {
+  const total = Number(db.select({ n: sql<number>`count(*)` }).from(broadcasts).get()?.n ?? 0);
+  const slice = paginate(query.page, total, query.perPage ?? 20);
+  return { rows: listBroadcasts({ limit: slice.perPage, offset: slice.offset }), total, slice };
 }
 
 export function getBroadcast(id: string) {

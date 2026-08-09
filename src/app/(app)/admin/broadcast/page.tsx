@@ -4,12 +4,13 @@ import { BroadcastComposer, BroadcastReview } from "@/components/admin/Broadcast
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { recentDigests } from "@/lib/digest/build";
+import { Pagination } from "@/components/ui/Pagination";
 import { Empty, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import {
   deliveriesOf,
-  listBroadcasts,
   msSinceLastSend,
+  pagedBroadcasts,
   sendableGroups,
   sentToday,
 } from "@/lib/broadcast/queries";
@@ -40,10 +41,15 @@ const STATUS_COLORS: Record<string, string> = {
   canceled: "var(--ink-tertiary)",
 };
 
-export default async function AdminBroadcastPage() {
+export default async function AdminBroadcastPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const admin = await requireAdmin("announce.site");
+  const params = await searchParams;
 
-  const rows = listBroadcasts({ limit: 30 });
+  const { rows, total, slice } = pagedBroadcasts({ page: params.page });
   const sendable = sendableGroups();
   const today = sentToday();
   const gap = msSinceLastSend();
@@ -195,6 +201,12 @@ export default async function AdminBroadcastPage() {
             })}
           </div>
         )}
+        <Pagination
+          slice={slice}
+          total={total}
+          noun="条公告"
+          basePath="/admin/broadcast"
+        />
       </Section>
 
       <p className="t-caption px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">

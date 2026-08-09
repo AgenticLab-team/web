@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { Empty, Pill } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { listUsers, userFacets } from "@/lib/admin/users";
@@ -29,19 +30,20 @@ const STATUS_COLOR: Record<string, string> = {
 export default async function AdminUsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; role?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; role?: string; page?: string }>;
 }) {
   await requireAdmin("user.list");
   const params = await searchParams;
 
-  const { rows, total } = listUsers({
+  const { rows, total, slice } = listUsers({
     keyword: params.q,
     status: params.status,
     roleKey: params.role,
-    limit: 60,
+    page: params.page,
   });
   const facets = userFacets();
 
+  // 筛选链接刻意不带 page —— 换了筛选条件之后停在第 5 页多半是空页
   const href = (patch: Record<string, string | undefined>) => {
     const next = new URLSearchParams();
     const merged = { q: params.q, status: params.status, role: params.role, ...patch };
@@ -131,6 +133,14 @@ export default async function AdminUsersPage({
           ))}
         </div>
       )}
+
+      <Pagination
+        slice={slice}
+        total={total}
+        noun="个账号"
+        basePath="/admin/users"
+        params={{ q: params.q, status: params.status, role: params.role }}
+      />
     </>
   );
 }

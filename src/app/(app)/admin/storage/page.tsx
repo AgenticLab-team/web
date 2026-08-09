@@ -4,12 +4,14 @@ import type { Metadata } from "next";
 import { PruneRunner } from "@/components/admin/PruneRunner";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { TruncationNote } from "@/components/ui/Pagination";
 import { Empty, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import {
   DISK_LEVEL_LABELS,
   diskLevel,
   pendingPruneTask,
+  pruneTaskCount,
   recentPruneTasks,
   storageOverview,
 } from "@/lib/storage/queries";
@@ -34,6 +36,7 @@ export default async function AdminStoragePage() {
   const s = storageOverview();
   const pending = pendingPruneTask();
   const tasks = recentPruneTasks(8);
+  const tasksTotal = pruneTaskCount();
   const warnings = configWarnings(s.config);
 
   const level = s.disk ? diskLevel(s.disk.pct, s.thresholds) : null;
@@ -231,6 +234,7 @@ export default async function AdminStoragePage() {
               );
             })}
           </div>
+          <TruncationNote shown={tasks.length} total={tasksTotal} noun="次任务" />
         </Section>
       )}
     </>

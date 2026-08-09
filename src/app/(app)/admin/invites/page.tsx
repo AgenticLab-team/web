@@ -4,9 +4,10 @@ import Link from "next/link";
 import { InviteManager } from "@/components/admin/InviteManager";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { Empty, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
-import { listInviteUses, listInvites, pendingRewards } from "@/lib/invites/queries";
+import { inviteUseStats, listInvites, pagedInviteUses, pendingRewards } from "@/lib/invites/queries";
 
 export const metadata: Metadata = { title: "邀请" };
 export const dynamic = "force-dynamic";
@@ -21,21 +22,27 @@ export const dynamic = "force-dynamic";
  * 奖励延迟到被邀请人真的用起来才发，被封时回滚，
  * 而「回滚了几笔」这个数字直接摆在码上 —— 它高就说明这个码在被滥用。
  */
-export default async function AdminInvitesPage() {
+export default async function AdminInvitesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireAdmin("invite.manage");
+  const params = await searchParams;
 
   const invites = listInvites();
-  const uses = listInviteUses(50);
+  const { rows: uses, total: useTotal, slice } = pagedInviteUses({ page: params.page });
   const pending = pendingRewards();
 
-  const reverted = uses.filter((u) => u.revertedAt !== null);
-  const idle = uses.filter((u) => !u.invitedCheckedIn && u.revertedAt === null);
+  // 告警数字对全表算，不能拿当前页 filter ——
+  // 随翻页变化的告警数字比没有告警更糟
+  const stats = inviteUseStats();
 
   return (
     <>
       <PageHeader
         title="邀请"
-        subtitle={`${invites.length} 个码 · 已邀请 ${uses.length} 人`}
+        subtitle={`${invites.length} 个码 · 已邀请 ${useTotal} 人`}
       />
 
       <div className="mb-4 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
@@ -52,15 +59,15 @@ export default async function AdminInvitesPage() {
         </p>
       </div>
 
-      {(idle.length > 0 || reverted.length > 0) && (
+      {(stats.idle > 0 || stats.reverted > 0) && (
         <div
           className="mb-4 rounded-[var(--radius-card)] p-4 hairline"
           style={{ background: "color-mix(in srgb, var(--warning) 9%, var(--surface))" }}
         >
           <p className="t-subhead font-medium" style={{ color: "var(--warning)" }}>
-            {idle.length > 0 && `${idle.length} 个被邀请的人从没打过卡`}
-            {idle.length > 0 && reverted.length > 0 && " · "}
-            {reverted.length > 0 && `${reverted.length} 笔奖励已被回滚`}
+            {stats.idle > 0 && `${stats.idle} 个被邀请的人从没打过卡`}
+            {stats.idle > 0 && stats.reverted > 0 && " · "}
+            {stats.reverted > 0 && `${stats.reverted} 笔奖励已被回滚`}
           </p>
           <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">
             从没打过卡的人不会产生奖励，所以这本身不是损失 ——
@@ -123,6 +130,12 @@ export default async function AdminInvitesPage() {
             ))}
           </div>
         )}
+        <Pagination
+          slice={slice}
+          total={useTotal}
+          noun="条记录"
+          basePath="/admin/invites"
+        />
       </Section>
     </>
   );

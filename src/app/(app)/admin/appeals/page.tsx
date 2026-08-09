@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AppealActions } from "@/components/admin/AppealActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { Empty, Pill } from "@/components/ui/primitives";
 import { actionLabel, appealFacets, appealQueue } from "@/lib/admin/appeals";
 import { requireAdmin } from "@/lib/admin/guard";
@@ -25,12 +26,12 @@ export const dynamic = "force-dynamic";
 export default async function AdminAppealsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; page?: string }>;
 }) {
   const admin = await requireAdmin("moderation.appeal");
   const params = await searchParams;
 
-  const rows = appealQueue({ status: params.status, limit: 100 });
+  const { rows, total, slice } = appealQueue({ status: params.status, page: params.page });
   const facets = appealFacets();
 
   return (
@@ -143,6 +144,14 @@ export default async function AdminAppealsPage({
           })}
         </div>
       )}
+
+      <Pagination
+        slice={slice}
+        total={total}
+        noun="条申诉"
+        basePath="/admin/appeals"
+        params={{ status: params.status }}
+      />
     </>
   );
 }

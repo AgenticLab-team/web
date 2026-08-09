@@ -3,9 +3,10 @@ import type { Metadata } from "next";
 import { SettingItem } from "@/components/admin/SettingRow";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { TruncationNote } from "@/components/ui/Pagination";
 import { Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
-import { listSettings, modifiedCount, settingHistoryOf } from "@/lib/admin/settings";
+import { listSettings, modifiedCount, settingHistoryCount, settingHistoryOf } from "@/lib/admin/settings";
 import { passkeyLockoutRisk } from "@/lib/auth/passkey-enforcement";
 import { describeRisk } from "@/lib/auth/passkey-policy";
 
@@ -27,6 +28,7 @@ export default async function AdminSettingsPage() {
   const categories = listSettings();
   const changed = modifiedCount();
   const history = settingHistoryOf(undefined, 8);
+  const historyTotal = settingHistoryCount();
 
   const total = categories.reduce((n, c) => n + c.items.length, 0);
   const passkeyRisk = passkeyLockoutRisk();
@@ -53,6 +55,7 @@ export default async function AdminSettingsPage() {
               </div>
             ))}
           </div>
+          <TruncationNote shown={history.length} total={historyTotal} noun="条变更" />
           <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
             每次改动都进变更历史，含改前改后的值和理由。
             <strong>回滚本身也是一次变更</strong>，同样进历史 ——

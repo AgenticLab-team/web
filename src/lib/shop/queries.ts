@@ -5,6 +5,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { makeupCards, orders, posts, shopItems, users } from "@/lib/db/schema";
 import { isEffectivelyPinned } from "@/lib/forum/pin";
+import { paginate, type PageSlice } from "@/lib/pagination";
 import { itemKindLabel, orderStatusLabel, remainingStock } from "@/lib/shop/rules";
 import type { OrderStatus, ShopItemKind } from "@/lib/shop/types";
 import { resolveDisplayName } from "@/lib/users/display-name";
@@ -86,7 +87,7 @@ export interface OrderRow {
 }
 
 export function listOrders(
-  query: { userId?: string; status?: string; limit?: number } = {},
+  query: { userId?: string; status?: string; limit?: number; offset?: number } = {},
 ): OrderRow[] {
   const conditions = [];
   if (query.userId) conditions.push(eq(orders.userId, query.userId));
@@ -105,8 +106,10 @@ export function listOrders(
     .innerJoin(shopItems, eq(shopItems.id, orders.itemId))
     .leftJoin(users, eq(users.id, orders.userId))
     .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(desc(orders.createdAt))
+    // createdAt 撞毫秒时补 id 保证全序 —— 分页时半序会让订单在页间重复或消失
+    .orderBy(desc(orders.createdAt), desc(orders.id))
     .limit(Math.min(query.limit ?? 100, 300))
+    .offset(query.offset ?? 0)
     .all()
     .map(({ order, itemName, itemKind, site, wx, wxId }) => ({
       id: order.id,
@@ -123,6 +126,30 @@ export function listOrders(
       refundReason: order.refundReason,
       createdAt: order.createdAt,
     }));
+}
+
+/**
+ * 后台订单列表的分页版。
+ *
+ * 总数单独 count 而不是数 rows.length —— 后者只会数到 limit 为止，
+ * 这一页的副标题曾经就这么把「60 笔」当成了全部订单数。
+ */
+export function pagedOrders(
+  query: { status?: string; page?: unknown; perPage?: number } = {},
+): { rows: OrderRow[]; total: number; slice: PageSlice } {
+  const total = Number(
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(orders)
+      .where(query.status ? eq(orders.status, query.status as "pending") : undefined)
+      .get()?.n ?? 0,
+  );
+  const slice = paginate(query.page, total, query.perPage ?? 30);
+  return {
+    rows: listOrders({ status: query.status, limit: slice.perPage, offset: slice.offset }),
+    total,
+    slice,
+  };
 }
 
 /** 这个人已经买过几次某个商品 —— 界面上要提前显示「已达上限」 */

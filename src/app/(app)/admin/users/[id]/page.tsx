@@ -7,6 +7,7 @@ import { Avatar } from "@/components/Avatar";
 import { UserActions } from "@/components/admin/UserActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { TruncationNote } from "@/components/ui/Pagination";
 import { Group, Row, Section, StatTile } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { getUserDetail } from "@/lib/admin/users";
@@ -179,6 +180,12 @@ export default async function AdminUserDetail({ params }: { params: Promise<{ id
               </Row>
             ))}
           </Group>
+          {/* 处罚记录被截断绝不能是静默的 —— 惯犯和初犯的差别就在没显示的那几条里 */}
+          <TruncationNote
+            shown={detail.moderation.length}
+            total={detail.moderationTotal}
+            noun="条处罚"
+          />
         </Section>
       )}
 
@@ -206,6 +213,11 @@ export default async function AdminUserDetail({ params }: { params: Promise<{ id
             </Row>
           )}
         </Group>
+        <TruncationNote
+          shown={Math.min(detail.ledger.length, 10)}
+          total={detail.ledgerTotal}
+          noun="笔流水"
+        />
       </Section>
 
       <Section title={`登录设备（${detail.sessions.length}）`}>

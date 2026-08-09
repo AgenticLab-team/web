@@ -228,6 +228,17 @@ export function retryableJobs(limit = 20) {
     .all();
 }
 
+/** 失败任务的总数 —— 列表只显示前几条，截断必须说出来，否则「失败了 47 个」看起来像 10 个 */
+export function retryableJobCount(): number {
+  return Number(
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(syncJobs)
+      .where(inArray(syncJobs.status, ["failed", "partial"]))
+      .get()?.n ?? 0,
+  );
+}
+
 /** 增量游标。落后太多说明某一轮同步没跑完 */
 export function cursors() {
   return db.select().from(syncCursors).orderBy(syncCursors.kind).all();

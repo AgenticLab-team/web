@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { Empty, Pill } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { auditActionFacets, queryAuditLogs } from "@/lib/admin/audit-query";
@@ -20,7 +21,7 @@ const DANGER_COLOR = [
 export default async function AuditPage({
   searchParams,
 }: {
-  searchParams: Promise<{ action?: string; danger?: string; days?: string }>;
+  searchParams: Promise<{ action?: string; danger?: string; days?: string; page?: string }>;
 }) {
   await requireAdmin("audit.read");
   const params = await searchParams;
@@ -28,14 +29,15 @@ export default async function AuditPage({
   const minDanger = params.danger ? Number(params.danger) : undefined;
   const days = params.days ? Number(params.days) : 30;
 
-  const { entries, total } = queryAuditLogs({
+  const { entries, total, slice } = queryAuditLogs({
     action: params.action,
     minDanger: Number.isFinite(minDanger) ? minDanger : undefined,
     days: Number.isFinite(days) ? days : 30,
-    limit: 80,
+    page: params.page,
   });
   const facets = auditActionFacets();
 
+  // 筛选链接不带 page —— 换筛选后原页码大概率越界
   const href = (patch: Record<string, string | undefined>) => {
     const next = new URLSearchParams();
     const merged = { action: params.action, danger: params.danger, days: params.days, ...patch };
@@ -161,6 +163,14 @@ export default async function AuditPage({
           ))}
         </div>
       )}
+
+      <Pagination
+        slice={slice}
+        total={total}
+        noun="条记录"
+        basePath="/admin/audit"
+        params={{ action: params.action, danger: params.danger, days: params.days }}
+      />
 
       <p className="t-caption mt-4 px-1 leading-relaxed text-[var(--ink-tertiary)]">
         审计日志<strong className="font-medium">只增不改不删</strong>，
