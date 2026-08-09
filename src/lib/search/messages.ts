@@ -6,6 +6,7 @@ import type { CurrentUser } from "@/lib/auth/session";
 import { db, sqlite } from "@/lib/db";
 import { buildMatchExpression, desegment } from "@/lib/db/fts";
 import { groups, messages, people } from "@/lib/db/schema";
+import { unsearchableWxIds } from "@/lib/privacy/queries";
 import { visibleGroupIds } from "@/lib/queries/visibility";
 import { endOfDayMs, startOfDayMs } from "@/lib/time";
 import { resolveDisplayName } from "@/lib/users/display-name";
@@ -87,6 +88,23 @@ export function searchMessages(user: CurrentUser | null, options: SearchOptions)
   if (sender) {
     filters.push("m.sender_wx_id = ?");
     params.push(sender);
+  }
+
+  /*
+   * 关掉了「别人能搜到我的发言」的人，在别人的搜索里不出现。
+   *
+   * **排除自己**（`unsearchableWxIds` 的参数）：他关掉这个开关之后
+   * 还得能搜自己说过的话 —— 那是他自己的东西，
+   * 而「我上次在哪儿说过这事」正是搜索最常见的用法。
+   *
+   * 过滤和权限一样落在 SQL 里，不是查出来再过滤：`total` 是单独一条
+   * count 查询，两边口径不一致的话会出现「共 30 条」但只列出 24 条，
+   * 翻到第二页是空的。
+   */
+  const unsearchable = unsearchableWxIds(user);
+  if (unsearchable.length > 0) {
+    filters.push(`m.sender_wx_id NOT IN (${unsearchable.map(() => "?").join(",")})`);
+    params.push(...unsearchable);
   }
   if (options.from) {
     filters.push("m.ts >= ?");

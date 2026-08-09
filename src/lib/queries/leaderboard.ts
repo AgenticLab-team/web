@@ -1,9 +1,11 @@
 import "server-only";
 
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, notInArray, sql } from "drizzle-orm";
 
+import type { CurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { dailyStats, people } from "@/lib/db/schema";
+import { leaderboardHiddenWxIds } from "@/lib/privacy/queries";
 import { currentSeason } from "@/lib/seasons/queries";
 import { dateRangeOf } from "@/lib/seasons/rules";
 import { shiftDateKey, todayKey } from "@/lib/time";
@@ -58,6 +60,22 @@ export interface BoardOptions {
    */
   convIds: string[];
   limit?: number;
+  /**
+   * 看榜的是谁。未登录传 null。
+   *
+   * 两个用途：
+   *
+   * 1. **把「不想上榜」的人排掉，但不排掉看榜的人自己** ——
+   *    自己那一行永远在，否则拨了开关的人没有任何办法确认它生效了，
+   *    只能靠相信，而只能靠相信的隐私开关跟没有是一样的。
+   * 2. **管理员看到的是完整的榜**（见 privacy/queries.ts 的豁免）。
+   *    界面上会把「别人看不到的那几行」标出来 ——
+   *    不标的话管理员会以为公开的榜就长这样，
+   *    然后照着一个只有他自己看得到的名次去发公告、发奖。
+   *
+   * 传整个 user 而不是 wx_id：豁免要判权限，而权限判断只该有一处。
+   */
+  viewer?: CurrentUser | null;
 }
 
 function rangeFor(period: Period): {
@@ -101,11 +119,21 @@ function aggregate(
   convIds: string[],
   convId?: string,
   limit = 50,
+  hiddenWxIds: string[] = [],
 ) {
   const conditions = [inArray(dailyStats.convId, convIds)];
   if (from) conditions.push(gte(dailyStats.date, from));
   if (to) conditions.push(sql`${dailyStats.date} <= ${to}`);
   if (convId) conditions.push(eq(dailyStats.convId, convId));
+  /*
+   * 藏起来的人在**聚合之前**就排掉，不是查完再 filter。
+   *
+   * 查完再 filter 的话名次会错得很难看：第 3 名被滤掉之后，
+   * 原来的第 4 名仍然显示「第 4 名」，而榜上只有 49 行 ——
+   * 谁都看得出少了一个人，只是不知道少了谁。那等于把「有人藏起来了」
+   * 这件事本身广播出去，而藏起来的人最不想要的就是这个。
+   */
+  if (hiddenWxIds.length > 0) conditions.push(notInArray(dailyStats.wxId, hiddenWxIds));
 
   return db
     .select({
@@ -133,16 +161,22 @@ export function getLeaderboard(options: BoardOptions): BoardEntry[] {
   const limit = options.limit ?? 50;
   const { from, to, previousFrom, previousTo } = rangeFor(period);
 
+  const hidden = leaderboardHiddenWxIds(options.viewer ?? null);
+
   // 赛季有结束日，所以上界要传进去 —— 不传的话看历史赛季会把之后的也算进来
-  const current = aggregate(from, to ?? null, options.convIds, options.convId, limit);
+  const current = aggregate(from, to ?? null, options.convIds, options.convId, limit, hidden);
   if (current.length === 0) return [];
 
-  // 上一周期的名次，用来算升降。总榜没有「上一周期」，箭头不显示
+  // 上一周期的名次，用来算升降。总榜没有「上一周期」，箭头不显示。
+  // 同一份排除名单要用在这里 —— 两边口径不一样的话，箭头会指向一个
+  // 从来没在榜上出现过的名次，比不显示箭头更让人困惑。
   const previousRanks = new Map<string, number>();
   if (previousFrom && previousTo) {
-    aggregate(previousFrom, previousTo, options.convIds, options.convId, 200).forEach((row, index) => {
-      previousRanks.set(row.wxId, index + 1);
-    });
+    aggregate(previousFrom, previousTo, options.convIds, options.convId, 200, hidden).forEach(
+      (row, index) => {
+        previousRanks.set(row.wxId, index + 1);
+      },
+    );
   }
 
   const profiles = new Map(
@@ -167,10 +201,18 @@ export function getLeaderboard(options: BoardOptions): BoardEntry[] {
   }));
 }
 
-/** 某个人在榜上的位置，用于「我的排名」。不在前 N 也要能查到 */
-export function getMyRank(wxId: string, options: BoardOptions): BoardEntry | null {
-  const full = getLeaderboard({ ...options, limit: 5000 });
-  return full.find((entry) => entry.wxId === wxId) ?? null;
+/**
+ * 某个人在榜上的位置，用于「我的排名」。不在前 N 也要能查到。
+ *
+ * **viewer 一定是他自己**：一个关掉了「出现在榜单上」的人打开榜单，
+ * 看到的是别人看不到他、但他自己那一行还在 ——
+ * 这是他确认开关真的生效了的唯一途径。
+ */
+export function getMyRank(user: CurrentUser | null, options: BoardOptions): BoardEntry | null {
+  // 收 null 而不是让每个调用点自己判 —— 少一处三元表达式，也少一处判错的机会
+  if (!user?.wxId) return null;
+  const full = getLeaderboard({ ...options, limit: 5000, viewer: user });
+  return full.find((entry) => entry.wxId === user.wxId) ?? null;
 }
 
 // 全量群列表不再对外提供 —— 群列表属于隐私，一律走 visibility.ts 的收口

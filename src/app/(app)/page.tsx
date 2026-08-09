@@ -41,11 +41,11 @@ export default async function HomePage() {
   // 总榜对所有人开放 —— 贡献排名是荣誉。
   // 但群的身份不外泄：下面只用 id 做聚合，不渲染任何群名。
   const allIds = allSyncedGroupIds();
-  const board = getLeaderboard({ period: "week", convIds: allIds, limit: 8 });
+  const board = getLeaderboard({ period: "week", convIds: allIds, limit: 8, viewer: user });
 
   // 群列表是隐私，只给自己所在的群
   const myGroups = visibleGroupsFor(user);
-  const myRank = user?.wxId ? getMyRank(user.wxId, { period: "week", convIds: allIds }) : null;
+  const myRank = getMyRank(user, { period: "week", convIds: allIds });
 
   const checkin = user ? checkinStatus(user) : null;
   const digest = buildDigest(user, user ? visibleGroupIds(user) : allIds);

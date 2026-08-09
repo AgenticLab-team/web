@@ -6,6 +6,7 @@ import type { CurrentUser } from "@/lib/auth/session";
 import { db, sqlite } from "@/lib/db";
 import { messages, people } from "@/lib/db/schema";
 import { ARCHIVE_PAGE_SIZE, type MessageOrder } from "@/lib/messages/archive-rules";
+import { unsearchableWxIds } from "@/lib/privacy/queries";
 import { paginate, type PageSlice } from "@/lib/pagination";
 import { assertGroupAccess } from "@/lib/queries/visibility";
 import { endOfDayMs, startOfDayMs } from "@/lib/time";
@@ -214,6 +215,24 @@ export function searchMessagesForConvert(
    * 只有真的去读那 22 条的内容才会发现里面一条台风都没有。
    * 上线之后对着生产数据抽查内容才抓到的。
    */
+  /*
+   * 关掉了「别人能搜到我的发言」的人，在别人的搜索里不出现 ——
+   * 这一条也管这里。
+   *
+   * 这条路径比 `/search` 更该管：它的产物是一篇**会被发出去的帖子**。
+   * 一个不愿意被搜到的人，最不愿意的就是自己那句话被别人搜出来、
+   * 整理成一篇公开的帖子。
+   *
+   * 按天翻那条路（`messagesOfDay`）**不加这个过滤**是有意的：
+   * 那是同群的人在看自己群里的记录，那些话他们本来就在微信里看过，
+   * 这里没有多出新的暴露。开关管的是「搜」。
+   */
+  const unsearchable = unsearchableWxIds(user);
+  const hideClause =
+    unsearchable.length > 0
+      ? `AND m.sender_wx_id NOT IN (${unsearchable.map(() => "?").join(",")})`
+      : "";
+
   const hits = sqlite
     .prepare(
       `SELECT m.id
@@ -223,10 +242,11 @@ export function searchMessagesForConvert(
           AND m.conv_id = ?
           AND m.is_send = 0
           AND m.content != ''
+          ${hideClause}
         ORDER BY m.ts DESC
         LIMIT ?`,
     )
-    .all(match, convId, limit) as { id: string }[];
+    .all(match, convId, ...unsearchable, limit) as { id: string }[];
 
   if (hits.length === 0) return { rows: [], dropped: 0, total: 0, slice: paginate(1, 0, limit) };
 

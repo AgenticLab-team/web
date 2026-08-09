@@ -6,6 +6,7 @@ import type { CurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { groups, messageWindows, messages, people } from "@/lib/db/schema";
 import { LlmNotConfigured, embed } from "@/lib/llm/client";
+import { unsearchableWxIds } from "@/lib/privacy/queries";
 import { visibleGroupIds } from "@/lib/queries/visibility";
 import { resolveDisplayName } from "@/lib/users/display-name";
 
@@ -336,7 +337,55 @@ export async function semanticSearch(
   }
 
   scored.sort((a, b) => b.score - a.score);
-  const top = scored.slice(0, limit);
+
+  /*
+   * 关掉了「别人能搜到我的发言」的人，要从别人的语义检索里排掉。
+   *
+   * ─────────────────────────────────────────
+   * 这里只能整段丢掉，不能只抹掉他那几行
+   * ─────────────────────────────────────────
+   *
+   * 语义检索的最小单位是**一段对话**，而这一段的向量是连他说的话
+   * 一起嵌进去的。只把他那几行从展示里抹掉的话，这一段仍然会
+   * 因为他说过的内容而被搜出来 —— 搜的人看不见他的字，
+   * 却能从「这一段怎么会匹配上」反推出他说过什么。那不叫搜不到。
+   *
+   * 所以只要一段里有他，整段就不进别人的结果。代价是别人那几句
+   * 也一起被藏了 —— 但**隐私开关宁可多藏一点，不能少藏一点**：
+   * 少藏的那一次是泄露，多藏的那一次只是少找到一段。
+   *
+   * 多取一些候选再筛，否则一段被丢掉就少一条结果。
+   */
+  const unsearchable = new Set(unsearchableWxIds(user));
+  const candidates = unsearchable.size > 0 ? scored.slice(0, limit * 4) : scored.slice(0, limit);
+
+  const top =
+    unsearchable.size === 0
+      ? candidates
+      : (() => {
+          const windowIds = candidates.map((c) => c.id);
+          if (windowIds.length === 0) return candidates;
+          // 一次查出这些段里出现过的、需要排掉的人，避免在循环里逐段查
+          const tainted = new Set(
+            db
+              .select({ windowId: messageWindows.id, ids: messageWindows.messageIds })
+              .from(messageWindows)
+              .where(inArray(messageWindows.id, windowIds))
+              .all()
+              .filter((w) => {
+                const ids = JSON.parse(w.ids) as string[];
+                const senders = db
+                  .select({ senderWxId: messages.senderWxId })
+                  .from(messages)
+                  .where(inArray(messages.id, ids))
+                  .all();
+                return senders.some((s) => s.senderWxId && unsearchable.has(s.senderWxId));
+              })
+              .map((w) => w.windowId),
+          );
+          return candidates.filter((c) => !tainted.has(c.id)).slice(0, limit);
+        })();
+
   if (top.length === 0) return { ...empty, pending };
 
   const windows = db

@@ -160,8 +160,9 @@ describe("排行榜按可见群收口", () => {
   });
 
   it("getMyRank 同样受可见范围约束", () => {
-    assert.equal(board.getMyRank(ALICE, { convIds: [], period: "all" }), null);
-    const rank = board.getMyRank(ALICE, { convIds: [G1], period: "all" });
+    // getMyRank 现在收整个 user：隐私豁免要判权限，而权限判断只该有一处
+    assert.equal(board.getMyRank(userOf(ALICE), { convIds: [], period: "all" }), null);
+    const rank = board.getMyRank(userOf(ALICE), { convIds: [G1], period: "all" });
     assert.ok(rank);
     assert.equal(rank.quality, 5);
   });

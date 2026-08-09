@@ -1,16 +1,22 @@
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 
 import { ChevronRight } from "lucide-react";
 
 import { Avatar } from "@/components/Avatar";
+import { SharePrompts } from "@/components/github/SharePrompts";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TitleIcon } from "@/components/titles/TitleIcon";
 import { TitleShelf } from "@/components/titles/TitleShelf";
 import { Empty, Group, Row, Section, StatTile } from "@/components/ui/primitives";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUser, getRealUser } from "@/lib/auth/session";
+import { connectionOf } from "@/lib/github/link";
+import { expireStalePrompts, listPendingPrompts } from "@/lib/github/prompts";
+import { refreshIfStale } from "@/lib/github/repos";
+import { githubEnabled } from "@/lib/github/secret";
 import { db } from "@/lib/db";
 import { dailyStats, groupMembers, people, roles, userRoles } from "@/lib/db/schema";
 import { listPasskeys } from "@/lib/auth/passkey";
@@ -20,6 +26,8 @@ import { listFollows } from "@/lib/forum/follow";
 import { getMyRank } from "@/lib/queries/leaderboard";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { mySkills } from "@/lib/members/queries";
+import { privacyOf } from "@/lib/privacy/queries";
+import { hiddenCount } from "@/lib/privacy/rules";
 import { isAlwaysOn } from "@/lib/notifications/prefs";
 import { getPrefs } from "@/lib/notifications/store";
 import { equippedTitle, titlesOf } from "@/lib/titles/queries";
@@ -42,6 +50,7 @@ export default async function MePage() {
   });
 
   const skillCount = mySkills(user.id).length;
+  const privacyHidden = hiddenCount(privacyOf(user.id));
   const prefs = getPrefs(user.id);
   const mutedTypes = Object.entries(prefs).filter(
     ([type, v]) => !v.site && !isAlwaysOn(type),
@@ -76,7 +85,7 @@ export default async function MePage() {
   const followCount = listFollows(user.id).length;
   const drafts = draftCount(user.id);
 
-  const weekRank = wxId && convIds.length ? getMyRank(wxId, { period: "week", convIds }) : null;
+  const weekRank = convIds.length ? getMyRank(user, { period: "week", convIds }) : null;
   const today = todayKey();
 
   const todayStat = wxId && convIds.length
@@ -116,6 +125,35 @@ export default async function MePage() {
 
   const ownedTitles = titlesOf(user.id);
   const equipped = equippedTitle(user.id);
+
+  /*
+   * ─────────────────────────────────────────
+   * GitHub 的「要不要发个帖」提示
+   * ─────────────────────────────────────────
+   *
+   * **只对本人。** 用 getRealUser() 而不是上面那个 user ——
+   * 管理员预览别人时，`user` 是被预览的那个人，
+   * 而这些提示里带着他还没公开的新仓库名。提示是私事，
+   * 连「以他的视角看看」也不该看到。
+   *
+   * 渲染阶段只读库、一个网络请求都不发。真正去 GitHub 抓数据
+   * 挂在 after() 上，跑在**响应发出之后** —— 见 lib/github/repos.ts
+   * 里那段关于「谁来刷新」的说明。
+   */
+  const realUser = await getRealUser();
+  const isSelf = realUser?.id === user.id;
+  const githubConn = githubEnabled() && isSelf ? connectionOf(user.id) : null;
+
+  if (githubConn?.promptEnabled) {
+    // 先把挂太久的收起来，再列 —— 顺序反了的话会先摆出一条马上要过期的
+    expireStalePrompts(user.id);
+  }
+  const sharePrompts = githubConn?.promptEnabled ? listPendingPrompts(user.id) : [];
+
+  if (githubConn) {
+    const targetId = user.id;
+    after(() => refreshIfStale(targetId));
+  }
 
   return (
     <>
@@ -159,6 +197,27 @@ export default async function MePage() {
           </div>
         </div>
       </Section>
+
+      {/*
+        提示排在称号前面，但没有角标、没有小红点，也不进通知中心。
+        它说的是「你可以做一件事」，不是「你有事没做」——
+        后者用久了会让人学会无视这整块区域。
+        没有待处理的提示时这一段完全不出现。
+      */}
+      {sharePrompts.length > 0 && (
+        <Section title="有件事可以说给群里听">
+          <SharePrompts
+            items={sharePrompts.map((p) => ({
+              id: p.id,
+              kind: p.kind,
+              title: p.title,
+              url: p.url,
+              summary: p.summary,
+              repoFullName: p.repoFullName,
+            }))}
+          />
+        </Section>
+      )}
 
       <Section title="称号">
         <TitleShelf titles={ownedTitles} />
@@ -296,6 +355,43 @@ export default async function MePage() {
             <span className="t-footnote text-[var(--ink-tertiary)]">
               {skillCount === 0 ? "还没填技能标签" : `${skillCount} 个技能标签`}
             </span>
+            <ChevronRight
+              className="h-4 w-4 shrink-0 text-[var(--ink-quaternary)]"
+              strokeWidth={2}
+              aria-hidden
+            />
+          </Row>
+          {/*
+            * 隐私摆在个人资料后面、通知设置前面。
+            *
+            * 它管的是「谁能找到你说过的话」，而个人资料那一项管的是
+            * 「谁能找到你这个人」—— 两件事挨着放，人才会把它们
+            * 当成一组来想。摘要要说「藏起来了几样」而不是「已开启」：
+            * 一个三个月前关过某个开关的人根本想不起来自己关过，
+            * 然后会来问「为什么我不在榜上」。
+            */}
+          <Row href="/me/privacy">
+            <span className="t-body flex-1">隐私</span>
+            <span className="t-footnote text-[var(--ink-tertiary)]">
+              {privacyHidden === 0 ? "都是公开的" : `藏起来了 ${privacyHidden} 样`}
+            </span>
+            <ChevronRight
+              className="h-4 w-4 shrink-0 text-[var(--ink-quaternary)]"
+              strokeWidth={2}
+              aria-hidden
+            />
+          </Row>
+          {/*
+            * 导出紧挨着隐私。
+            *
+            * 两项管的是同一件事的两面：隐私决定「别人能看到你的什么」，
+            * 导出决定「你能把自己的什么带走」。摘要里直接写出
+            * 「含别人的发言」—— 这是点进去之前就该知道的事，
+            * 不该等到解压之后才发现。
+            */}
+          <Row href="/me/export">
+            <span className="t-body flex-1">导出我的数据</span>
+            <span className="t-footnote text-[var(--ink-tertiary)]">zip · 含上下文</span>
             <ChevronRight
               className="h-4 w-4 shrink-0 text-[var(--ink-quaternary)]"
               strokeWidth={2}

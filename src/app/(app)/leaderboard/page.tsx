@@ -66,8 +66,8 @@ export default async function LeaderboardPage({
     scopeLabel = "全社区";
   }
 
-  const entries = getLeaderboard({ period, convIds, limit: 50 });
-  const myRank = user?.wxId ? getMyRank(user.wxId, { period, convIds }) : null;
+  const entries = getLeaderboard({ period, convIds, limit: 50, viewer: user });
+  const myRank = getMyRank(user, { period, convIds });
   const inTop = myRank ? entries.some((e) => e.wxId === myRank.wxId) : false;
 
   return (
