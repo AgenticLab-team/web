@@ -30,6 +30,8 @@ const fail = (error: string): ShopResult => ({ ok: false, error });
 export async function buyItem(input: {
   itemKey: string;
   shipping?: Record<string, unknown>;
+  /** 作用在具体对象上的商品需要它 —— 置顶要一个帖子 id */
+  targetRef?: string;
   /** 前端生成，防重复提交 */
   clientToken: string;
 }): Promise<ShopResult> {
@@ -41,6 +43,7 @@ export async function buyItem(input: {
     itemKey: input.itemKey,
     balance: user.points,
     shipping: input.shipping,
+    targetRef: input.targetRef,
     // 幂等键带上用户与商品：换个商品应该是新的一单
     idempotencyKey: `shop:${user.id}:${input.itemKey}:${input.clientToken}`,
   });

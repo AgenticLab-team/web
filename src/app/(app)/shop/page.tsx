@@ -5,7 +5,7 @@ import { ShopGrid } from "@/components/shop/ShopGrid";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
-import { listItems, listOrders, ownedCounts, unusedMakeupCards } from "@/lib/shop/queries";
+import { listItems, listOrders, ownedCounts, unusedMakeupCards , pinnablePosts } from "@/lib/shop/queries";
 
 export const metadata: Metadata = { title: "商店" };
 export const dynamic = "force-dynamic";
@@ -26,6 +26,7 @@ export default async function ShopPage() {
   const owned = user ? ownedCounts(user.id) : new Map<string, number>();
   const myOrders = user ? listOrders({ userId: user.id, limit: 20 }) : [];
   const cards = user ? unusedMakeupCards(user.id) : 0;
+  const pinnable = user ? pinnablePosts(user.id) : [];
 
   return (
     <>
@@ -49,6 +50,7 @@ export default async function ShopPage() {
           balance={user?.points ?? 0}
           owned={Object.fromEntries(owned)}
           loggedIn={Boolean(user)}
+          pinnable={pinnable}
         />
       </Section>
 

@@ -2,10 +2,11 @@ import "server-only";
 
 import { and, eq, isNull, sql } from "drizzle-orm";
 
-import { db } from "@/lib/db";
+import { db, sqlite } from "@/lib/db";
 import { isModuleEnabled } from "@/lib/modules/state";
-import { makeupCards, orders, shopItems, titles, userTitles } from "@/lib/db/schema";
+import { makeupCards, orders, posts, shopItems, titles, userTitles } from "@/lib/db/schema";
 import { findLedgerByIdempotencyKey, grantPoints, revertPoints } from "@/lib/points/ledger";
+import { checkPinPurchase, pinUntil } from "@/lib/forum/pin";
 import { checkPurchase, checkRefund, isInstantDelivery } from "@/lib/shop/rules";
 import { expiryFor } from "@/lib/titles/rules";
 import type { ShopItemKind } from "@/lib/shop/types";
@@ -37,11 +38,51 @@ export interface PurchaseResult {
 
 const fail = (error: string): PurchaseResult => ({ ok: false, error });
 
+/**
+ * 置顶目标的校验。
+ *
+ * 全部在扣分之前跑完 —— 一个收了钱却没生效的订单，
+ * 修起来要人工退款，而人工的事一定会拖。
+ */
+function checkPinTarget(
+  buyerId: string,
+  postId: string | undefined,
+): { ok: true } | { ok: false; error: string } {
+  if (!postId) return { ok: false, error: "要先选一个自己的帖子" };
+
+  const post = db.select().from(posts).where(eq(posts.id, postId)).get();
+  const now = Date.now();
+
+  // 同版块当前还有效的付费置顶（不含本帖）
+  const paidPins = post
+    ? sqlite
+        .prepare(
+          `SELECT count(*) n FROM forum_posts
+           WHERE board_id = ? AND id != ? AND deleted_at IS NULL
+             AND pinned = 1 AND pinned_until IS NOT NULL AND pinned_until > ?`,
+        )
+        .get(post.boardId, postId, now)
+    : { n: 0 };
+
+  return checkPinPurchase({
+    exists: Boolean(post),
+    authorId: post?.authorId ?? null,
+    buyerId,
+    deleted: post?.deletedAt != null,
+    status: post?.status ?? "",
+    current: { pinned: post?.pinned ?? false, pinnedUntil: post?.pinnedUntil ?? null },
+    paidPinsInBoard: (paidPins as { n: number }).n,
+    now,
+  });
+}
+
 export function purchaseItem(input: {
   userId: string;
   itemKey: string;
   balance: number;
   shipping?: Record<string, unknown>;
+  /** 作用在某个具体对象上的商品需要它 —— 比如置顶要一个帖子 id */
+  targetRef?: string;
   idempotencyKey: string;
 }): PurchaseResult {
   // 关掉之后不能再下单；已有订单照常处理
@@ -64,6 +105,15 @@ export function purchaseItem(input: {
           AND ${orders.status} NOT IN ('cancelled','refunded')`,
     )
     .all().length;
+
+  /*
+   * 置顶这类「作用在某个具体东西上」的商品，要在**扣分之前**
+   * 把目标验完。扣完钱再发现帖子被删了，就得走退款 —— 而退款是人工的。
+   */
+  if (item.kind === "highlight") {
+    const pinCheck = checkPinTarget(input.userId, input.targetRef);
+    if (!pinCheck.ok) return fail(pinCheck.error);
+  }
 
   const check = checkPurchase({
     enabled: item.enabled,
@@ -134,7 +184,11 @@ export function purchaseItem(input: {
       .get();
 
     if (instant) {
-      const delivered = deliver(item.kind, item.id, input.userId, row.id, item.config);
+      const delivered = deliver(item.kind, item.id, input.userId, row.id, {
+        ...(item.config as Record<string, unknown>),
+        // 目标在下单时才确定，塞进配置传给交付函数
+        __postId: input.targetRef,
+      });
       db.update(orders)
         .set({ fulfillResult: delivered, handledAt: Date.now() })
         .where(eq(orders.id, row.id))
@@ -181,6 +235,19 @@ function deliver(
   config: unknown,
 ): Record<string, unknown> {
   const cfg = (config as Record<string, unknown>) ?? {};
+
+  if (kind === "highlight") {
+    const postId = String(cfg.__postId ?? "");
+    const hours = typeof cfg.hours === "number" ? cfg.hours : 24;
+    const post = db.select().from(posts).where(eq(posts.id, postId)).get();
+    if (!post) return { error: `找不到帖子 ${postId}，需要人工处理` };
+
+    db.update(posts)
+      .set({ pinned: true, pinnedUntil: pinUntil(hours, Date.now()) })
+      .where(eq(posts.id, postId))
+      .run();
+    return { pinnedPost: postId, hours };
+  }
 
   if (kind === "makeup_card") {
     const count = typeof cfg.count === "number" ? cfg.count : 1;

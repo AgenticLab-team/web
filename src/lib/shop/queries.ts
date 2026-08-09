@@ -3,7 +3,8 @@ import "server-only";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { makeupCards, orders, shopItems, users } from "@/lib/db/schema";
+import { makeupCards, orders, posts, shopItems, users } from "@/lib/db/schema";
+import { isEffectivelyPinned } from "@/lib/forum/pin";
 import { itemKindLabel, orderStatusLabel, remainingStock } from "@/lib/shop/rules";
 import type { OrderStatus, ShopItemKind } from "@/lib/shop/types";
 import { resolveDisplayName } from "@/lib/users/display-name";
@@ -154,4 +155,34 @@ export function unusedMakeupCards(userId: string): number {
  */
 export function pendingShipments(): OrderRow[] {
   return listOrders({ status: "pending" }).filter((o) => o.shipping !== null);
+}
+
+/**
+ * 我名下可以买置顶的帖子。
+ *
+ * 已经在置顶中的不列 —— 让人选一个买不了的选项，
+ * 只会得到一次「兑换失败」和一次疑惑。
+ */
+export function pinnablePosts(userId: string, now = Date.now()) {
+  return db
+    .select({
+      id: posts.id,
+      title: posts.title,
+      createdAt: posts.createdAt,
+      pinnedUntil: posts.pinnedUntil,
+      pinned: posts.pinned,
+    })
+    .from(posts)
+    .where(
+      and(
+        eq(posts.authorId, userId),
+        eq(posts.status, "published"),
+        isNull(posts.deletedAt),
+      ),
+    )
+    .orderBy(desc(posts.createdAt))
+    .limit(20)
+    .all()
+    .filter((p) => !isEffectivelyPinned(p, now))
+    .map((p) => ({ id: p.id, title: p.title, createdAt: p.createdAt }));
 }

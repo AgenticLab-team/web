@@ -7,6 +7,7 @@ import { boards, people, posts, replies, users } from "@/lib/db/schema";
 import type { Visibility } from "@/lib/db/schema/forum";
 import { resolveDisplayName } from "@/lib/users/display-name";
 
+import { isEffectivelyPinned } from "./pin";
 import { canSeePost, type PostVisibilityInfo, type ViewerContext } from "./visibility";
 
 /**
@@ -34,6 +35,8 @@ export interface PostSummary {
   boardKey: string;
   boardName: string;
   pinned: boolean;
+  /** 置顶到什么时候；null = 管理员手动置顶，不会到期 */
+  pinnedUntil: number | null;
   featured: boolean;
   solved: boolean;
   replyCount: number;
@@ -90,12 +93,20 @@ export function listPosts(viewer: ViewerContext, options: ListPostsOptions = {})
   if (options.boardId) conditions.push(eq(posts.boardId, options.boardId));
   if (options.authorId) conditions.push(eq(posts.authorId, options.authorId));
 
+  /*
+   * 排序里用的是「现在还置顶着吗」，不是 pinned 这个布尔。
+   *
+   * 只看布尔的话，一次「置顶一天」会变成置顶到天荒地老 ——
+   * 而且没有任何地方看得出来：帖子就在那儿，看起来一切正常。
+   */
+  const stillPinned = sql`(${posts.pinned} = 1 AND (${posts.pinnedUntil} IS NULL OR ${posts.pinnedUntil} > ${Date.now()}))`;
+
   const order = {
-    recent: [desc(posts.pinned), desc(sql`COALESCE(${posts.lastReplyAt}, ${posts.createdAt})`)],
-    created: [desc(posts.pinned), desc(posts.createdAt)],
+    recent: [desc(stillPinned), desc(sql`COALESCE(${posts.lastReplyAt}, ${posts.createdAt})`)],
+    created: [desc(stillPinned), desc(posts.createdAt)],
     // 热度按时间衰减，否则永远是那几个老帖霸榜
     hot: [
-      desc(posts.pinned),
+      desc(stillPinned),
       desc(sql`(${posts.reactionCount} * 3 + ${posts.replyCount} * 2 + ${posts.viewCount} * 0.05)
                / (((${Date.now()} - ${posts.createdAt}) / 3600000.0) + 2)`),
     ],
@@ -175,7 +186,9 @@ function hydrateAuthors(rows: { post: typeof posts.$inferSelect; board: typeof b
       boardId: board.id,
       boardKey: board.key,
       boardName: board.name,
-      pinned: post.pinned,
+      // 列表上显示的也要是「现在还置顶着」，否则过期的会一直带着置顶标
+      pinned: isEffectivelyPinned(post, Date.now()),
+      pinnedUntil: post.pinnedUntil,
       featured: post.featured,
       solved: Boolean(post.solvedReplyId),
       replyCount: post.replyCount,

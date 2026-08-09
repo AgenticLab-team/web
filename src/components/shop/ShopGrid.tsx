@@ -26,23 +26,29 @@ export function ShopGrid({
   balance,
   owned,
   loggedIn,
+  pinnable,
 }: {
   items: ItemRow[];
   balance: number;
   owned: Record<string, number>;
   loggedIn: boolean;
+  /** 我名下还能买置顶的帖子 */
+  pinnable: { id: string; title: string }[];
 }) {
   const router = useRouter();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [shippingFor, setShippingFor] = useState<string | null>(null);
   const [shipping, setShipping] = useState({ name: "", phone: "", address: "" });
+  /* 置顶要选一个帖子 —— 和实物的地址一样，点了才问 */
+  const [pinFor, setPinFor] = useState<string | null>(null);
 
-  const buy = (item: ItemRow, ship?: Record<string, unknown>) => {
+  const buy = (item: ItemRow, ship?: Record<string, unknown>, targetRef?: string) => {
     startTransition(async () => {
       const result = await buyItem({
         itemKey: item.key,
         shipping: ship,
+        targetRef,
         // 一次性 token：重复点击会命中幂等键，不会扣两次分
         clientToken: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       });
@@ -53,6 +59,7 @@ export function ShopGrid({
       }
       toast.show({ message: result.note ?? "兑换成功", kind: "success" });
       setShippingFor(null);
+      setPinFor(null);
       setShipping({ name: "", phone: "", address: "" });
       router.refresh();
     });
@@ -167,12 +174,54 @@ export function ShopGrid({
                     地址只用于这次发货，管理员之外没有人能看到。
                   </p>
                 </div>
+              ) : pinFor === item.id ? (
+                <div className="animate-rise space-y-2">
+                  {/* 让人选一个买不了的选项，只会换来一次「兑换失败」和一次疑惑 ——
+                      所以这里只列还能置顶的帖子 */}
+                  {pinnable.length === 0 ? (
+                    <p className="t-caption leading-relaxed text-[var(--ink-tertiary)]">
+                      你名下没有可以置顶的帖子 —— 已经在置顶中的不算。先去发一篇。
+                    </p>
+                  ) : (
+                    <div className="inset-group">
+                      {pinnable.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          disabled={pending}
+                          onClick={() => buy(item, undefined, p.id)}
+                          className="inset-row flex w-full items-center gap-2 px-3.5 py-2.5 text-left transition active:opacity-60"
+                        >
+                          <span className="t-subhead min-w-0 flex-1 truncate">{p.title}</span>
+                          <span className="t-caption2 shrink-0 text-[var(--accent)]">
+                            置顶它 · {item.price} 分
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setPinFor(null)}
+                    className="t-subhead rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 text-[var(--ink-secondary)]"
+                  >
+                    取消
+                  </button>
+                  <p className="t-caption2 leading-relaxed text-[var(--ink-quaternary)]">
+                    同一个版块同时只有一个付费置顶位。占着的时候买不了 ——
+                    不会先收钱再排队。
+                  </p>
+                </div>
               ) : (
                 <button
                   type="button"
                   disabled={pending}
                   onClick={() =>
-                    item.kind === "physical" ? setShippingFor(item.id) : buy(item)
+                    item.kind === "physical"
+                      ? setShippingFor(item.id)
+                      : item.kind === "highlight"
+                        ? setPinFor(item.id)
+                        : buy(item)
                   }
                   className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
                 >

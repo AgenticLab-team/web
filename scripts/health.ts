@@ -2,6 +2,7 @@
 import { checkAndDispatch } from "@/lib/alerts/dispatch";
 import { runHealthChecks, takeStorageSnapshot } from "@/lib/health";
 import { autoPruneIfNeeded } from "@/lib/storage/auto";
+import { settleExpiredPins } from "@/lib/forum/pin-settle";
 import { settleAll } from "@/lib/titles/settle";
 
 async function main() {
@@ -39,6 +40,9 @@ async function main() {
    * 称号结算。挂在这一轮里，不另开一个 timer ——
    * 又一个 timer 就是又一个可能悄悄挂掉的东西。
    */
+  const pins = settleExpiredPins();
+  if (pins.cleared > 0) console.log(`\n置顶 到期清理 ${pins.cleared} 条`);
+
   const titles = settleAll();
   if (titles.granted || titles.expired || titles.renewed || titles.reminded) {
     console.log(
