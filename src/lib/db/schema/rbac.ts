@@ -13,7 +13,7 @@ export const permissions = sqliteTable("permissions", {
   description: text("description"),
   /** 是否支持范围限定（限某版块 / 某群 / 某活动） */
   scopable: integer("scopable", { mode: "boolean" }).notNull().default(false),
-  /** 0 普通 / 1 敏感 / 2 危险（需重新验证身份）/ 3 极危（需双人复核） */
+  /** 0 普通 / 1 敏感 / 2 危险 / 3 极危。2026-08 起等级只驱动警示与留痕，不再触发强制复核 */
   dangerLevel: integer("danger_level").notNull().default(0),
   sort: integer("sort").notNull().default(0),
 });

@@ -86,8 +86,9 @@ export const featureFlags = sqliteTable("feature_flags", {
 });
 
 /**
- * 危险操作双人复核。dangerLevel >= 3 的操作不直接执行，
- * 先落待批记录，需另一名管理员批准 —— 防误操作和内鬼的唯一手段。
+ * 危险操作留痕。原是双人复核（不直接执行、需另一名管理员批准），
+ * 2026-08 按站长指令降级为可选：想先写下来再执行的操作走这里，
+ * 自批也放行。表结构一列没动 —— 历史记录还要照旧读。
  */
 export const approvals = sqliteTable(
   "approvals",
