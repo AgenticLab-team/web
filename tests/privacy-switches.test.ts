@@ -186,6 +186,18 @@ describe("**每一条检索路径都要接上，一条都不能漏**", () => {
     ["关键词检索", "lib/search/messages.ts"],
     ["语义检索", "lib/search/semantic.ts"],
     ["整理成帖子里的检索", "lib/forum/convert-source.ts"],
+    /*
+     * 关键词雷达是**第五个**入口，一开始被漏掉了。
+     *
+     * 漏掉的原因很典型：雷达写在这个开关之前，而接线那一轮
+     * 心里的全集是「四个检索出口」—— 连 privacy/queries.ts 的注释
+     * 都写着「四个调用点」。一个写在开关之前的功能，
+     * 不会因为它叫「雷达」而不是「搜索」就不是搜索。
+     *
+     * 它甚至比搜索更进一步：命中会**主动推送**给订阅者，
+     * 带昵称和高亮片段，还常驻在他的雷达页上 —— 对方连搜都不用搜。
+     */
+    ["关键词雷达", "lib/radar/engine.ts"],
   ] as const) {
     it(`${what}接上了`, () => {
       assert.match(strip(src(file)), /unsearchableWxIds\(/, `${file} 没有过滤`);
@@ -506,5 +518,55 @@ describe("**管理员不受这两个开关的限制**", () => {
      */
     const spec = PRIVACY_SWITCHES.find((s) => s.key === "searchableByOthers")!;
     assert.match(spec.limit, /管理员|站长|审核/);
+  });
+});
+
+describe("**关键词雷达也是一个搜索**", () => {
+  /*
+   * 这一组是一次对抗性审计查出来的：雷达整条链路没接隐私开关。
+   * 一个关掉了「别人能搜到我的发言」的人一开口，他的昵称和一段
+   * 高亮片段会被主动推给同群的订阅者 —— 而开关的说明写的是
+   * 「别人搜关键词、搜语义都搜不到你说过的话」。
+   */
+  it("匹配循环里排掉了藏起来的人", () => {
+    const engine = strip(src("lib/radar/engine.ts"));
+    assert.match(engine, /hiddenSet\.has\(message\.senderWxId\)/);
+  });
+
+  it("**名单在循环外面取一次** —— 那是「每批消息 × 每个订阅」的双重循环", () => {
+    const engine = strip(src("lib/radar/engine.ts"));
+    // 只切 scanMessages 这一段。切到文件末尾的话会把 estimateHits7d
+    // 里那次合法的查询也算进来 —— 断言范围划错，红的是对的代码
+    const loop = engine.slice(
+      engine.indexOf("for (const message of rows)"),
+      engine.indexOf("function recordHit"),
+    );
+    assert.equal(loop.includes("unsearchableWxIds("), false, "名单在循环里查库了");
+  });
+
+  it("管理员的雷达不受限，而且这个判断也在循环外面算", () => {
+    const engine = strip(src("lib/radar/engine.ts"));
+    assert.match(engine, /bypassesPrivacy: boolean/);
+    const loop = engine.slice(
+      engine.indexOf("for (const message of rows)"),
+      engine.indexOf("function recordHit"),
+    );
+    assert.match(loop, /!watcher\.bypassesPrivacy/);
+    assert.equal(loop.includes("bypassesPrivacy({"), false, "在循环里判权限了");
+  });
+
+  it("**预估那条也要过** —— 同一个词在两处返回的数不一样，本身就是信息", () => {
+    /*
+     * 差值等于「有被藏起来的人说过这句」。而那条 Server Action
+     * 只要求登录、没有限流，可以反复问。
+     */
+    const engine = strip(src("lib/radar/engine.ts"));
+    const fn = engine.slice(engine.indexOf("export function estimateHits7d"));
+    assert.match(fn, /sender_wx_id NOT IN/);
+  });
+
+  it("拼 SQL 时对 sender_wx_id 为空的消息要放行 —— NOT IN 遇到 NULL 会把整行判掉", () => {
+    const engine = strip(src("lib/radar/engine.ts"));
+    assert.match(engine, /sender_wx_id IS NULL OR sender_wx_id NOT IN/);
   });
 });

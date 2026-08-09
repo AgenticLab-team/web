@@ -3,6 +3,7 @@ import "server-only";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { db, sqlite } from "@/lib/db";
+import { bypassesPrivacy, unsearchableWxIds } from "@/lib/privacy/queries";
 import { groupMembers, keywordHits, keywordSubs, users } from "@/lib/db/schema";
 import { notify } from "@/lib/forum/notify";
 import { isModuleEnabled } from "@/lib/modules/state";
@@ -58,6 +59,13 @@ interface Watcher {
   hitsToday: number;
   lastNotifiedAt: number | null;
   convIds: Set<string>;
+  /**
+   * 这个订阅者能不能越过别人的「别人能搜到我的发言」开关。
+   *
+   * 在加载时算一次，不在匹配循环里算 —— 那个循环是
+   * 「每批新消息 × 每个订阅」，一次同步可能跑上万次。
+   */
+  bypassesPrivacy: boolean;
 }
 
 /** 取出所有启用中的订阅，连同订阅者看得到的群 */
@@ -71,6 +79,8 @@ function loadWatchers(): Watcher[] {
       hitsToday: keywordSubs.hitsToday,
       lastNotifiedAt: keywordSubs.lastNotifiedAt,
       wxId: users.wxId,
+      status: users.status,
+      kind: users.kind,
     })
     .from(keywordSubs)
     .innerJoin(users, eq(users.id, keywordSubs.userId))
@@ -96,6 +106,12 @@ function loadWatchers(): Watcher[] {
   return subs.map((sub) => ({
     ...sub,
     convIds: sub.wxId ? (byWxId.get(sub.wxId) ?? new Set<string>()) : new Set<string>(),
+    // 和检索那几条路一样：处理举报的人不受这个开关限制
+    bypassesPrivacy: bypassesPrivacy({
+      id: sub.userId,
+      status: sub.status,
+      kind: sub.kind,
+    } as Parameters<typeof bypassesPrivacy>[0]),
   }));
 }
 
@@ -108,6 +124,30 @@ export function scanMessages(rows: RadarMessage[], now = Date.now()): RadarResul
   const watchers = loadWatchers();
   if (watchers.length === 0) return result;
 
+  /*
+   * ─────────────────────────────────────────
+   * 雷达也是一个关键词搜索
+   * ─────────────────────────────────────────
+   *
+   * 这一段是补上的。原来这个循环只判了三件事：在不在这个群、
+   * 是不是自己说的、词匹不匹配 —— **完全没有过隐私开关**。
+   *
+   * 而「别人能搜到我的发言」那个开关的说明白纸黑字写着
+   * 「别人搜关键词、搜语义都搜不到你说过的话」。雷达正是常驻的
+   * 关键词搜索：一个关掉了开关的人一开口，他的昵称和一段高亮片段
+   * 会被**主动推送**给同群的订阅者，还常驻在对方的雷达页上。
+   * 那比被搜到更进一步 —— 他甚至不用去搜。
+   *
+   * 之所以漏掉，是因为雷达写在这个开关之前，而接线那一轮
+   * 只认了「四个检索出口」。这里补上第五个。
+   *
+   * 名单一次性取好：这个双重循环是「每批新消息 × 每个订阅」，
+   * 一次同步可能跑上万次，放在里面查库会让同步整个变慢。
+   */
+  const hiddenSenders = unsearchableWxIds(null);
+  const anyHidden = hiddenSenders.length > 0;
+  const hiddenSet = new Set(hiddenSenders);
+
   for (const message of rows) {
     if (!MATCHABLE_TYPES.has(message.type)) continue;
     result.scanned++;
@@ -117,6 +157,15 @@ export function scanMessages(rows: RadarMessage[], now = Date.now()): RadarResul
       if (!watcher.convIds.has(message.convId)) continue;
       // 自己说的话不该提醒自己
       if (message.senderWxId && message.senderWxId === watcher.wxId) continue;
+      // 关掉了「别人能搜到我的发言」的人，不进别人的雷达
+      if (
+        anyHidden &&
+        !watcher.bypassesPrivacy &&
+        message.senderWxId &&
+        hiddenSet.has(message.senderWxId)
+      ) {
+        continue;
+      }
       if (!matchesKeyword(message.content, watcher.keywordKey)) continue;
 
       const recorded = recordHit(watcher, message, now, result);
@@ -225,6 +274,21 @@ export function estimateHits7d(userId: string, keyword: string, now = Date.now()
 
   if (convIds.length === 0) return 0;
 
+  /*
+   * 这个预估也要过隐私开关。
+   *
+   * 它比雷达本身弱得多（只回一个数字，不回内容），但**同一个词
+   * 在这里和在 /search 里返回的数不一样，本身就是一条信息** ——
+   * 差值等于「有被藏起来的人说过这句」。而且这条 Server Action
+   * 只要求登录、没有任何限流，可以反复问。
+   *
+   * 排除自己那一档传 null：这里数的是「别人说过几次」，
+   * 而调用者自己的发言本来就不该算进他的预估里。
+   */
+  const hidden = unsearchableWxIds(null);
+  const hiddenClause =
+    hidden.length > 0 ? `AND (sender_wx_id IS NULL OR sender_wx_id NOT IN (${hidden.map(() => "?").join(",")}))` : "";
+
   const placeholders = convIds.map(() => "?").join(",");
   const rows = sqlite
     .prepare(
@@ -233,9 +297,10 @@ export function estimateHits7d(userId: string, keyword: string, now = Date.now()
          AND ts >= ?
          AND type IN ('text','quote')
          AND content != ''
+         ${hiddenClause}
        LIMIT 20000`,
     )
-    .all(...convIds, now - 7 * 86_400_000) as { content: string }[];
+    .all(...convIds, now - 7 * 86_400_000, ...hidden) as { content: string }[];
 
   let hits = 0;
   for (const row of rows) if (matchesKeyword(row.content, keyword)) hits++;
