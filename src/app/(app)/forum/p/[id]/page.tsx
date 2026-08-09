@@ -22,6 +22,7 @@ import { ReactionBar } from "@/components/forum/ReactionBar";
 import { ReportButton } from "@/components/forum/ReportButton";
 import { ReplyForm } from "@/components/forum/ReplyForm";
 import { ReplyRow } from "@/components/forum/ReplyRow";
+import { ReadingProgress } from "@/components/forum/ReadingProgress";
 import { ResumeReading } from "@/components/forum/ResumeReading";
 import { BackLink, Empty, EmptyAction, Pill, Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -34,6 +35,7 @@ import { tipsOfTargets } from "@/lib/forum/tips-queries";
 import { isSubscribed } from "@/lib/forum/notify";
 import { bookmarkOf, listFolders } from "@/lib/forum/bookmark-queries";
 import { getDraft } from "@/lib/forum/drafts";
+import { lockNotice } from "@/lib/forum/lock-rules";
 import { isBookmarked, reactionStates, readFloor } from "@/lib/forum/social-queries";
 import { isIndexable } from "@/lib/forum/visibility";
 import { recordView } from "@/lib/forum/actions";
@@ -147,6 +149,19 @@ export default async function PostPage({
     siteName: env.site.name,
   });
   const locked = status === "locked";
+  /*
+   * 锁上之后那一行字要分清是谁锁的。
+   *
+   * 楼主收尾的帖子仍然值得读（多半还有个结论），
+   * 被版主叫停的那种则是在说「这里出过问题」——
+   * 用同一句「该帖已锁定」盖住，等于把两件事混成一件。
+   */
+  const lockedNotice = locked
+    ? lockNotice(
+        { authorId: post.authorId, status, lockedBy: post.raw.lockedBy },
+        post.raw.lockReason,
+      )
+    : null;
   const deleted = status === "deleted";
   const canReply = Boolean(user) && !locked && !deleted;
 
@@ -186,9 +201,13 @@ export default async function PostPage({
               </span>
             )}
             {locked && (
-              <span className="t-caption inline-flex items-center gap-1 rounded-[var(--radius-pill)] bg-[var(--fill)] px-2 py-0.5 font-medium text-[var(--ink-secondary)]">
+              <span
+                className="t-caption inline-flex items-center gap-1 rounded-[var(--radius-pill)] bg-[var(--fill)] px-2 py-0.5 font-medium text-[var(--ink-secondary)]"
+                title={lockedNotice ?? undefined}
+              >
                 <Lock className="h-3 w-3" strokeWidth={2} aria-hidden />
-                已锁定
+                {/* 楼主收尾说「讨论结束」，版主叫停说「已锁定」 */}
+                {post.raw.lockedBy === post.authorId ? "讨论结束" : "已锁定"}
               </span>
             )}
           </div>
@@ -293,6 +312,7 @@ export default async function PostPage({
               featured={post.featured}
               caps={caps}
               boards={moveTargets}
+              isMine={post.authorId === user?.id}
             />
           </span>
         </div>
@@ -319,6 +339,13 @@ export default async function PostPage({
             )}
           </div>
         )}
+
+        {/*
+          * 进度条**不跟着登录状态走** —— 「我读到哪了」对访客一样成立。
+          * 下面那个「跳回上次读到」才需要登录（它要有存过的进度）。
+          * 顶上一条细线 + 滚动时浮出的楼层号，短帖里一个字都不出现。
+          */}
+        <ReadingProgress maxFloor={maxFloor} />
 
         {user && !onlyAuthor && (
           <ResumeReading postId={post.id} lastReadFloor={lastRead} maxFloor={maxFloor} />
@@ -451,7 +478,12 @@ export default async function PostPage({
         )}
 
         {user ? (
-          !deleted && <ReplyForm postId={post.id} locked={locked} serverDraft={replyDraft} />
+          !deleted && <ReplyForm
+              postId={post.id}
+              locked={locked}
+              lockNotice={lockedNotice}
+              serverDraft={replyDraft}
+            />
         ) : (
           <Empty
             title="登录后参与讨论"

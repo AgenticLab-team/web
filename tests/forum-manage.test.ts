@@ -149,15 +149,38 @@ beforeEach(() => {
 });
 
 describe("postCapabilities：按钮显示的依据", () => {
-  it("作者对自己的帖子：能编辑能删，但没有版主动作", () => {
+  it("作者对自己的帖子：能编辑能删能收尾，但没有版主动作", () => {
     const caps = mod.postCapabilities(user(AUTHOR), post("p1"));
     assert.equal(caps.edit, true);
     assert.equal(caps.deleteOwn, true);
     assert.equal(caps.deleteAny, false);
     assert.equal(caps.feature, false);
     assert.equal(caps.pin, false);
-    assert.equal(caps.lock, false);
     assert.equal(caps.move, false);
+
+    /*
+     * 锁自己的帖子是**楼主该有的动作**（FORUM.md 4.3）——
+     * 「这个问题解决了，不用再讨论了」和「这串吵起来了，版主叫停」
+     * 是两件事，不该由同一个权限管。
+     *
+     * 真正的分界线在解锁那边：楼主只解得开自己加的那把，
+     * 见 tests/post-lock.test.ts。
+     */
+    assert.equal(caps.lock, true);
+    // 没锁的时候没有解锁这回事
+    assert.equal(caps.unlock, false);
+  });
+
+  it("**楼主解不开版主加的锁** —— 否则版主叫停就形同虚设", () => {
+    const locked = { ...post("p1"), status: "locked" as const, lockedBy: MOD_B1 };
+    const caps = mod.postCapabilities(user(AUTHOR), locked);
+    assert.equal(caps.unlock, false);
+    assert.equal(caps.lock, false, "已经锁上了还给锁的按钮");
+  });
+
+  it("楼主解得开自己加的锁", () => {
+    const locked = { ...post("p1"), status: "locked" as const, lockedBy: AUTHOR };
+    assert.equal(mod.postCapabilities(user(AUTHOR), locked).unlock, true);
   });
 
   it("普通成员对别人的帖子：什么都不能做", () => {

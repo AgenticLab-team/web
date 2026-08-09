@@ -8,6 +8,7 @@ import { boards, moderationActions, posts, users } from "@/lib/db/schema";
 import { can } from "@/lib/rbac/can";
 
 import { recountBoardPosts } from "./board-stats";
+import { canLock, canUnlock, checkLockReason } from "./lock-rules";
 import { notify } from "./notify";
 import { indexPost, removeFromIndex } from "./search";
 import { capVisibility } from "./visibility";
@@ -39,7 +40,15 @@ export interface PostCaps {
   restore: boolean;
   feature: boolean;
   pin: boolean;
+  /** 现在能不能锁 */
   lock: boolean;
+  /**
+   * 现在能不能解锁 —— 和 lock 分开。
+   *
+   * 合成一个的话，楼主就能解掉**版主**加的那把锁：
+   * 版主叫停、楼主解开、再吵起来，处罚形同虚设。
+   */
+  unlock: boolean;
   move: boolean;
   /** 能不能折叠别人的回复 —— 判据和 moderateReply 服务端那条保持一致 */
   moderateReplies: boolean;
@@ -54,6 +63,7 @@ export const NO_CAPS: PostCaps = {
   feature: false,
   pin: false,
   lock: false,
+  unlock: false,
   move: false,
 };
 
@@ -64,6 +74,7 @@ export function postCapabilities(actor: Actor | null, post: PostRow): PostCaps {
   const isAuthor = actor.id === post.authorId;
   const deleted = post.status === "deleted";
   const canDeleteAny = can(actor, "forum.post.delete.any", scope).allowed;
+  const lockActor = { userId: actor.id, canModerate: can(actor, "forum.post.lock", scope).allowed };
 
   if (deleted) {
     return {
@@ -90,7 +101,13 @@ export function postCapabilities(actor: Actor | null, post: PostRow): PostCaps {
     restore: false,
     feature: can(actor, "forum.post.feature", scope).allowed,
     pin: can(actor, "forum.post.pin", scope).allowed,
-    lock: can(actor, "forum.post.lock", scope).allowed,
+    /*
+     * 锁 / 解锁都走 lock-rules —— 服务端 moderatePostCore 用的是
+     * **同一组函数**。两处各判一遍的话，早晚会出现一个
+     * 点了必然失败的按钮，或者更糟：一个不该出现却生效的按钮。
+     */
+    lock: canLock(lockActor, post),
+    unlock: canUnlock(lockActor, post),
     move: can(actor, "forum.post.move", scope).allowed,
     /*
      * 能不能折叠**别人的回复**。
@@ -187,11 +204,32 @@ export function moderatePostCore(
   if (!post) return fail("帖子不存在");
 
   if (!actor) return fail("请先登录");
-  const verdict = can(actor, PERMISSION_FOR[input.action], {
-    scopeType: "board",
-    scopeId: post.boardId,
-  });
-  if (!verdict.allowed) return fail(verdict.reason);
+
+  const scope = { scopeType: "board" as const, scopeId: post.boardId };
+
+  /*
+   * 锁 / 解锁**不只看权限**，还看是谁锁的 —— 见 lock-rules。
+   *
+   * 楼主可以锁自己的帖子（FORUM.md 4.3），但只解得开自己加的那把：
+   * 否则版主叫停、楼主解开、再吵起来，处罚形同虚设。
+   *
+   * 界面那边（postCapabilities）调的是同一组函数。
+   */
+  if (input.action === "lock" || input.action === "unlock") {
+    const lockActor = { userId: actor.id, canModerate: can(actor, "forum.post.lock", scope).allowed };
+    const allowed =
+      input.action === "lock" ? canLock(lockActor, post) : canUnlock(lockActor, post);
+    if (!allowed) {
+      return fail(
+        input.action === "lock"
+          ? "只有楼主和版主能锁帖"
+          : "这把锁是版主加的，得由版主解 —— 有异议走申诉",
+      );
+    }
+  } else {
+    const verdict = can(actor, PERMISSION_FOR[input.action], scope);
+    if (!verdict.allowed) return fail(verdict.reason);
+  }
 
   const now = Date.now();
   const patch: Partial<typeof posts.$inferInsert> = {};
@@ -211,11 +249,20 @@ export function moderatePostCore(
       patch.deletedBy = null;
       patch.deleteReason = null;
       break;
-    case "lock":
+    case "lock": {
+      // 理由要显示给看帖的人，所以在这里再规范一次（去掉多余空白、限长）
+      const shaped = checkLockReason(reason);
+      if (!shaped.ok) return fail(shaped.message);
       patch.status = "locked";
+      patch.lockedBy = actor.id;
+      patch.lockReason = shaped.reason;
       break;
+    }
     case "unlock":
       patch.status = "published";
+      // 解开就把痕迹清掉 —— 留着的话下次谁锁的就说不清了
+      patch.lockedBy = null;
+      patch.lockReason = null;
       break;
     case "pin":
       patch.pinned = true;

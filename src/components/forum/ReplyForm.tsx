@@ -16,10 +16,19 @@ import { useServerDraft } from "./use-server-draft";
 export function ReplyForm({
   postId,
   locked,
+  lockNotice = null,
   serverDraft = null,
 }: {
   postId: string;
   locked: boolean;
+  /**
+   * 锁上之后显示哪一句。
+   *
+   * 「该帖已锁定」只说了发生什么，没说为什么 —— 而楼主收尾
+   * 和版主叫停在读者眼里是完全不同的信号，用同一句话盖住
+   * 等于把两件事混成一件。
+   */
+  lockNotice?: string | null;
   /** 服务端上那份写了一半的回复 */
   serverDraft?: DraftSnapshot | null;
 }) {
@@ -60,7 +69,10 @@ export function ReplyForm({
   if (locked) {
     return (
       <div className="inset-group px-4 py-5 text-center">
-        <p className="t-subhead text-[var(--ink-secondary)]">该帖已锁定，不能再回复</p>
+        <p className="t-subhead text-[var(--ink-secondary)]">
+          {lockNotice ?? "该帖已锁定"}
+        </p>
+        <p className="t-caption mt-1 text-[var(--ink-tertiary)]">不能再回复了</p>
       </div>
     );
   }

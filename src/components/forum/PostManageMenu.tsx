@@ -42,6 +42,7 @@ export interface PostMenuCaps {
   feature: boolean;
   pin: boolean;
   lock: boolean;
+  unlock: boolean;
   move: boolean;
 }
 
@@ -61,6 +62,7 @@ export function PostManageMenu({
   featured,
   caps,
   boards,
+  isMine = false,
 }: {
   postId: string;
   boardKey: string;
@@ -69,6 +71,8 @@ export function PostManageMenu({
   featured: boolean;
   caps: PostMenuCaps;
   boards: BoardOption[];
+  /** 楼主看到的措辞不一样 —— 他做的是收尾，不是处置 */
+  isMine?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -254,22 +258,37 @@ export function PostManageMenu({
                   />
                 ))}
 
-              {caps.lock &&
-                (locked ? (
-                  <MenuItem
-                    icon={LockOpen}
-                    label="解除锁定"
-                    disabled={pending}
-                    onClick={() => runModeration("unlock", "快捷操作", "已解锁")}
-                  />
-                ) : (
-                  <MenuItem
-                    icon={Lock}
-                    label="锁定回复"
-                    disabled={pending}
-                    onClick={() => setStep({ kind: "reason", action: "lock" })}
-                  />
-                ))}
+              {/*
+                * 锁和解锁是两个能力，不是一个。
+                *
+                * 楼主锁得了自己的帖子，但解不开**版主**加的那把 ——
+                * 否则版主叫停、楼主解开、再吵起来，处罚形同虚设。
+                * caps.unlock 由 lock-rules 算，和服务端同一组函数。
+                */}
+              {locked
+                ? caps.unlock && (
+                    <MenuItem
+                      icon={LockOpen}
+                      label="解除锁定"
+                      disabled={pending}
+                      onClick={() => runModeration("unlock", "快捷操作", "已解锁")}
+                    />
+                  )
+                : caps.lock && (
+                    <MenuItem
+                      icon={Lock}
+                      /*
+                       * 楼主看到的是「结束讨论」。
+                       *
+                       * 「锁定回复」是一个处置动作的说法，
+                       * 而楼主做的是给自己的帖子收尾 —— 同一个词
+                       * 会让人以为自己在处罚别人，于是不敢点。
+                       */
+                      label={isMine ? "结束讨论" : "锁定回复"}
+                      disabled={pending}
+                      onClick={() => setStep({ kind: "reason", action: "lock" })}
+                    />
+                  )}
 
               {caps.move && boards.length > 0 && (
                 <MenuItem
@@ -308,7 +327,7 @@ export function PostManageMenu({
           {step?.kind === "reason" && (
             <div className="p-2">
               <p className="t-subhead mb-2 font-medium">
-                {step.action === "lock" ? "锁定回复" : "删除这篇帖子"}
+                {step.action === "lock" ? (isMine ? "结束这个讨论" : "锁定回复") : "删除这篇帖子"}
               </p>
               {/*
                * 处罚必须填理由 —— 不是走形式：作者会收到带理由的通知，
@@ -334,7 +353,7 @@ export function PostManageMenu({
                       : "bg-[var(--accent)] text-[var(--accent-ink)]"
                   }`}
                 >
-                  {step.action === "lock" ? "锁定" : "删除"}
+                  {step.action === "lock" ? (isMine ? "结束讨论" : "锁定") : "删除"}
                 </button>
                 <button
                   type="button"

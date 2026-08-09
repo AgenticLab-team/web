@@ -123,6 +123,20 @@ export const posts = sqliteTable(
     updatedAt: now("updated_at"),
     deletedAt: integer("deleted_at"),
     deletedBy: text("deleted_by"),
+
+    /**
+     * 谁锁的、为什么锁。
+     *
+     * 有了这两列，「楼主锁自己的帖子」才做得成 ——
+     * 否则楼主一旦能解锁，就能解掉**版主**加的锁，处罚形同虚设。
+     * 删除那边早就是这么办的（`deletedBy`：作者自删的自己能恢复，
+     * 管理员删的必须走申诉），锁定照抄同一条线。
+     *
+     * `lockReason` 还要给读者看：一句「已经解决了」比一行
+     * 「该帖已锁定」有用得多 —— 后者只说了发生什么，没说为什么。
+     */
+    lockedBy: text("locked_by"),
+    lockReason: text("lock_reason"),
     deleteReason: text("delete_reason"),
   },
   (t) => [
