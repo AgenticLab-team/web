@@ -166,24 +166,54 @@ export async function chat(
   const config = chatConfig();
   if (!isConfigured(config)) throw new LlmNotConfigured(config.missing);
 
-  const data = await post<ChatResponse>(
-    config,
-    "/chat/completions",
-    {
-      model: config.model,
-      messages,
-      temperature: options.temperature ?? 0.2,
-      max_tokens: options.maxTokens ?? 800,
-    },
-    options.timeoutMs,
-  );
+  let totalTokens = 0;
 
-  const text = data.choices?.[0]?.message?.content;
-  if (typeof text !== "string" || text.trim() === "") {
-    throw new LlmError("模型返回了空内容");
+  /*
+   * 空回复重试一次。
+   *
+   * ─────────────────────────────────────────
+   * 这是量出来的，不是防御性编程
+   * ─────────────────────────────────────────
+   *
+   * 整理资源库时 195 条里有 10 条报「模型返回了空内容」。
+   * 一开始以为是推理模型把 max_tokens 吃光了 —— 量了一下不是:
+   * reasoning 只用了 40 来个 token，finish_reason 也是 stop。
+   * 拿同样的提示词重跑，那 10 条**全部正常返回**。
+   *
+   * 也就是说这是上游的偶发行为。只重一次:
+   * 真正坏掉的时候重多少次都一样，而重试次数一多，
+   * 一次配置错误就会变成一场对上游的压测。
+   */
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const data = await post<ChatResponse>(
+      config,
+      "/chat/completions",
+      {
+        model: config.model,
+        messages,
+        temperature: options.temperature ?? 0.2,
+        max_tokens: options.maxTokens ?? 800,
+      },
+      options.timeoutMs,
+    );
+    totalTokens += data.usage?.total_tokens ?? 0;
+
+    const text = data.choices?.[0]?.message?.content;
+    if (typeof text === "string" && text.trim() !== "") {
+      return { text: text.trim(), totalTokens };
+    }
+
+    /*
+     * 被长度截断的话重试也没用 —— 那不是偶发，是预算不够。
+     * 如实说出来，不要混进「空回复」里让人以为是抖动。
+     */
+    const finish = (data.choices?.[0] as { finish_reason?: string } | undefined)?.finish_reason;
+    if (finish === "length") {
+      throw new LlmError(`回复被 max_tokens 截断了（${options.maxTokens ?? 800}），调大再试`);
+    }
   }
 
-  return { text: text.trim(), totalTokens: data.usage?.total_tokens ?? 0 };
+  throw new LlmError("模型连着两次都返回空内容");
 }
 
 interface EmbeddingResponse {

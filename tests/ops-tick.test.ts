@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import {
@@ -420,5 +420,29 @@ describe("另外两个定时任务也隔开了", () => {
 
   it("本机备份那一段**不在** runSteps 里 —— 它失败就该直接退出，没有下一步可谈", () => {
     assert.ok(backup.indexOf("source.backup") < backup.indexOf("runSteps("));
+  });
+});
+
+describe("**package.json 里的脚本都得真的能跑**", () => {
+  /*
+   * `db:migrate` 曾经指向 scripts/migrate.ts，而那个文件根本不存在 ——
+   * 真正跑迁移的是 bootstrap。这种条目是个陷阱:
+   * 照着 package.json 敲一遍命令,得到的是一句
+   * 「Cannot find module」,而人第一反应是「我的环境坏了」。
+   */
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+    scripts: Record<string, string>;
+  };
+
+  it("每个引用了 scripts/*.ts 的命令，那个文件都要存在", () => {
+    const missing: string[] = [];
+    for (const [name, cmd] of Object.entries(pkg.scripts)) {
+      for (const match of cmd.matchAll(/(scripts\/[\w-]+\.ts)/g)) {
+        if (!existsSync(new URL(`../${match[1]}`, import.meta.url))) {
+          missing.push(`${name} → ${match[1]}`);
+        }
+      }
+    }
+    assert.deepEqual(missing, [], "package.json 里这些命令跑不起来");
   });
 });

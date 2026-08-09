@@ -234,6 +234,15 @@ export const ADMIN_NAV: AdminNavSection[] = [
         ready: true,
       },
       {
+        key: "llm",
+        href: "/admin/llm",
+        label: "模型接入",
+        icon: "sparkles",
+        permission: "system.settings",
+        description: "对话与嵌入是否真的通、资源库整理进度",
+        ready: true,
+      },
+      {
         key: "approvals",
         href: "/admin/approvals",
         label: "危险操作留痕",

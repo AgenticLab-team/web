@@ -30,6 +30,14 @@ export interface LinkItem {
   domainLabel: string;
   title: string;
   note: string | null;
+  /**
+   * 模型根据上下文整理出来的标题与简介。
+   *
+   * **和 title/note 分开传到界面上**，因为界面要说清楚哪一条是机器写的 ——
+   * 一个语气笃定的简介，人默认它是可靠的。
+   */
+  aiTitle: string | null;
+  aiSummary: string | null;
   shareCount: number;
   firstSharedAt: number;
   lastSharedAt: number;
@@ -88,7 +96,8 @@ export function listLinks(user: CurrentUser | null, query: LinkQuery = {}): Link
    */
   const rows = sqlite
     .prepare(
-      `SELECT l.id, l.url, l.domain, l.title, l.note, l.share_count AS shareCount,
+      `SELECT l.id, l.url, l.domain, l.title, l.note,
+              l.ai_title AS aiTitle, l.ai_summary AS aiSummary, l.share_count AS shareCount,
               l.first_shared_at AS firstSharedAt, l.last_shared_at AS lastSharedAt,
               COUNT(m.id) AS visibleShares,
               MAX(m.shared_at) AS visibleLastAt,
@@ -106,6 +115,8 @@ export function listLinks(user: CurrentUser | null, query: LinkQuery = {}): Link
     domain: string;
     title: string;
     note: string | null;
+    aiTitle: string | null;
+    aiSummary: string | null;
     shareCount: number;
     firstSharedAt: number;
     lastSharedAt: number;
@@ -130,6 +141,8 @@ export function listLinks(user: CurrentUser | null, query: LinkQuery = {}): Link
     domainLabel: domainLabel(row.domain),
     title: row.title,
     note: row.note,
+    aiTitle: row.aiTitle,
+    aiSummary: row.aiSummary,
     shareCount: row.shareCount,
     firstSharedAt: row.firstSharedAt,
     // 时间也用可见范围里的 —— 和次数一个道理
@@ -152,7 +165,10 @@ export function listLinks(user: CurrentUser | null, query: LinkQuery = {}): Link
         (i) =>
           i.title.toLowerCase().includes(needle) ||
           i.url.toLowerCase().includes(needle) ||
-          (i.note ?? "").toLowerCase().includes(needle),
+          (i.note ?? "").toLowerCase().includes(needle) ||
+          // 整理出来的标题和简介也要能搜到 —— 不然「台风」搜不出中央气象台那条
+          (i.aiTitle ?? "").toLowerCase().includes(needle) ||
+          (i.aiSummary ?? "").toLowerCase().includes(needle),
       );
     }
   }

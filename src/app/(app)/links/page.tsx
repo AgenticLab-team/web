@@ -124,7 +124,12 @@ export default async function LinksPage({
                           rel="noopener noreferrer nofollow"
                           className="t-body inline-flex items-baseline gap-1 font-medium transition active:opacity-60"
                         >
-                          <span className="min-w-0 break-all">{item.title}</span>
+                          {/*
+                            * 有整理过的标题就用它 —— 原来那个多半只是域名。
+                            * 但原文不丢:下面那行小字会把它带出来,
+                            * 让人对得上「这条到底指向哪」。
+                            */}
+                          <span className="min-w-0 break-all">{item.aiTitle ?? item.title}</span>
                           <ExternalLink
                             className="h-3 w-3 shrink-0 translate-y-px text-[var(--ink-quaternary)]"
                             strokeWidth={2.2}
@@ -132,13 +137,33 @@ export default async function LinksPage({
                           />
                         </a>
 
-                        {item.note && (
+                        {item.aiSummary ? (
                           <p className="t-caption mt-0.5 leading-relaxed text-[var(--ink-secondary)]">
-                            {item.note}
+                            {item.aiSummary}
+                            {/*
+                              * 标出来是机器写的。
+                              *
+                              * 一段语气笃定、格式工整的简介,人默认它是可靠的 ——
+                              * 而它是根据群里的只言片语整理出来的,可能不准。
+                              * 不标的话,读的人没有机会自己判断要不要信。
+                              */}
+                            <span
+                              className="ml-1 align-baseline text-[var(--ink-quaternary)]"
+                              title="根据分享时群里的对话由模型整理，可能不准"
+                            >
+                              · AI 整理
+                            </span>
                           </p>
+                        ) : (
+                          item.note && (
+                            <p className="t-caption mt-0.5 leading-relaxed text-[var(--ink-secondary)]">
+                              {item.note}
+                            </p>
+                          )
                         )}
 
                         <p className="t-caption2 mt-1 text-[var(--ink-quaternary)]">
+                          {item.aiTitle && item.title !== item.aiTitle ? `${item.title} · ` : ""}
                           {item.domainLabel}
                           {item.sharers.length > 0 && ` · ${item.sharers.join("、")} 分享`}
                           {item.visibleShares > 1 && ` · 被分享 ${item.visibleShares} 次`}
