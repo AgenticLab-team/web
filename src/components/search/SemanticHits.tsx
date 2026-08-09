@@ -70,7 +70,7 @@ export function SemanticHits({ hits, siteUrl }: { hits: SemanticHit[]; siteUrl: 
             {hit.messages.map((m) => (
               <p key={m.id} className="t-subhead leading-relaxed">
                 <span className="text-[var(--ink-tertiary)]">{m.senderName}：</span>
-                <span className="text-[var(--ink-primary)]">{m.content}</span>
+                <span className="text-[var(--ink)]">{m.content}</span>
               </p>
             ))}
           </div>
@@ -90,7 +90,7 @@ export function SemanticNotice({ error, pending }: { error: string | null; pendi
       className={`mb-3 flex items-start gap-1.5 rounded-lg border px-3 py-2 ${
         error
           ? "border-[var(--danger)]/40 bg-[var(--danger)]/8 text-[var(--danger)]"
-          : "border-[var(--hairline)] text-[var(--ink-tertiary)]"
+          : "border-[var(--separator)] text-[var(--ink-tertiary)]"
       }`}
     >
       <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />

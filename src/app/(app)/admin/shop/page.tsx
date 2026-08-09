@@ -5,7 +5,7 @@ import { OrderActions } from "@/components/admin/OrderActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Pagination } from "@/components/ui/Pagination";
-import { Empty, Section } from "@/components/ui/primitives";
+import { Callout, Card, Empty, PageNote, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { listItems, pagedOrders, pendingShipments } from "@/lib/shop/queries";
 
@@ -42,32 +42,20 @@ export default async function AdminShopPage({
       />
 
       {pending.length > 0 && (
-        <div
-          className="mb-4 rounded-[var(--radius-card)] p-4 hairline"
-          style={{ background: "color-mix(in srgb, var(--warning) 9%, var(--surface))" }}
-        >
-          <p className="t-subhead font-medium" style={{ color: "var(--warning)" }}>
-            {pending.length} 笔实物订单待发货
-          </p>
+        <Callout tone="warning" title={`${pending.length} 笔实物订单待发货`}>
           <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">
             用户花掉的分是真的没了，东西却还没到 —— 积压久了就是失信。
           </p>
-        </div>
+        </Callout>
       )}
 
       {drifted.length > 0 && (
-        <div
-          className="mb-4 rounded-[var(--radius-card)] p-4 hairline"
-          style={{ background: "color-mix(in srgb, var(--danger) 9%, var(--surface))" }}
-        >
-          <p className="t-subhead font-medium" style={{ color: "var(--danger)" }}>
-            {drifted.length} 个商品的卖出数与订单数对不上
-          </p>
+        <Callout tone="danger" title={`${drifted.length} 个商品的卖出数与订单数对不上`}>
           <p className="t-caption mt-1 text-[var(--ink-secondary)]">
             {drifted.map((i) => `${i.name}（记 ${i.sold}）`).join("、")}。
             库存数错了会导致超卖或永远卖不完，先查清楚再继续上架。
           </p>
-        </div>
+        </Callout>
       )}
 
       <Section title="商品">
@@ -110,10 +98,7 @@ export default async function AdminShopPage({
         ) : (
           <div className="space-y-2">
             {orders.map((order) => (
-              <article
-                key={order.id}
-                className="rounded-[var(--radius-card)] bg-[var(--surface)] p-3.5 hairline"
-              >
+              <Card as="article" key={order.id}>
                 <p className="t-body flex flex-wrap items-center gap-1.5">
                   <span>{order.itemName}</span>
                   <Link href={`/admin/users/${order.userId}`} className="t-caption text-[var(--ink-tertiary)]">
@@ -150,7 +135,7 @@ export default async function AdminShopPage({
                 {admin.has("shop.order.handle") && (
                   <OrderActions id={order.id} status={order.status} />
                 )}
-              </article>
+              </Card>
             ))}
           </div>
         )}
@@ -162,10 +147,10 @@ export default async function AdminShopPage({
         />
       </Section>
 
-      <p className="t-caption px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         退款走<strong>冲正</strong>而不是凭空加分 —— 凭空加的话积分总量会悄悄多出来，
         而通胀体检看到「有人白拿了分」却查不出源头。退款同时会把库存还回去。
-      </p>
+      </PageNote>
     </>
   );
 }

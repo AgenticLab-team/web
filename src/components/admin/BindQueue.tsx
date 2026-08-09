@@ -113,7 +113,7 @@ export function FriendRequestQueue({
 
   return (
     <div className="inset-group">
-      <p className="t-caption border-b border-[var(--hairline)] px-4 py-2 leading-relaxed text-[var(--ink-tertiary)]">
+      <p className="t-caption border-b border-[var(--separator)] px-4 py-2 leading-relaxed text-[var(--ink-tertiary)]">
         绑定<strong>不需要</strong>通过好友申请 —— 验证码在群里发就行。
         这里留着通过的口子只为极少数要走私聊备用通道的人。
         <span className="text-[var(--ink-secondary)]"> {budgetReason}。</span>
@@ -122,7 +122,7 @@ export function FriendRequestQueue({
       {message && (
         <p
           role="status"
-          className={`t-subhead border-b border-[var(--hairline)] px-4 py-2 ${
+          className={`t-subhead border-b border-[var(--separator)] px-4 py-2 ${
             message.ok ? "text-[var(--success)]" : "text-[var(--danger)]"
           }`}
         >
@@ -135,12 +135,12 @@ export function FriendRequestQueue({
       ) : (
         <ul>
           {rows.map((row) => (
-            <li key={row.wxId} className="border-b border-[var(--hairline)] last:border-b-0 px-4 py-3">
+            <li key={row.wxId} className="border-b border-[var(--separator)] last:border-b-0 px-4 py-3">
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <span className="t-body font-medium">{row.nickname ?? row.wxId}</span>
                 <code className="t-caption2 font-mono text-[var(--ink-quaternary)]">{row.wxId}</code>
                 {row.boundUserId && (
-                  <span className="t-caption2 rounded-full border border-[var(--hairline)] px-1.5 text-[var(--ink-tertiary)]">
+                  <span className="t-caption2 rounded-full border border-[var(--separator)] px-1.5 text-[var(--ink-tertiary)]">
                     已有账号
                   </span>
                 )}
@@ -172,7 +172,7 @@ export function FriendRequestQueue({
                         <input
                           value={reason}
                           onChange={(e) => setReason(e.target.value)}
-                          className="mt-1 w-full rounded-lg border border-[var(--hairline)] bg-[var(--surface)] px-2 py-1.5 text-[14px] outline-none focus-visible:border-[var(--accent)]"
+                          className="mt-1 w-full rounded-lg border border-[var(--separator)] bg-[var(--surface)] px-2 py-1.5 text-[14px] outline-none focus-visible:border-[var(--accent)]"
                         />
                       </label>
                       <div className="mt-2 flex gap-2">
@@ -201,7 +201,7 @@ export function FriendRequestQueue({
                         setReason("");
                         setMessage(null);
                       }}
-                      className="t-caption rounded-md border border-[var(--hairline)] px-2 py-1 transition-colors hover:bg-[var(--surface-hover)]"
+                      className="t-caption rounded-md border border-[var(--separator)] px-2 py-1 transition-colors hover:bg-[var(--fill)]"
                     >
                       通过好友申请
                     </button>
@@ -252,7 +252,7 @@ export function StalledBindQueue({ rows, canBind }: { rows: StalledRow[]; canBin
 
   return (
     <div className="inset-group">
-      <p className="t-caption border-b border-[var(--hairline)] px-4 py-2 leading-relaxed text-[var(--ink-tertiary)]">
+      <p className="t-caption border-b border-[var(--separator)] px-4 py-2 leading-relaxed text-[var(--ink-tertiary)]">
         <strong>反复取码但一直没成功</strong>的人 —— 打开登录页就会取一个码，
         所以只取过一次的不算卡住（那多半只是点开看了一眼）。
         手动绑定<strong>绕过了验证码</strong>，而验证码本身就是「这个人在群里」的证明，
@@ -262,7 +262,7 @@ export function StalledBindQueue({ rows, canBind }: { rows: StalledRow[]; canBin
       {message && (
         <p
           role="status"
-          className={`t-subhead border-b border-[var(--hairline)] px-4 py-2 ${
+          className={`t-subhead border-b border-[var(--separator)] px-4 py-2 ${
             message.ok ? "text-[var(--success)]" : "text-[var(--danger)]"
           }`}
         >
@@ -277,7 +277,7 @@ export function StalledBindQueue({ rows, canBind }: { rows: StalledRow[]; canBin
       ) : (
         <ul>
           {rows.map((row) => (
-            <li key={row.ip} className="border-b border-[var(--hairline)] px-4 py-3 last:border-b-0">
+            <li key={row.ip} className="border-b border-[var(--separator)] px-4 py-3 last:border-b-0">
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <span className="t-body font-medium tabular-nums">取了 {row.codes} 次码</span>
                 <code className="t-caption font-mono tracking-wider text-[var(--ink-secondary)]">
@@ -286,7 +286,7 @@ export function StalledBindQueue({ rows, canBind }: { rows: StalledRow[]; canBin
                 <span
                   className={`t-caption2 rounded-full border px-1.5 ${
                     row.expired
-                      ? "border-[var(--hairline)] text-[var(--ink-tertiary)]"
+                      ? "border-[var(--separator)] text-[var(--ink-tertiary)]"
                       : "border-[var(--accent)] text-[var(--accent)]"
                   }`}
                 >
@@ -307,7 +307,7 @@ export function StalledBindQueue({ rows, canBind }: { rows: StalledRow[]; canBin
                           value={wxId}
                           onChange={(e) => setWxId(e.target.value)}
                           placeholder="wxid_..."
-                          className="mt-1 w-full rounded-lg border border-[var(--hairline)] bg-[var(--surface)] px-2 py-1.5 font-mono text-[14px] outline-none focus-visible:border-[var(--accent)]"
+                          className="mt-1 w-full rounded-lg border border-[var(--separator)] bg-[var(--surface)] px-2 py-1.5 font-mono text-[14px] outline-none focus-visible:border-[var(--accent)]"
                         />
                       </label>
                       <label className="t-caption mt-2 block text-[var(--ink-tertiary)]">
@@ -315,7 +315,7 @@ export function StalledBindQueue({ rows, canBind }: { rows: StalledRow[]; canBin
                         <input
                           value={reason}
                           onChange={(e) => setReason(e.target.value)}
-                          className="mt-1 w-full rounded-lg border border-[var(--hairline)] bg-[var(--surface)] px-2 py-1.5 text-[14px] outline-none focus-visible:border-[var(--accent)]"
+                          className="mt-1 w-full rounded-lg border border-[var(--separator)] bg-[var(--surface)] px-2 py-1.5 text-[14px] outline-none focus-visible:border-[var(--accent)]"
                         />
                       </label>
                       <div className="mt-2 flex flex-wrap gap-2">
@@ -331,7 +331,7 @@ export function StalledBindQueue({ rows, canBind }: { rows: StalledRow[]; canBin
                           type="button"
                           onClick={() => run(() => dismissBindAction({ bindCodeId: row.latestCodeId, reason }))}
                           disabled={pending}
-                          className="t-caption rounded-lg border border-[var(--hairline)] px-2.5 py-1 transition-colors hover:bg-[var(--surface-hover)]"
+                          className="t-caption rounded-lg border border-[var(--separator)] px-2.5 py-1 transition-colors hover:bg-[var(--fill)]"
                         >
                           作废这条
                         </button>
@@ -355,7 +355,7 @@ export function StalledBindQueue({ rows, canBind }: { rows: StalledRow[]; canBin
                       }}
                       disabled={row.expired}
                       title={row.expired ? "过期的码不能手动放行 —— 让他重新取一次" : undefined}
-                      className="t-caption rounded-md border border-[var(--hairline)] px-2 py-1 transition-colors hover:bg-[var(--surface-hover)] disabled:opacity-40"
+                      className="t-caption rounded-md border border-[var(--separator)] px-2 py-1 transition-colors hover:bg-[var(--fill)] disabled:opacity-40"
                     >
                       {row.expired ? "已过期，让他重新取码" : "处理"}
                     </button>

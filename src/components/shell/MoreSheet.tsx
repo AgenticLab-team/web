@@ -97,7 +97,7 @@ export function MoreSheet({
         className="m-0 max-h-[85dvh] w-full max-w-none rounded-t-[1.25rem] bg-[var(--surface)] p-0 backdrop:bg-black/40 sm:mx-auto sm:mb-auto sm:mt-[8vh] sm:max-w-[26rem] sm:rounded-[1.25rem]"
         style={{ marginTop: "auto" }}
       >
-        <div className="flex items-center justify-between border-b border-[var(--hairline)] px-4 py-3">
+        <div className="flex items-center justify-between border-b border-[var(--separator)] px-4 py-3">
           <h2 className="t-body font-semibold">{title}</h2>
           <button
             type="button"
@@ -130,7 +130,7 @@ export function MoreSheet({
                         onClick={close}
                         aria-current={active ? "page" : undefined}
                         className={`flex items-center gap-3 rounded-[var(--radius-control)] px-3 py-2.5 transition active:opacity-60 ${
-                          active ? "bg-[var(--surface-hover)]" : ""
+                          active ? "bg-[var(--fill)]" : ""
                         }`}
                       >
                         <NavIcon

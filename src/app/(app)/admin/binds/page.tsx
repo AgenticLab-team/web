@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { FriendRequestQueue, StalledBindQueue } from "@/components/admin/BindQueue";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Section } from "@/components/ui/primitives";
+import { PageNote, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import {
   currentAcceptBudget,
@@ -78,11 +78,11 @@ export default async function AdminBindsPage() {
         />
       </Section>
 
-      <p className="t-caption px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         绑定的主通道是<strong>在群里发验证码</strong> —— 机器人加好友已经触发过微信风控，
         那条路不再当第一步。这里通过好友申请是限速的（一天有上限、两次之间要隔开），
         限制在服务端，按钮上的提示只是提示。
-      </p>
+      </PageNote>
     </>
   );
 }

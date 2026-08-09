@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { ApprovalDecision, DangerousSettingRequest } from "@/components/admin/ApprovalActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Empty, Section } from "@/components/ui/primitives";
+import { Callout, Card, Empty, Section } from "@/components/ui/primitives";
 import { APPROVAL_HANDLERS_LOADED } from "@/lib/admin/approval-handlers";
 import {
   dangerousSettingOptions,
@@ -55,7 +55,7 @@ export default async function AdminApprovalsPage() {
         subtitle={pending === 0 ? "没有待处理的记录" : `${pending} 条待处理`}
       />
 
-      <div className="mb-4 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
+      <Callout>
         <p className="t-subhead leading-relaxed">
           改错会<strong>静默影响所有人</strong>的操作可以在这里留一步痕迹 ——
           先写下来再执行，自己批自己也行（不再强制第二个人）。
@@ -66,7 +66,7 @@ export default async function AdminApprovalsPage() {
           把每日积分上限设成 0，全站都拿不到分，而大家只会以为「今天没发分」。
           待批记录 24 小时后过期：一周后才执行的批准，当时的判断依据早就变了。
         </p>
-      </div>
+      </Callout>
 
       <Section title="发起">
         <DangerousSettingRequest options={options} />
@@ -78,10 +78,7 @@ export default async function AdminApprovalsPage() {
         ) : (
           <div className="space-y-3">
             {rows.map((row) => (
-              <article
-                key={row.id}
-                className="space-y-2.5 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline"
-              >
+              <Card as="article" key={row.id} className="space-y-2.5">
                 <header className="flex flex-wrap items-center gap-1.5">
                   <span className="t-body font-medium">{row.actionLabel}</span>
                   <span
@@ -124,7 +121,7 @@ export default async function AdminApprovalsPage() {
                     describe={row.describe}
                   />
                 )}
-              </article>
+              </Card>
             ))}
           </div>
         )}

@@ -207,9 +207,13 @@ describe("界面", () => {
   const page = src("app/(app)/forum/convert/page.tsx");
 
   it("**复用检索页那套搜索框**，不另起一份", () => {
+    /*
+     * 一开始这里是手拼的（自己摆图标和输入框），
+     * 后来收敛到 <SearchField> —— 同一个构件，检索页也在用。
+     * 手拼的那份和检索页的差一个内边距，两页并排看就能看出来。
+     */
     assert.match(page, /searchMessagesForConvert/);
-    assert.match(page, /name="q"/);
-    assert.match(page, /SearchIcon/);
+    assert.match(page, /<SearchField/);
   });
 
   it("搜索态下不显示翻天的控件 —— 两套导航同时在会让人不确定自己在看什么", () => {

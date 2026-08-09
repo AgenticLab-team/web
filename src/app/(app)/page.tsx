@@ -5,7 +5,7 @@ import { LeaderboardList } from "@/components/LeaderboardList";
 import { DigestCard } from "@/components/home/DigestCard";
 import { CheckinCard } from "@/components/points/CheckinCard";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Group, Row, Section, StatTile } from "@/components/ui/primitives";
+import { Empty, EmptyAction, Group, Row, Section, StatTile } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { messages, people } from "@/lib/db/schema";
@@ -93,7 +93,7 @@ export default async function HomePage() {
           user ? null : (
             <Link
               href="/login"
-              className="t-subhead shrink-0 rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] transition active:scale-[0.97]"
+              className="t-subhead shrink-0 rounded-[var(--radius-control)] bg-[var(--accent)] px-3.5 py-2 font-medium text-[var(--accent-ink)] transition active:scale-[0.97]"
             >
               登录
             </Link>
@@ -199,18 +199,11 @@ export default async function HomePage() {
 
           {!user && (
             <Section>
-              <div className="inset-group px-6 py-8 text-center">
-                <p className="t-callout mb-1.5">群聊内容与分群数据仅对成员开放</p>
-                <p className="t-footnote mx-auto max-w-xs leading-relaxed text-[var(--ink-secondary)]">
-                  登录后可以看到自己所在群的动态、检索历史消息，并参与社区讨论。
-                </p>
-                <Link
-                  href="/login"
-                  className="t-subhead mt-5 inline-flex rounded-[var(--radius-control)] bg-[var(--accent)] px-5 py-2.5 font-medium text-[var(--accent-ink)] transition active:scale-[0.98]"
-                >
-                  用微信身份登录
-                </Link>
-              </div>
+              <Empty
+                title="群聊内容与分群数据仅对成员开放"
+                hint="登录后可以看到自己所在群的动态、检索历史消息，并参与社区讨论。"
+                action={<EmptyAction href="/login">用微信身份登录</EmptyAction>}
+              />
             </Section>
           )}
         </aside>

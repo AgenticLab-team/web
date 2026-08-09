@@ -175,14 +175,14 @@ export default async function AdminRolesPage({
           <p className="t-caption mb-3 leading-relaxed text-[var(--ink-tertiary)]">
             预览是<strong>只读</strong>的：页面按他的视角渲染，按钮该出现就出现，
             但真去点的时候不会执行 —— 否则审计日志会把这笔记在他头上。
-            权限**只减不增**，他有你没有的那些不会生效，横幅里会告诉你少了哪几项。
+            权限<strong>只减不增</strong>，他有你没有的那些不会生效，横幅里会告诉你少了哪几项。
             30 分钟自动过期。
           </p>
 
           {params.preview_error && (
             <p
               role="alert"
-              className="t-subhead mb-3 rounded-lg border border-[#b91c1c]/40 bg-[#b91c1c]/8 px-3 py-2 text-[#b91c1c]"
+              className="t-subhead mb-3 rounded-[var(--radius-control)] border border-[var(--danger)]/40 bg-[var(--danger)]/8 px-3 py-2 text-[var(--danger)]"
             >
               {params.preview_error}
             </p>
@@ -192,17 +192,19 @@ export default async function AdminRolesPage({
             <>
               <form method="get" className="mb-3 flex gap-2" action="/admin/roles">
                 {params.category && <input type="hidden" name="category" value={params.category} />}
+                {/* --hairline / --surface-hover 是不存在的变量：边框会退回文字色，
+                    在一片 0.5px 发丝线里显得又粗又黑 —— 用真实的 token */}
                 <input
                   type="search"
                   name="as"
                   defaultValue={params.as ?? ""}
                   placeholder="搜微信号或昵称"
                   aria-label="搜索要预览的人"
-                  className="min-w-0 flex-1 rounded-lg border border-[var(--hairline)] bg-[var(--surface)] px-3 py-1.5 text-[14px] outline-none focus-visible:border-[var(--accent)]"
+                  className="t-subhead min-w-0 flex-1 rounded-[var(--radius-control)] border border-[var(--separator)] bg-[var(--surface)] px-3 py-1.5 outline-none focus-visible:border-[var(--accent)]"
                 />
                 <button
                   type="submit"
-                  className="shrink-0 rounded-lg border border-[var(--hairline)] px-3 py-1.5 text-[13px] transition-colors hover:bg-[var(--surface-hover)]"
+                  className="t-footnote shrink-0 rounded-[var(--radius-control)] border border-[var(--separator)] px-3 py-1.5 transition-colors hover:bg-[var(--fill)]"
                 >
                   搜索
                 </button>
@@ -212,7 +214,7 @@ export default async function AdminRolesPage({
                 <p className="t-caption px-1 text-[var(--ink-tertiary)]">没找到这个人。</p>
               )}
 
-              <ul className="divide-y divide-[var(--hairline)]">
+              <ul className="divide-y divide-[var(--separator)]">
                 {candidates.map((c) => (
                   <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
                     <span className="t-body min-w-0 flex-1 truncate">
@@ -224,7 +226,7 @@ export default async function AdminRolesPage({
                     {c.roleNames.map((r) => (
                       <span
                         key={r}
-                        className="t-caption shrink-0 rounded-full border border-[var(--hairline)] px-1.5 py-px text-[var(--ink-secondary)]"
+                        className="t-caption shrink-0 rounded-full border border-[var(--separator)] px-1.5 py-px text-[var(--ink-secondary)]"
                       >
                         {r}
                       </span>
@@ -236,7 +238,7 @@ export default async function AdminRolesPage({
                       <form action={startPreviewAction.bind(null, c.id)} className="shrink-0">
                         <button
                           type="submit"
-                          className="rounded-md border border-[#b91c1c] px-2.5 py-1 text-[13px] text-[#b91c1c] transition-colors hover:bg-[#b91c1c] hover:text-white"
+                          className="t-footnote rounded-[var(--radius-control)] border border-[var(--danger)] px-2.5 py-1 text-[var(--danger)] transition-colors hover:bg-[var(--danger)] hover:text-white"
                         >
                           以他的身份预览
                         </button>
@@ -275,7 +277,7 @@ export default async function AdminRolesPage({
               </thead>
               <tbody className="t-subhead">
                 {history.map((row) => (
-                  <tr key={row.id} className="border-t border-[var(--hairline)]">
+                  <tr key={row.id} className="border-t border-[var(--separator)]">
                     <td className="px-4 py-2">{row.viewerName}</td>
                     <td className="px-4 py-2">
                       {row.subjectName}
@@ -302,7 +304,7 @@ export default async function AdminRolesPage({
           )}
           <p className="t-caption px-4 py-2 leading-relaxed text-[var(--ink-tertiary)]">
             一个只读的功能，唯一的制衡就是事后看得见 —— 所以这张表不能省。
-            每一次进出也都在审计日志里，记的是**真人**，不是被预览的那个人。
+            每一次进出也都在审计日志里，记的是<strong>真人</strong>，不是被预览的那个人。
           </p>
         </div>
       </Section>

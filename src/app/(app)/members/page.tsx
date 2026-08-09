@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Empty, Pill, Section } from "@/components/ui/primitives";
+import { Card, Empty, PageNote, Pill, PillRow, Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { memberDirectory } from "@/lib/members/queries";
 import { isDirectoryHidden } from "@/lib/members/queries";
@@ -78,28 +78,28 @@ export default async function MembersPage({
       ) : (
         <>
           {dir.facets.length > 0 && (
-            <div className="-mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
-              <span className="shrink-0">
-                <Pill href="/members" active={!tag}>
-                  全部
-                </Pill>
-              </span>
+            <PillRow>
+              <Pill href="/members" active={!tag}>
+                全部
+              </Pill>
               {dir.facets.map((facet) => (
-                <span key={facet.slug} className="shrink-0">
-                  <Pill href={`/members?tag=${encodeURIComponent(facet.slug)}`} active={tag === facet.slug}>
-                    {facet.label}
-                    <span className="tabular ml-1 opacity-55">{facet.count}</span>
-                  </Pill>
-                </span>
+                <Pill
+                  key={facet.slug}
+                  href={`/members?tag=${encodeURIComponent(facet.slug)}`}
+                  active={tag === facet.slug}
+                >
+                  {facet.label}
+                  <span className="tabular ml-1 opacity-55">{facet.count}</span>
+                </Pill>
               ))}
-            </div>
+            </PillRow>
           )}
 
           {/* 目录的价值完全取决于有多少人填了标签 —— 说出来，顺便给个入口 */}
           {dir.untagged > 0 && !tag && (
             <Link
               href="/me/profile"
-              className="mb-3 flex items-center gap-2.5 rounded-[var(--radius-card)] bg-[var(--surface)] p-3.5 transition hairline active:opacity-70"
+              className="mb-3 flex items-center gap-2.5 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 transition hairline active:opacity-70"
             >
               <UserRoundSearch
                 className="h-4 w-4 shrink-0 text-[var(--accent)]"
@@ -125,10 +125,7 @@ export default async function MembersPage({
             ) : (
               <div className="space-y-2">
                 {dir.members.map((member) => (
-                  <article
-                    key={member.id}
-                    className="rounded-[var(--radius-card)] bg-[var(--surface)] p-3.5 hairline"
-                  >
+                  <Card as="article" key={member.id}>
                     <div className="flex gap-3">
                       <Avatar src={member.avatarUrl} paletteIndex={member.paletteIndex} name={member.name} size={40} />
 
@@ -191,7 +188,7 @@ export default async function MembersPage({
                         </p>
                       </div>
                     </div>
-                  </article>
+                  </Card>
                 ))}
               </div>
             )}
@@ -199,7 +196,7 @@ export default async function MembersPage({
         </>
       )}
 
-      <p className="t-caption flex gap-1.5 px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote className="flex gap-1.5">
         <EyeOff className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
         <span>
           目录只收录<strong>在站上注册过</strong>的人，而且只显示和你<strong>同群</strong>的 ——
@@ -210,7 +207,7 @@ export default async function MembersPage({
           </Link>
           里隐身。
         </span>
-      </p>
+      </PageNote>
     </>
   );
 }

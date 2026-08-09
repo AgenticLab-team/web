@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Reply } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -6,7 +6,14 @@ import { notFound } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { MessageText } from "@/components/messages/MessageText";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Empty, Pill } from "@/components/ui/primitives";
+import {
+  Callout,
+  Empty,
+  EmptyAction,
+  PageNote,
+  Pill,
+  PillRow,
+} from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { messagesOfDay } from "@/lib/forum/convert-source";
 import {
@@ -39,15 +46,10 @@ export default async function ArchivePage({
     return (
       <>
         <PageHeader title="按天回看" />
-        <div className="inset-group px-6 py-10 text-center">
-          <p className="t-callout text-[var(--ink-secondary)]">群聊记录仅对社群成员开放</p>
-          <Link
-            href="/login"
-            className="t-subhead mt-5 inline-flex rounded-[var(--radius-control)] bg-[var(--accent)] px-5 py-2.5 font-medium text-[var(--accent-ink)]"
-          >
-            登录
-          </Link>
-        </div>
+        <Empty
+          title="群聊记录仅对社群成员开放"
+          action={<EmptyAction href="/login">登录</EmptyAction>}
+        />
       </>
     );
   }
@@ -82,15 +84,13 @@ export default async function ArchivePage({
     <>
       <PageHeader title="按天回看" subtitle={`${groupName} · ${rows.length} 条`} />
 
-      <div className="-mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
+      <PillRow>
         {groups.map((g) => (
-          <span key={g.convId} className="shrink-0">
-            <Pill href={link(day, g.convId)} active={g.convId === convId}>
-              {g.name}
-            </Pill>
-          </span>
+          <Pill key={g.convId} href={link(day, g.convId)} active={g.convId === convId}>
+            {g.name}
+          </Pill>
         ))}
-      </div>
+      </PillRow>
 
       {/* 日期导航常驻顶部：翻天是这个页面的主操作，不该滚到底才找得到 */}
       <div className="chrome sticky top-12 z-10 mb-4 flex items-center justify-between gap-2 rounded-[var(--radius-control)] px-2 py-2">
@@ -118,16 +118,12 @@ export default async function ArchivePage({
 
       {/* 裁剪过的一天和冷清的一天长得一模一样 —— 必须说出来 */}
       {dropped > 0 && (
-        <p
-          className="t-caption mb-3 rounded-[var(--radius-card)] px-3.5 py-2.5 leading-relaxed hairline"
-          style={{
-            background: "color-mix(in srgb, var(--warning) 8%, var(--surface))",
-            color: "var(--ink-secondary)",
-          }}
-        >
-          这一天有 {dropped} 条正文已因存储裁剪被归档，不在下面的列表里 ——
-          归档文件在服务器上，需要时可以捞回来。
-        </p>
+        <Callout tone="warning">
+          <p className="t-caption leading-relaxed text-[var(--ink-secondary)]">
+            这一天有 {dropped} 条正文已因存储裁剪被归档，不在下面的列表里 ——
+            归档文件在服务器上，需要时可以捞回来。
+          </p>
+        </Callout>
       )}
 
       {rows.length === 0 ? (
@@ -165,10 +161,11 @@ export default async function ArchivePage({
                     {/* 引用目标解析不出时也要承认这是条回复 —— 上游暂不透传引用关系 */}
                     {message.type === "quote" && !replyTarget && (
                       <span
-                        className="t-caption2 text-[var(--ink-quaternary)]"
+                        className="t-caption2 flex items-center gap-0.5 text-[var(--ink-quaternary)]"
                         title="这是一条引用回复，但上游未提供被引用的消息"
                       >
-                        ↩ 回复
+                        <Reply className="h-3 w-3" strokeWidth={2} aria-hidden />
+                        回复
                       </span>
                     )}
                   </div>
@@ -200,13 +197,13 @@ export default async function ArchivePage({
         </div>
       )}
 
-      <p className="t-caption mt-4 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         只显示你所在的群。想把某段讨论留下来，去
         <Link href="/forum/convert" className="text-[var(--accent)]">
           {" "}整理成帖子
         </Link>
         。
-      </p>
+      </PageNote>
     </>
   );
 }

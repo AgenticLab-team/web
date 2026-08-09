@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Pagination } from "@/components/ui/Pagination";
-import { Empty, Pill } from "@/components/ui/primitives";
+import { Empty, PageNote, Pill, PillRow } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { auditActionFacets, queryAuditLogs } from "@/lib/admin/audit-query";
 
@@ -50,7 +50,7 @@ export default async function AuditPage({
     <>
       <PageHeader title="审计日志" subtitle={`${total} 条记录`} />
 
-      <div className="mb-3 flex flex-wrap gap-1.5">
+      <PillRow wrap>
         {[
           { value: undefined, label: "全部等级" },
           { value: "2", label: "危险及以上" },
@@ -77,23 +77,23 @@ export default async function AuditPage({
             {option.label}
           </Pill>
         ))}
-      </div>
+      </PillRow>
 
       {facets.length > 0 && (
-        <div className="-mx-4 mb-5 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
-          <span className="shrink-0">
-            <Pill href={href({ action: undefined })} active={!params.action}>
-              全部动作
-            </Pill>
-          </span>
+        <PillRow>
+          <Pill href={href({ action: undefined })} active={!params.action}>
+            全部动作
+          </Pill>
           {facets.slice(0, 12).map((facet) => (
-            <span key={facet.action} className="shrink-0">
-              <Pill href={href({ action: facet.action })} active={params.action === facet.action}>
-                {facet.label} {facet.count}
-              </Pill>
-            </span>
+            <Pill
+              key={facet.action}
+              href={href({ action: facet.action })}
+              active={params.action === facet.action}
+            >
+              {facet.label} {facet.count}
+            </Pill>
           ))}
-        </div>
+        </PillRow>
       )}
 
       {entries.length === 0 ? (
@@ -172,10 +172,10 @@ export default async function AuditPage({
         params={{ action: params.action, danger: params.danger, days: params.days }}
       />
 
-      <p className="t-caption mt-4 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         审计日志<strong className="font-medium">只增不改不删</strong>，
         系统里没有任何删除它的接口 —— 包括站长。
-      </p>
+      </PageNote>
     </>
   );
 }

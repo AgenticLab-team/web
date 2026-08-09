@@ -5,7 +5,7 @@ import { SyncControls } from "@/components/admin/SyncControls";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { TruncationNote } from "@/components/ui/Pagination";
-import { Empty, Section } from "@/components/ui/primitives";
+import { Callout, Card, Empty, PageNote, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import {
   cursors,
@@ -71,13 +71,7 @@ export default async function AdminGroupsPage() {
 
       {/* 结论先行：有问题的先说，没问题的一句话带过 */}
       {(stale.length > 0 || broken.length > 0) && (
-        <div
-          className="mb-4 rounded-[var(--radius-card)] p-4 hairline"
-          style={{ background: "color-mix(in srgb, var(--danger) 9%, var(--surface))" }}
-        >
-          <p className="t-subhead font-medium" style={{ color: "var(--danger)" }}>
-            数据可能没在进来
-          </p>
+        <Callout tone="danger" title="数据可能没在进来">
           <ul className="mt-1.5 space-y-0.5">
             {broken.map((s) => (
               <li key={s.kind} className="t-caption text-[var(--ink-secondary)]">
@@ -94,16 +88,13 @@ export default async function AdminGroupsPage() {
             先查 frp 隧道 —— 它是上游数据的唯一通道，断了之后本站的表现
             和「大家今天没说话」完全一样，不会有任何地方报错。
           </p>
-        </div>
+        </Callout>
       )}
 
       <Section title="同步任务">
         <div className="space-y-2">
           {sync.map((s) => (
-            <div
-              key={s.kind}
-              className="flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] bg-[var(--surface)] px-4 py-3 hairline"
-            >
+            <Card key={s.kind} className="flex flex-wrap items-center gap-2">
               <span
                 className="h-2 w-2 shrink-0 rounded-full"
                 style={{ background: VERDICT_COLORS[s.health.verdict] }}
@@ -123,7 +114,7 @@ export default async function AdminGroupsPage() {
                 {s.health.message}
               </span>
               <SyncControls kind={s.kind} />
-            </div>
+            </Card>
           ))}
         </div>
       </Section>
@@ -167,10 +158,7 @@ export default async function AdminGroupsPage() {
         ) : (
           <div className="space-y-2.5">
             {groups.map((group) => (
-              <article
-                key={group.convId}
-                className="rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline"
-              >
+              <Card as="article" key={group.convId}>
                 <header className="flex items-start gap-3">
                   <span
                     className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
@@ -221,7 +209,7 @@ export default async function AdminGroupsPage() {
 
                   <GroupConfig group={group} />
                 </header>
-              </article>
+              </Card>
             ))}
           </div>
         )}
@@ -246,18 +234,18 @@ export default async function AdminGroupsPage() {
           </div>
           <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
             游标记录每类同步拉到哪儿了。它明显落后于当前时间，说明某一轮没跑完 ——
-            而**游标一旦前移，跳过的那段消息不会自己补回来**，只能 resync 重建。
+            而<strong>游标一旦前移，跳过的那段消息不会自己补回来</strong>，只能 resync 重建。
           </p>
         </Section>
       )}
 
-      <p className="t-caption px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         是否同步由上游的 bound 驱动，不手工维护 ——
         手动打开一个上游没绑定的群，同步只会一直拉不到东西。
         管理员能改的只有「排除同步」，它是唯一能压过上游的开关。
-        手动触发只是**排队**，由后台同步进程取走：在 web 请求里直接跑的话，
+        手动触发只是<strong>排队</strong>，由后台同步进程取走：在 web 请求里直接跑的话，
         请求超时会把跑到一半的任务丢下，而游标已经动过了。
-      </p>
+      </PageNote>
     </>
   );
 }

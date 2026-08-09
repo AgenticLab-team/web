@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { relativeTime } from "@/components/forum/PostList";
 import { ShopGrid } from "@/components/shop/ShopGrid";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Section } from "@/components/ui/primitives";
+import { Callout, PageNote, Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { listItems, listOrders, ownedCounts, unusedMakeupCards , pinnablePosts } from "@/lib/shop/queries";
 
@@ -36,12 +36,11 @@ export default async function ShopPage() {
       />
 
       {cards > 0 && (
-        <div className="mb-4 rounded-[var(--radius-card)] bg-[var(--surface)] px-4 py-3 hairline">
-          <p className="t-subhead">你还有 {cards} 张补签卡没用</p>
+        <Callout title={`你还有 ${cards} 张补签卡没用`}>
           <p className="t-caption mt-0.5 text-[var(--ink-tertiary)]">
             断签的那天可以补回来 —— 连胜不会因为一次忘记就归零。
           </p>
-        </div>
+        </Callout>
       )}
 
       <Section>
@@ -85,11 +84,11 @@ export default async function ShopPage() {
         </Section>
       )}
 
-      <p className="t-caption px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         兑换会真正<strong>销毁</strong>这些积分，而不是转给谁 ——
         这是积分能一直代表点什么的原因。只发不收的话，一年后所有价格都要重定，
         而重定价格等于宣布之前攒的都不算数。
-      </p>
+      </PageNote>
     </>
   );
 }

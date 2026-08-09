@@ -5,7 +5,7 @@ import { Avatar } from "@/components/Avatar";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Pagination } from "@/components/ui/Pagination";
-import { Empty, Pill } from "@/components/ui/primitives";
+import { Empty, Pill, PillRow, SearchField } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { listUsers, userFacets } from "@/lib/admin/users";
 
@@ -59,15 +59,10 @@ export default async function AdminUsersPage({
       <form action="/admin/users" className="mb-4">
         {params.status && <input type="hidden" name="status" value={params.status} />}
         {params.role && <input type="hidden" name="role" value={params.role} />}
-        <input
-          name="q"
-          defaultValue={params.q}
-          placeholder="搜昵称、微信 ID、邮箱或账号 ID"
-          className="t-body w-full rounded-[var(--radius-card)] bg-[var(--surface)] px-4 py-3 outline-none hairline placeholder:text-[var(--ink-quaternary)]"
-        />
+        <SearchField defaultValue={params.q} placeholder="搜昵称、微信 ID、邮箱或账号 ID" />
       </form>
 
-      <div className="mb-2 flex flex-wrap gap-1.5">
+      <PillRow wrap>
         <Pill href={href({ status: undefined })} active={!params.status}>
           全部状态
         </Pill>
@@ -76,22 +71,18 @@ export default async function AdminUsersPage({
             {STATUS_LABEL[f.value] ?? f.value} {f.count}
           </Pill>
         ))}
-      </div>
+      </PillRow>
 
-      <div className="-mx-4 mb-5 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
-        <span className="shrink-0">
-          <Pill href={href({ role: undefined })} active={!params.role}>
-            全部身份
-          </Pill>
-        </span>
+      <PillRow>
+        <Pill href={href({ role: undefined })} active={!params.role}>
+          全部身份
+        </Pill>
         {facets.roles.map((f) => (
-          <span key={f.key} className="shrink-0">
-            <Pill href={href({ role: f.key })} active={params.role === f.key}>
-              {f.name} {f.count}
-            </Pill>
-          </span>
+          <Pill key={f.key} href={href({ role: f.key })} active={params.role === f.key}>
+            {f.name} {f.count}
+          </Pill>
         ))}
-      </div>
+      </PillRow>
 
       {rows.length === 0 ? (
         <Empty title="没有匹配的账号" hint="换个关键词或筛选条件" />

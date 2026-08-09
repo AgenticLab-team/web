@@ -1,11 +1,11 @@
-import { ChevronLeft, PenLine } from "lucide-react";
+import { PenLine } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { PostList } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Pill, Section } from "@/components/ui/primitives";
+import { BackLink, Pill, PillRow, Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
 import { getBoardByKey, listBoards, listPosts } from "@/lib/forum/queries";
@@ -50,13 +50,7 @@ export default async function BoardPage({
 
   return (
     <>
-      <Link
-        href="/forum"
-        className="t-subhead -ml-1 mt-6 inline-flex items-center gap-0.5 text-[var(--accent)] transition active:opacity-60"
-      >
-        <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
-        论坛
-      </Link>
+      <BackLink href="/forum">论坛</BackLink>
 
       <PageHeader
         title={board.name}
@@ -74,7 +68,7 @@ export default async function BoardPage({
         }
       />
 
-      <div className="mb-5 flex flex-wrap gap-1.5">
+      <PillRow wrap>
         {SORTS.map((s) => (
           <Pill
             key={s.key}
@@ -84,7 +78,7 @@ export default async function BoardPage({
             {s.label}
           </Pill>
         ))}
-      </div>
+      </PillRow>
 
       <Section>
         <PostList posts={posts} />

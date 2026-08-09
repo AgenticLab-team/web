@@ -1,11 +1,10 @@
 import { AlertTriangle, BellOff, CheckCircle2, XCircle } from "lucide-react";
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
 
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { TruncationNote } from "@/components/ui/Pagination";
-import { Empty, Group, Row, Section } from "@/components/ui/primitives";
+import { Callout, Card, Empty, Group, Row, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { systemStatus } from "@/lib/admin/dashboard";
 import { alertCount, listAlerts } from "@/lib/alerts/dispatch";
@@ -52,11 +51,12 @@ export default async function AdminHealthPage() {
 
       {/* 探测本身停了比某个组件挂了更危险 —— 后者会告警，前者悄无声息 */}
       {probeStale && (
-        <Callout tone="danger" icon={<XCircle className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />}>
-          <p className="t-subhead font-medium">
-            健康探测已经 {Math.round((status.staleSeconds ?? 0) / 60)} 分钟没跑了
-          </p>
-          <p className="t-caption mt-1 leading-relaxed">
+        <Callout
+          tone="danger"
+          icon={<XCircle className="h-4 w-4" strokeWidth={2} aria-hidden />}
+          title={`健康探测已经 ${Math.round((status.staleSeconds ?? 0) / 60)} 分钟没跑了`}
+        >
+          <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">
             这一页上的所有「正常」都不可信 —— 它们只是最后一次探测留下的结果。
             先去服务器上看 <code className="font-mono">agenticlab-health.timer</code> 还活着没有。
           </p>
@@ -64,15 +64,18 @@ export default async function AdminHealthPage() {
       )}
 
       {undelivered.length > 0 && (
-        <Callout tone="warning" icon={<BellOff className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />}>
-          <p className="t-subhead font-medium">{undelivered.length} 条告警没能送达</p>
-          <p className="t-caption mt-1 leading-relaxed">
+        <Callout
+          tone="warning"
+          icon={<BellOff className="h-4 w-4" strokeWidth={2} aria-hidden />}
+          title={`${undelivered.length} 条告警没能送达`}
+        >
+          <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">
             告警已经记下来了，但<strong>没有任何人收到过它</strong>。
             没收到消息不代表没出事 —— 这一页是唯一还看得到它们的地方。
           </p>
           <ul className="mt-2 space-y-1">
             {undelivered.map((a) => (
-              <li key={a.id} className="t-caption">
+              <li key={a.id} className="t-caption text-[var(--ink-secondary)]">
                 {a.componentLabel}：{a.notifyError}
               </li>
             ))}
@@ -86,9 +89,9 @@ export default async function AdminHealthPage() {
         ) : (
           <div className="space-y-2">
             {firing.map((a) => (
-              <article
+              <Card
+                as="article"
                 key={a.id}
-                className="rounded-[var(--radius-card)] bg-[var(--surface)] p-3.5 hairline"
                 style={{
                   borderLeft: `3px solid ${a.severity === "critical" ? "var(--danger)" : "var(--warning)"}`,
                 }}
@@ -113,13 +116,16 @@ export default async function AdminHealthPage() {
                     ? ` · 已通知（${relativeTime(a.notifiedAt)}）`
                     : " · 尚未送达任何人"}
                 </p>
-              </article>
+              </Card>
             ))}
           </div>
         )}
       </Section>
 
       <Section title="组件">
+        {status.components.length === 0 ? (
+          <Empty title="还没有探测记录" hint="定时任务可能还没跑过 —— 查 agenticlab-health.timer" />
+        ) : (
         <Group>
           {status.components.map((c) => {
             const alertKey = alertComponentFor(c.component);
@@ -159,12 +165,8 @@ export default async function AdminHealthPage() {
               </Row>
             );
           })}
-          {status.components.length === 0 && (
-            <Row>
-              <span className="t-subhead text-[var(--ink-secondary)]">还没有探测记录</span>
-            </Row>
-          )}
         </Group>
+        )}
         <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
           <strong>frp 隧道</strong>和<strong>上游接口</strong>在告警上算同一件事 ——
           它们是同一次探测的两种失败归因。隧道一断，上游接口那一行就不再更新，
@@ -223,28 +225,5 @@ export default async function AdminHealthPage() {
         <TruncationNote shown={alerts.length} total={alertsTotal} noun="条告警" />
       </Section>
     </>
-  );
-}
-
-function Callout({
-  tone,
-  icon,
-  children,
-}: {
-  tone: "danger" | "warning";
-  icon: ReactNode;
-  children: ReactNode;
-}) {
-  const color = tone === "danger" ? "var(--danger)" : "var(--warning)";
-  return (
-    <div
-      className="mb-4 flex gap-2.5 rounded-[var(--radius-card)] p-4 hairline"
-      style={{ background: `color-mix(in srgb, ${color} 9%, var(--surface))`, color }}
-    >
-      <span className="mt-0.5">{icon}</span>
-      <div className="min-w-0 flex-1 text-[var(--ink-secondary)]">
-        <div style={{ color }}>{children}</div>
-      </div>
-    </div>
   );
 }

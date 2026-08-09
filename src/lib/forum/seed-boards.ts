@@ -58,6 +58,30 @@ export const DEFAULT_BOARDS: BoardSeed[] = [
     maxVisibility: "public",
   },
   {
+    /*
+     * 反馈与报错。
+     *
+     * 站长的原话：「就是引导用户遇到 bug 来到某一个板块发言」——
+     * 明确不要工单系统。
+     *
+     * 版块比工单好的地方恰恰在于**公开**：
+     * 别人报过的问题你看得见，于是不会再报一遍；
+     * 而工单系统里每个人都在自己的隔间里，同一个 bug 会被报二十次，
+     * 处理的人也没法一次回答所有人。
+     *
+     * 所以 visibleTo 是 public：没登录的人也能看到已知问题。
+     * 但发帖仍然要登录 —— 一个公开可写的板块两天就会被灌满。
+     */
+    key: "feedback",
+    name: "反馈与报错",
+    description: "站点坏了、用着别扭、想要什么功能，都发这里。先翻一下有没有人报过",
+    icon: "bug",
+    sort: 35,
+    visibleTo: "public",
+    defaultVisibility: "public",
+    maxVisibility: "public",
+  },
+  {
     key: "inside",
     name: "内部事务",
     description: "社群运营与内部讨论，登录成员可见",

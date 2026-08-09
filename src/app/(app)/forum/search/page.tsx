@@ -1,9 +1,8 @@
-import { ChevronLeft, MessageSquare, Search as SearchIcon } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Empty, Group, Row } from "@/components/ui/primitives";
+import { BackLink, Empty, Group, PageNote, Row, SearchField } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
 import { searchForum } from "@/lib/forum/search";
@@ -24,27 +23,16 @@ export default async function ForumSearchPage({
 
   return (
     <>
-      <Link
-        href="/forum"
-        className="t-subhead -ml-1 mt-6 inline-flex items-center gap-0.5 text-[var(--accent)] transition active:opacity-60"
-      >
-        <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
-        论坛
-      </Link>
+      <BackLink href="/forum">论坛</BackLink>
 
       <PageHeader title="搜索" subtitle={query ? `“${query}” · ${hits.length} 条结果` : undefined} />
 
       <form action="/forum/search" className="mb-6">
-        <div className="flex items-center gap-2 rounded-[var(--radius-card)] bg-[var(--surface)] px-4 py-3 hairline">
-          <SearchIcon className="h-4 w-4 shrink-0 text-[var(--ink-tertiary)]" strokeWidth={2} aria-hidden />
-          <input
-            name="q"
-            defaultValue={query}
-            placeholder="搜标题与正文，支持中文两字词"
-            autoFocus={!query}
-            className="t-body w-full bg-transparent outline-none placeholder:text-[var(--ink-quaternary)]"
-          />
-        </div>
+        <SearchField
+          defaultValue={query}
+          placeholder="搜标题与正文，支持中文两字词"
+          autoFocus={!query}
+        />
       </form>
 
       {!query ? (
@@ -76,9 +64,9 @@ export default async function ForumSearchPage({
         </Group>
       )}
 
-      <p className="t-caption mt-4 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         搜索结果按可见性过滤 —— 你看不到的内容不会出现在这里，连标题也不会。
-      </p>
+      </PageNote>
     </>
   );
 }

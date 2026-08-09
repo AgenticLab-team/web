@@ -41,6 +41,15 @@ export async function PreviewBanner() {
       {/* 等高占位：横幅是 fixed 的，不留空档会盖住第一屏内容 */}
       <div className="h-[var(--preview-banner-h,3.25rem)]" aria-hidden />
 
+      {/*
+        * 这里的红是**写死的**，不走 --danger，这是刻意的。
+        *
+        * 暗色主题下 --danger 是柔化过的 #ff7a6b —— 一条浅珊瑚色的
+        * 全幅横幅读起来像装饰，而这条横幅的全部作用是让人
+        * **没法忽略**「我现在是别人的视角」。跟着主题走就等于放弃了那个作用。
+        *
+        * 两种主题下都是白字压深红，对比度都够。
+        */}
       <div
         role="status"
         aria-live="polite"

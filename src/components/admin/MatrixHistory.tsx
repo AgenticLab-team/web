@@ -86,7 +86,7 @@ export function MatrixHistory({
       {done && (
         <p
           role="status"
-          className="t-subhead border-b border-[var(--hairline)] px-4 py-2 text-[var(--success)]"
+          className="t-subhead border-b border-[var(--separator)] px-4 py-2 text-[var(--success)]"
         >
           已回滚 —— {done}。这次回滚本身也进了历史。
         </p>
@@ -94,14 +94,14 @@ export function MatrixHistory({
 
       <ul>
         {rows.map((row) => (
-          <li key={row.id} className="border-b border-[var(--hairline)] last:border-b-0">
+          <li key={row.id} className="border-b border-[var(--separator)] last:border-b-0">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-4 py-2.5">
               <span className="t-subhead">{row.takenByName}</span>
               <span className="t-caption text-[var(--ink-tertiary)]">
                 改了 {row.changeCount} 格 · {row.changeSummary}
               </span>
               {row.isRollback && (
-                <span className="t-caption2 rounded-full border border-[var(--hairline)] px-1.5 text-[var(--ink-tertiary)]">
+                <span className="t-caption2 rounded-full border border-[var(--separator)] px-1.5 text-[var(--ink-tertiary)]">
                   回滚
                 </span>
               )}
@@ -119,7 +119,7 @@ export function MatrixHistory({
                 <button
                   type="button"
                   onClick={() => (openId === row.id ? setOpenId(null) : open(row.id))}
-                  className="t-caption shrink-0 rounded-md border border-[var(--hairline)] px-2 py-0.5 transition-colors hover:bg-[var(--surface-hover)]"
+                  className="t-caption shrink-0 rounded-md border border-[var(--separator)] px-2 py-0.5 transition-colors hover:bg-[var(--fill)]"
                   aria-expanded={openId === row.id}
                 >
                   {openId === row.id ? "收起" : "回到这次之前"}
@@ -130,7 +130,7 @@ export function MatrixHistory({
             <p className="t-caption px-4 pb-2 text-[var(--ink-tertiary)]">{row.reason}</p>
 
             {openId === row.id && (
-              <div className="border-t border-[var(--hairline)] bg-[var(--surface-sunken)] px-4 py-3">
+              <div className="border-t border-[var(--separator)] bg-[var(--surface-sunken)] px-4 py-3">
                 {pending && !diff && (
                   <p className="t-caption text-[var(--ink-tertiary)]">算着会变成什么样…</p>
                 )}
@@ -194,7 +194,7 @@ export function MatrixHistory({
                         value={reason}
                         onChange={(e) => setReason(e.target.value)}
                         rows={2}
-                        className="mt-1 w-full rounded-lg border border-[var(--hairline)] bg-[var(--surface)] px-2 py-1.5 text-[14px] outline-none focus-visible:border-[var(--accent)]"
+                        className="mt-1 w-full rounded-lg border border-[var(--separator)] bg-[var(--surface)] px-2 py-1.5 text-[14px] outline-none focus-visible:border-[var(--accent)]"
                       />
                     </label>
 

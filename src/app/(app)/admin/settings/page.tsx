@@ -4,7 +4,7 @@ import { SettingItem } from "@/components/admin/SettingRow";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { TruncationNote } from "@/components/ui/Pagination";
-import { Section } from "@/components/ui/primitives";
+import { PageNote, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { listSettings, modifiedCount, settingHistoryCount, settingHistoryOf } from "@/lib/admin/settings";
 import { passkeyLockoutRisk } from "@/lib/auth/passkey-enforcement";
@@ -82,10 +82,10 @@ export default async function AdminSettingsPage() {
             */}
           {category.category === "auth" && (
             <div
-              className={`mt-2 rounded-lg border px-3 py-2 ${
+              className={`mt-2 rounded-[var(--radius-control)] border px-3 py-2 ${
                 passkeyRisk.active
-                  ? "border-[#b91c1c]/40 bg-[#b91c1c]/8 text-[#b91c1c]"
-                  : "border-[var(--hairline)] text-[var(--ink-tertiary)]"
+                  ? "border-[var(--danger)]/40 bg-[var(--danger)]/8 text-[var(--danger)]"
+                  : "border-[var(--separator)] text-[var(--ink-tertiary)]"
               }`}
             >
               <p className="t-caption leading-relaxed">
@@ -97,12 +97,12 @@ export default async function AdminSettingsPage() {
         </Section>
       ))}
 
-      <p className="t-caption px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         写入侧会校验类型与上下限 —— 读取侧遇到非法值虽然会退回代码默认值，
         但那会造成<strong>后台显示的和实际生效的不是一回事</strong>：
         把上限填成 6O（字母 O）会保存成功、页面显示 6O，而系统一直在用 60，
         没有任何地方报错。所以拒绝发生在保存的那一刻。
-      </p>
+      </PageNote>
     </>
   );
 }

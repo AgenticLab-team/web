@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { relativeTime } from "@/components/forum/PostList";
 import { MarkAllRead } from "@/components/forum/MarkAllRead";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Empty, Group, Pill } from "@/components/ui/primitives";
+import { Empty, Group, Pill, PillRow } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { listNotifications, notificationCounts } from "@/lib/forum/notify";
 import { FILTER_LABELS, parseFilter, type NotificationFilter } from "@/lib/notifications/prefs";
@@ -61,18 +61,20 @@ export default async function NotificationsPage({
       />
 
       {/* 页签上带条数：空页签要能提前看出来，而不是点进去才发现 */}
-      <div className="-mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
+      <PillRow>
         {(Object.keys(FILTER_LABELS) as NotificationFilter[]).map((key) => (
-          <span key={key} className="shrink-0">
-            <Pill href={key === "all" ? "/notifications" : `/notifications?f=${key}`} active={key === filter}>
-              {FILTER_LABELS[key]}
-              {counts[key] > 0 && (
-                <span className="tabular ml-1 opacity-55">{counts[key]}</span>
-              )}
-            </Pill>
-          </span>
+          <Pill
+            key={key}
+            href={key === "all" ? "/notifications" : `/notifications?f=${key}`}
+            active={key === filter}
+          >
+            {FILTER_LABELS[key]}
+            {counts[key] > 0 && (
+              <span className="tabular ml-1 opacity-55">{counts[key]}</span>
+            )}
+          </Pill>
         ))}
-      </div>
+      </PillRow>
 
       {items.length === 0 ? (
         <Empty

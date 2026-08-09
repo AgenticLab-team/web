@@ -5,7 +5,7 @@ import { BoardEditor } from "@/components/admin/BoardEditor";
 import { BoardModerators } from "@/components/admin/BoardModerators";
 import { TagManager } from "@/components/admin/TagManager";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Empty, Section } from "@/components/ui/primitives";
+import { Callout, Card, Empty, Section } from "@/components/ui/primitives";
 import { VISIBILITY_OPTIONS, visibilityLabel } from "@/lib/admin/board-rules";
 import { capImpact, listBoardsForAdmin, listTagsForAdmin, orphanTags } from "@/lib/admin/boards";
 import { requireAdmin } from "@/lib/admin/guard";
@@ -43,20 +43,14 @@ export default async function AdminBoardsPage() {
       />
 
       {drifted.length > 0 && (
-        <div
-          className="mb-4 rounded-[var(--radius-card)] p-4 hairline"
-          style={{ background: "color-mix(in srgb, var(--warning) 9%, var(--surface))" }}
-        >
-          <p className="t-subhead font-medium" style={{ color: "var(--warning)" }}>
-            {drifted.length} 个版块的缓存计数与真实帖子数不一致
-          </p>
+        <Callout tone="warning" title={`${drifted.length} 个版块的缓存计数与真实帖子数不一致`}>
           <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">
             {drifted.map((b) => `${b.name} ${b.cachedCount}→${b.livePosts}`).join("、")}。
             在服务器上跑 <code className="font-mono">npm run recount-boards</code> 修正。
             这个数漂过一次，表现是「群聊沉淀」实际有帖子却显示 0 ——
             0 被当成了「确实没有」。
           </p>
-        </div>
+        </Callout>
       )}
 
       <Section title="版块">
@@ -65,10 +59,7 @@ export default async function AdminBoardsPage() {
         ) : (
           <div className="space-y-2.5">
             {boards.map((board) => (
-              <article
-                key={board.id}
-                className="rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline"
-              >
+              <Card as="article" key={board.id}>
                 <header className="flex items-start gap-3">
                   {board.icon ? (
                     <span className="text-[22px] leading-none">{board.icon}</span>
@@ -120,13 +111,13 @@ export default async function AdminBoardsPage() {
                     candidates={moderatorCandidates(board.id)}
                   />
                 )}
-              </article>
+              </Card>
             ))}
           </div>
         )}
         <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
           版块标识（key）建好之后不能改 —— 它在 URL 里，改了等于把所有旧链接作废。
-          可见性上限是**封顶**：帖子想公开但版块只允许到「
+          可见性上限是<strong>封顶</strong>：帖子想公开但版块只允许到「
           {VISIBILITY_OPTIONS.find((o) => o.key === "member")?.label}」时，结果就是后者。
         </p>
       </Section>

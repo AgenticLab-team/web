@@ -5,7 +5,7 @@ import { WordList } from "@/components/admin/WordList";
 import { WordTester } from "@/components/admin/WordTester";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Pagination } from "@/components/ui/Pagination";
-import { Section } from "@/components/ui/primitives";
+import { Callout, PageNote, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { db } from "@/lib/db";
 import { sensitiveWords } from "@/lib/db/schema";
@@ -65,7 +65,7 @@ export default async function AdminWordsPage({
         subtitle={total === 0 ? "词库是空的" : `${total} 条 · ${blocking} 条拦截`}
       />
 
-      <div className="mb-4 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
+      <Callout>
         <p className="t-subhead leading-relaxed">
           子串匹配<strong>必然误伤</strong> —— 一个两字的词能在无数正常表达里出现。
         </p>
@@ -74,22 +74,16 @@ export default async function AdminWordsPage({
           拦截则是对方的内容直接没了，而他往往不知道为什么，也没处说理。
           真的要拦，先用下面的预览器拿几段真实聊天记录试一遍。
         </p>
-      </div>
+      </Callout>
 
       {suspicious.length > 0 && (
-        <div
-          className="mb-4 rounded-[var(--radius-card)] p-4 hairline"
-          style={{ background: "color-mix(in srgb, var(--warning) 9%, var(--surface))" }}
-        >
-          <p className="t-subhead font-medium" style={{ color: "var(--warning)" }}>
-            {suspicious.length} 条规则命中次数异常高
-          </p>
+        <Callout tone="warning" title={`${suspicious.length} 条规则命中次数异常高`}>
           <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">
             {suspicious.map((w) => `${w.word}（${w.hitCount} 次）`).join("、")}。
-            命中特别多**大概率是误伤**，不是这条规则很有用 ——
+            命中特别多<strong>大概率是误伤</strong>，不是这条规则很有用 ——
             真正的违规内容不会天天出现几十次。建议拿这个词去预览器里试试。
           </p>
-        </div>
+        </Callout>
       )}
 
       <Section title="预览">
@@ -110,12 +104,12 @@ export default async function AdminWordsPage({
         <Pagination slice={slice} total={total} noun="条" basePath="/admin/words" />
       </Section>
 
-      <p className="t-caption px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         匹配前会先归一化：去掉空白与标点、全角转半角、统一小写 ——
         否则加个空格或换成全角就绕过去了。
         发帖、编辑、回复三条路都会过这道闸；只查发帖的话，
         先发一篇干净的再编辑把词加进去就绕过了。
-      </p>
+      </PageNote>
     </>
   );
 }

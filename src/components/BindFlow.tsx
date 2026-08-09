@@ -232,7 +232,7 @@ export function BindFlow({ next }: { next?: string } = {}) {
           {code.split("").map((digit, i) => (
             <span
               key={i}
-              className="flex h-14 w-11 items-center justify-center rounded-[var(--radius-control)] bg-[var(--color-surface)] text-[28px] font-semibold shadow-[var(--shadow-hairline)]"
+              className="flex h-14 w-11 items-center justify-center rounded-[var(--radius-control)] bg-[var(--color-surface)] text-[28px] font-semibold hairline"
             >
               {digit}
             </span>
@@ -262,7 +262,7 @@ export function BindFlow({ next }: { next?: string } = {}) {
         <button
           type="button"
           onClick={() => void copy(`${groupPrefix} ${code}`, "group")}
-          className="tabular flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--color-surface)] px-4 py-4 text-[19px] font-medium shadow-[var(--shadow-hairline)] transition active:scale-[0.98]"
+          className="tabular flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--color-surface)] px-4 py-4 text-[19px] font-medium hairline transition active:scale-[0.98]"
         >
           <span>
             {groupPrefix} {code}
@@ -293,7 +293,7 @@ export function BindFlow({ next }: { next?: string } = {}) {
             <button
               type="button"
               onClick={() => void copy(code, "code")}
-              className="tabular flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--color-surface)] px-4 py-3 text-[19px] font-medium shadow-[var(--shadow-hairline)] transition active:scale-[0.98]"
+              className="tabular flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--color-surface)] px-4 py-3 text-[19px] font-medium hairline transition active:scale-[0.98]"
             >
               <span>{code}</span>
               <span className="text-[13px] font-normal text-[var(--color-ink-tertiary)]">

@@ -1,12 +1,10 @@
-import { ChevronLeft } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AppealForm } from "@/components/forum/AppealForm";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Empty, Group } from "@/components/ui/primitives";
+import { BackLink, Empty, Group, PageNote } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
 import { myModerationRecord } from "@/lib/forum/appeals-queries";
 
@@ -41,13 +39,7 @@ export default async function MyModerationPage() {
 
   return (
     <>
-      <Link
-        href="/me"
-        className="t-subhead -ml-1 mt-6 inline-flex items-center gap-0.5 text-[var(--accent)] transition active:opacity-60"
-      >
-        <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
-        我的
-      </Link>
+      <BackLink href="/me">我的</BackLink>
 
       <PageHeader title="处罚与申诉" />
 
@@ -94,10 +86,10 @@ export default async function MyModerationPage() {
         </Group>
       )}
 
-      <p className="t-caption mt-3 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+      <PageNote>
         每一条处罚都会写明理由，你也随时可以申诉。
         觉得判错了就说出来 —— 申诉会由另一位管理员处理。
-      </p>
+      </PageNote>
     </>
   );
 }

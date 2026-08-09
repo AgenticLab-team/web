@@ -36,7 +36,7 @@ export function PageHeader({
   return (
     <>
       <div
-        className={`chrome fixed inset-x-0 top-0 z-20 flex h-12 items-center justify-center px-4 transition-opacity duration-200 lg:left-[var(--sidebar-width)] ${
+        className={`chrome fixed inset-x-0 top-0 z-20 flex h-12 items-center justify-center px-4 transition-opacity lg:left-[var(--sidebar-width)] ${
           collapsed ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
         style={collapsed ? { boxShadow: "inset 0 -0.5px 0 var(--separator)" } : undefined}
