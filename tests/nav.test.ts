@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import {
@@ -112,6 +113,32 @@ describe("导航可见性", () => {
     const keys = sections.flatMap((s) => s.items.map((i) => i.key));
     for (const forbidden of ["search", "me", "admin"]) {
       assert.ok(!keys.includes(forbidden), `访客不该看到 ${forbidden}`);
+    }
+  });
+});
+
+describe("前台导航的图标", () => {
+  it("**每个入口声明的图标都要在 ICONS 里注册**", () => {
+    /*
+     * 没注册的图标会静默回退，导航里出现两个一模一样的图标 ——
+     * 不报错、不崩，只是谁也说不清哪个是哪个。
+     * 后台导航已经有同样的断言，前台之前漏了，
+     * 而漏的那次就真的漏进去一个（shop 的 gift）。
+     */
+    const source = readFileSync(
+      new URL("../src/components/shell/icons.tsx", import.meta.url),
+      "utf8",
+    );
+    const registered = new Set(
+      [...source.matchAll(/^\s+"?([a-z-]+)"?:\s+[A-Z]\w+,$/gm)].map((m) => m[1]),
+    );
+
+    for (const item of ALL_NAV_ITEMS) {
+      if (!item.icon) continue;
+      assert.ok(
+        registered.has(item.icon),
+        `${item.key} 用的图标 ${item.icon} 没在 icons.tsx 里注册，会静默回退`,
+      );
     }
   });
 });

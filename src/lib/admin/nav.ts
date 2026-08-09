@@ -165,6 +165,15 @@ export const ADMIN_NAV: AdminNavSection[] = [
         ready: true,
       },
       {
+        key: "shop",
+        href: "/admin/shop",
+        label: "商店与订单",
+        icon: "shopping-bag",
+        permission: "shop.manage",
+        description: "积分的主要回收口",
+        ready: true,
+      },
+      {
         key: "broadcast",
         href: "/admin/broadcast",
         label: "公告与群发",

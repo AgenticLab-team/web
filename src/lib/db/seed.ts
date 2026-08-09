@@ -14,6 +14,7 @@ import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { BUILTIN_ROLES, resolveRolePermissions } from "@/lib/rbac/roles";
 import { seedBoards } from "@/lib/forum/seed-boards";
 import { seedTitles } from "@/lib/titles/seed-titles";
+import { seedShopItems } from "@/lib/shop/seed-items";
 import { DEFAULT_FLAGS, DEFAULT_SETTINGS } from "@/lib/settings/defaults";
 
 export interface SeedReport {
@@ -24,6 +25,7 @@ export interface SeedReport {
   flags: number;
   boards: number;
   titles: number;
+  shopItems: number;
 }
 
 /**
@@ -39,6 +41,7 @@ export function seedDatabase(): SeedReport {
     flags: 0,
     boards: 0,
     titles: 0,
+    shopItems: 0,
   };
 
   db.transaction((tx) => {
@@ -159,6 +162,7 @@ export function seedDatabase(): SeedReport {
 
   report.boards = seedBoards();
   report.titles = seedTitles();
+  report.shopItems = seedShopItems();
 
   return report;
 }

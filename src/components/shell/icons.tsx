@@ -3,6 +3,7 @@
 import {
   Bell,
   Calendar,
+  Gift,
   Home,
   Link as LinkIcon,
   MessagesSquare,
@@ -30,6 +31,7 @@ const ICONS: Record<string, LucideIcon> = {
   link: LinkIcon,
   "user-round": UserRound,
   shield: Shield,
+  gift: Gift,
 };
 
 export function NavIcon({
