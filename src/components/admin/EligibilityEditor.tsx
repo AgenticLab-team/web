@@ -104,6 +104,7 @@ export function EligibilityEditor({
 
           <input
             type="number"
+            aria-label="门槛数值"
             value={c.value}
             onChange={(e) => push(conditions.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))}
             className={`tabular w-24 ${inputClass}`}

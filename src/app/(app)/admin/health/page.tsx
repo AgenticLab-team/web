@@ -50,7 +50,7 @@ export default async function AdminHealthPage() {
 
       {/* 探测本身停了比某个组件挂了更危险 —— 后者会告警，前者悄无声息 */}
       {probeStale && (
-        <Callout tone="danger" icon={<XCircle className="h-4 w-4 shrink-0" strokeWidth={2} />}>
+        <Callout tone="danger" icon={<XCircle className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />}>
           <p className="t-subhead font-medium">
             健康探测已经 {Math.round((status.staleSeconds ?? 0) / 60)} 分钟没跑了
           </p>
@@ -62,7 +62,7 @@ export default async function AdminHealthPage() {
       )}
 
       {undelivered.length > 0 && (
-        <Callout tone="warning" icon={<BellOff className="h-4 w-4 shrink-0" strokeWidth={2} />}>
+        <Callout tone="warning" icon={<BellOff className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />}>
           <p className="t-subhead font-medium">{undelivered.length} 条告警没能送达</p>
           <p className="t-caption mt-1 leading-relaxed">
             告警已经记下来了，但<strong>没有任何人收到过它</strong>。

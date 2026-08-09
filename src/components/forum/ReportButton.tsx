@@ -48,7 +48,7 @@ export function ReportButton({
         onClick={() => setOpen(true)}
         aria-label="举报"
         title="举报"
-        className="rounded-[0.5rem] p-2 text-[var(--ink-quaternary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--danger)]"
+        className="tap-target rounded-[0.5rem] p-2 text-[var(--ink-quaternary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--danger)]"
       >
         <Flag className="h-4 w-4" strokeWidth={1.9} aria-hidden />
       </button>

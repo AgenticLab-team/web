@@ -89,7 +89,7 @@ export function SkillEditor({ initial }: { initial: { slug: string; label: strin
               aria-label={`删除 ${tag.label}`}
               disabled={pending}
               onClick={() => commit(tags.filter((t) => t.slug !== tag.slug))}
-              className="rounded-full p-0.5 transition active:opacity-50"
+              className="tap-target rounded-full p-0.5 transition active:opacity-50"
             >
               <X className="h-3 w-3" strokeWidth={2.6} aria-hidden />
             </button>

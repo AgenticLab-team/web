@@ -88,7 +88,7 @@ export function PollWidget({ poll, canVote }: { poll: PollView; canVote: boolean
                   }`}
                   aria-hidden
                 >
-                  {checked && <Check className="h-2.5 w-2.5" strokeWidth={3.5} />}
+                  {checked && <Check className="h-2.5 w-2.5" strokeWidth={3.5} aria-hidden />}
                 </span>
 
                 <span className="t-subhead min-w-0 flex-1">{option.text}</span>

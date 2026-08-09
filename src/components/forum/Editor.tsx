@@ -197,7 +197,7 @@ export function Editor({
             title={tool.label}
             aria-label={tool.label}
             onClick={() => runTool(tool.action)}
-            className="rounded-[0.375rem] p-1.5 text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--ink)]"
+            className="tap-target rounded-[0.375rem] p-1.5 text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--ink)]"
           >
             <tool.icon className="h-4 w-4" strokeWidth={1.9} aria-hidden />
           </button>

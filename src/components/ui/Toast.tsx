@@ -145,7 +145,7 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
         type="button"
         onClick={onDismiss}
         aria-label="关闭"
-        className="shrink-0 rounded-full p-1 opacity-50 transition hover:opacity-100"
+        className="tap-target shrink-0 rounded-full p-1 opacity-50 transition hover:opacity-100"
       >
         <X className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
       </button>

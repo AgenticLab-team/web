@@ -52,6 +52,7 @@ export function BountyBadge({
         <span className="flex items-center gap-1.5">
           <input
             type="number"
+            aria-label="悬赏积分"
             min={1}
             max={balance}
             value={value}

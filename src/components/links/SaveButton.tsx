@@ -37,7 +37,7 @@ export function SaveButton({ linkId, initial }: { linkId: string; initial: boole
           }
         });
       }}
-      className="shrink-0 self-start rounded-full p-1.5 transition active:opacity-50 disabled:opacity-45"
+      className="tap-target shrink-0 self-start rounded-full p-1.5 transition active:opacity-50 disabled:opacity-45"
       style={{ color: error ? "var(--danger)" : saved ? "var(--accent)" : "var(--ink-quaternary)" }}
     >
       <Bookmark

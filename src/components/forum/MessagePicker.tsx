@@ -129,7 +129,7 @@ export function MessagePicker({
                 }`}
                 aria-hidden
               >
-                {active && <Check className="h-3 w-3" strokeWidth={3} />}
+                {active && <Check className="h-3 w-3" strokeWidth={3} aria-hidden />}
               </span>
             </button>
           );

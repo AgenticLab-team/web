@@ -223,7 +223,7 @@ export function RadarManager({ initial }: { initial: RadarSub[] }) {
                   aria-label={sub.enabled ? "暂停" : "恢复"}
                   disabled={pending}
                   onClick={() => flip(sub.id)}
-                  className="shrink-0 rounded-full p-1.5 text-[var(--ink-tertiary)] transition active:opacity-50"
+                  className="tap-target shrink-0 rounded-full p-1.5 text-[var(--ink-tertiary)] transition active:opacity-50"
                 >
                   {sub.enabled ? (
                     <Pause className="h-4 w-4" strokeWidth={2} aria-hidden />
@@ -244,7 +244,7 @@ export function RadarManager({ initial }: { initial: RadarSub[] }) {
                       } else setError(result.error ?? "删除失败");
                     });
                   }}
-                  className="shrink-0 rounded-full p-1.5 text-[var(--ink-quaternary)] transition active:opacity-50"
+                  className="tap-target shrink-0 rounded-full p-1.5 text-[var(--ink-quaternary)] transition active:opacity-50"
                 >
                   <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
                 </button>

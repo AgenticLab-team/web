@@ -278,6 +278,32 @@ body {
   }
 }
 
+/* ── 触控区 ───────────────────────────────────────────── */
+/*
+ * 图标按钮的**可点范围**扩到 44×44，视觉尺寸不变。
+ *
+ * 一个 28px 的删除按钮在设计稿上很克制，在手机上是每三次点中两次 ——
+ * 而点不中的人不会来报 bug，他只会觉得这个站有点难用。
+ * 用伪元素撑开而不是改 padding：改 padding 会把周围的排版顶开，
+ * 于是这件事就永远排不上优先级。
+ */
+.tap-target {
+  position: relative;
+}
+.tap-target::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+}
+/* 指针设备上不需要 —— 鼠标本来就点得准，扩大反而会挡住旁边的元素 */
+@media (pointer: fine) {
+  .tap-target::after { display: none; }
+}
+
 /* ── 无障碍 ───────────────────────────────────────────── */
 /* 视觉隐藏但屏幕阅读器可读。不能用 display:none —— 那样读屏也读不到 */
 .sr-only {
