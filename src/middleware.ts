@@ -55,6 +55,7 @@ export const config = {
     "/radar/:path*",
     "/shop/:path*",
     "/search/:path*",
+    "/archive/:path*",
     "/forum/new",
     "/forum/convert",
     "/onboarding",

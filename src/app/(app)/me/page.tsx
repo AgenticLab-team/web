@@ -417,10 +417,24 @@ export default async function MePage() {
               aria-hidden
             />
           </Row>
-          <Row>
-            <span className="t-body flex-1">微信 ID</span>
-            <span className="t-footnote font-mono text-[var(--ink-tertiary)]">{wxId}</span>
-          </Row>
+          {/*
+            * ⚠ 只给本人看。
+            *
+            * 这一页取当前用户走的是 getCurrentUser()，而它在预览态下返回的是
+            * **被预览的那个人** —— 也就是说管理员「以他的视角看看」的时候，
+            * 这一行会把他的微信 ID 摆出来。拿着微信 ID 就能在微信里直接加人，
+            * 而这个站的其他地方为了不泄露它，专门绕了一条
+            * /members/by/<账号 id> 的中转（见 lib/members/queries.ts）。
+            *
+            * 判据用 isSelf（realUser 和 user 是同一个人），
+            * 和这一页上 GitHub 提示那一段同一条线。
+            */}
+          {isSelf && (
+            <Row>
+              <span className="t-body flex-1">微信 ID</span>
+              <span className="t-footnote font-mono text-[var(--ink-tertiary)]">{wxId}</span>
+            </Row>
+          )}
         </Group>
         {passkeyCount === 0 && (
           <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">

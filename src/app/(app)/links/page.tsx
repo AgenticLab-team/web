@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { relativeTime } from "@/components/forum/PostList";
 import { SaveButton } from "@/components/links/SaveButton";
 import { VoteButton } from "@/components/links/VoteButton";
+import { ChatTabs } from "@/components/shell/ChatTabs";
 import { PageHeader } from "@/components/shell/PageHeader";
 import {
   Card,
@@ -75,6 +76,8 @@ export default async function LinksPage({
             : `${result.total} 条 · 来自你所在的群`
         }
       />
+
+      <ChatTabs current="links" />
 
       {result.total === 0 ? (
         <Empty

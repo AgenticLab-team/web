@@ -4,6 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { RadarManager } from "@/components/radar/RadarManager";
+import { ChatTabs } from "@/components/shell/ChatTabs";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, Section } from "@/components/ui/primitives";
 import { requireFeature } from "@/lib/flags/server";
@@ -44,6 +45,8 @@ export default async function RadarPage() {
             : `${subs.length} 个词 · 累计命中 ${subs.reduce((n, s) => n + s.totalHits, 0)} 次`
         }
       />
+
+      <ChatTabs current="radar" />
 
       {groups.length === 0 ? (
         <Card>

@@ -1,10 +1,11 @@
-import { Archive, Sparkles, User } from "lucide-react";
+import { Sparkles, User } from "lucide-react";
 import { requireFeature } from "@/lib/flags/server";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { MessageHitList } from "@/components/search/MessageHitList";
 import { SemanticHits, SemanticNotice } from "@/components/search/SemanticHits";
+import { ChatTabs } from "@/components/shell/ChatTabs";
 import { PageHeader } from "@/components/shell/PageHeader";
 import {
   Empty,
@@ -19,7 +20,6 @@ import { getCurrentUser, type CurrentUser } from "@/lib/auth/session";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { myMessageCount, searchMessages } from "@/lib/search/messages";
 import { semanticSearch } from "@/lib/search/semantic";
-import { todayKey } from "@/lib/time";
 import { env } from "@/lib/env";
 
 export const metadata: Metadata = { title: "检索" };
@@ -92,6 +92,8 @@ export default async function SearchPage({
         }
       />
 
+      <ChatTabs current="search" />
+
       <form action="/search" className="mb-4">
         {params.group && <input type="hidden" name="group" value={params.group} />}
         {onlyMine && <input type="hidden" name="mine" value="1" />}
@@ -141,12 +143,11 @@ export default async function SearchPage({
             只搜我说过的
           </span>
         </Pill>
-        <Pill href={`/archive?date=${todayKey()}`} active={false}>
-          <span className="flex items-center gap-1">
-            <Archive className="h-3 w-3" strokeWidth={2.2} aria-hidden />
-            按天回看
-          </span>
-        </Pill>
+        {/*
+          * 原来这里还有一颗「按天回看」——
+          * 它是当初按天回看根本不在导航里时留的一条小路。
+          * 现在它和检索同属「群聊」，在页顶那一排里，这里就是重复了。
+          */}
       </PillRow>
 
       {result.noAccess ? (

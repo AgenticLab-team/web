@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
 
+import { eq } from "drizzle-orm";
+
 /**
  * 成员目录的隐私边界。
  *
@@ -27,6 +29,8 @@ type Queries = typeof import("@/lib/members/queries");
 let dbm: DbModule;
 let schema: typeof import("@/lib/db/schema");
 let q: Queries;
+let settingsStore: typeof import("@/lib/settings/store");
+let permCache: typeof import("@/lib/rbac/can");
 
 before(async () => {
   dbm = await import("@/lib/db");
@@ -34,6 +38,8 @@ before(async () => {
   const { migrate } = await import("drizzle-orm/better-sqlite3/migrator");
   migrate(dbm.db, { migrationsFolder: "./drizzle" });
   q = await import("@/lib/members/queries");
+  settingsStore = await import("@/lib/settings/store");
+  permCache = await import("@/lib/rbac/can");
 });
 
 after(() => rmSync(tmp, { recursive: true, force: true }));
@@ -43,11 +49,25 @@ beforeEach(() => {
     schema.userSkills,
     schema.groupMembers,
     schema.groups,
+    schema.userPrivacy,
+    schema.userRoles,
+    schema.rolePermissions,
+    schema.roles,
     schema.people,
     schema.users,
+    /*
+     * settings 也要清。
+     *
+     * 「模块关掉时不能伪装成空目录」那条会往 settings 里写一行
+     * module.directory.enabled=false —— 不清的话它会渗给**它后面
+     * 所有的用例**，而那些用例失败时的表现是「目录里一个人都没有」，
+     * 看起来像查询写错了。这种串味的排查成本远高于多删一张表。
+     */
+    schema.settings,
   ]) {
     dbm.db.delete(table).run();
   }
+  settingsStore.invalidateSettingsCache();
 });
 
 /** 造一个注册用户 */
@@ -332,5 +352,257 @@ describe("模块关掉时不能伪装成「目录是空的」", () => {
 
     // 标签数据本身没被删 —— 打开就回来
     assert.equal(dbm.db.select().from(schema.userSkills).all().length, 1);
+  });
+});
+
+/* ───────────────────────────────────────────────────────────────
+ * 目录要答得上问题，而不只是一列人名
+ *
+ * 站长的原话是「成员那个模块也不太优雅 就是单纯一个列表」。
+ * 一列按名字排的名单，四个问题一个都答不了：
+ * 谁会做 X / 谁和我在同一个群 / 谁最近还在 / 这个人是谁。
+ *
+ * 加的每一样都是**新的暴露面**，所以下面那组隐私断言和这组是一起写的 ——
+ * 每加一个能按人找到内容的入口，就得回来问一遍
+ * 「这个人关掉了开关的话，这里会不会漏」。
+ * ─────────────────────────────────────────────────────────────── */
+
+const DAY = 24 * 60 * 60 * 1000;
+
+/** 造一个在群里说过话的注册用户，顺便给个「最后说话时间」 */
+function seenAt(wxId: string, name: string, lastSeen: number) {
+  dbm.db
+    .insert(schema.people)
+    .values({ wxId, displayName: name, lastSeen })
+    .onConflictDoUpdate({ target: schema.people.wxId, set: { lastSeen } })
+    .run();
+}
+
+describe("搜人：matchesQuery 终于接上了", () => {
+  /*
+   * 这个函数早就写好、也早就被 tests/member-tags.test.ts 测过了，
+   * 但**没有任何页面调用它** —— 目录上一直只有标签筛选。
+   * 而标签筛选只答得了「谁会做 X」，且要够多人填了才成立。
+   */
+  beforeEach(() => {
+    group("g1");
+    user("me", "我");
+    user("zhang", "张三", {});
+    user("li", "李四", {});
+    joinGroup("g1", "wx_me");
+    joinGroup("g1", "wx_zhang");
+    joinGroup("g1", "wx_li");
+    skill("zhang", "rag", "RAG");
+    dbm.db.update(schema.users).set({ bio: "在做检索增强" }).where(eq(schema.users.id, "li")).run();
+  });
+
+  it("按名字搜得到", () => {
+    const dir = q.memberDirectory(viewer("me"), { q: "张三" });
+    assert.deepEqual(dir.members.map((m) => m.name), ["张三"]);
+  });
+
+  it("按技能标签也搜得到，而且**和点标签是同一套归一化**", () => {
+    /*
+     * 搜「RAG」和点标签「rag」必须找到同一批人。
+     * 两个入口各有各的脾气的话，用户会以为目录里根本没这个人。
+     */
+    const byQuery = q.memberDirectory(viewer("me"), { q: "RAG" }).members.map((m) => m.name);
+    const byTag = q.memberDirectory(viewer("me"), { tag: "rag" }).members.map((m) => m.name);
+    assert.deepEqual(byQuery, ["张三"]);
+    assert.deepEqual(byQuery, byTag);
+  });
+
+  it("简介里的字也搜得到 —— 没填标签的人不该完全找不到", () => {
+    assert.deepEqual(
+      q.memberDirectory(viewer("me"), { q: "检索" }).members.map((m) => m.name),
+      ["李四"],
+    );
+  });
+
+  it("**搜不到时，total 仍然是收录总数** —— 那句「共几人」不该跟着搜索跳", () => {
+    /*
+     * total 说的是「这个目录里有几个人」，matched 说的是「这次筛出来几个」。
+     * 混成一个数的话，搜了个不存在的名字，页面会显示「还没有可见的成员」——
+     * 而那是一句假话。
+     */
+    const dir = q.memberDirectory(viewer("me"), { q: "根本没有这个人" });
+    assert.equal(dir.total, 3);
+    assert.equal(dir.matched, 0);
+    assert.equal(dir.members.length, 0);
+  });
+
+  it("空搜索等于没搜", () => {
+    assert.equal(q.memberDirectory(viewer("me"), { q: "   " }).matched, 3);
+  });
+});
+
+describe("排序：三种排法对应三个问题", () => {
+  beforeEach(() => {
+    group("g1");
+    group("g2");
+    user("me", "我");
+    user("near", "同两个群的");
+    user("far", "只同一个群的");
+    for (const wx of ["wx_me", "wx_near", "wx_far"]) joinGroup("g1", wx);
+    joinGroup("g2", "wx_me");
+    joinGroup("g2", "wx_near");
+  });
+
+  it("**共同群最多的排前面** —— 搭话成本最低的那个人", () => {
+    const dir = q.memberDirectory(viewer("me"), { sort: "shared" });
+    const shared = new Map(dir.members.map((m) => [m.name, m.sharedGroups]));
+    assert.equal(shared.get("同两个群的"), 2);
+    assert.equal(shared.get("只同一个群的"), 1);
+
+    const names = dir.members.map((m) => m.name);
+    assert.ok(
+      names.indexOf("同两个群的") < names.indexOf("只同一个群的"),
+      `排出来是 ${names.join("、")}`,
+    );
+  });
+
+  it("**最近活跃的排前面**，而且分得出「本周」和「本月」", () => {
+    const now = Date.UTC(2026, 7, 9);
+    seenAt("wx_near", "同两个群的", now - 2 * DAY);
+    seenAt("wx_far", "只同一个群的", now - 20 * DAY);
+
+    const dir = q.memberDirectory(viewer("me"), { sort: "active", now });
+    const byName = new Map(dir.members.map((m) => [m.name, m.activity]));
+    assert.equal(byName.get("同两个群的"), "week");
+    assert.equal(byName.get("只同一个群的"), "month");
+    assert.equal(dir.members[0].name, "同两个群的");
+  });
+
+  it("**只到「本月」为止，不给时间点**", () => {
+    /*
+     * lib/privacy/rules.ts 删掉 hide_activity_hours 时写明了理由：
+     * 那个开关守的是**作息**，而作息是逐小时的直方图才暴露得出来的。
+     * 粗到「本周活跃过」这一档，说的是「这个人还在」，不是他几点睡。
+     *
+     * 所以结构里只能有 week / month / null，不能有时间戳。
+     */
+    const now = Date.UTC(2026, 7, 9);
+    seenAt("wx_near", "同两个群的", now - 2 * DAY);
+    const dir = q.memberDirectory(viewer("me"), { sort: "active", now });
+    for (const m of dir.members) {
+      assert.ok([null, "week", "month"].includes(m.activity));
+    }
+    assert.doesNotMatch(JSON.stringify(dir.members), /lastSeen|last_seen/);
+  });
+
+  it("很久没说话的人不显示活跃，但**人还在目录里**", () => {
+    const now = Date.UTC(2026, 7, 9);
+    seenAt("wx_far", "只同一个群的", now - 200 * DAY);
+    const dir = q.memberDirectory(viewer("me"), { now });
+    const far = dir.members.find((m) => m.name === "只同一个群的")!;
+    assert.equal(far.activity, null);
+    assert.ok(far, "半年没说话就从目录里消失了 —— 那是隐身开关的事，不是活跃度的事");
+  });
+
+  it("同分时按名字兜底 —— 不兜的话每次刷新顺序都不一样", () => {
+    const a = q.memberDirectory(viewer("me"), { sort: "active" }).members.map((m) => m.name);
+    const b = q.memberDirectory(viewer("me"), { sort: "active" }).members.map((m) => m.name);
+    assert.deepEqual(a, b);
+  });
+
+  it("排序参数是敌对输入 —— 认不得的一律回默认", () => {
+    for (const bad of ["", "points", "../../etc", "__proto__", undefined]) {
+      assert.equal(q.resolveSort(bad), "tags", `${JSON.stringify(bad)} 不该被放行`);
+    }
+  });
+});
+
+describe("⑤ 目录里的贡献数字也要过榜单开关", () => {
+  /*
+   * ─────────────────────────────────────────
+   * 一张没叫自己榜单的榜
+   * ─────────────────────────────────────────
+   *
+   * 「出现在榜单上」这个开关承诺的是「别人看到的榜单里没有你」。
+   * 而成员目录一直在显示积分、还按积分排序 —— 那就是另一张榜，
+   * 只是换了个名字，而且它从来没查过这个开关。
+   *
+   * 一个只在其中一处生效的隐私开关，比没有开关更坏：
+   * 它让人以为自己藏起来了。
+   */
+  beforeEach(() => {
+    for (const t of [schema.userPrivacy, schema.userRoles, schema.rolePermissions, schema.roles]) {
+      dbm.db.delete(t).run();
+    }
+    dbm.db
+      .insert(schema.roles)
+      .values([{ id: "r_mod", key: "moderator", name: "版主" }])
+      .run();
+    dbm.db
+      .insert(schema.rolePermissions)
+      .values([{ roleId: "r_mod", permissionKey: "moderation.queue" }])
+      .run();
+    /*
+     * 角色→权限的映射在 can() 里是**进程级缓存**的。
+     * 每个用例都重灌了这两张表，不清缓存的话 can() 读到的还是上一轮的，
+     * 而表现是「豁免莫名其妙不生效」——  和权限本身写错长得一模一样。
+     */
+    permCache.invalidatePermissionCache();
+
+    group("g1");
+    user("me", "我");
+    user("shy", "不想上榜的", { points: 999 });
+    joinGroup("g1", "wx_me");
+    joinGroup("g1", "wx_shy");
+    dbm.db
+      .insert(schema.userPrivacy)
+      .values({ userId: "shy", hideFromLeaderboard: true })
+      .run();
+  });
+
+  it("**关掉之后别人看不到他的积分**", () => {
+    const shy = q.memberDirectory(viewer("me")).members.find((m) => m.name === "不想上榜的")!;
+    assert.equal(shy.points, null, "榜单开关关了，目录里照样把积分摆出来");
+  });
+
+  it("**活跃度也一起藏** —— 新加的展示要过同一道开关", () => {
+    const now = Date.UTC(2026, 7, 9);
+    seenAt("wx_shy", "不想上榜的", now - DAY);
+    const shy = q
+      .memberDirectory(viewer("me"), { now })
+      .members.find((m) => m.name === "不想上榜的")!;
+    assert.equal(shy.activity, null);
+  });
+
+  it("**但人还在目录里** —— 藏数字和隐身是两个开关，各管各的", () => {
+    /*
+     * 这条很要紧：把两个开关搅在一起的话，一个只是不想上榜的人
+     * 会发现自己整个从通讯录里消失了，而他从来没要求过这个。
+     */
+    const names = q.memberDirectory(viewer("me")).members.map((m) => m.name);
+    assert.ok(names.includes("不想上榜的"));
+  });
+
+  it("**他自己还看得到自己的数字** —— 否则这个开关无法自证", () => {
+    /*
+     * 和隐身那条同一个道理：看不到任何变化的话，用户只能靠相信，
+     * 而只能靠相信的隐私开关跟没有是一样的。
+     */
+    const me = q.memberDirectory(viewer("shy")).members.find((m) => m.isMe)!;
+    assert.equal(me.points, 999);
+  });
+
+  it("处理举报的人看得到完整数字 —— 和榜单那边同一条豁免", () => {
+    dbm.db.insert(schema.userRoles).values({ userId: "me", roleId: "r_mod" }).run();
+    const shy = q
+      .memberDirectory({ id: "me", wxId: "wx_me", status: "active", kind: "member" } as never)
+      .members.find((m) => m.name === "不想上榜的")!;
+    assert.equal(shy.points, 999);
+  });
+
+  it("按积分排序时，藏了积分的人不会被顶到最前面", () => {
+    /*
+     * 默认排序的次级键是积分。藏起来的人按 0 算 ——
+     * 按 null 直接参与减法的话结果是 NaN，排序会变成一个随机顺序，
+     * 而随机顺序在页面上看起来完全正常。
+     */
+    const names = q.memberDirectory(viewer("me")).members.map((m) => m.name);
+    assert.equal(names.length, 2);
+    assert.ok(names.includes("不想上榜的"));
   });
 });

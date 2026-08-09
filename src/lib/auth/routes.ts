@@ -23,6 +23,15 @@ export const PROTECTED_PREFIXES = [
   "/radar",
   "/shop",
   "/search",
+  /*
+   * 按天回看跟着「群聊」这个入口一起拦下来。
+   *
+   * 它的正文本来就 100% 靠 visibleGroupsFor 收口 —— 访客能拿到的
+   * 只有一个「仅对社群成员开放」的空壳。既然给访客的是空壳，
+   * 就按这个文件开头那条规矩办：拦在中间件里，而不是让他先看到
+   * 一次地址栏、标题和加载过程。
+   */
+  "/archive",
   "/forum/new",
   "/forum/convert",
   "/onboarding",

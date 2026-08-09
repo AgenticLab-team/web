@@ -13,6 +13,7 @@ import {
   pickSource,
   unfollowIsDelete,
 } from "@/lib/forum/follow-rules";
+import { tabBarItems } from "@/lib/nav";
 
 /**
  * 关注作者 / 版块 / 标签。
@@ -190,11 +191,48 @@ describe("界面", () => {
     assert.match(page, /const canFollowThem = Boolean\(account\)/);
   });
 
-  it("入口进了 NAV —— 手机「更多」和桌面侧栏是同一份", () => {
+  /*
+   * ─────────────────────────────────────────
+   * 「我关注的」并进了「我的」
+   * ─────────────────────────────────────────
+   *
+   * 这一条原来断言的是 nav.ts 里有 `key: "following"`。它当初存在的理由
+   * （写在 bookmarks/drafts 那两条同款断言旁边）是：
+   * **「新功能只在电脑端侧栏加入口」是这个站反复犯的错**，
+   * 所以要求入口必须进 NAV —— 因为 NAV 是两端唯一的真源。
+   *
+   * 现在它不再是一个独立的导航项，而是「我的」页面上的一行。
+   * 那条理由**没有被绕过**：「我的」本身在 NAV 里、而且在 tab 栏里，
+   * 手机和电脑打开的是同一个页面、同一行。
+   *
+   * 所以这里断言的东西换成三件，比原来那条更严：
+   *   ① 它真的从导航里撤了（否则「合并」只是嘴上说说，侧栏照样十几行）
+   *   ② 「我的」页面上确实有这一行（不然就是删掉了，不是合并）
+   *   ③ 「我的」还在 tab 栏里（否则合并进去等于藏起来）
+   */
+  it("入口并进了「我的」—— 手机和电脑打开的是同一页同一行", () => {
     const nav = src("lib/nav.ts");
-    assert.match(nav, /key: "following"/);
-    assert.match(nav, /href: "\/me\/following"/);
-    assert.match(src("components/shell/icons.tsx"), /"user-plus": UserPlus,/);
+    assert.doesNotMatch(nav, /key: "following"/, "还在导航里单列着，没有并进「我的」");
+
+    assert.match(src("app/(app)/me/page.tsx"), /href="\/me\/following"/, "「我的」页上没有这一行");
+
+    const inTabBar = tabBarItems(() => true).map((i) => i.key);
+    assert.ok(inTabBar.includes("me"), "「我的」不在 tab 栏里，关注就等于在手机上被藏起来了");
+  });
+
+  it("**旧地址不能死** —— 通知和历史链接都指着 /me/following", () => {
+    /*
+     * 关注列表从导航里撤下来了，但页面必须留着：
+     * 站内通知、别人转发过的链接、浏览器历史里都存着这个地址，
+     * 而一个 404 在用户那边读起来是「这个功能没了」。
+     */
+    const page = readFileSync(
+      new URL("../src/app/(app)/me/following/page.tsx", import.meta.url),
+      "utf8",
+    );
+    assert.match(page, /export default async function/);
+    // 撤下导航之后，返回键是回到「我的」唯一的路
+    assert.match(page, /<BackLink href="\/me">/);
   });
 
   it("已经没了的关注也留着能删，不悄悄滤掉", () => {

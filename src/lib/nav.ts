@@ -15,8 +15,31 @@ export interface NavItem {
   permission?: PermissionKey;
   /** 需要登录才显示。访客看到自己用不了的入口只会点进去撞空状态 */
   requiresAuth?: boolean;
-  /** 出现在移动端底部 Tab Bar 里（最多 5 个，超了就装不下） */
+  /**
+   * 一级入口：桌面侧栏直接列出来，不收进「更多」。
+   *
+   * ─────────────────────────────────────────
+   * 判据是「多久点一次」，不是「重不重要」
+   * ─────────────────────────────────────────
+   *
+   * 后台设置很重要，榜单很好看，但没有人每天进去 ——
+   * 而一级导航的成本是**它一直占着那一行**，让每天要点的那几个
+   * 更难找。所以这里只放「每天都会点」的：首页、论坛、群聊、通知、我的。
+   *
+   * 其余的全部进「更多」，用减法算（见 sidebarMoreSections）——
+   * 新页面默认收进去，不会因为有人忘了删而慢慢把侧栏堆满。
+   */
+  primary?: boolean;
+  /** 出现在移动端底部 Tab Bar 里（最多 4 个，第 5 格留给「更多」） */
   inTabBar?: boolean;
+  /**
+   * 除 href 外，还有哪些路径前缀算「在这一项里」。
+   *
+   * 「群聊」是一个入口下面四个视图（回看、检索、链接、雷达），
+   * 它们各自有独立的 URL。没有这一条的话，从回看点到检索，
+   * 侧栏上那一项就灭了 —— 人会以为自己离开了这个板块。
+   */
+  alsoMatches?: string[];
   /** 尚未实现的入口先不显示，但保留定义，免得漏掉 */
   ready?: boolean;
   /**
@@ -35,35 +58,27 @@ export interface NavSection {
   items: NavItem[];
 }
 
+/**
+ * ─────────────────────────────────────────
+ * 「群聊」是一个入口，不是四个
+ * ─────────────────────────────────────────
+ *
+ * 按天回看、检索、资源库、关键词雷达，做的是同一件事的四个切面：
+ * **把群里说过的话再找出来**。它们在数据上也确实是同一条流的衍生 ——
+ * links / keyword_hits / message_windows 都是同步时从 messages 派生的。
+ *
+ * 之前这四个是：检索在一级、资源库和雷达在「社区」里、
+ * 而按天回看**根本不在导航里** —— 它是站里数据最多的一页
+ * （四万多条消息），却只能从搜索结果和通知里撞进去。
+ *
+ * 现在合成一个「群聊」，四个视图在页内用一排标签切换。
+ * 落点是按天回看：它不受任何开关管，永远打得开。
+ */
 export const NAV: NavSection[] = [
   {
     key: "main",
     items: [
-      { key: "home", href: "/", label: "首页", icon: "home", inTabBar: true, ready: true },
-      {
-        key: "leaderboard",
-        href: "/leaderboard",
-        label: "排行",
-        icon: "trophy",
-        // 全站总榜对所有人开放 —— 贡献排名是荣誉。
-        // 分群榜单在页面内部按可见性收口，不靠隐藏入口来保护
-        //
-        // 不占 tab 栏的格子：榜单是「偶尔看一眼」的东西，
-        // 而 tab 栏的 5 个格子要留给每天都点的。它在「更多」里。
-        ready: true,
-      },
-      {
-        key: "search",
-        flag: "message_search",
-        href: "/search",
-        label: "检索",
-        icon: "search",
-        // 只有社群成员有可搜范围，访客搜出来必然为空
-        permission: "group.messages.read",
-        requiresAuth: true,
-        inTabBar: true,
-        ready: true,
-      },
+      { key: "home", href: "/", label: "首页", icon: "home", primary: true, inTabBar: true, ready: true },
       {
         key: "forum",
         flag: "forum",
@@ -71,6 +86,47 @@ export const NAV: NavSection[] = [
         label: "论坛",
         icon: "messages-square",
         // 公开版块对访客开放，具体帖子的可见性在查询层收口
+        primary: true,
+        inTabBar: true,
+        ready: true,
+      },
+      {
+        key: "chat",
+        href: "/archive",
+        label: "群聊",
+        icon: "message-circle",
+        // 只有社群成员有可看范围，访客进来只会撞一个空页面
+        permission: "group.messages.read",
+        requiresAuth: true,
+        primary: true,
+        inTabBar: true,
+        // 检索 / 资源库 / 雷达 是同一个入口下的三个视图
+        alsoMatches: ["/search", "/links", "/radar"],
+        ready: true,
+      },
+      {
+        key: "notifications",
+        href: "/notifications",
+        label: "通知",
+        icon: "bell",
+        requiresAuth: true,
+        /*
+         * 一级，但不占 tab 栏的格子。
+         *
+         * 手机上它在「更多」里，而「更多」会把里面所有条目的未读数
+         * 加起来显示成一个红点（见 TabBar）—— 红点不会因为它被收进去而失联。
+         * 桌面侧栏空间够，直接列出来，角标就在那一行上。
+         */
+        primary: true,
+        ready: true,
+      },
+      {
+        key: "me",
+        href: "/me",
+        label: "我的",
+        icon: "user-round",
+        requiresAuth: true,
+        primary: true,
         inTabBar: true,
         ready: true,
       },
@@ -80,31 +136,25 @@ export const NAV: NavSection[] = [
     key: "community",
     label: "社区",
     items: [
+      { key: "members", href: "/members", label: "成员", icon: "users", requiresAuth: true, ready: true },
+      {
+        key: "leaderboard",
+        href: "/leaderboard",
+        label: "排行",
+        icon: "trophy",
+        // 全站总榜对所有人开放 —— 贡献排名是荣誉。
+        // 分群榜单在页面内部按可见性收口，不靠隐藏入口来保护
+        //
+        // 不是一级：榜单是「偶尔看一眼」的东西，
+        // 而一级的那几行要留给每天都点的。它在「更多」里。
+        ready: true,
+      },
       {
         key: "events",
         flag: "events",
         href: "/activities",
         label: "活动",
         icon: "calendar",
-        ready: true,
-      },
-      { key: "members", href: "/members", label: "成员", icon: "users", requiresAuth: true, ready: true },
-      {
-        key: "links",
-        flag: "link_library",
-        href: "/links",
-        label: "资源库",
-        icon: "link",
-        requiresAuth: true,
-        ready: true,
-      },
-      {
-        key: "radar",
-        flag: "keyword_radar",
-        href: "/radar",
-        label: "关键词雷达",
-        icon: "radar",
-        requiresAuth: true,
         ready: true,
       },
       {
@@ -120,15 +170,8 @@ export const NAV: NavSection[] = [
   },
   {
     key: "personal",
+    label: "我的东西",
     items: [
-      {
-        key: "notifications",
-        href: "/notifications",
-        label: "通知",
-        icon: "bell",
-        requiresAuth: true,
-        ready: true,
-      },
       {
         key: "bookmarks",
         href: "/me/bookmarks",
@@ -145,23 +188,12 @@ export const NAV: NavSection[] = [
         requiresAuth: true,
         ready: true,
       },
-      {
-        key: "following",
-        href: "/me/following",
-        label: "我关注的",
-        icon: "user-plus",
-        requiresAuth: true,
-        ready: true,
-      },
-      {
-        key: "me",
-        href: "/me",
-        label: "我的",
-        icon: "user-round",
-        requiresAuth: true,
-        inTabBar: true,
-        ready: true,
-      },
+    ],
+  },
+  {
+    key: "system",
+    label: "管理",
+    items: [
       {
         key: "admin",
         href: "/admin",
@@ -212,9 +244,9 @@ export function navItemVisible(item: NavItem, ctx: NavContext): boolean {
  * 第 5 格永远是「更多」，不是第 5 个目的地
  * ─────────────────────────────────────────
  *
- * 这个站有 12 个前台入口。把 5 个塞进 tab 栏、剩下 7 个只放在
- * 桌面侧栏里，结果是**手机上那 7 个板块根本没有入口** ——
- * 通知、资源库、活动、成员、雷达、商店，以及整个后台。
+ * 把 5 个塞进 tab 栏、剩下的只放在桌面侧栏里，结果是
+ * **那些板块在手机上根本没有入口** —— 通知、资源库、活动、
+ * 成员、雷达、商店，以及整个后台。
  *
  * 那不是「手机端功能少一点」，是这些功能在手机上不存在，
  * 而这个站大部分人是在微信里点开的。
@@ -258,14 +290,44 @@ export function visibleSections(visible: (item: NavItem) => boolean): NavSection
 }
 
 /**
+ * 桌面侧栏的一级区：只有 primary 的那几项，平铺、不分组。
+ *
+ * 分组标题在只有五行的时候是纯噪音 —— 五行不需要目录。
+ */
+export function sidebarPrimaryItems(visible: (item: NavItem) => boolean): NavItem[] {
+  return ALL_NAV_ITEMS.filter((item) => item.primary && visible(item));
+}
+
+/**
+ * 桌面侧栏的「更多」里放什么：**所有不是一级的**。
+ *
+ * 和手机端「更多」同一套减法。两边都不维护第二份清单，
+ * 于是「桌面上摸得到、手机上摸不到」和它的反面都不可能发生 ——
+ * 这两个函数各自覆盖全集，谁都不会漏掉新页面。
+ */
+export function sidebarMoreSections(visible: (item: NavItem) => boolean): NavSection[] {
+  const primary = new Set(sidebarPrimaryItems(visible).map((i) => i.key));
+  return NAV.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => visible(item) && !primary.has(item.key)),
+  })).filter((section) => section.items.length > 0);
+}
+
+/**
  * 当前激活的导航项。取匹配最长的那个 href ——
  * 否则 "/" 会匹配上所有路径，每个页面都显示成在首页。
  */
 export function activeNavKey(pathname: string): string | null {
-  let best: NavItem | null = null;
+  let best: { item: NavItem; length: number } | null = null;
+
   for (const item of ALL_NAV_ITEMS) {
-    const matches = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-    if (matches && (!best || item.href.length > best.href.length)) best = item;
+    for (const prefix of [item.href, ...(item.alsoMatches ?? [])]) {
+      const matches = prefix === "/" ? pathname === "/" : pathname.startsWith(prefix);
+      if (matches && (!best || prefix.length > best.length)) {
+        best = { item, length: prefix.length };
+      }
+    }
   }
-  return best?.key ?? null;
+
+  return best?.item.key ?? null;
 }

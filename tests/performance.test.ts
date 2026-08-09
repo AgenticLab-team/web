@@ -209,7 +209,19 @@ describe("列表查询不能是 N+1", () => {
       .run();
     dbm.db.insert(schema.groupMembers).values({ convId: "g1", wxId: "wx_me" }).run();
 
-    assertNoNPlusOne("成员目录", seedMembers, () => members.memberDirectory(viewer("me")), 12);
+    /*
+     * 预算从 12 提到 15。
+     *
+     * 多出来的三条是 `leaderboardHiddenWxIds` 那一次隐私收口：
+     * 一条查隐藏名单，另两条是它内部 `can()` 判「这个人是不是有豁免权」。
+     * 目录会显示积分、还按积分排序 —— 那就是一张榜，
+     * 关掉了「出现在榜单上」的人必须在这里也藏得住。
+     *
+     * 这三条是**常数**，不随成员数变 —— 而这个测试真正防的那件事
+     * 是下面那条 `large <= small`（数据翻十倍查询不许涨）。
+     * 上界只是个提醒：再往上涨就该回来看看是不是又忘了批量取。
+     */
+    assertNoNPlusOne("成员目录", seedMembers, () => members.memberDirectory(viewer("me")), 15);
   });
 
   it("**资源库**：链接再多也是固定几条查询", () => {

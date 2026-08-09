@@ -247,3 +247,34 @@ describe("这个权限给谁", () => {
     assert.match(denies, /"system\.impersonate"/);
   });
 });
+
+/* ───────────────────────────────────────────────────────────────
+ * 预览态也会**读**出不该读的东西
+ *
+ * 上面那些查的都是「预览时会不会写」。但预览是「以他的视角看看」——
+ * 页面本来就照着被预览的人渲染，于是有些**只该本人看到**的东西
+ * 会顺着这条路被摊开，而且一行代码都不用改就发生了。
+ * ─────────────────────────────────────────────────────────────── */
+
+describe("预览态下不该被看到的东西", () => {
+  it("**「我的」页面上的微信 ID 只给本人看**", () => {
+    /*
+     * 拿着微信 ID 就能在微信里直接把人加上。
+     * 这个站在别处为了不泄露它专门绕了一条 /members/by/<账号 id> 的中转
+     * （成员目录连算头像颜色都不肯把 wx_id 放进 RSC 载荷），
+     * 而「我的」这一页当时直接把它印在了页面上 ——
+     * 页面取用户走的是 getCurrentUser()，预览态下那是**被预览的人**。
+     *
+     * 判据必须是 isSelf（realUser === user），不能只判「登录了没有」：
+     * 预览态下也是登录着的。
+     */
+    const page = code(
+      readFileSync(new URL("../src/app/(app)/me/page.tsx", import.meta.url), "utf8"),
+    );
+
+    assert.match(page, /const isSelf = realUser\?\.id === user\.id;/, "isSelf 的算法变了");
+
+    const row = page.slice(page.indexOf("微信 ID") - 400, page.indexOf("微信 ID"));
+    assert.match(row, /isSelf &&/, "微信 ID 那一行没有按 isSelf 收口 —— 预览时会露出别人的微信号");
+  });
+});

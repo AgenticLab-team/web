@@ -18,9 +18,17 @@ function profileHref(member: { id: string; isMe: boolean; hasProfile: boolean })
   return `/members/by/${member.id}`;
 }
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Card, Empty, PageNote, Pill, PillRow, Section } from "@/components/ui/primitives";
+import {
+  Card,
+  Empty,
+  PageNote,
+  Pill,
+  PillRow,
+  SearchField,
+  Section,
+} from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
-import { memberDirectory } from "@/lib/members/queries";
+import { memberDirectory, resolveSort, type MemberSort } from "@/lib/members/queries";
 import { isDirectoryHidden } from "@/lib/members/queries";
 import { rarityColor } from "@/lib/titles/rules";
 import { TitleIcon } from "@/components/titles/TitleIcon";
@@ -48,15 +56,28 @@ export const dynamic = "force-dynamic";
 export default async function MembersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tag?: string }>;
+  searchParams: Promise<{ tag?: string; q?: string; sort?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/members");
 
-  const { tag } = await searchParams;
-  const dir = memberDirectory(user, { tag });
+  const { tag, q, sort: sortParam } = await searchParams;
+  const query = (q ?? "").trim();
+  const sort = resolveSort(sortParam);
+  const dir = memberDirectory(user, { tag, q: query, sort });
   const meHidden = isDirectoryHidden(user.id);
   const activeFacet = dir.facets.find((f) => f.slug === tag);
+
+  /** 换筛选条件时把其余条件带上 —— 丢掉的话每点一次都要重填 */
+  const href = (patch: Record<string, string | undefined>) => {
+    const next = new URLSearchParams();
+    const merged = { tag, q: query || undefined, sort: sort === "tags" ? undefined : sort, ...patch };
+    for (const [key, value] of Object.entries(merged)) {
+      if (value) next.set(key, value);
+    }
+    const qs = next.toString();
+    return qs ? `/members?${qs}` : "/members";
+  };
 
   return (
     <>
@@ -90,15 +111,49 @@ export default async function MembersPage({
         />
       ) : (
         <>
+          {/*
+            * 搜人的框摆在最上面。
+            *
+            * 标签筛选只答得了「谁会做 X」，而且要够多人填了才成立；
+            * 「我记得有个人叫什么什么」这条路以前在这一页上完全没有 ——
+            * matchesQuery 早就写好也测过了，只是没有任何页面接上它。
+            * 它把人名、技能标签和一句话简介一起搜，用的是和标签筛选
+            * 同一套归一化，所以搜「RAG」和点标签「rag」结果一致。
+            */}
+          <form action="/members" className="mb-3">
+            {tag && <input type="hidden" name="tag" value={tag} />}
+            {sort !== "tags" && <input type="hidden" name="sort" value={sort} />}
+            <SearchField defaultValue={query} placeholder="搜名字、技能或简介" />
+          </form>
+
+          {/*
+            * 三种排法，对应这一页真正要回答的三个问题：
+            * 谁会做 X / 谁和我在同一个群 / 谁最近还在。
+            * 一列按名字排的名单一个都答不了。
+            */}
+          <PillRow wrap>
+            {(
+              [
+                ["tags", "会点什么"],
+                ["shared", "共同群最多"],
+                ["active", "最近活跃"],
+              ] as [MemberSort, string][]
+            ).map(([key, label]) => (
+              <Pill key={key} href={href({ sort: key === "tags" ? undefined : key })} active={sort === key}>
+                {label}
+              </Pill>
+            ))}
+          </PillRow>
+
           {dir.facets.length > 0 && (
             <PillRow>
-              <Pill href="/members" active={!tag}>
+              <Pill href={href({ tag: undefined })} active={!tag}>
                 全部
               </Pill>
               {dir.facets.map((facet) => (
                 <Pill
                   key={facet.slug}
-                  href={`/members?tag=${encodeURIComponent(facet.slug)}`}
+                  href={href({ tag: facet.slug })}
                   active={tag === facet.slug}
                 >
                   {facet.label}
@@ -108,8 +163,9 @@ export default async function MembersPage({
             </PillRow>
           )}
 
-          {/* 目录的价值完全取决于有多少人填了标签 —— 说出来，顺便给个入口 */}
-          {dir.untagged > 0 && !tag && (
+          {/* 目录的价值完全取决于有多少人填了标签 —— 说出来，顺便给个入口。
+              搜索或筛标签时不显示：那时候人在找一个具体的人，不该被岔开 */}
+          {dir.untagged > 0 && !tag && !query && (
             <Link
               href="/me/profile"
               className="mb-3 flex items-center gap-2.5 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 transition hairline active:opacity-70"
@@ -131,10 +187,18 @@ export default async function MembersPage({
           )}
 
           <Section
-            title={activeFacet ? `${activeFacet.label} · ${dir.members.length} 人` : undefined}
+            title={activeFacet ? `${activeFacet.label} · ${dir.matched} 人` : undefined}
           >
-            {dir.members.length === 0 ? (
-              <Empty title="这个标签下没有人" hint="换一个标签，或者看全部" />
+            {/* 「搜没搜到」和「这个标签下没人」是两件事，说错了人会去改错的条件 */}
+            {dir.matched === 0 ? (
+              query ? (
+                <Empty
+                  title={`没有找到「${query}」`}
+                  hint="名字、技能标签和简介都搜过了 —— 目录只收录和你同群、并且在站上注册过的人"
+                />
+              ) : (
+                <Empty title="这个标签下没有人" hint="换一个标签，或者看全部" />
+              )
             ) : (
               <div className="space-y-2">
                 {dir.members.map((member) => (
@@ -203,10 +267,17 @@ export default async function MembersPage({
                         )}
 
                         {/* 只说共同群的**数量**，不说是哪个 ——
-                            说了就等于把群名泄露给了另一个群的人 */}
+                            说了就等于把群名泄露给了另一个群的人。
+                            积分和活跃只在对方没关掉「出现在榜单上」时才有值 */}
                         <p className="t-caption2 mt-1.5 text-[var(--ink-quaternary)]">
-                          {member.sharedGroups > 0 && `${member.sharedGroups} 个共同群`}
-                          {member.points > 0 && ` · ${member.points} 积分`}
+                          {[
+                            member.sharedGroups > 0 && `${member.sharedGroups} 个共同群`,
+                            member.activity === "week" && "本周活跃",
+                            member.activity === "month" && "本月活跃",
+                            member.points != null && member.points > 0 && `${member.points} 积分`,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </p>
                       </div>
                     </div>

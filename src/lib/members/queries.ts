@@ -7,7 +7,8 @@ import { db } from "@/lib/db";
 import { groupMembers, people, userSkills, users } from "@/lib/db/schema";
 import { paletteIndexFor } from "@/components/Avatar";
 import { isModuleEnabled } from "@/lib/modules/state";
-import { preferredLabel, visibleFacets, type TagFacet } from "@/lib/members/tags";
+import { leaderboardHiddenWxIds } from "@/lib/privacy/queries";
+import { matchesQuery, preferredLabel, visibleFacets, type TagFacet } from "@/lib/members/tags";
 import { equippedTitles } from "@/lib/titles/queries";
 import { resolveDisplayName } from "@/lib/users/display-name";
 
@@ -61,8 +62,62 @@ export interface DirectoryMember {
   tags: { slug: string; label: string }[];
   /** 和你共同在几个群 —— 只说数量，不说是哪个 */
   sharedGroups: number;
-  points: number;
+  /**
+   * 积分。**关掉了「出现在榜单上」的人这里是 null。**
+   *
+   * 那个开关承诺的是「别人看到的榜单里没有你」。而一份显示积分、
+   * 又按积分排序的成员目录**就是另一张榜** —— 只是换了个名字。
+   * 一个只在其中一处生效的隐私开关，比没有开关更坏：
+   * 它让人以为自己藏起来了。
+   *
+   * 注意这跟 `directory_hidden` 是两件事，两个开关各管各的：
+   * 隐身管的是「出不出现在目录里」，这个管的是「露不露贡献数字」。
+   */
+  points: number | null;
+  /**
+   * 最近在群里说过话没有 —— 只给一个粗粒度的档，不给时间点。
+   *
+   * 「谁最近活跃」是这一页要回答的问题之一：一份分不出
+   * 「还在」和「半年没来过」的名单，找人的时候等于没有。
+   *
+   * 但只到「这周 / 这个月」为止。lib/privacy/rules.ts 里删掉
+   * `hide_activity_hours` 时写明了理由：那个开关守的是**作息**
+   * （几点睡、几点起），而作息是逐小时的直方图才暴露得出来的东西。
+   * 粗到「本周活跃过」这一档，说的是「这个人还在」，不是他的生活规律。
+   *
+   * 和积分一样跟着榜单开关走：关掉的人这里是 null。
+   */
+  activity: "week" | "month" | null;
   isMe: boolean;
+}
+
+/** 「最近活跃」的分档 */
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+
+function activityBucket(lastSeen: number | null | undefined, now: number): "week" | "month" | null {
+  if (!lastSeen) return null;
+  const age = now - lastSeen;
+  if (age <= WEEK_MS) return "week";
+  if (age <= MONTH_MS) return "month";
+  return null;
+}
+
+/**
+ * 目录的排序方式。
+ *
+ * 三种排法对应这一页真正要回答的三个问题：
+ *   · tags   —— 「谁会做 X」：填了标签的排前面，没标签的行对找人毫无帮助
+ *   · shared —— 「谁和我在同一个群」：共同群多的人，搭话的成本最低
+ *   · active —— 「谁最近还在」：一份分不出活人的名单，找人时等于没有
+ */
+export const MEMBER_SORTS = ["tags", "shared", "active"] as const;
+export type MemberSort = (typeof MEMBER_SORTS)[number];
+
+export function resolveSort(value: string | undefined): MemberSort {
+  return (MEMBER_SORTS as readonly string[]).includes(value ?? "")
+    ? (value as MemberSort)
+    : "tags";
 }
 
 /** 和我共同在群里的注册用户 id */
@@ -132,6 +187,8 @@ export interface DirectoryResult {
   hidden: number;
   /** 一个标签都没填的人数 —— 目录的价值取决于这个数字往下走 */
   untagged: number;
+  /** 按当前条件筛出来还剩几个 —— 搜不到东西时要说得出是「搜的」还是「本来就没有」 */
+  matched: number;
   /**
    * 模块是不是被关掉了。
    *
@@ -144,7 +201,7 @@ export interface DirectoryResult {
 
 export function memberDirectory(
   user: CurrentUser | null,
-  options: { tag?: string } = {},
+  options: { tag?: string; q?: string; sort?: MemberSort; now?: number } = {},
 ): DirectoryResult {
   const empty: DirectoryResult = {
     members: [],
@@ -152,6 +209,7 @@ export function memberDirectory(
     total: 0,
     hidden: 0,
     untagged: 0,
+    matched: 0,
     moduleOff: false,
   };
   if (!user) return empty;
@@ -179,14 +237,31 @@ export function memberDirectory(
   const visible = rows.filter((r) => !r.hidden || r.id === user.id);
   const hidden = rows.length - visible.length;
 
-  // 头像与展示名要走 people 表补齐 —— users 上的可能还没同步到
+  // 头像与展示名要走 people 表补齐 —— users 上的可能还没同步到。
+  // lastSeen 顺路一起取：单独再查一次是白给的一次全表扫描
   const profiles = new Map(
     db
-      .select({ wxId: people.wxId, name: people.displayName, avatar: people.avatarUrl })
+      .select({
+        wxId: people.wxId,
+        name: people.displayName,
+        avatar: people.avatarUrl,
+        lastSeen: people.lastSeen,
+      })
       .from(people)
       .all()
       .map((p) => [p.wxId, p]),
   );
+
+  /*
+   * 关掉了「出现在榜单上」的人，在目录里不露贡献数字。
+   *
+   * 这是一个**新加的展示要过一遍旧开关**的例子：目录本来就显示积分、
+   * 还按积分排序，等于一张没人叫它榜单的榜；现在又要加「最近活跃」。
+   * 每加一个能按人找到内容的入口，就得回来问一遍
+   * 「这个人关掉了开关的话，这里会不会漏」—— 这次的答案是会。
+   */
+  const noMetrics = new Set(leaderboardHiddenWxIds(user));
+  const now = options.now ?? Date.now();
 
   const skills = db
     .select()
@@ -209,6 +284,7 @@ export function memberDirectory(
   let members: DirectoryMember[] = visible.map((row) => {
     const profile = row.wxId ? profiles.get(row.wxId) : undefined;
     const title = titles.get(row.id) ?? null;
+    const metricsOk = !row.wxId || !noMetrics.has(row.wxId);
     return {
       id: row.id,
       name: resolveDisplayName([row.siteNickname, row.wxNickname, profile?.name], {
@@ -223,7 +299,8 @@ export function memberDirectory(
       title,
       tags: byUser.get(row.id) ?? [],
       sharedGroups: shared.get(row.id) ?? 0,
-      points: row.points,
+      points: metricsOk ? row.points : null,
+      activity: metricsOk ? activityBucket(profile?.lastSeen, now) : null,
       isMe: row.id === user.id,
     };
   });
@@ -237,20 +314,53 @@ export function memberDirectory(
   }
 
   /*
-   * 排序：填了标签的排前面。
+   * 搜索用的是和标签筛选同一套归一化（见 lib/members/tags.ts 的 matchesQuery）——
+   * 搜「RAG」和点标签「rag」找到的是同一批人，否则同一页里两个入口各有各的脾气。
+   */
+  if (options.q?.trim()) {
+    members = members.filter((m) => matchesQuery(m, options.q!));
+  }
+
+  sortMembers(members, options.sort ?? "tags");
+
+  return { members, facets, total, hidden, untagged, matched: members.length, moduleOff: false };
+}
+
+/**
+ * 排序。三种排法，末位一律用姓名兜底 ——
+ * 不兜的话，同分的人每次刷新顺序都不一样，看起来像列表在自己动。
+ */
+function sortMembers(members: DirectoryMember[], sort: MemberSort): void {
+  const byName = (a: DirectoryMember, b: DirectoryMember) => a.name.localeCompare(b.name, "zh");
+  const rank = { week: 2, month: 1 } as const;
+  const activityRank = (m: DirectoryMember) => (m.activity ? rank[m.activity] : 0);
+
+  if (sort === "shared") {
+    members.sort((a, b) => b.sharedGroups - a.sharedGroups || byName(a, b));
+    return;
+  }
+
+  if (sort === "active") {
+    members.sort((a, b) => activityRank(b) - activityRank(a) || byName(a, b));
+    return;
+  }
+
+  /*
+   * 默认：填了标签的排前面。
    *
    * 这不是偏心，是这一页的用途决定的 —— 目录是用来「找到会某件事的人」的，
    * 而没有标签的行对这个用途一点帮助都没有。把它们排在前面，
    * 第一屏就会全是无法据以联系的人，然后没人再往下翻。
+   *
+   * 次级键用积分，而藏起了积分的人按 0 算 —— 他排得靠后一点，
+   * 但**不会因为藏了积分就从目录里消失**：隐身是另一个开关的事。
    */
   members.sort(
     (a, b) =>
       Number(b.tags.length > 0) - Number(a.tags.length > 0) ||
-      b.points - a.points ||
-      a.name.localeCompare(b.name, "zh"),
+      (b.points ?? 0) - (a.points ?? 0) ||
+      byName(a, b),
   );
-
-  return { members, facets, total, hidden, untagged, moduleOff: false };
 }
 
 function buildFacets(members: DirectoryMember[]): TagFacet[] {
@@ -316,10 +426,14 @@ export function allTagFacets(): TagFacet[] {
   }).sort((a, b) => b.count - a.count);
 }
 
-/** 目录里贡献最高的几个人，首页用 */
-export function directoryHighlights(user: CurrentUser | null, limit = 6): DirectoryMember[] {
-  return memberDirectory(user)
-    .members.filter((m) => m.tags.length > 0)
-    .sort((a, b) => b.points - a.points)
-    .slice(0, limit);
-}
+/*
+ * 这里原来还有一个 `directoryHighlights`：注释写着「首页用」，
+ * 而全站**零处调用** —— 首页从来没有过这一块。
+ *
+ * 删掉不只是因为它没人用。它做的事是「按积分排序取前 6 个人」，
+ * 也就是一张**没叫自己榜单的榜单**，而且没过 leaderboardHiddenWxIds。
+ * 哪天有人把它接到首页上，关掉了「出现在榜单上」的人就会出现在
+ * 首页最显眼的位置，而改动看起来只是「加了个模块」。
+ *
+ * 真要做首页高亮，走 lib/queries/leaderboard.ts —— 隐私收口在那边。
+ */

@@ -38,7 +38,14 @@ export interface FlagSpec {
   /** 关掉之后具体会发生什么 —— 这句话是管理员按下去之前唯一的依据 */
   effect: string;
   status: FlagStatus;
-  /** 关掉后会消失的导航项（nav.ts 里的 key） */
+  /**
+   * 这个开关管着哪个导航项（nav.ts 里的 key）。
+   *
+   * 注意**不是一一对应**：检索、资源库、雷达三个开关都指向 `chat`，
+   * 因为它们是「群聊」这一个入口下面的三个视图。关掉其中一个，
+   * 消失的是页内那一个标签，入口本身还在 —— 按天回看不受任何开关管，
+   * 所以「群聊」永远打得开。
+   */
   navKeys?: string[];
 }
 
@@ -62,21 +69,21 @@ export const FLAGS: readonly FlagSpec[] = [
     label: "群消息检索",
     effect: "关掉后搜索页 404 —— 群聊存档本身不受影响",
     status: "wired",
-    navKeys: ["search"],
+    navKeys: ["chat"],
   },
   {
     key: "link_library",
     label: "资源库",
     effect: "关掉后资源库页面 404，群里新出现的链接仍然会照常收录",
     status: "wired",
-    navKeys: ["links"],
+    navKeys: ["chat"],
   },
   {
     key: "keyword_radar",
     label: "关键词雷达",
     effect: "关掉后雷达页面 404，已经订阅的词**不再触发通知**",
     status: "wired",
-    navKeys: ["radar"],
+    navKeys: ["chat"],
   },
   {
     key: "shop",

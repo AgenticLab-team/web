@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ArchiveMessage } from "@/components/messages/ArchiveMessage";
+import { ChatTabs } from "@/components/shell/ChatTabs";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Pagination } from "@/components/ui/Pagination";
 import {
@@ -148,6 +149,8 @@ export default async function ArchivePage({
         title="按天回看"
         subtitle={`${groupName} · ${total.toLocaleString("zh-CN")} 条`}
       />
+
+      <ChatTabs current="archive" />
 
       <PillRow>
         {groups.map((g) => (

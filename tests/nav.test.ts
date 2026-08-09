@@ -102,7 +102,14 @@ describe("导航可见性", () => {
   it("登录用户能看到需要登录的项", () => {
     const keys = tabBarItems(asMember).map((i) => i.key);
     assert.ok(keys.includes("me"));
-    assert.ok(keys.includes("search"));
+    /*
+     * 原来这里断言的是 `search`。检索现在是「群聊」这个入口下面的一个视图
+     * （回看 / 检索 / 资源库 / 雷达 合成了一项，见 nav.ts），
+     * 所以举的例子换成 `chat` —— 这条测的一直是
+     * 「requiresAuth 的入口在登录后真的出现了」，
+     * 而不是「必须存在一个叫 search 的导航项」。
+     */
+    assert.ok(keys.includes("chat"));
   });
 
   it("未实现的入口对谁都不显示", () => {
