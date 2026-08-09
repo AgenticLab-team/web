@@ -191,8 +191,8 @@ function PathBar({ path, dimmed }: { path: CheckinPath; dimmed: boolean }) {
         aria-label={path.label}
       >
         <div
-          className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-500"
-          style={{ width: `${ratio * 100}%` }}
+          className="progress-fill h-full rounded-full bg-[var(--accent)]"
+          style={{ transform: `translateX(${ratio * 100 - 100}%)` }}
         />
       </div>
     </div>

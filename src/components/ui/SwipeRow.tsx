@@ -112,7 +112,8 @@ export function SwipeRow({
         onPointerCancel={onPointerUp}
         style={{
           transform: `translateX(${offset}px)`,
-          transition: animating ? "transform 0.32s var(--ease-spring)" : "none",
+          // 归位是「已有元素改变位置」——转场档；跟手拖动时必须关掉过渡
+          transition: animating ? "transform var(--motion-shift) var(--ease-spring)" : "none",
           // 允许竖向滚动透传，横向由我们接管
           touchAction: "pan-y",
         }}

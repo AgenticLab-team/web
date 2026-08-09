@@ -144,9 +144,9 @@ export default async function AdminEscalationPage({
                     </p>
                     <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[var(--separator)]">
                       <div
-                        className="h-full rounded-full transition-[width] duration-500"
+                        className="progress-fill h-full rounded-full"
                         style={{
-                          width: `${row.consent.ratio * 100}%`,
+                          transform: `translateX(${row.consent.ratio * 100 - 100}%)`,
                           background: row.consent.complete
                             ? "var(--success)"
                             : "var(--warning)",

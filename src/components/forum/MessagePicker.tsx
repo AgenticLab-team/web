@@ -122,7 +122,7 @@ export function MessagePicker({
               </span>
 
               <span
-                className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-all ${
+                className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition ${
                   active
                     ? "bg-[var(--accent)] text-[var(--accent-ink)]"
                     : "bg-[var(--fill-strong)] opacity-0 group-hover:opacity-100"

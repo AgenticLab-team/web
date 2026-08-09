@@ -50,9 +50,10 @@ export function DirectoryToggle({ initial }: { initial: boolean }) {
             className="relative mt-0.5 h-[31px] w-[51px] shrink-0 rounded-full transition disabled:opacity-45"
             style={{ background: hidden ? "var(--fill-strong, var(--fill))" : "var(--success)" }}
           >
+            {/* 位移走 translateX 不走 left —— 理由见 globals.css 的 .switch-knob */}
             <span
-              className="absolute top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-sm transition-all"
-              style={{ left: hidden ? "2px" : "22px" }}
+              className="switch-knob absolute left-[2px] top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-sm"
+              style={{ transform: hidden ? "translateX(0)" : "translateX(20px)" }}
             />
           </button>
         </div>

@@ -150,10 +150,13 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
         <X className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
       </button>
 
-      {/* 剩余时间条。让人知道还有多久可以撤销，而不是凭感觉 */}
+      {/* 剩余时间条。让人知道还有多久可以撤销，而不是凭感觉。
+          时长走 CSS 变量传给 .animate-toast-progress —— 动画本体
+          （scaleX 而不是 width、reduced-motion 下的豁免）都定义在
+          globals.css，这里只负责告诉它「这条 toast 活多久」 */}
       <span
-        className="absolute bottom-0 left-0 h-0.5 bg-[var(--canvas)]/40"
-        style={{ animation: `toast-progress ${item.duration}ms linear forwards` }}
+        className="animate-toast-progress absolute bottom-0 left-0 h-0.5 w-full bg-[var(--canvas)]/40"
+        style={{ "--toast-duration": `${item.duration}ms` } as React.CSSProperties}
         aria-hidden
       />
     </div>

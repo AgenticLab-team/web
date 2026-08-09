@@ -90,7 +90,7 @@ export function TabBar({
               <Link
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
-                className={`flex h-full flex-col items-center justify-center gap-[0.1875rem] transition-colors duration-150 ${
+                className={`flex h-full flex-col items-center justify-center gap-[0.1875rem] transition-colors ${
                   isActive ? "text-[var(--accent)]" : "text-[var(--ink-tertiary)]"
                 }`}
               >
@@ -122,7 +122,7 @@ export function TabBar({
                 onClick={open}
                 aria-haspopup="dialog"
                 aria-expanded={isOpen}
-                className={`flex h-full flex-col items-center justify-center gap-[0.1875rem] transition-colors duration-150 ${
+                className={`flex h-full flex-col items-center justify-center gap-[0.1875rem] transition-colors ${
                   isOpen ? "text-[var(--accent)]" : "text-[var(--ink-tertiary)]"
                 }`}
               >

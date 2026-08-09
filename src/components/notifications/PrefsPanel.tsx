@@ -111,9 +111,10 @@ export function PrefsPanel({ initial, showPush = false }: { initial: PrefsMap; s
                             background: pushOn ? "var(--accent)" : "var(--fill-strong, var(--fill))",
                           }}
                         >
+                          {/* 位移走 translateX 不走 left —— 理由见 globals.css 的 .switch-knob */}
                           <span
-                            className="absolute top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-all"
-                            style={{ left: pushOn ? "18px" : "2px" }}
+                            className="switch-knob absolute left-[2px] top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow-sm"
+                            style={{ transform: pushOn ? "translateX(16px)" : "translateX(0)" }}
                           />
                         </button>
                         <span className="t-caption text-[var(--ink-tertiary)]">推送到设备</span>
@@ -132,8 +133,8 @@ export function PrefsPanel({ initial, showPush = false }: { initial: PrefsMap; s
                     style={{ background: on ? "var(--success)" : "var(--fill-strong, var(--fill))" }}
                   >
                     <span
-                      className="absolute top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-sm transition-all"
-                      style={{ left: on ? "22px" : "2px" }}
+                      className="switch-knob absolute left-[2px] top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-sm"
+                      style={{ transform: on ? "translateX(20px)" : "translateX(0)" }}
                     />
                   </button>
                 </div>

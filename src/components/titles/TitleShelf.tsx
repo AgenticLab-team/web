@@ -142,9 +142,10 @@ export function TitleShelf({ titles }: { titles: OwnedTitle[] }) {
                   background: title.autoRenew ? "var(--success)" : "var(--fill-strong, var(--fill))",
                 }}
               >
+                {/* 位移走 translateX 不走 left —— 理由见 globals.css 的 .switch-knob */}
                 <span
-                  className="absolute top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-sm transition-all"
-                  style={{ left: title.autoRenew ? "22px" : "2px" }}
+                  className="switch-knob absolute left-[2px] top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-sm"
+                  style={{ transform: title.autoRenew ? "translateX(20px)" : "translateX(0)" }}
                 />
               </button>
             </div>
