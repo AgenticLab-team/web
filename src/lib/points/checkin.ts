@@ -23,6 +23,7 @@ import { settleInviteReward } from "@/lib/invites/settle";
 
 import { INTERACTION_WEIGHTS } from "./economy";
 import { grantPoints } from "./ledger";
+import { configuredLevels } from "./levels";
 import {
   collapseByMinute,
   dedupeSimilar,
@@ -286,7 +287,7 @@ export function performCheckin(user: CurrentUser, ip?: string): CheckinResult {
   const today = todayKey();
   const { base, qualityBonus, streakBonus, interactionBonus, total, capped, streakAfter } =
     status.verdict;
-  const levelBefore = levelOf(user.pointsTotal).level;
+  const levelBefore = levelOf(user.pointsTotal, configuredLevels()).level;
 
   /*
    * 撞上每日发行上限时 total 会是 0。
@@ -333,7 +334,14 @@ export function performCheckin(user: CurrentUser, ip?: string): CheckinResult {
         lastCheckinDate: today,
         streakCurrent: streakAfter,
         streakBest: sql`MAX(${users.streakBest}, ${streakAfter})`,
-        level: levelOf(user.pointsTotal + total).level,
+        /*
+         * 等级**不在这里算**了。
+         *
+         * 原来这一行是全站唯一会更新 level 的地方 —— 于是靠打赏、
+         * 邀请奖励、人工调整攒分的人永远停在 L1。现在算在 grantPoints
+         * 里（所有积分变动的唯一入口），这里再算一遍就是第二份真相，
+         * 而且这一份还跑在发分之前，算出来的是旧值。
+         */
         updatedAt: Date.now(),
       })
       .where(eq(users.id, user.id))
@@ -350,7 +358,7 @@ export function performCheckin(user: CurrentUser, ip?: string): CheckinResult {
    */
   settleInviteReward(user.id);
 
-  const levelAfter = levelOf(user.pointsTotal + total).level;
+  const levelAfter = levelOf(user.pointsTotal + total, configuredLevels()).level;
 
   return {
     ok: true,

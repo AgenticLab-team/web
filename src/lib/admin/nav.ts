@@ -192,6 +192,15 @@ export const ADMIN_NAV: AdminNavSection[] = [
         ready: true,
       },
       {
+        key: "levels",
+        href: "/admin/points/levels",
+        label: "等级门槛",
+        icon: "trending-up",
+        permission: "points.rules.manage",
+        description: "每级需要多少分、解锁了哪些版块",
+        ready: true,
+      },
+      {
         key: "ledger",
         href: "/admin/points/ledger",
         label: "积分流水",

@@ -7,6 +7,7 @@ import { BackLink, Empty, Group, PageNote, Section, StatTile } from "@/component
 import { getCurrentUser } from "@/lib/auth/session";
 import { recentCheckins } from "@/lib/points/checkin";
 import { auditBalance, listLedger } from "@/lib/points/ledger";
+import { configuredLevels } from "@/lib/points/levels";
 import { levelProgress } from "@/lib/points/rules";
 
 export const metadata: Metadata = { title: "积分" };
@@ -18,7 +19,8 @@ export default async function PointsPage() {
 
   const ledger = listLedger(user.id, 60);
   const checkins = recentCheckins(user.id, 90);
-  const progress = levelProgress(user.pointsTotal);
+  // 门槛走配置 —— 「我的等级」和实际判定必须用同一份表
+  const progress = levelProgress(user.pointsTotal, configuredLevels());
   const audit = auditBalance(user.id);
 
   return (

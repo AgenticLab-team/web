@@ -35,6 +35,23 @@ export function getSettingInt(key: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/**
+ * 读一个 json 设置。
+ *
+ * 坏值一律退回 fallback —— 一份存坏的等级表不该让整站崩掉。
+ * 而写入侧是拒绝坏值的（validateSettingValue + checkLevels），
+ * 所以走到这条兜底路的只可能是有人直接改了库。
+ */
+export function getSettingJson<T>(key: string, fallback: T): T {
+  const raw = load().get(key);
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 export function getSettingBool(key: string, fallback = false): boolean {
   const raw = load().get(key);
   if (raw === undefined) return fallback;

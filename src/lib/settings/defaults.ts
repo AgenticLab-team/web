@@ -103,6 +103,34 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
 
   // ── 积分规则 ────────────────────────────────────────────────
   {
+    key: "points.levels",
+    /*
+     * 等级门槛。**这是全站唯一一个 json 类型的设置** ——
+     * 它本来就是一张表，拆成十个整数项的话，改一次要点十次，
+     * 而「门槛必须一级比一级高」这条跨行的约束也没地方校验。
+     *
+     * 值的合法性由 checkLevels 判（递增、L1 为 0、名字非空），
+     * 保存前会先算出「多少人会升级、多少人会降级」摆给人看。
+     */
+    value: JSON.stringify([
+      { level: 1, requires: 0, name: "新来的" },
+      { level: 2, requires: 50, name: "冒泡" },
+      { level: 3, requires: 150, name: "常客" },
+      { level: 4, requires: 350, name: "熟面孔" },
+      { level: 5, requires: 700, name: "老手" },
+      { level: 6, requires: 1200, name: "中坚" },
+      { level: 7, requires: 2000, name: "骨干" },
+      { level: 8, requires: 3200, name: "元老" },
+      { level: 9, requires: 5000, name: "旗手" },
+      { level: 10, requires: 8000, name: "传奇" },
+    ]),
+    type: "json",
+    category: "points",
+    label: "等级门槛",
+    description: "每一级需要多少累计积分。改动会立刻影响所有人的等级，以及按等级卡的版块",
+    requiresPermission: "points.rules.manage",
+  },
+  {
     key: "points.checkin.min_quality_messages",
     value: "3",
     type: "int",

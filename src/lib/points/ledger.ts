@@ -5,6 +5,9 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { pointsLedger, users } from "@/lib/db/schema";
 
+import { configuredLevels } from "./levels";
+import { levelOf } from "./rules";
+
 /**
  * 积分记账。
  *
@@ -82,11 +85,26 @@ export function grantPoints(input: GrantInput): GrantResult {
         .returning({ id: pointsLedger.id })
         .get();
 
+      const pointsTotal =
+        // 累计获得只增不减，用于等级计算：花掉的分不该让人掉级
+        input.delta > 0 ? user.pointsTotal + input.delta : user.pointsTotal;
+
       tx.update(users)
         .set({
           points: balance,
-          // 累计获得只增不减，用于等级计算：花掉的分不该让人掉级
-          pointsTotal: input.delta > 0 ? user.pointsTotal + input.delta : user.pointsTotal,
+          pointsTotal,
+          /*
+           * 等级在**这里**算，因为这里是所有积分变动的唯一入口。
+           *
+           * 原来只有打卡那条路会更新 level（checkin.ts 里手写了一次），
+           * 于是靠打赏、邀请奖励、人工调整攒到 50 分的人**永远停在 L1** ——
+           * 而版块的 post_min_level 是按 level 判的，他会被挡在门外，
+           * 页面上还写着「你当前 L1」，看起来像是分没算对。
+           *
+           * 生产上暂时没人踩到（分几乎全来自打卡，而打卡那条路碰巧对），
+           * 但它只是还没发生，不是不会发生。
+           */
+          level: levelOf(pointsTotal, configuredLevels()).level,
           updatedAt: Date.now(),
         })
         .where(eq(users.id, input.userId))

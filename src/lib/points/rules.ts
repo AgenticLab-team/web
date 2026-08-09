@@ -223,9 +223,27 @@ export const LEVELS: LevelSpec[] = [
   { level: 10, requires: 8000, name: "传奇" },
 ];
 
-export function levelOf(pointsTotal: number): LevelSpec {
-  let current = LEVELS[0];
-  for (const spec of LEVELS) {
+/**
+ * 等级判定。
+ *
+ * ─────────────────────────────────────────
+ * 门槛表**必须由调用方传进来**
+ * ─────────────────────────────────────────
+ *
+ * `LEVELS` 只是兜底默认值，真正生效的存在配置里（`points.levels`）——
+ * 「一切阈值走配置」那条规则以前漏了等级门槛，而它恰恰是
+ * 影响面最大的一组数字。
+ *
+ * 一开始写成了模块级的可变状态（`setActiveLevels`）。那样有个
+ * 初始化顺序的陷阱：谁先 import 谁先算，而漏掉那一次注入的表现是
+ * **静默地用了默认门槛** —— 没有报错，只是数字不对。
+ *
+ * 改成显式传参：忘了传就是编译期少一个参数，而不是运行期少一次注入。
+ * 服务端那份表由 `lib/points/levels.ts` 读出来（它才碰数据库）。
+ */
+export function levelOf(pointsTotal: number, table: LevelSpec[] = LEVELS): LevelSpec {
+  let current = table[0];
+  for (const spec of table) {
     if (pointsTotal >= spec.requires) current = spec;
     else break;
   }
@@ -241,9 +259,9 @@ export interface LevelProgress {
   ratio: number;
 }
 
-export function levelProgress(pointsTotal: number): LevelProgress {
-  const current = levelOf(pointsTotal);
-  const next = LEVELS.find((spec) => spec.level === current.level + 1) ?? null;
+export function levelProgress(pointsTotal: number, table: LevelSpec[] = LEVELS): LevelProgress {
+  const current = levelOf(pointsTotal, table);
+  const next = table.find((spec) => spec.level === current.level + 1) ?? null;
 
   if (!next) return { current, next: null, remaining: 0, ratio: 1 };
 
