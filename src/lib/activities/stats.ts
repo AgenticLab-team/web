@@ -14,6 +14,7 @@ import {
   users,
 } from "@/lib/db/schema";
 import type { Stats } from "@/lib/activities/eligibility";
+import { judgePost } from "@/lib/activities/post-quality";
 
 /**
  * 把用户数据算成资格引擎能吃的指标。
@@ -126,6 +127,31 @@ export function computeAllStats(options: StatsOptions = {}): UserStats[] {
       .all(),
   );
 
+  /*
+   * 够格换域名的那种帖子有几篇。
+   *
+   * 这里把正文取出来在内存里判 —— 判定要去掉代码块、链接和空白
+   * 再数字数，SQL 写不出来（也不该写：那条规则要能被测试直接引用）。
+   *
+   * 量级上没问题：全站帖子总数是三位数。真到了十万篇再谈
+   * 把判定结果存成一列，那时候的做法是发帖时判一次、存下来。
+   */
+  const qualityPostCounts = new Map<string, number>();
+  for (const row of db
+    .select({ id: posts.authorId, title: posts.title, content: posts.content })
+    .from(posts)
+    .where(
+      and(
+        inArray(posts.authorId, ids),
+        isNull(posts.deletedAt),
+        eq(posts.status, "published"),
+      ),
+    )
+    .all()) {
+    if (!judgePost({ title: row.title, content: row.content }).ok) continue;
+    qualityPostCounts.set(row.id, (qualityPostCounts.get(row.id) ?? 0) + 1);
+  }
+
   const replyCounts = countBy(
     db
       .select({ id: replies.authorId, n: sql<number>`count(*)` })
@@ -175,6 +201,7 @@ export function computeAllStats(options: StatsOptions = {}): UserStats[] {
       checkins: checkinCounts.get(a.id) ?? 0,
 
       forum_posts: postCounts.get(a.id) ?? 0,
+      forum_quality_posts: qualityPostCounts.get(a.id) ?? 0,
       forum_replies: replyCounts.get(a.id) ?? 0,
 
       // 日期型指标存成 YYYY-MM-DD，与规则里的写法一致

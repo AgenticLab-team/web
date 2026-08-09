@@ -53,6 +53,21 @@ export interface RuleOutcome {
   message: string;
   /** 差距，用于排序「还差多少」 */
   gap?: number;
+  /**
+   * 进度条画什么。只有数值型规则有。
+   *
+   * 有了「12 / 20」这两个数，界面才画得出一条进度条 ——
+   * 而一句「只有 12，要求至少 20」在手机上是一行会被忽略的小字。
+   */
+  current?: number;
+  target?: number;
+  /**
+   * 「满足其一」时各条路各自的情况。
+   *
+   * 折叠成一句「以下条件需满足其一：…」的话，人得在一行长句子里
+   * 自己找哪条最接近 —— 而这正是他唯一想知道的事。
+   */
+  anyOf?: RuleOutcome[];
 }
 
 export interface EligibilityResult {
@@ -74,6 +89,7 @@ export const METRIC_LABELS: Record<string, string> = {
   in_group: "所在群",
   has_role: "身份组",
   forum_posts: "论坛发帖数",
+  forum_quality_posts: "论坛认真写的帖子数（100 字以上、不灌水）",
   forum_replies: "论坛回复数",
   checkins: "打卡天数",
 };
@@ -167,6 +183,8 @@ function evaluateMetric(rule: MetricRule, stats: Stats): RuleOutcome {
       ? `${windowText}${label} ${actualNum}，达标`
       : `${windowText}${label}只有 ${actualNum}，要求${OP_LABELS[op]} ${rule.value}`,
     gap: passed ? 0 : Math.abs(rule.value - actualNum),
+    // 只有「至少多少」这种才画得出进度条：「至多」画出来是反的
+    ...(op === ">=" || op === ">" ? { current: actualNum, target: rule.value } : {}),
   };
 }
 
@@ -186,12 +204,20 @@ export function evaluateRule(rule: Rule, stats: Stats): RuleOutcome[] {
   if ("any" in rule) {
     const outcomes = rule.any.flatMap((r) => evaluateRule(r, stats));
     const passed = outcomes.some((o) => o.passed);
+
+    /*
+     * 把各条路原样带出去（anyOf）。
+     *
+     * 只折叠成一句话的话，人得在一行长句子里自己找哪条最接近 ——
+     * 而「哪条最接近」正是他唯一想知道的事。
+     */
     return [
       {
         passed,
-        message: passed
-          ? "满足其中一项条件"
-          : `以下条件需满足其一：${outcomes.map((o) => o.message).join("；")}`,
+        message: passed ? "满足其中一项条件" : "下面几条达成任意一条即可",
+        anyOf: outcomes,
+        // 差距取最小的那条 —— 排序时该按「离够格最近的那条路」算
+        gap: passed ? 0 : Math.min(...outcomes.map((o) => o.gap ?? Infinity)),
       },
     ];
   }

@@ -103,7 +103,19 @@ describe("资格判定", () => {
     };
     const result = evaluateEligibility(rule, stats);
     assert.equal(result.eligible, false);
-    assert.match(result.failures[0].message, /满足其一/);
+    assert.match(result.failures[0].message, /任意一条/);
+
+    /*
+     * 各条路要原样带出来，不能折叠成一句长句子。
+     *
+     * 折叠的话，人得自己在里面找哪条最接近 ——
+     * 而「哪条最接近」正是他唯一想知道的事。
+     */
+    const branches = result.failures[0].anyOf;
+    assert.ok(branches, "没带出各条路");
+    assert.equal(branches!.length, 2);
+    assert.match(branches![0].message, /等级/);
+    assert.match(branches![1].message, /发言/);
   });
 
   it("not：排除条件", () => {

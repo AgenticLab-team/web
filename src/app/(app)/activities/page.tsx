@@ -1,7 +1,8 @@
-import { Check, Dot } from "lucide-react";
 import type { Metadata } from "next";
 
 import { ApplyForm } from "@/components/activities/ApplyForm";
+import { Countdown } from "@/components/activities/Countdown";
+import { EligibilityBars, QuotaBar } from "@/components/activities/EligibilityBars";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, Empty, Section } from "@/components/ui/primitives";
 import { evaluateEligibility, type Rule } from "@/lib/activities/eligibility";
@@ -68,13 +69,25 @@ export default async function ActivitiesPage() {
                     >
                       {activity.open ? "进行中" : activity.statusLabel}
                     </span>
-                    {activity.quotaTotal !== null && (
-                      <span className="tabular">
-                        名额 {activity.quotaUsed} / {activity.quotaTotal}
-                      </span>
-                    )}
                     {!activity.open && activity.openReason && <span>{activity.openReason}</span>}
                   </p>
+
+                  {/*
+                    * 倒计时只在真的设了截止时间时出现。
+                    *
+                    * 没设截止的活动挂一个「距结束 —」比不挂更糟：
+                    * 它让人以为随时会结束，而实际上什么都没定。
+                    */}
+                  {activity.open && activity.closesAt !== null && (
+                    <div className="mt-1.5">
+                      <Countdown endsAt={activity.closesAt} />
+                    </div>
+                  )}
+
+                  {/* 名额是「还抢不抢得到」，和下面那条「我够不够格」是两回事 */}
+                  {activity.quotaTotal !== null && (
+                    <QuotaBar used={activity.quotaUsed} total={activity.quotaTotal} />
+                  )}
 
                   {activity.description && (
                     <p className="t-body mt-2 whitespace-pre-wrap leading-relaxed">
@@ -83,27 +96,7 @@ export default async function ActivitiesPage() {
                   )}
 
                   {/* 够格的人也把条件列出来 —— 知道自己是怎么够格的，才知道要保持什么 */}
-                  {eligibility && (
-                    <ul className="mt-2 space-y-0.5">
-                      {eligibility.outcomes.map((o, i) => (
-                        <li
-                          key={i}
-                          className="t-caption2 flex items-center gap-1"
-                          style={{
-                            color: o.passed ? "var(--ink-tertiary)" : "var(--warning)",
-                          }}
-                        >
-                          {/* 达标/未达标的记号用 lucide 线条，和全站图标同一套 —— 字符 ✓ 在各平台粗细不一 */}
-                          {o.passed ? (
-                            <Check className="h-3 w-3 shrink-0" strokeWidth={2.2} aria-hidden />
-                          ) : (
-                            <Dot className="h-3 w-3 shrink-0" strokeWidth={3} aria-hidden />
-                          )}
-                          {o.message}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  {eligibility && <EligibilityBars outcomes={eligibility.outcomes} />}
                 </Card>
 
                 {!user ? (

@@ -1,6 +1,10 @@
-import { AtSign, Bell, MessageSquare, Radar, Shield, Sparkles } from "lucide-react";
+import { AtSign, Bell, FileText, MessageSquare, Radar, Shield, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+
+import { NotificationRow } from "@/components/notifications/NotificationRow";
+import { PushNudge } from "@/components/notifications/PushNudge";
+import { configProblem } from "@/lib/notifications/webpush";
 import { redirect } from "next/navigation";
 
 import { relativeTime } from "@/components/forum/PostList";
@@ -19,6 +23,7 @@ const ICONS: Record<string, typeof Bell> = {
   reply_to_post: MessageSquare,
   reply_to_reply: MessageSquare,
   subscribed_reply: Bell,
+  new_post: FileText,
   reaction: Sparkles,
   featured: Sparkles,
   accepted: Sparkles,
@@ -32,6 +37,8 @@ export default async function NotificationsPage({
 }: {
   searchParams: Promise<{ f?: string }>;
 }) {
+  // 推送配好了才提 —— 没配的话那条提示指向一个开不了的开关
+  const pushConfigured = configProblem() === null;
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/notifications");
 
@@ -59,6 +66,9 @@ export default async function NotificationsPage({
           </span>
         }
       />
+
+      {/* 推送开关藏在设置页第三屏，没人找得到 —— 用不了的环境这里一个字都不会出现 */}
+      <PushNudge configured={pushConfigured} />
 
       {/* 页签上带条数：空页签要能提前看出来，而不是点进去才发现 */}
       <PillRow>
@@ -91,51 +101,42 @@ export default async function NotificationsPage({
         <Group>
           {items.map((item) => {
             const Icon = ICONS[item.type] ?? Bell;
-            const body = (
-              <>
-                <span
-                  className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-                    item.readAt
-                      ? "bg-[var(--fill)] text-[var(--ink-tertiary)]"
-                      : "bg-[var(--accent-soft)] text-[var(--accent)]"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className={`t-subhead leading-snug ${item.readAt ? "text-[var(--ink-secondary)]" : ""}`}>
-                    {item.title}
-                  </p>
-                  {item.body && (
-                    <p className="t-caption mt-0.5 truncate text-[var(--ink-tertiary)]">
-                      {item.body}
-                    </p>
-                  )}
-                  <p className="tabular t-caption mt-0.5 text-[var(--ink-quaternary)]">
-                    {relativeTime(item.updatedAt)}
-                  </p>
-                </div>
-                {!item.readAt && (
-                  <span
-                    className="mt-2 h-2 w-2 shrink-0 rounded-full bg-[var(--accent)]"
-                    aria-label="未读"
-                  />
-                )}
-              </>
-            );
 
-            return item.link ? (
-              <Link
-                key={item.id}
-                href={item.link}
-                className="inset-row flex gap-3 px-4 py-3 transition-colors hover:bg-[var(--fill)]"
-              >
-                {body}
-              </Link>
-            ) : (
-              <div key={item.id} className="inset-row flex gap-3 px-4 py-3">
-                {body}
-              </div>
+            return (
+              <NotificationRow key={item.id} id={item.id} href={item.link} readAt={item.readAt}>
+                {(read) => (
+                  <>
+                    <span
+                      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+                        read
+                          ? "bg-[var(--fill)] text-[var(--ink-tertiary)]"
+                          : "bg-[var(--accent-soft)] text-[var(--accent)]"
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className={`t-subhead leading-snug ${read ? "text-[var(--ink-secondary)]" : ""}`}>
+                        {item.title}
+                      </p>
+                      {item.body && (
+                        <p className="t-caption mt-0.5 truncate text-[var(--ink-tertiary)]">
+                          {item.body}
+                        </p>
+                      )}
+                      <p className="tabular t-caption mt-0.5 text-[var(--ink-quaternary)]">
+                        {relativeTime(item.updatedAt)}
+                      </p>
+                    </div>
+                    {!read && (
+                      <span
+                        className="mt-2 h-2 w-2 shrink-0 rounded-full bg-[var(--accent)]"
+                        aria-label="未读"
+                      />
+                    )}
+                  </>
+                )}
+              </NotificationRow>
             );
           })}
         </Group>
