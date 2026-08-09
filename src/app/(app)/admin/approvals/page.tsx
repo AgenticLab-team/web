@@ -12,20 +12,21 @@ import {
 } from "@/lib/admin/approval-queries";
 import { requireAdmin } from "@/lib/admin/guard";
 
-export const metadata: Metadata = { title: "危险操作复核" };
+export const metadata: Metadata = { title: "危险操作留痕" };
 export const dynamic = "force-dynamic";
 
 // 确保 handler 注册表在渲染前已经填好
 void APPROVAL_HANDLERS_LOADED;
 
 /**
- * 危险操作复核。
+ * 危险操作留痕。
  *
- * 这套机制的全部价值就在「**第二个人**」四个字上。
- * 一旦允许自己批自己，它就退化成一个多余的确认弹窗 ——
- * 而多余的确认弹窗只会训练人闭着眼睛点确定。
+ * 2026-08 前这里是双人复核（不能自己批自己）。站长明确要求管理操作
+ * 不被复核挡住，所以现在它是**可选的**：危险配置可以直接在设置页改，
+ * 想先写下来、想留一条批准记录的时候才用这里 —— 自己批自己也放行。
+ * 队列和历史一条不删，事后追问「那件事是谁定的」时答案还在。
  *
- * 另一条：**只有代码里登记过的动作能被提出**。
+ * 没松的那条：**只有代码里登记过的动作能被提出**。
  * 把要执行的操作序列化存起来、批准后回放，等于在数据库里开了一个
  * 延迟执行的远程调用入口 —— 谁能往表里写一行，谁就能让系统
  * 以「已被批准」的身份执行任意操作。
@@ -50,16 +51,17 @@ export default async function AdminApprovalsPage() {
   return (
     <>
       <PageHeader
-        title="危险操作复核"
-        subtitle={pending === 0 ? "没有待复核的操作" : `${pending} 条待复核`}
+        title="危险操作留痕"
+        subtitle={pending === 0 ? "没有待处理的记录" : `${pending} 条待处理`}
       />
 
       <div className="mb-4 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
         <p className="t-subhead leading-relaxed">
-          改错会<strong>静默影响所有人</strong>的操作走这里 —— 需要另一个人批准。
+          改错会<strong>静默影响所有人</strong>的操作可以在这里留一步痕迹 ——
+          先写下来再执行，自己批自己也行（不再强制第二个人）。
         </p>
         <p className="t-caption mt-1.5 leading-relaxed text-[var(--ink-tertiary)]">
-          判断一件事该不该进这个队列，标准不是「重不重要」，
+          什么样的事值得写一笔？标准不是「重不重要」，
           是<strong>「改错之后多久才会有人察觉」</strong> —— 越久越危险。
           把每日积分上限设成 0，全站都拿不到分，而大家只会以为「今天没发分」。
           待批记录 24 小时后过期：一周后才执行的批准，当时的判断依据早就变了。
@@ -72,7 +74,7 @@ export default async function AdminApprovalsPage() {
 
       <Section title="记录">
         {rows.length === 0 ? (
-          <Empty title="还没有任何待复核记录" hint="这不一定是好事 —— 也可能是大家在绕过流程" />
+          <Empty title="还没有任何记录" hint="危险配置也可以在设置页直接改 —— 这里只服务想留一步痕迹的人" />
         ) : (
           <div className="space-y-3">
             {rows.map((row) => (

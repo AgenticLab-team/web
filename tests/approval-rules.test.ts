@@ -11,11 +11,13 @@ import {
 } from "@/lib/admin/approval-rules";
 
 /**
- * 双人复核。
+ * 危险操作留痕（原双人复核）。
  *
- * 这套机制的全部价值就在「**第二个人**」这四个字上。
- * 一旦允许自己批自己，它就退化成一个多余的确认弹窗 ——
- * 而多余的确认弹窗只会训练人闭着眼睛点确定。
+ * 2026-08 站长指令：管理员操作不再被「必须换一个人」挡住，
+ * 自己批自己放行。这组测试盯住的是**改完之后还剩什么**：
+ *   - 松掉的只有那一条 —— 自批要能通过
+ *   - 注册表和过期这两道安全边界一步没松 —— 它们防的不是人，
+ *     是任意代码执行入口和「批一条旧记录」
  */
 
 const NOW = 1_800_000_000_000;
@@ -64,20 +66,23 @@ describe("批准", () => {
     assert.equal(checkApprove(base).ok, true);
   });
 
-  it("**不能批准自己提出的操作**", () => {
-    const r = checkApprove({ ...base, actorId: "u_requester" });
-    assert.equal(r.ok, false);
-    assert.match(r.error!, /双人复核的意义/);
+  it("**自己批自己也放行**（站长指令）—— 留痕不是闸门", () => {
+    assert.equal(checkApprove({ ...base, actorId: "u_requester" }).ok, true);
   });
 
-  it("必须写复核意见", () => {
+  it("必须写批准意见 —— 松掉的是「换个人」，不是「说清楚」", () => {
     assert.equal(checkApprove({ ...base, note: "" }).ok, false);
   });
 
-  it("**过期的不能再执行** —— 当时的判断依据可能已经变了", () => {
+  it("**过期的不能再执行** —— 这条不随复核一起松：payload 是旧的", () => {
     const r = checkApprove({ ...base, expiresAt: NOW - 1 });
     assert.equal(r.ok, false);
     assert.match(r.error!, /过期/);
+  });
+
+  it("**自批也过不了过期这道** —— 两条规则是独立的，别在放松时一起带走", () => {
+    const r = checkApprove({ ...base, actorId: "u_requester", expiresAt: NOW - 1 });
+    assert.equal(r.ok, false);
   });
 
   it("没设有效期的不会被误判为过期", () => {
@@ -109,8 +114,8 @@ describe("驳回", () => {
     assert.equal(checkReject({ ...base, note: "" }).ok, false);
   });
 
-  it("不能处理自己提出的", () => {
-    assert.equal(checkReject({ ...base, actorId: "u_requester" }).ok, false);
+  it("自己驳回自己提出的也放行 —— 和撤回殊途同归，没理由拦", () => {
+    assert.equal(checkReject({ ...base, actorId: "u_requester" }).ok, true);
   });
 });
 

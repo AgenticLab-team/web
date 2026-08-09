@@ -32,7 +32,7 @@ export interface SettingRow {
   modified: boolean;
   /** 改了不会追溯历史数据 */
   retroactive: boolean;
-  /** 改错会静默影响所有人，要双人复核 */
+  /** 改错会静默影响所有人 —— 界面要常驻警告（不再强制复核，站长指令） */
   dangerous: boolean;
 
   updatedAt: number;

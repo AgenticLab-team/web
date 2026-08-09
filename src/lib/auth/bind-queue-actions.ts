@@ -25,25 +25,23 @@ const fail = (error: string): QueueResult => ({ ok: false, error });
  * 通过一个好友申请。
  *
  * ─────────────────────────────────────────
- * 限速在服务端，不在按钮上
+ * 服务端不再拦，但账还是要算（2026-08 站长指令）
  * ─────────────────────────────────────────
  *
- * 界面上会把「今天还能通过几个」显示出来，但那只是提示。
- * 真正的限制在这里 —— 按钮可以被连点、页面可以是过期的，
- * 而**风控不认这些理由**。
+ * 这里原来有一道硬性限速（每天 5 个、间隔 5 分钟），站长明确要求
+ * 管理接口不设限速。于是拦截去掉，但 currentAcceptBudget 的计算保留，
+ * 并且在每次通过后的返回里带上 —— 风控是真实存在过的失败模式，
+ * 判断交回给人，前提是人得看见数字。
  *
- * nekobot/client.ts 里那句「只在管理员后台手动、限速地使用」
- * 写了很久，而这条路一直没建出来。建的时候限速必须一起建：
- * 一个「手动的」操作在界面上点起来和自动的一样快。
+ * 拿掉拦截之后，「按钮被连点」不再有服务端兜底：
+ * 每一下都会真的打到上游。所以成功的 note 里必须回显今天的累计，
+ * 让连点的人第一时间看见自己点了几下。
  */
 export async function acceptFriendRequestAction(input: {
   wxId: string;
   reason: string;
 }): Promise<QueueResult> {
   const admin = await requireWritableAdmin("user.bind.approve");
-
-  const budget = currentAcceptBudget();
-  if (budget.remaining === 0 || budget.waitMs > 0) return fail(budget.reason);
 
   if (input.reason.trim().length < 4) {
     return fail("写一句为什么要通过他（至少 4 个字）");
@@ -55,9 +53,9 @@ export async function acceptFriendRequestAction(input: {
     /*
      * 上游失败**不记审计**。
      *
-     * 记了的话下一次的限速会把这次算进去 —— 于是一次失败的尝试
-     * 会消耗掉今天的额度。而额度是为了保护风控，
-     * 没真的发出去的请求不该占用它。
+     * 界面上「今天已经通过几个」是从审计日志数出来的 ——
+     * 记了失败的话那个数字会虚高，而它现在是风控判断的唯一依据：
+     * 没真的发出去的请求不该混进去。
      */
     return fail(`上游拒绝了：${error instanceof Error ? error.message : String(error)}`);
   }

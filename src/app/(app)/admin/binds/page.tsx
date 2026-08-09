@@ -80,8 +80,8 @@ export default async function AdminBindsPage() {
 
       <p className="t-caption px-1 pb-4 leading-relaxed text-[var(--ink-tertiary)]">
         绑定的主通道是<strong>在群里发验证码</strong> —— 机器人加好友已经触发过微信风控，
-        那条路不再当第一步。这里通过好友申请是限速的（一天有上限、两次之间要隔开），
-        限制在服务端，按钮上的提示只是提示。
+        那条路不再当第一步。通过好友申请<strong>不设服务端限制</strong>（站长指令），
+        上面那句「今天已经通过几个」是仅有的提醒 —— 点之前看一眼它。
       </p>
     </>
   );

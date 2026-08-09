@@ -16,8 +16,9 @@ import type { SettingRow as Row } from "@/lib/admin/settings";
  *      而那三五个才是排查问题时该看的。
  *   ② **「不会追溯」的提醒在改动的那一刻出现**，不是保存后给一句 toast ——
  *      那时人已经点完了。
- *   ③ **危险项不给输入框**，直接引导去复核队列。给了输入框再拒绝，
- *      只会让人觉得系统在耍他。
+ *   ③ **危险项照样给输入框**（2026-08 站长指令：不强制复核），
+ *      但警告常驻在输入框上方 —— 打字之前的那一眼才可能改变主意，
+ *      保存之后的提示只会被点掉。
  */
 export function SettingItem({ row }: { row: Row }) {
   const router = useRouter();
@@ -56,7 +57,7 @@ export function SettingItem({ row }: { row: Row }) {
             )}
             {row.dangerous && (
               <span className="t-caption2 font-medium" style={{ color: "var(--danger)" }}>
-                需双人复核
+                危险项
               </span>
             )}
           </p>
@@ -82,8 +83,12 @@ export function SettingItem({ row }: { row: Row }) {
 
       {open && (
         <div className="animate-rise mt-2.5 space-y-2">
-          {row.dangerous ? (
-            // 给了输入框再拒绝，只会让人觉得系统在耍他
+          {/*
+            危险项不再锁输入框（2026-08 站长指令：不强制复核）。
+            警告改为常驻在输入框上方 —— 出现在打字之前，而不是保存之后：
+            保存之后的提示只会被点掉，打字之前的那一眼才可能改变主意。
+          */}
+          {row.dangerous && (
             <p
               className="t-caption rounded-[var(--radius-control)] px-3 py-2 leading-relaxed"
               style={{
@@ -91,70 +96,67 @@ export function SettingItem({ row }: { row: Row }) {
                 color: "var(--danger)",
               }}
             >
-              这一项改错会<strong>静默影响所有人</strong>，而且不会有人立刻发现 ——
-              请到「危险操作复核」里发起，需要另一个人批准。
+              这一项改错会<strong>静默影响所有人</strong>，而且不会有人立刻发现。
+              不拦你 —— 但改完记得亲自验证一遍效果。
             </p>
-          ) : (
-            <>
-              <input
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                className={`${row.type === "int" ? "tabular " : ""}${inputClass}`}
-                placeholder={row.defaultValue ?? ""}
-              />
-
-              <p className="t-caption2 text-[var(--ink-quaternary)]">
-                类型 {row.type}
-                {row.minValue !== null && ` · 不小于 ${row.minValue}`}
-                {row.maxValue !== null && ` · 不大于 ${row.maxValue}`}
-                {row.defaultValue !== null && ` · 默认 ${row.defaultValue}`}
-                {row.changeCount > 0 && ` · 改过 ${row.changeCount} 次`}
-                {row.updatedByName && ` · 上次由 ${row.updatedByName} 修改`}
-              </p>
-
-              {/* 提醒在改动的那一刻出现，不是保存后 —— 那时人已经点完了 */}
-              {changed && row.retroactive && (
-                <p
-                  className="t-caption rounded-[var(--radius-control)] px-3 py-2 leading-relaxed"
-                  style={{
-                    background: "color-mix(in srgb, var(--warning) 10%, transparent)",
-                    color: "var(--warning)",
-                  }}
-                >
-                  这一项<strong>不会追溯历史数据</strong>。已经入库的记录还是按旧规则算的，
-                  榜单和当前规则会对不上 —— 要一致的话，改完还得跑一次重算。
-                </p>
-              )}
-
-              <input
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="理由（必填，会记入变更历史）"
-                className={inputClass}
-              />
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={pending || !changed || !reason.trim()}
-                  onClick={() => run(() => changeSetting({ key: row.key, value, reason }))}
-                  className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
-                >
-                  保存
-                </button>
-                {row.modified && (
-                  <button
-                    type="button"
-                    disabled={pending || !reason.trim()}
-                    onClick={() => run(() => resetSetting({ key: row.key, reason }))}
-                    className="t-subhead rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 text-[var(--ink-secondary)] disabled:opacity-40"
-                  >
-                    恢复默认
-                  </button>
-                )}
-              </div>
-            </>
           )}
+          <input
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className={`${row.type === "int" ? "tabular " : ""}${inputClass}`}
+            placeholder={row.defaultValue ?? ""}
+          />
+
+          <p className="t-caption2 text-[var(--ink-quaternary)]">
+            类型 {row.type}
+            {row.minValue !== null && ` · 不小于 ${row.minValue}`}
+            {row.maxValue !== null && ` · 不大于 ${row.maxValue}`}
+            {row.defaultValue !== null && ` · 默认 ${row.defaultValue}`}
+            {row.changeCount > 0 && ` · 改过 ${row.changeCount} 次`}
+            {row.updatedByName && ` · 上次由 ${row.updatedByName} 修改`}
+          </p>
+
+          {/* 提醒在改动的那一刻出现，不是保存后 —— 那时人已经点完了 */}
+          {changed && row.retroactive && (
+            <p
+              className="t-caption rounded-[var(--radius-control)] px-3 py-2 leading-relaxed"
+              style={{
+                background: "color-mix(in srgb, var(--warning) 10%, transparent)",
+                color: "var(--warning)",
+              }}
+            >
+              这一项<strong>不会追溯历史数据</strong>。已经入库的记录还是按旧规则算的，
+              榜单和当前规则会对不上 —— 要一致的话，改完还得跑一次重算。
+            </p>
+          )}
+
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="理由（必填，会记入变更历史）"
+            className={inputClass}
+          />
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={pending || !changed || !reason.trim()}
+              onClick={() => run(() => changeSetting({ key: row.key, value, reason }))}
+              className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
+            >
+              保存
+            </button>
+            {row.modified && (
+              <button
+                type="button"
+                disabled={pending || !reason.trim()}
+                onClick={() => run(() => resetSetting({ key: row.key, reason }))}
+                className="t-subhead rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 text-[var(--ink-secondary)] disabled:opacity-40"
+              >
+                恢复默认
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

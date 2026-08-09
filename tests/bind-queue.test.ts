@@ -35,43 +35,50 @@ const activity = (o: Partial<ApplicantActivity> = {}): ApplicantActivity => ({
   ...o,
 });
 
-describe("**通过好友申请是限速的**", () => {
-  it("没通过过的时候可以通过", () => {
+describe("**通过好友申请：算账但不拦**（2026-08 站长指令）", () => {
+  it("没通过过的时候数字是满的", () => {
     const b = acceptBudget([], NOW);
     assert.equal(b.remaining, ACCEPT_DAILY_CAP);
     assert.equal(b.waitMs, 0);
   });
 
-  it("**一天有上限** —— 机器人加好友被风控过", () => {
+  it("**超过安全线时提示里要点名风控** —— 这是判断交回给人之后仅剩的护栏", () => {
     const times = Array.from({ length: ACCEPT_DAILY_CAP }, (_, i) => NOW - i * 3600_000);
     const b = acceptBudget(times, NOW);
     assert.equal(b.remaining, 0);
     assert.match(b.reason, /风控/);
+    // 「明天再说」式的措辞是拦截时代的 —— 现在不拦，不能再这么说
+    assert.doesNotMatch(b.reason, /明天再说/);
   });
 
-  it("**两次之间要隔开** —— 连点二十下和脚本没有区别", () => {
+  it("**连得太密时提示间隔** —— waitMs 仍然算，只是不再用来拒绝", () => {
     const b = acceptBudget([NOW - 60_000], NOW);
-    assert.equal(b.remaining > 0, true, "额度还有");
-    assert.ok(b.waitMs > 0, "却让它立刻又通过了一个");
-    assert.match(b.reason, /分钟/);
+    assert.equal(b.remaining > 0, true);
+    assert.ok(b.waitMs > 0);
+    assert.match(b.reason, /风控|分钟|密/);
   });
 
-  it("隔够了就放行", () => {
+  it("隔够了就没有间隔提示", () => {
     const b = acceptBudget([NOW - ACCEPT_MIN_GAP_MS - 1], NOW);
     assert.equal(b.waitMs, 0);
   });
 
-  it("**超过 24 小时的不算数** —— 额度是滚动的，不是自然日", () => {
+  it("**超过 24 小时的不算数** —— 数字是滚动窗口，不是自然日", () => {
     const old = Array.from({ length: ACCEPT_DAILY_CAP }, () => NOW - DAY_MS - 1000);
     const b = acceptBudget(old, NOW);
     assert.equal(b.remaining, ACCEPT_DAILY_CAP);
     assert.equal(b.usedToday, 0);
   });
 
-  it("额度用完时说得出还要等多久", () => {
-    const times = Array.from({ length: ACCEPT_DAILY_CAP }, (_, i) => NOW - i * 3600_000);
-    const b = acceptBudget(times, NOW);
-    assert.ok(b.waitMs > 0);
+  it("**每一档提示都报今天的累计** —— 连点的人要能立刻看见自己点了几下", () => {
+    for (const times of [
+      [] as number[],
+      [NOW - 60_000],
+      Array.from({ length: ACCEPT_DAILY_CAP }, (_, i) => NOW - i * 3600_000),
+    ]) {
+      const b = acceptBudget(times, NOW);
+      assert.equal(b.usedToday, times.length);
+    }
   });
 
   it("传进来的顺序不影响结果", () => {
@@ -79,11 +86,6 @@ describe("**通过好友申请是限速的**", () => {
     const a = acceptBudget(times, NOW);
     const b = acceptBudget([...times].reverse(), NOW);
     assert.deepEqual(a, b);
-  });
-
-  it("上限定得低 —— 高了就等于没限", () => {
-    assert.ok(ACCEPT_DAILY_CAP <= 10, `一天 ${ACCEPT_DAILY_CAP} 个太多了`);
-    assert.ok(ACCEPT_MIN_GAP_MS >= 60_000);
   });
 });
 
@@ -213,20 +215,29 @@ describe("接线", () => {
   const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
   const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
-  it("**限速在服务端，不只在按钮上** —— 按钮能被连点，页面可能是过期的", () => {
+  it("**服务端不再拦**（站长指令）—— 不许再出现按额度 fail 的分支", () => {
+    /*
+     * 这条是方向锁：有人日后看到「风控」两个字很可能又把拦截加回来，
+     * 而那正是站长明确否掉的。要恢复拦截，先改这条测试，
+     * 那意味着他会看到这段说明。
+     */
     const code = strip(src("lib/auth/bind-queue-actions.ts"));
     const fn = code.slice(code.indexOf("function acceptFriendRequestAction"));
-    assert.match(fn.slice(0, 600), /currentAcceptBudget\(\)/);
-    assert.match(fn.slice(0, 600), /budget\.remaining === 0 \|\| budget\.waitMs > 0/);
+    assert.doesNotMatch(fn.slice(0, 800), /budget\.remaining === 0|budget\.waitMs > 0/);
   });
 
-  it("**限速检查在调上游之前** —— 之后检查就等于没检查", () => {
+  it("**不拦不等于不算** —— 成功之后要把今天的累计回显给点按钮的人", () => {
     const code = strip(src("lib/auth/bind-queue-actions.ts"));
-    const fn = code.slice(code.indexOf("function acceptFriendRequestAction"));
-    const budgetAt = fn.indexOf("currentAcceptBudget");
-    const callAt = fn.indexOf("nekobot.acceptFriendRequest");
-    assert.ok(budgetAt > 0 && callAt > 0);
-    assert.ok(budgetAt < callAt, "先调了上游再查限速");
+    const fn = code.slice(
+      code.indexOf("function acceptFriendRequestAction"),
+      code.indexOf("function manualBindAction"),
+    );
+    // 通过之后重新算一次并放进 note —— 数字必须是含本次的
+    const recountAt = fn.indexOf("currentAcceptBudget()");
+    const auditAt = fn.indexOf("audit(");
+    assert.ok(recountAt > 0, "没在算今天通过了几个");
+    assert.ok(recountAt > auditAt, "计数要在落审计之后取，否则不含本次");
+    assert.match(fn, /after\.reason/);
   });
 
   it("**上游失败不记审计** —— 记了的话失败的尝试会白白吃掉今天的额度", () => {

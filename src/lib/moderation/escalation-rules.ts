@@ -5,7 +5,7 @@ import { isStricter } from "@/lib/forum/visibility";
  * 可见性提升的判定。纯函数。
  *
  * 这条队列是「群聊转帖锁定在原群」这条硬约束的**唯一出口**，
- * 所以它自己必须是最严的一段流程。四条底线写在代码里，配置改不动：
+ * 所以它自己必须是最严的一段流程。三条底线写在代码里，配置改不动：
  *
  *   1. **上限是「仅成员」，永远到不了公开。**
  *      群里说的话不该出现在搜索引擎里 —— 那不是「更多人能看到」，
@@ -14,8 +14,11 @@ import { isStricter } from "@/lib/forum/visibility";
  *      混进来只会让队列里出现无需审核的东西。
  *   3. **需要原作者同意。** 群里那几个人只是在群里聊天，
  *      没同意过被拿给一千六百人看。
- *   4. **不能自己批自己。** 转帖人自己批准自己的申请，
- *      整条约束就形同虚设。
+ *
+ * 原来还有第四条「不能自己批自己」。2026-08 按站长指令去掉了 ——
+ * 管理员审核不再被「换一个人」挡住。注意去掉的只是那一条：
+ * 上面三条保护的是**群里说话的人**，不是审核流程本身，
+ * 谁来点批准都不能少了他们的同意。
  */
 
 export interface RuleResult {
@@ -73,13 +76,11 @@ export function checkApprove(input: ApproveInput): RuleResult {
   if (!input.note.trim()) return no("必须写明理由，申请人会看到");
   if (input.status !== "pending") return no("这条申请已经处理过了");
 
-  // 自己批自己的申请，整条约束就形同虚设
-  if (input.actorId === input.requestedBy) {
-    return no("不能批准自己提交的申请，请交给其他管理员");
-  }
-  if (input.actorId === input.postAuthorId) {
-    return no("不能批准自己帖子的提升申请");
-  }
+  /*
+   * 自己批自己：放行（2026-08 站长指令）。actorId/requestedBy/postAuthorId
+   * 仍然都传进来 —— 恢复限制时只改这里，调用方不用动。
+   * 真正兜住内容安全的是下面那条：同意没凑齐，谁批都不行。
+   */
 
   /*
    * 原作者同意是**批准的前提**，不是可选项。
@@ -99,9 +100,6 @@ export function checkApprove(input: ApproveInput): RuleResult {
 export function checkReject(input: { actorId: string; requestedBy: string; status: string; note: string }): RuleResult {
   if (!input.note.trim()) return no("必须写明理由，申请人会看到");
   if (input.status !== "pending") return no("这条申请已经处理过了");
-  if (input.actorId === input.requestedBy) {
-    return no("不能处理自己提交的申请，请交给其他管理员");
-  }
   return OK;
 }
 

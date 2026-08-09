@@ -16,21 +16,23 @@
  * 而只是一个默认值。
  *
  * ─────────────────────────────────────────
- * 通过好友申请是限速的，这不是性能考虑
+ * 通过好友申请：算账，但不拦（2026-08 站长指令）
  * ─────────────────────────────────────────
  *
- * 机器人加好友已经触发过微信风控。nekobot/client.ts 里那句
- * 「只在管理员后台手动、限速地使用」写了很久,而这条路从来没建出来 ——
- * 于是 acceptFriendRequest 一个调用点都没有。
+ * 这套额度原来是服务端的硬性拦截。站长明确要求管理接口不设限速
+ * （「我有数」），所以服务端不再拒绝 —— 但**计算保留**：
+ * 机器人加好友触发过微信风控是事实，额度算出来摆在界面上，
+ * 让点按钮的人在点之前看见「今天已经通过几个」。
  *
- * 建出来的时候限速必须一起建。一个「手动的」操作在界面上点起来
- * 和自动的一样快,人一口气点二十下不需要任何决心。
+ * 也就是说，风控的判断从代码手里交回到了人手里。
+ * 数字如果不再显示，这个决定就退化成了「没人知道点了多少下」——
+ * 所以改这里的人注意：reason 那句话必须一直有地方展示。
  */
 
-/** 一天最多通过几个好友申请 */
+/** 一天通过几个以内算安全 —— 只用于提示，服务端不拦 */
 export const ACCEPT_DAILY_CAP = 5;
 
-/** 两次通过之间至少隔多久 —— 连点二十下和脚本没有区别 */
+/** 两次通过之间建议至少隔多久 —— 同上，只是提示 */
 export const ACCEPT_MIN_GAP_MS = 5 * 60_000;
 
 export const DAY_MS = 86_400_000;
@@ -38,14 +40,15 @@ export const DAY_MS = 86_400_000;
 export interface AcceptBudget {
   usedToday: number;
   remaining: number;
-  /** 还要等多久才能通过下一个；0 表示现在就能 */
+  /** 距建议的安全间隔还差多久；0 表示已经隔够了 */
   waitMs: number;
   reason: string;
 }
 
 /**
- * 现在还能不能通过好友申请。
+ * 今天通过了几个、离安全线还有多远。
  *
+ * 只产出给人看的判断，不产出「能不能」—— 服务端不再据此拒绝。
  * `recentAcceptTimes` 是最近的通过时间（倒序即可，这里不假设顺序）。
  */
 export function acceptBudget(recentAcceptTimes: number[], now: number): AcceptBudget {
@@ -58,8 +61,8 @@ export function acceptBudget(recentAcceptTimes: number[], now: number): AcceptBu
     return {
       usedToday: withinDay.length,
       remaining: 0,
-      waitMs: DAY_MS - (now - Math.min(...withinDay)),
-      reason: `今天已经通过 ${withinDay.length} 个了，机器人加好友被风控过，明天再说`,
+      waitMs,
+      reason: `今天已经通过 ${withinDay.length} 个，微信对机器人频繁加好友有风控 —— 不拦你，但风险自己拿着`,
     };
   }
   if (waitMs > 0) {
@@ -67,14 +70,14 @@ export function acceptBudget(recentAcceptTimes: number[], now: number): AcceptBu
       usedToday: withinDay.length,
       remaining,
       waitMs,
-      reason: `离上一个通过还不到 ${Math.round(ACCEPT_MIN_GAP_MS / 60_000)} 分钟，再等 ${Math.ceil(waitMs / 60_000)} 分钟`,
+      reason: `离上一个通过还不到 ${Math.round(ACCEPT_MIN_GAP_MS / 60_000)} 分钟 —— 连得太密是最典型的风控触发姿势`,
     };
   }
   return {
     usedToday: withinDay.length,
     remaining,
     waitMs: 0,
-    reason: `今天还能通过 ${remaining} 个`,
+    reason: `今天已通过 ${withinDay.length} 个，${ACCEPT_DAILY_CAP} 个以内比较稳`,
   };
 }
 

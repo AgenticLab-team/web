@@ -12,7 +12,11 @@ import {
 } from "@/lib/admin/approval-actions";
 
 /**
- * 危险操作的发起与复核。
+ * 危险操作的发起与批准。
+ *
+ * 2026-08 起自己发起的也能自己批（站长指令，不再强制双人复核）——
+ * 所以发起人看到的不再是「等别人来批」，而是和别人一样的批准表单，
+ * 外加一个撤回按钮。
  *
  * 「批准」和「驳回」长得一样重，且**批准的按钮上写的是会发生什么**
  * （「批准并执行」而不是「同意」）—— 批准之后立刻执行，
@@ -56,31 +60,13 @@ export function ApprovalDecision({
     );
   }
 
-  if (isRequester) {
-    return (
-      <div className="space-y-2">
-        <p className="t-caption rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 text-[var(--ink-tertiary)]">
-          这是你发起的，要另一个人来批 —— 自己批自己的话，这套机制就退化成一个确认弹窗。
-        </p>
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => run(() => withdrawApproval({ id }))}
-          className="t-caption rounded-[var(--radius-pill)] bg-[var(--fill)] px-2.5 py-1 text-[var(--ink-secondary)] disabled:opacity-40"
-        >
-          撤回
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-2">
       <textarea
         value={note}
         onChange={(e) => setNote(e.target.value)}
         rows={2}
-        placeholder="复核意见（必填）"
+        placeholder="批准/驳回意见（必填，会记入历史）"
         className="t-subhead w-full resize-none rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]"
       />
       <div className="flex gap-2">
@@ -101,9 +87,21 @@ export function ApprovalDecision({
         >
           驳回
         </button>
+        {isRequester && (
+          // 撤回不用写意见 —— 让「算了」这条路比「随便批了」更省事
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => run(() => withdrawApproval({ id }))}
+            className="t-caption rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 text-[var(--ink-secondary)] disabled:opacity-40"
+          >
+            撤回
+          </button>
+        )}
       </div>
       <p className="t-caption2 text-[var(--ink-tertiary)]">
         批准即执行：{describe}
+        {isRequester && " —— 这是你自己发起的，批之前当自己是那个复核的人再读一遍"}
       </p>
     </div>
   );
@@ -151,7 +149,7 @@ export function DangerousSettingRequest({
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         rows={2}
-        placeholder="为什么要改（必填，复核的人要靠它判断）"
+        placeholder="为什么要改（必填，事后翻记录靠这句话）"
         className={`${inputClass} resize-none`}
       />
 
