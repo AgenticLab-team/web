@@ -192,9 +192,16 @@ describe("**同一件事只有一套长相**", () => {
   it("翻天时带上筛选参数 —— 丢掉的话人会回到「全部群」", () => {
     const nav = src("components/ui/DayNav.tsx");
     assert.match(nav, /hidden\?: Record<string, string \| undefined>/);
+    /*
+     * 断言的是「群跟着走」，不是某一行的字面写法 ——
+     * 回看页后来又多了一个排序筛选，写死整个 hidden 的话，
+     * 每加一个筛选这条测试就会假红一次，而它想防的东西根本没变。
+     */
     for (const p of ["app/(app)/archive/page.tsx", "app/(app)/forum/convert/page.tsx"]) {
-      assert.match(src(p), /hidden=\{\{ group: convId \}\}/, `${p} 翻天会丢掉群`);
+      assert.match(src(p), /hidden=\{\{[^}]*group: convId/, `${p} 翻天会丢掉群`);
     }
+    // 回看页的排序同样是筛选：跳一次日期就被打回默认排序的话，和丢掉群一样烦
+    assert.match(src("app/(app)/archive/page.tsx"), /hidden=\{\{[^}]*order:/);
   });
 
   it("「今天/昨天」比一串数字好认", () => {

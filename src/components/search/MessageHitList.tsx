@@ -1,11 +1,13 @@
 "use client";
 
 import { ChevronDown, ChevronUp } from "lucide-react";
+import Link from "next/link";
 import { useState, useTransition } from "react";
 
 import { Avatar } from "@/components/Avatar";
 import { PersonLink } from "@/components/PersonLink";
 import { relativeTime } from "@/components/forum/PostList";
+import { messageLink } from "@/lib/messages/archive-rules";
 import { loadContext } from "@/lib/search/actions";
 import type { ContextMessage, MessageHit } from "@/lib/search/messages";
 
@@ -127,6 +129,19 @@ function HitRow({ hit }: { hit: MessageHit }) {
           ) : (
             <p className="t-caption text-[var(--ink-tertiary)]">取不到上下文</p>
           )}
+
+          {/*
+            * 就地看前后各 8 条解决大部分情况，但「我想看这条前后那半小时」
+            * 只能去回看页。以前从搜索结果没有任何路能过去 ——
+            * 人得自己记住日期，再去按天翻，再在几千条里找回这一条。
+            */}
+          <Link
+            href={messageLink(hit.id, { convId: hit.convId })}
+            prefetch={false}
+            className="t-caption2 mt-2 inline-block text-[var(--accent)] transition active:opacity-60"
+          >
+            在群聊记录里打开这一条 →
+          </Link>
         </div>
       )}
     </div>

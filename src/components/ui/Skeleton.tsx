@@ -115,17 +115,26 @@ export function CardListSkeleton({ cards = 5, avatar = true }: { cards?: number;
   );
 }
 
-/** 聊天记录行的骨架。对齐按天回看的行：28px 头像 + px-4 py-2.5 */
+/**
+ * 聊天记录行的骨架。对齐按天回看的行：20px 头像 + pl-3 py-1，**一行一条**。
+ *
+ * 回看那一行后来从三行压成一行（见 components/messages/ArchiveMessage.tsx），
+ * 骨架必须跟着压 —— 否则骨架有 12 行 × 62px，真内容只有 12 行 × 30px，
+ * 数据一到整页往上跳一大截。骨架的意义就是**把位置先占准**，
+ * 占错了比不占更难受。
+ */
 export function ChatListSkeleton({ rows = 10 }: { rows?: number }) {
   return (
     <div className="inset-group" role="status" aria-busy="true" aria-label="加载中">
       {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="inset-row flex gap-3 px-4 py-2.5">
-          <Skeleton className="mt-0.5 h-7 w-7 shrink-0 rounded-full" />
-          <span className="min-w-0 flex-1 space-y-1.5">
-            <Skeleton className="h-3 w-24" />
+        <div key={i} className="inset-row flex items-start gap-2 py-1 pl-3">
+          <Skeleton className="mt-0.5 h-5 w-5 shrink-0 rounded-full" />
+          <span className="min-w-0 flex-1 py-0.5">
             <Skeleton className={`h-[0.9375rem] ${i % 4 === 0 ? "w-11/12" : i % 4 === 1 ? "w-1/3" : i % 4 === 2 ? "w-2/3" : "w-1/2"}`} />
           </span>
+          {/* 右侧那两条窄栏也要占住，不然内容一到时正文宽度会变 */}
+          <Skeleton className="mt-1 h-3 w-8 shrink-0" />
+          <span className="w-9 shrink-0" />
         </div>
       ))}
     </div>

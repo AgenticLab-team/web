@@ -277,6 +277,34 @@ body {
   box-shadow: inset 0 0.5px 0 var(--separator);
 }
 
+/*
+ * ── 「就是这一条」───────────────────────────────────────
+ *
+ * 从通知或搜索结果直达某条消息时，光把它滚进视口是不够的：
+ * 一屏里还有几十条长得一模一样的消息，人照样得自己找 ——
+ * 那和「只跳到那一页」没有区别。必须让它自己站出来。
+ *
+ * 分两层，因为这两层解决的是两件事：
+ *   · 常驻的浅底色 + 左侧色条 —— 停留期间一直指着「就是它」，
+ *     而且它不依赖动画：reduce-motion 会把动画压成 0.01ms，
+ *     只做闪一下的话，那些用户什么都看不到；
+ *   · 短促的强闪两下 —— 视线落上去的那一刻抓住注意力。
+ *
+ * 不写 fill-mode。这不是入场动画，闪完就该回到常驻那层；
+ * forwards 会让它永久持有 to 帧，还顺手造一个层叠上下文
+ * （上面那条铁律的由来）。
+ */
+.msg-focus {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+  animation: msg-flash var(--motion-shift) var(--ease-out-quart) 2;
+}
+
+@keyframes msg-flash {
+  from { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+  to   { background: var(--accent-soft); }
+}
+
 .chrome {
   background: var(--chrome);
   backdrop-filter: saturate(180%) blur(20px);

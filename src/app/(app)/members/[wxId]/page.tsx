@@ -5,9 +5,14 @@ import { notFound } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
 import { FollowButton } from "@/components/forum/FollowButton";
+import { RepoShowcase } from "@/components/github/RepoShowcase";
+import { publicConnectionOf } from "@/lib/github/link";
+import { showcaseFor } from "@/lib/github/repos";
+import { githubEnabled } from "@/lib/github/secret";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, PageNote, Section, StatTile } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
+import { messageLink } from "@/lib/messages/archive-rules";
 import {
   mentionCountFor,
   recentMentionsFor,
@@ -71,6 +76,24 @@ export default async function PersonPage({
   const followingThem =
     canFollowThem && user ? isFollowing(user.id, "user", account!.id) : false;
 
+  /*
+   * GitHub 项目。
+   *
+   * 三道门都得过：站里配了 OAuth、这个人绑了、**而且他自己打开了展示开关**。
+   * 任何一道不过就是 `null`，那一整段（连标题带边框）从页面上消失 ——
+   * 不是显示一个空的「GitHub」区块。
+   *
+   * 空区块有两个问题：它让绝大多数人的主页多一块没内容的地方，
+   * 而且它把「这个人没绑 GitHub」变成了一条对所有同群的人公开的信息。
+   *
+   * 数据只读缓存表，**这一页一个网络请求都不发** ——
+   * 每次渲染都打 GitHub API 的话，GitHub 的限流是按服务器 IP 算的，
+   * 有人来回刷几个主页就能把全站的额度耗光。
+   */
+  const githubConn =
+    githubEnabled() && account ? publicConnectionOf(account.id) : null;
+  const githubRepos = githubConn ? showcaseFor(githubConn.userId, githubConn.pinnedRepos) : [];
+
   return (
     <>
       <PageHeader
@@ -98,13 +121,20 @@ export default async function PersonPage({
         <StatTile label="被回复" value={replyCount} />
       </div>
 
+      {githubConn && githubRepos.length > 0 && (
+        <Section title="GitHub 项目">
+          <RepoShowcase repos={githubRepos} login={githubConn.login} />
+        </Section>
+      )}
+
       {recentMentions.length > 0 && (
         <Section title="最近被 @">
           <div className="inset-group">
             {recentMentions.map((m) => (
               <Link
                 key={m.messageId}
-                href={`/archive?group=${encodeURIComponent(m.convId)}&date=${dateKey(m.ts)}`}
+                /* 直达那一条并高亮，而不是「落到那一天自己找」—— 见 lib/messages/archive-rules.ts */
+                href={messageLink(m.messageId, { convId: m.convId, date: dateKey(m.ts) })}
                 className="inset-row block px-4 py-2.5 transition active:opacity-70"
               >
                 <p className="t-caption flex items-baseline justify-between gap-2 text-[var(--ink-secondary)]">

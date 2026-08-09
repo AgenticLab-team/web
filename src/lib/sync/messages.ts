@@ -166,6 +166,7 @@ export async function syncGroupMessages(
             );
             if (!msg.is_send) {
               mentionNotifies.push({
+                messageId: msg.msg_svr_id,
                 convId: msg.conv_id,
                 convName: msg.conv_name,
                 messageTs: msg.create_time,

@@ -11,6 +11,7 @@ import {
   users,
 } from "@/lib/db/schema";
 import { notify } from "@/lib/forum/notify";
+import { messageLink } from "@/lib/messages/archive-rules";
 import {
   resolveMentions,
   type MentionRecord,
@@ -122,6 +123,8 @@ export function insertMentions(
 }
 
 export interface MentionNotifyInput {
+  /** 被 @ 的那条消息的 id —— 通知要能直达它，而不只是「那一天」 */
+  messageId: string;
   convId: string;
   convName: string;
   messageTs: number;
@@ -170,11 +173,24 @@ export function notifyMentionedUsers(batch: MentionNotifyInput[]): void {
         groupKey: `mention:group:${item.convId}`,
         title: `${item.senderName ?? "有人"}在「${item.convName}」@ 了你`,
         body: item.content.slice(0, 120),
-        // 日期用社区时区算 —— 服务器时区的午夜前后会链到错的一天
-        link: `/archive?group=${encodeURIComponent(item.convId)}&date=${dateKey(item.messageTs)}`,
+        /*
+         * 直达那一条，不是「那一天」。
+         *
+         * 原来链的是 `?group=…&date=…` —— 落到那一天之后，
+         * 人要在**几千条**（真实数据里一天最多 4553 条）里
+         * 自己找那一条。带上 m 之后，服务端按 id 算出页码并高亮它。
+         *
+         * group/date 仍然留着当兜底：那条消息的正文被存储裁剪掉之后
+         * 定位不到，至少还能落到当天。
+         * 日期用社区时区算 —— 服务器时区的午夜前后会链到错的一天。
+         */
+        link: messageLink(item.messageId, {
+          convId: item.convId,
+          date: dateKey(item.messageTs),
+        }),
         actorName: item.senderName ?? undefined,
         refType: "message",
-        refId: `${item.convId}`,
+        refId: item.messageId,
       });
     }
   }

@@ -52,7 +52,9 @@ describe("接线", () => {
   const surfaces: [string, string][] = [
     ["成员目录", "app/(app)/members/page.tsx"],
     ["榜单", "components/LeaderboardList.tsx"],
-    ["群聊存档", "app/(app)/archive/page.tsx"],
+    // 存档那一行后来抽成了组件（一条消息要压进一行，排版细节太多）——
+    // 断言跟着渲染那一行的文件走，页面本身只负责取数和拼链接
+    ["群聊存档", "components/messages/ArchiveMessage.tsx"],
     ["搜索结果", "components/search/MessageHitList.tsx"],
     ["帖子详情", "app/(app)/forum/p/[id]/page.tsx"],
   ];

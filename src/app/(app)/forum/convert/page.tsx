@@ -4,10 +4,13 @@ import { notFound, redirect } from "next/navigation";
 
 import { MessagePicker } from "@/components/forum/MessagePicker";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { BackLink, Callout, Empty, PageNote, Pill, PillRow, SearchField } from "@/components/ui/primitives";
 import { requireFeature } from "@/lib/flags/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { messagesOfDay, searchMessagesForConvert } from "@/lib/forum/convert-source";
+import { ARCHIVE_PAGE_SIZE, parseMessageId } from "@/lib/messages/archive-rules";
+import { locateMessage } from "@/lib/messages/locate";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { todayKey } from "@/lib/time";
 import { DayNav } from "@/components/ui/DayNav";
@@ -24,20 +27,39 @@ export const dynamic = "force-dynamic";
 export default async function ConvertPage({
   searchParams,
 }: {
-  searchParams: Promise<{ group?: string; date?: string; q?: string }>;
+  searchParams: Promise<{
+    group?: string;
+    date?: string;
+    q?: string;
+    page?: string;
+    /** 从「按天回看」里点某一条的引用图标过来时带的消息 id */
+    m?: string;
+  }>;
 }) {
   const user = await getCurrentUser();
   // 功能开关：关掉之后这一页 404 —— 只藏导航的话，地址栏敲一下照样进得去
   requireFeature("forum", user);
   if (!user) redirect("/login");
 
-  const { group, date, q } = await searchParams;
+  const { group, date, q, page, m } = await searchParams;
   const query = (q ?? "").trim();
   const myGroups = visibleGroupsFor(user);
   if (myGroups.length === 0) notFound();
 
-  const convId = myGroups.find((g) => g.convId === group)?.convId ?? myGroups[0].convId;
-  const day = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayKey();
+  /*
+   * 带着某条消息进来（在回看里看到一句话，想就地引用它）。
+   *
+   * 这里的排序固定是正序 —— 整理成帖子读的是对话，倒着读是乱的。
+   * 定位同样要过群可见性（locateMessage 里收口），
+   * 拿不到就当没传，退回按天翻。
+   */
+  const focusId = query ? null : parseMessageId(m);
+  const located = focusId ? locateMessage(user, focusId, { order: "asc" }) : null;
+
+  const convId =
+    located?.convId ?? myGroups.find((g) => g.convId === group)?.convId ?? myGroups[0].convId;
+  const day =
+    located?.date ?? (date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayKey());
 
   /*
    * 搜到东西就按搜索来，否则按天。
@@ -47,7 +69,11 @@ export default async function ConvertPage({
    */
   const source = query
     ? searchMessagesForConvert(user, convId, query)
-    : messagesOfDay(user, convId, day);
+    : messagesOfDay(user, convId, day, {
+        order: "asc",
+        page: located ? located.page : page,
+        perPage: ARCHIVE_PAGE_SIZE,
+      });
   if (source === null) notFound();
   const rows = source.rows;
   const dropped = source.dropped;
@@ -135,8 +161,22 @@ export default async function ConvertPage({
           <Empty title={`${groupName} 这天没有消息`} hint="换个日期看看" />
         )
       ) : (
-        <MessagePicker convId={convId} groupName={groupName} messages={rows} />
+        <MessagePicker
+          convId={convId}
+          groupName={groupName}
+          messages={rows}
+          focusId={located?.anchored ? focusId : null}
+        />
       )}
+
+      {/* 搜索态只有一页，Pagination 自己会隐藏 */}
+      <Pagination
+        slice={source.slice}
+        total={source.total}
+        noun="条消息"
+        basePath="/forum/convert"
+        params={{ group: convId, date: day }}
+      />
 
       <PageNote>
         转出来的帖子<strong className="font-medium">只有本群成员看得到</strong>。
