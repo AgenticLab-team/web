@@ -177,6 +177,32 @@ export async function runHealthChecks(): Promise<HealthReport[]> {
   return reports;
 }
 
+/**
+ * 记下这一轮定时任务本身的健康状态。
+ *
+ * 写完之后由**下一轮**的告警判定读到 —— 这一轮的告警投递
+ * 排在所有步骤之前就结束了，它不可能知道自己这一轮的结果。
+ *
+ * 定时器 5 分钟一轮、cron 的报警线是 30 分钟，
+ * 所以真的坏了会在半小时内报出来；偶发一次不会。
+ */
+export function recordTickHealth(status: HealthStatus, detail: string): void {
+  db.insert(systemHealth).values({ component: "cron", status, detail }).run();
+}
+
+/** 上一轮定时任务的状态，喂给这一轮的告警判定 */
+export function lastTickHealth(): HealthReport | null {
+  const row = db
+    .select()
+    .from(systemHealth)
+    .where(sql`${systemHealth.component} = 'cron'`)
+    .orderBy(desc(systemHealth.checkedAt))
+    .limit(1)
+    .get();
+  if (!row) return null;
+  return { component: "cron", status: row.status, detail: row.detail ?? undefined };
+}
+
 /** 各组件的最新状态，供后台首屏与 /api/health 使用 */
 export function latestHealth() {
   return db

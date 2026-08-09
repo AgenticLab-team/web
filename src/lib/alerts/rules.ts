@@ -98,6 +98,12 @@ export const DEFAULT_RULES: Record<string, AlertRule> = {
     renotifyAfterMs: 30 * 86_400_000,
     retryAfterMs: 6 * 3600_000,
   },
+  /*
+   * 定时任务本身。一轮偶发失败（数据库刚好被锁了）不值得报，
+   * 但连着挂半小时说明是真的坏了 —— 而定时任务坏了之后，
+   * 同步、结算、告警全都停在那一刻。
+   */
+  cron: { fireAfterMs: 30 * 60_000, renotifyAfterMs: 12 * 3600_000, retryAfterMs: 10 * 60_000 },
 };
 
 export function ruleFor(component: string): AlertRule {
@@ -236,6 +242,7 @@ const HINTS: Record<string, string> = {
   upstream: "先查 frp 隧道：ssh 上去看 127.0.0.1:8090 通不通",
   db: "查磁盘是否写满、WAL 是否损坏",
   offsite: "看 /admin/backup：是没配置、传失败，还是该做恢复演练了",
+  cron: "journalctl -u agenticlab-health -n 50 —— 详情里已经写了是哪一步",
   disk: "跑存储裁剪，或清理媒体缓存",
 };
 
@@ -246,6 +253,7 @@ export const COMPONENT_LABELS: Record<string, string> = {
   db: "数据库",
   disk: "磁盘",
   offsite: "异地备份",
+  cron: "定时任务",
   sync: "同步任务",
 };
 

@@ -14,7 +14,7 @@
 | 运行时 | Node 22.23.2（`/usr/local/bin/node`） |
 | 应用 | systemd `agenticlab.service` → 127.0.0.1:3000 |
 | 同步 | systemd `agenticlab-sync.timer`，每 2 分钟 |
-| 健康与告警 | `agenticlab-health.timer`，每 5 分钟（探测 + 告警投递 + 到线自动裁剪）|
+| 健康与告警 | `agenticlab-health.timer`，每 5 分钟。一轮里六步：存储快照 · 自动裁剪 ·<br>置顶到期 · 赛季结算 · 称号结算 · 告警投递。**每一步都是隔开的** ——<br>一步失败不影响其它步，失败会写成 `cron` 组件的健康状态，<br>连续 30 分钟才报警（`journalctl -u agenticlab-health` 看详情）|
 | 备份 | `agenticlab-backup.timer`，每日 04:00（备完顺带推异地）|
 | 每周精选 | `agenticlab-digest.timer`，每周一 09:00 —— **只生成草稿，不发送** |
 | 反代 | nginx，80 → 443 强制跳转 |
