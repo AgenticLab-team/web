@@ -10,6 +10,7 @@ import {
   collapsedView,
   shouldMarkEdited,
 } from "@/lib/forum/reply-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 编辑与折叠回复。
@@ -28,7 +29,6 @@ import {
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 const NOW = 1_700_000_000_000;
 const base = { isAuthor: true, status: "published", createdAt: NOW - 60_000, now: NOW };

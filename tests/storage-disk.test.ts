@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { stripComments as strip } from "./_source";
 
 /**
  * 磁盘那一行。
@@ -17,7 +18,6 @@ import { describe, it } from "node:test";
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("**绝对值要露出来**", () => {
   const q = strip(src("lib/storage/queries.ts"));

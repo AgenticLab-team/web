@@ -12,7 +12,16 @@ import type { DeviceSession } from "@/lib/auth/devices";
  * 「下线全部」是个例外 —— 它会把当前这台也踢掉，等于自己登出，
  * 这个后果必须先说清楚，不能默默执行。
  */
-export function SessionList({ sessions }: { sessions: DeviceSession[] }) {
+export function SessionList({
+  sessions,
+  autoRevoked,
+  cap,
+}: {
+  sessions: DeviceSession[];
+  /** 最近被「设备太多」自动下线的 —— null 表示没发生过 */
+  autoRevoked: { count: number; latestAt: number } | null;
+  cap: number;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
@@ -41,6 +50,21 @@ export function SessionList({ sessions }: { sessions: DeviceSession[] }) {
 
   return (
     <div className="space-y-3">
+      {autoRevoked && (
+        /*
+         * 自动做的事必须自己说出来。
+         *
+         * 不说的话，用户看到的是一台设备**凭空消失** ——
+         * 而在一个安全页面上，凭空消失的设备只会让人怀疑被盗号了。
+         * 那比多几台僵尸会话糟糕得多。
+         */
+        <p className="t-caption rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2.5 leading-relaxed text-[var(--ink-secondary)]">
+          最多同时登录 <strong>{cap}</strong> 台设备。{formatWhen(autoRevoked.latestAt)}
+          自动下线了 <strong>{autoRevoked.count}</strong> 台最久没用的 ——
+          这不是异常，是设备满了。如果下面有你不认识的设备，先下线它，再去改密码或重设通行密钥。
+        </p>
+      )}
+
       <div className="inset-group">
         {sessions.map((session) => (
           <div key={session.id} className="inset-row flex items-center gap-3 px-4 py-3">

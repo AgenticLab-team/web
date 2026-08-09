@@ -13,6 +13,7 @@ import {
   type CellChange,
   type MatrixState,
 } from "@/lib/rbac/matrix-edit";
+import { stripComments as strip } from "./_source";
 
 /**
  * 权限矩阵的在线编辑。
@@ -378,8 +379,7 @@ describe("规则层不碰 IO", () => {
 
 describe("接线", () => {
   const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-  const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
-
+  
   it("**保存时重跑一遍护栏** —— 不能因为「预览时查过了」就跳过", () => {
     /*
      * 预览和保存之间隔着人的思考时间,期间权限可能被撤、身份组可能被删。

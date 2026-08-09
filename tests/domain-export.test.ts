@@ -14,6 +14,7 @@ import {
   isExportScope,
   type ExportRow,
 } from "@/lib/activities/export-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 导出域名申请清单。
@@ -30,7 +31,6 @@ import {
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 const row = (over: Partial<ExportRow> = {}): ExportRow => ({
   domain: "foo.icu",

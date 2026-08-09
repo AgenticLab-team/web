@@ -14,6 +14,7 @@ import {
 } from "@/lib/flags/registry";
 import { DEFAULT_FLAGS } from "@/lib/settings/defaults";
 import { NAV, navItemVisible } from "@/lib/nav";
+import { stripComments as strip } from "./_source";
 
 /**
  * 功能开关。
@@ -33,7 +34,6 @@ import { NAV, navItemVisible } from "@/lib/nav";
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 const guest = { userId: null, roleKeys: [] };
 const member = { userId: "u1", roleKeys: ["member"] };

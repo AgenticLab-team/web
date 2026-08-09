@@ -11,6 +11,7 @@ import {
   lockKind,
   lockNotice,
 } from "@/lib/forum/lock-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 楼主锁自己的帖子 + 阅读进度。
@@ -35,7 +36,6 @@ import {
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 const AUTHOR = "u_author";
 const MOD = "u_mod";

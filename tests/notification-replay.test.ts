@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
+import { stripComments as strip } from "./_source";
 
 /**
  * 同一条通知不该因为刷新页面就再弹一遍。
@@ -164,7 +165,6 @@ describe("**弹过并且点掉的通知，刷新多少次都不该再弹**", () 
 });
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("**点吐司就是「我看到了」**", () => {
   /*

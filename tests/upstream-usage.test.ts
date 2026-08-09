@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { after, describe, it } from "node:test";
 
 import { callerRole, normalizeEndpoint } from "@/lib/upstream/usage-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 上游调用的账。
@@ -20,7 +21,6 @@ import { callerRole, normalizeEndpoint } from "@/lib/upstream/usage-rules";
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("**端点要归一化 —— 不然会把成员 id 存进这张表**", () => {
   /*

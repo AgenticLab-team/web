@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
+import { stripComments as strip } from "./_source";
 
 /**
  * 成员主页上的「发过的帖」。
@@ -21,7 +22,6 @@ import { after, before, beforeEach, describe, it } from "node:test";
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("接线", () => {
   it("主页上真的列出来了", () => {

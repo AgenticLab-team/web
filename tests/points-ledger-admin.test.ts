@@ -12,6 +12,7 @@ import {
   sortRisks,
   type RiskItem,
 } from "@/lib/points/admin-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 全站积分流水与风控。
@@ -37,7 +38,6 @@ import {
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 const risk = (kind: RiskItem["kind"], at: number): RiskItem => ({
   kind,

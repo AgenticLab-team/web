@@ -14,6 +14,7 @@ import {
   type NudgeFacts,
 } from "@/lib/auth/passkey-nudge-rules";
 import { passwordLoginVerdict } from "@/lib/auth/passkey-policy";
+import { stripComments as strip } from "./_source";
 
 /**
  * 「加个 Passkey 吧」——普通成员那一侧的提醒。
@@ -36,7 +37,6 @@ import { passwordLoginVerdict } from "@/lib/auth/passkey-policy";
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
 /* 结构性断言一律先剥注释 —— 否则会匹配到这个功能自己写的说明文字 */
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 const DAY = 86_400_000;
 const NOW = 1_800_000_000_000;

@@ -13,6 +13,7 @@ import {
   switchIsOn,
   withDefaults,
 } from "@/lib/privacy/rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 隐私开关。
@@ -33,7 +34,6 @@ import {
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("**开和藏是反的，而翻转只能有一处**", () => {
   it("字段叫 hide_*，界面问的是「要不要出现」", () => {

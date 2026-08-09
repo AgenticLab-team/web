@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
 
 import { MAX_TAGS_PER_POST, MAX_TAG_LENGTH, cleanTags, slugify } from "@/lib/forum/tag-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 标签体系接线。
@@ -22,7 +23,6 @@ import { MAX_TAGS_PER_POST, MAX_TAG_LENGTH, cleanTags, slugify } from "@/lib/for
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("归一化", () => {
   it("**大小写和空格不该造出三个标签**", () => {

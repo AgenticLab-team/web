@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, before, describe, it } from "node:test";
+import { stripComments as strip } from "./_source";
 
 /**
  * 首页那块「你不在的时候」。
@@ -25,7 +26,6 @@ import { after, before, describe, it } from "node:test";
  */
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 /**
  * 站里真实存在的页面路由。

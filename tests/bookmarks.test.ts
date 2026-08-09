@@ -14,6 +14,7 @@ import {
   onFolderDeleted,
   tombstone,
 } from "@/lib/forum/bookmark-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 收藏夹。
@@ -34,7 +35,6 @@ import {
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("收藏夹名字", () => {
   it("正常的过", () => {

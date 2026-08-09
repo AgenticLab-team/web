@@ -10,6 +10,7 @@ import {
   parseViewMode,
   threadingIsMeaningful,
 } from "@/lib/forum/thread-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 楼中楼（树形视图）。
@@ -36,7 +37,6 @@ import {
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 const r = (id: string, floor: number, parentId: string | null = null) => ({ id, floor, parentId });
 

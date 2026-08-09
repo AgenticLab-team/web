@@ -9,6 +9,7 @@ import { Readable } from "node:stream";
 import { sqlite } from "@/lib/db";
 import { getSettingBool, getSettingInt } from "@/lib/settings/store";
 import { nekobot } from "@/lib/nekobot/client";
+import { pruneSessions } from "@/lib/auth/session";
 import { pruneApiUsage } from "@/lib/upstream/usage";
 import {
   DEFAULT_TIER_CONFIG,
@@ -280,6 +281,8 @@ export interface PruneResult {
    * 不能掺进任何别的东西。
    */
   usageRows: number;
+  /** 清掉的过期 / 早已下线的会话行数 */
+  sessionRows: number;
 }
 
 export interface PruneOptions {
@@ -339,6 +342,7 @@ export async function runPrune(options: PruneOptions = {}): Promise<PruneResult>
     bytesAfter: bytesBefore,
     skipped: "",
     usageRows: 0,
+    sessionRows: 0,
   };
 
   // ③ 丢正文 —— 不可逆，最后做，且要过两道门
@@ -370,6 +374,14 @@ export async function runPrune(options: PruneOptions = {}): Promise<PruneResult>
    * 删一行运维流水不是不可逆操作，它没有任何东西可丢。
    */
   result.usageRows = pruneApiUsage(now);
+  /*
+   * 过期会话在此之前**没有任何地方删过**。
+   *
+   * 30 天 TTL、一百多人，一年下来是几万行没人看的数据 ——
+   * 而且每一行都带着 IP 和 UA，那是「谁在哪儿上过网」的记录。
+   * 留着不看，等于白留一份可泄露的东西。
+   */
+  result.sessionRows = pruneSessions(now);
 
   result.bytesAfter = dbBytes();
   return result;

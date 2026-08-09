@@ -23,6 +23,7 @@ import {
   showcaseRepos,
   type RepoFact,
 } from "@/lib/github/repo-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 「有新项目 / 新 PR，要不要发个帖」。
@@ -462,8 +463,7 @@ describe("**缓存与限流**", () => {
   });
 
   it("渲染路径上一个网络请求都没有 —— 页面只读缓存表", () => {
-    const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
-    const memberPage = strip(
+        const memberPage = strip(
       readFileSync(new URL("../src/app/(app)/members/[wxId]/page.tsx", import.meta.url), "utf8"),
     );
     assert.match(memberPage, /showcaseFor\(/);

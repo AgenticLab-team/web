@@ -7,6 +7,7 @@ import {
   looksLikeShareCode,
   newShareCode,
 } from "@/lib/forum/share-code";
+import { stripComments as strip } from "./_source";
 
 /**
  * 帖子短链。
@@ -23,7 +24,6 @@ import {
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("**生成的码必须定长**", () => {
   it("每次都是同一个长度", () => {

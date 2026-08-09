@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
 
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { cookies } from "next/headers";
 
 import { db } from "@/lib/db";
@@ -24,6 +24,48 @@ export interface SessionContext {
   deviceName?: string;
 }
 
+/**
+ * 一个人同时能有几个活会话。
+ *
+ * ─────────────────────────────────────────
+ * 不设上限的后果不是「安全」，是「看不清」
+ * ─────────────────────────────────────────
+ *
+ * 每次登录都新建一行，而没有任何地方合并或回收 ——
+ * 线上有人三天里攒了 **25 个**活会话。
+ *
+ * 「登录设备」那一页因此变成一串认不出来的条目：
+ * 二十多行「Android · 微信」，谁也说不清哪个是自己现在这台、
+ * 哪个是上个月在别人手机上登的。**一个说不清的列表等于没有列表** ——
+ * 而这一页存在的唯一理由就是让人发现不该在的那一台。
+ *
+ * 超出上限时踢掉**最久没露面**的那些，不是最早创建的：
+ * 一台天天在用的老设备比一台上周登过一次的新设备更该留着。
+ */
+function enforceSessionCap(userId: string, keep: number): void {
+  const live = db
+    .select({ id: sessions.id })
+    .from(sessions)
+    .where(
+      and(eq(sessions.userId, userId), isNull(sessions.revokedAt), gt(sessions.expiresAt, Date.now())),
+    )
+    .orderBy(desc(sessions.lastSeenAt))
+    .all();
+
+  const extra = live.slice(keep);
+  if (extra.length === 0) return;
+
+  db.update(sessions)
+    .set({
+      revokedAt: Date.now(),
+      // 记明白是谁踢的 —— 用户在登录历史里看到「被下线」时要答得上来为什么
+      revokedBy: "system:session-cap",
+      revokeReason: "session_cap",
+    })
+    .where(inArray(sessions.id, extra.map((s) => s.id)))
+    .run();
+}
+
 export function createSession(userId: string, ctx: SessionContext = {}): string {
   const token = randomBytes(32).toString("base64url");
   const ttlDays = getSettingInt("auth.session.ttl_days", 30);
@@ -39,7 +81,38 @@ export function createSession(userId: string, ctx: SessionContext = {}): string 
     })
     .run();
 
+  /*
+   * 先插入再收口，不是反过来。
+   *
+   * 反过来的话，上限是 N 时人只能有 N-1 个 —— 而且刚建的这一个
+   * `lastSeenAt` 最新，永远不会被自己踢掉，所以顺序在这里是安全的。
+   */
+  enforceSessionCap(userId, getSettingInt("auth.session.max_per_user", 10));
+
   return token;
+}
+
+/**
+ * 清掉过期和早就撤销的会话行。
+ *
+ * **在此之前没有任何地方删过它们。** 30 天 TTL、一百多人，
+ * 一年下来是几万行没人看的数据 —— 而且每一行都带着 IP 和 UA，
+ * 那是「谁在哪儿上过网」的记录，留着不看等于白留一份可泄露的东西。
+ *
+ * 撤销的多留一段时间：用户点了「下线这台」之后，
+ * 「登录历史」还要能说出那台设备什么时候被下线、是谁下的。
+ */
+export function pruneSessions(now = Date.now()): number {
+  const graceDays = getSettingInt("auth.session.revoked_keep_days", 30);
+  return db
+    .delete(sessions)
+    .where(
+      or(
+        lt(sessions.expiresAt, now),
+        and(isNotNull(sessions.revokedAt), lt(sessions.revokedAt, now - graceDays * 86_400_000)),
+      ),
+    )
+    .run().changes;
 }
 
 export type CurrentUser = typeof users.$inferSelect;

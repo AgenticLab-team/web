@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
+import { stripComments as strip } from "./_source";
 
 /**
  * 界面上的图标与栏宽。
@@ -23,7 +24,6 @@ import { describe, it } from "node:test";
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 /** 图形类 emoji（表情、物件），不含箭头和数学符号 */
 const PICTOGRAPH = /[\u{1F300}-\u{1FAFF}\u{1F900}-\u{1F9FF}\u{2700}-\u{27BF}]/u;

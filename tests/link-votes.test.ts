@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
 
 import { eq } from "drizzle-orm";
+import { stripComments as strip } from "./_source";
 
 /**
  * 资源点赞。
@@ -234,8 +235,7 @@ describe("**点赞和收藏互不影响**", () => {
 });
 
 describe("接线", () => {
-  const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
-
+  
   it("**点赞也走可见性收口** —— 看不到的东西不该能点", () => {
     const src = strip(readFileSync(new URL("../src/lib/links/actions.ts", import.meta.url), "utf8"));
     const fn = src.slice(src.indexOf("function toggleVoteLink"));

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
 
 import { eq } from "drizzle-orm";
+import { stripComments as strip } from "./_source";
 
 /**
  * 矩阵快照与回滚。
@@ -307,8 +308,7 @@ describe("只留最近的若干张", () => {
 
 describe("接线", () => {
   const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-  const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
-
+  
   it("**保存前会拍快照** —— 不拍的话这个功能等于不存在", () => {
     const code = strip(src("lib/rbac/matrix-actions.ts"));
     const evaluate = code.slice(code.indexOf("function evaluate"));

@@ -12,6 +12,7 @@ import {
   isNewbie,
   newbieLinkNotice,
 } from "@/lib/moderation/link-defang-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 新人外链：从「拦」改成「降权 + 说明」。
@@ -31,7 +32,6 @@ import {
 process.env.NEKOBOT_API_KEY = "nk_test";
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 const SITE = { siteHosts: ["agenticlab.sh", "localhost"] };
 

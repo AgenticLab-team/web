@@ -18,6 +18,7 @@ import {
   partRange,
   pickUrl,
 } from "@/lib/uploads/rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 图床。
@@ -35,7 +36,6 @@ import {
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("**SVG 不算图片**", () => {
   it("SVG 一律拒绝 —— 它是 image/*，但里面能写脚本", () => {

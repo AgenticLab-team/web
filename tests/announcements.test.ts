@@ -13,6 +13,7 @@ import {
   pickVisible,
   targeted,
 } from "@/lib/broadcast/announce-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 站内公告。
@@ -30,7 +31,6 @@ import {
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 const NOW = 1_786_000_000_000;
 

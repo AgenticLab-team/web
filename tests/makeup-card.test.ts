@@ -11,6 +11,7 @@ import {
   shiftDate,
   streakFrom,
 } from "@/lib/points/makeup-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 补签卡。
@@ -28,7 +29,6 @@ import {
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 const TODAY = "2026-08-10";
 const d = (n: number) => shiftDate(TODAY, n);

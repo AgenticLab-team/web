@@ -199,8 +199,15 @@ export const sessions = sqliteTable(
     expiresAt: integer("expires_at").notNull(),
     revokedAt: integer("revoked_at"),
     revokedBy: text("revoked_by"),
+    /**
+     * 为什么下线的。**是一张封闭的表，不是自由文本** ——
+     * 用户在「登录历史」里看到「这台被下线了」时，
+     * 得到的必须是一个说得清的原因，而不是某次实现里顺手写的一句话。
+     *
+     * `session_cap` = 同时登录的设备太多，自动下线了最久没用的那几台。
+     */
     revokeReason: text("revoke_reason", {
-      enum: ["logout", "admin", "credential_change", "expired", "ban"],
+      enum: ["logout", "admin", "credential_change", "expired", "ban", "session_cap"],
     }),
   },
   (t) => [index("sessions_user_idx").on(t.userId), index("sessions_expires_idx").on(t.expiresAt)],

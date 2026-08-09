@@ -14,6 +14,7 @@ import {
   draftKey,
   pickDraft,
 } from "@/lib/forum/draft-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 服务端草稿。
@@ -39,7 +40,6 @@ import {
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("草稿的键", () => {
   it("**永远非空** —— SQLite 的唯一索引不约束 NULL", () => {

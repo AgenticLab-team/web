@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, statSync } from "node:fs";
 import { describe, it } from "node:test";
+import { stripComments as strip } from "./_source";
 
 /**
  * 点一条通知，它就该已读。
@@ -18,7 +19,6 @@ import { describe, it } from "node:test";
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("**每一条都要能单独点掉**", () => {
   it("列表用的是会标已读的行，不是裸 Link", () => {

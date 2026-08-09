@@ -16,6 +16,7 @@ import {
   judgeApplicant,
   type ApplicantActivity,
 } from "@/lib/auth/bind-queue";
+import { stripComments as strip } from "./_source";
 
 /**
  * 绑定审批队列。
@@ -211,8 +212,7 @@ describe("规则层不碰 IO", () => {
 
 describe("接线", () => {
   const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-  const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
-
+  
   it("**服务端不再拦** —— 站长要求管理接口不设限速", () => {
     /*
      * 这条是方向锁:防止以后有人「顺手」把限速加回来。

@@ -15,7 +15,8 @@ import { connectionOf } from "@/lib/github/link";
 import { LINK_FAILURE_MESSAGE, type LinkFailure } from "@/lib/github/oauth-rules";
 import { cachedRepos } from "@/lib/github/repos";
 import { githubEnabled } from "@/lib/github/secret";
-import { listLoginHistory, listSessions } from "@/lib/auth/devices";
+import { listLoginHistory, listSessions, recentAutoRevoked } from "@/lib/auth/devices";
+import { getSettingInt } from "@/lib/settings/store";
 import { isPrivileged, selfLoginStatus } from "@/lib/auth/passkey-policy";
 import { hasPassword } from "@/lib/auth/password-login";
 import { listPasskeys } from "@/lib/auth/passkey";
@@ -64,6 +65,9 @@ export default async function SecurityPage({
   const passwordSet = hasPassword(user.id);
   const optedOut = user.passwordOptOutAt !== null;
   const sessionList = listSessions(user.id, currentHash);
+  // 设备被自动下线过就要说出来 —— 凭空消失的设备只会让人怀疑被盗号
+  const autoRevoked = recentAutoRevoked(user.id);
+  const sessionCap = getSettingInt("auth.session.max_per_user", 10);
   const history = listLoginHistory(user.id, 15);
 
   /*
@@ -146,7 +150,7 @@ export default async function SecurityPage({
       )}
 
       <Section title={`登录的设备（${sessionList.length}）`}>
-        <SessionList sessions={sessionList} />
+        <SessionList sessions={sessionList} autoRevoked={autoRevoked} cap={sessionCap} />
       </Section>
 
       <Section title="最近登录记录">

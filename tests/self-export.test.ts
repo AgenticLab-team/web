@@ -35,6 +35,7 @@ import {
   type RawMessage,
 } from "@/lib/export/self-export-stream";
 import { zipStream } from "@/lib/export/zip";
+import { stripComments as strip } from "./_source";
 
 /**
  * 「下载我自己的全部数据」。
@@ -56,7 +57,6 @@ import { zipStream } from "@/lib/export/zip";
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 /* ───────────────────────────────────────────────────────────────
  * 假数据源

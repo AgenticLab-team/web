@@ -6,6 +6,7 @@ import { ImageResponse } from "next/og";
 
 import { MAX_IMAGE_MESSAGES, trimForImage, type ShareMessage } from "@/lib/share/rules";
 import { WindowCard } from "@/app/api/share/window/[id]/card/card";
+import { stripComments as strip } from "./_source";
 
 /**
  * 群聊转发图**画不画得出来**。
@@ -29,7 +30,6 @@ import { WindowCard } from "@/app/api/share/window/[id]/card/card";
  * 这类错误只有真的跑一遍渲染才抓得到，所以下面每条都出一张真图。
  */
 
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
 
 function conversation(count: number): ShareMessage[] {

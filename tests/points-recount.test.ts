@@ -12,6 +12,7 @@ import {
   type CachedFact,
   type LedgerFact,
 } from "@/lib/points/recount-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 积分重算（对账修复）。
@@ -28,7 +29,6 @@ import {
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 /** 简单门槛：0 / 50 / 150 */
 const level = (total: number) => (total >= 150 ? 3 : total >= 50 ? 2 : 1);

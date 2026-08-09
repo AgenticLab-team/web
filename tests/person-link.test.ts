@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { stripComments as strip } from "./_source";
 
 /**
  * 头像和昵称要能点进主页；菜单要点得动；滚动条别一直挂着。
@@ -17,7 +18,6 @@ import { describe, it } from "node:test";
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("**匿名不能被点穿**", () => {
   it("匿名帖 / 匿名回复的 authorWxId 是 null", () => {

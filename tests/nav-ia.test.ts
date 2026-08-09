@@ -14,6 +14,7 @@ import {
   visibleSections,
 } from "@/lib/nav";
 import { FLAGS } from "@/lib/flags/registry";
+import { stripComments as strip } from "./_source";
 
 /**
  * 信息架构。
@@ -42,7 +43,6 @@ import { FLAGS } from "@/lib/flags/registry";
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
 /** 正则会匹配到注释里的字眼 —— 先把注释剥掉再断言 */
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 const everything = () => true;
 const asMember = (item: Parameters<typeof navItemVisible>[0]) =>

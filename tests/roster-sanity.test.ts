@@ -10,6 +10,7 @@ import {
   checkRoster,
   revocationsFor,
 } from "@/lib/sync/roster-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 名册同步的安全判定，以及进出群事件的结算。
@@ -29,7 +30,6 @@ import {
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 const base = { fetched: 100, limit: 2000, knownActive: 100, missing: 0 };
 

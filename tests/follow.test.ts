@@ -14,6 +14,7 @@ import {
   unfollowIsDelete,
 } from "@/lib/forum/follow-rules";
 import { tabBarItems } from "@/lib/nav";
+import { stripComments as strip } from "./_source";
 
 /**
  * 关注作者 / 版块 / 标签。
@@ -38,7 +39,6 @@ import { tabBarItems } from "@/lib/nav";
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("能不能关注", () => {
   it("正常的能", () => {

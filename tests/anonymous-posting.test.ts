@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { stripComments as strip } from "./_source";
 
 /**
  * 匿名发帖与回复。
@@ -25,7 +26,6 @@ import { describe, it } from "node:test";
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("**发帖和回复走同一条判定**", () => {
   it("发帖校验版块允不允许", () => {

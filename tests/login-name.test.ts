@@ -14,6 +14,7 @@ import {
   phoneShape,
   usernameShape,
 } from "@/lib/auth/login-name";
+import { stripComments as strip } from "./_source";
 
 /**
  * 登录名与手机号。
@@ -41,7 +42,6 @@ import {
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("登录名的格式", () => {
   it("正常的过，并且存小写", () => {

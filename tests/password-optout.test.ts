@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 import { eq } from "drizzle-orm";
+import { stripComments as strip } from "./_source";
 
 /**
  * 「这个账号就是不设密码」。
@@ -74,8 +75,7 @@ describe("列本身", () => {
 
 describe("接线", () => {
   const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-  const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
-  const actions = () => strip(src("lib/auth/password-actions.ts"));
+    const actions = () => strip(src("lib/auth/password-actions.ts"));
 
   it("**设了密码就自动清掉表态** —— 两个状态并存谁看谁糊涂", () => {
     const fn = actions().slice(

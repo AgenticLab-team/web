@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { stripComments as strip } from "./_source";
 
 /**
  * 健康探测的组件状态。
@@ -31,8 +32,6 @@ function probeSource(): string {
   const end = rest.indexOf("\nexport ");
   return rest.slice(0, end === -1 ? undefined : end);
 }
-
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("**每一条路径都要给两个组件各写一个状态**", () => {
   const body = strip(probeSource());

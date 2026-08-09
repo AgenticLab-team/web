@@ -13,6 +13,7 @@ import {
   seatsLeft,
   type HolderState,
 } from "@/lib/rbac/role-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 自定义身份组。
@@ -35,7 +36,6 @@ import {
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 const draft = (over: Partial<Parameters<typeof checkRole>[0]> = {}) => ({
   key: "veteran",

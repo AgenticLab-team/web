@@ -15,6 +15,7 @@ import {
   resolveOrder,
   type MessageOrder,
 } from "@/lib/messages/archive-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 「查看历史消息」这一整块。
@@ -36,7 +37,6 @@ import {
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
 /** 正则会匹配到注释里的字眼 —— 先把注释剥掉再断言 */
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("规则文件保持纯净", () => {
   it("archive-rules 不碰数据库、不碰 React", () => {

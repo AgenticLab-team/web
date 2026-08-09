@@ -10,6 +10,7 @@ import {
   type LevelDef,
 } from "@/lib/points/level-rules";
 import { LEVELS, levelOf, levelProgress } from "@/lib/points/rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 等级门槛。
@@ -31,7 +32,6 @@ import { LEVELS, levelOf, levelProgress } from "@/lib/points/rules";
  */
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 const good: LevelDef[] = [
   { level: 1, requires: 0, name: "一" },

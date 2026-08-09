@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import { stripComments as strip } from "./_source";
 
 /**
  * 「这台机器以为自己叫什么」。
@@ -69,7 +70,6 @@ function routeHandlers(dir: string, out: string[] = []): string[] {
 }
 
 const files = routeHandlers(join(root, "src/app"));
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("**Route Handler 不拿 request.url 拼绝对地址**", () => {
   it("确实扫到了东西 —— 否则这条测试是在空转", () => {

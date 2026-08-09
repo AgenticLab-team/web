@@ -6,6 +6,7 @@ import { after, describe, it } from "node:test";
 
 import { CONDITIONAL_PREFIXES } from "@/lib/auth/routes";
 import { NAV, navItemVisible, type NavItem } from "@/lib/nav";
+import { stripComments as strip } from "./_source";
 
 /**
  * 「论坛允许未登录浏览」这个开关。
@@ -33,7 +34,6 @@ import { NAV, navItemVisible, type NavItem } from "@/lib/nav";
 
 const root = new URL("..", import.meta.url).pathname;
 const src = (p: string) => readFileSync(join(root, "src", p), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
 describe("**开关真的被读了**", () => {
   it("有一处读 site.forum_public", () => {
