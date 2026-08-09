@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Avatar } from "@/components/Avatar";
+import { ANONYMOUS_PALETTE, Avatar } from "@/components/Avatar";
 import { PersonLink } from "@/components/PersonLink";
 import { AcceptButton } from "@/components/forum/AcceptButton";
 import { BountyBadge } from "@/components/forum/BountyBadge";
@@ -264,7 +264,16 @@ export default async function PostPage({
         <div className="mb-5 flex items-center gap-2.5">
           {/* 匿名帖的 authorWxId 是 null，PersonLink 会退化成普通 span */}
           <PersonLink wxId={post.authorWxId} name={post.authorName}>
-            <Avatar wxId={post.authorId} name={post.authorName} src={post.authorAvatar} size={32} />
+            {/* 匿名帖不拿作者 id 当配色种子 —— 那个哈希会把同一个人的
+                匿名帖串起来，也会和他的实名帖串起来 */}
+            <Avatar
+              {...(post.anonymous
+                ? { paletteIndex: ANONYMOUS_PALETTE }
+                : { wxId: post.authorId })}
+              name={post.authorName}
+              src={post.authorAvatar}
+              size={32}
+            />
           </PersonLink>
           <div className="min-w-0 flex-1">
             <p className="t-subhead leading-tight">
@@ -478,7 +487,9 @@ export default async function PostPage({
                 <div className="mb-2 flex items-center gap-2.5">
                   <PersonLink wxId={reply.authorWxId} name={reply.authorName}>
                     <Avatar
-                      wxId={reply.authorId}
+                      {...(reply.anonymous
+                        ? { paletteIndex: ANONYMOUS_PALETTE }
+                        : { wxId: reply.authorId })}
                       name={reply.authorName}
                       src={reply.authorAvatar}
                       size={26}
@@ -588,6 +599,7 @@ export default async function PostPage({
           !deleted && <ReplyForm
               postId={post.id}
               locked={locked}
+              allowAnonymous={post.board.allowAnonymous}
               lockNotice={lockedNotice}
               serverDraft={replyDraft}
             />

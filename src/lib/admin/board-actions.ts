@@ -107,6 +107,10 @@ export async function updateBoard(input: {
   maxVisibility: Visibility;
   postMinLevel: number;
   locked?: boolean;
+  /** 允许匿名发帖/回复。默认关 —— 匿名是个要主动选的东西 */
+  allowAnonymous?: boolean;
+  /** 发帖必须至少一个标签 */
+  requireTags?: boolean;
   reason: string;
 }): Promise<BoardResult> {
   const admin = await requireWritableAdmin("forum.board.manage");
@@ -136,6 +140,8 @@ export async function updateBoard(input: {
       maxVisibility: input.maxVisibility,
       postMinLevel: input.postMinLevel,
       locked: input.locked ?? before.locked,
+      allowAnonymous: input.allowAnonymous ?? before.allowAnonymous,
+      requireTags: input.requireTags ?? before.requireTags,
       updatedAt: Date.now(),
     })
     .where(eq(boards.id, input.id))

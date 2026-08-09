@@ -401,6 +401,17 @@ export async function createReply(input: {
   if (post.raw.status === "locked") return fail("该帖已锁定，不能再回复");
 
   const board = post.board;
+
+  /*
+   * 匿名回复要和匿名发帖同一条判定。
+   *
+   * 原来这里**完全不校验** —— 发帖那条走了 `board.allowAnonymous`，
+   * 回复这条没走，于是不允许匿名的版块里照样能匿名回复。
+   * 今天没有界面所以触发不到，但一个只在其中一条路上生效的规则，
+   * 等于没有这条规则。
+   */
+  if (input.anonymous && !board.allowAnonymous) return fail("该版块不允许匿名回复");
+
   const permission = (board.replyPermission ?? "forum.reply.create") as "forum.reply.create";
   const verdict = can(user, permission, { scopeType: "board", scopeId: board.id });
   if (!verdict.allowed) return fail(verdict.reason);

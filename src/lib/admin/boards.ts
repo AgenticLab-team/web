@@ -29,6 +29,8 @@ export interface BoardRow {
   maxVisibility: Visibility;
   postMinLevel: number;
   locked: boolean;
+  allowAnonymous: boolean;
+  requireTags: boolean;
   /** 真实帖子数，不读冗余列 —— 那个列漂移过一次（群聊沉淀显示 0） */
   livePosts: number;
   /** 冗余列的值，两者不一致说明又漂了 */
@@ -75,6 +77,8 @@ export function listBoardsForAdmin(): BoardRow[] {
     maxVisibility: row.maxVisibility,
     postMinLevel: row.postMinLevel,
     locked: row.locked,
+    allowAnonymous: row.allowAnonymous,
+    requireTags: row.requireTags,
     livePosts: live.get(row.id) ?? 0,
     cachedCount: row.postCount,
     lastPostAt: row.lastPostAt,

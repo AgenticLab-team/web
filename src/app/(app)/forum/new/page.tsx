@@ -99,6 +99,7 @@ export default async function NewPostPage({
           postCount: t.postCount,
         }))}
         requireTagBoards={boards.filter((b) => b.requireTags).map((b) => b.key)}
+        anonymousBoards={boards.filter((b) => b.allowAnonymous).map((b) => b.key)}
         defaultBoard={board}
         prefill={prefill}
         githubPromptId={promptRow?.id}

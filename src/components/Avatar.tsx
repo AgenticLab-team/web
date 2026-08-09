@@ -54,6 +54,19 @@ export function initialOf(name: string): string {
   return trimmed.slice(0, 1).toUpperCase();
 }
 
+/**
+ * 匿名内容统一用这一档配色。
+ *
+ * **不能拿作者 id 当种子** —— 配色是个稳定的哈希，
+ * 于是同一个人的两篇匿名帖会是同一个颜色（互相串得起来），
+ * 而它和他的实名帖也是同一个颜色。
+ * 匿名这件事就是从这种地方漏掉的：名字抹了、头像抹了，
+ * 剩一个颜色，而颜色不会引起任何人怀疑。
+ *
+ * 所有匿名内容长得一模一样才是对的 —— 「匿名」就是同一个身份。
+ */
+export const ANONYMOUS_PALETTE = 0;
+
 interface AvatarProps {
   /** 配色种子。不该拿到 wx_id 的页面改传 paletteIndex */
   wxId?: string;

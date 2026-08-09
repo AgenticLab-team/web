@@ -330,6 +330,8 @@ export function listReplies(viewer: ViewerContext, postId: string) {
       authorAvatar: r.anonymous ? null : (author?.avatar ?? null),
       // 匿名回复不给主页链接 —— 点进去就是本人
       authorWxId: r.anonymous ? null : (author?.wxId ?? null),
+      // 标志本身要传出去 —— 页面得知道该不该拿 authorId 当配色种子
+      anonymous: r.anonymous,
       accepted: r.accepted,
       // 原文（markdown）—— 编辑时要拿它填输入框，渲染后的 HTML 回不去
       content: r.content,

@@ -40,6 +40,7 @@ export function ComposeForm({
   githubPromptId,
   tagSuggestions = [],
   requireTagBoards = [],
+  anonymousBoards = [],
 }: {
   boards: BoardOption[];
   defaultBoard?: string;
@@ -60,6 +61,8 @@ export function ComposeForm({
   tagSuggestions?: { slug: string; name: string; postCount: number }[];
   /** 哪些版块要求必填标签，按版块 key */
   requireTagBoards?: string[];
+  /** 哪些版块允许匿名，按版块 key */
+  anonymousBoards?: string[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -67,6 +70,7 @@ export function ComposeForm({
   const [error, setError] = useState<string | null>(null);
   const [boardKey, setBoardKey] = useState(defaultBoard ?? boards[0]?.key ?? "");
   const [tags, setTags] = useState<string[]>([]);
+  const [anonymous, setAnonymous] = useState(false);
   const [type, setType] = useState<(typeof TYPES)[number]["key"]>("discussion");
   const [title, setTitle] = useState(prefill?.title ?? "");
   const [content, setContent] = useState(prefill?.content ?? "");
@@ -148,6 +152,8 @@ export function ComposeForm({
         title,
         content,
         tags,
+        // 版块不允许时永远传 false —— 界面藏起来了不代表值不会被带上
+        anonymous: anonymousBoards.includes(boardKey) ? anonymous : false,
         // datetime-local 给的是本地时间字符串，转成毫秒再传
         scheduledAt: scheduleAt ? new Date(scheduleAt).getTime() : undefined,
         // 投票帖的类型由服务端按有没有 poll 定 —— 两处各判一次迟早对不上
@@ -356,6 +362,40 @@ export function ComposeForm({
         required={requireTagBoards.includes(boardKey)}
         onChange={setTags}
       />
+
+      {/*
+        * 匿名只在允许的版块出现。
+        *
+        * 换版块之后这个勾**不自动清掉**（值在提交时按版块过滤），
+        * 但控件会消失 —— 于是人不会以为自己还在匿名。
+        */}
+      {anonymousBoards.includes(boardKey) && (
+        <div className="inset-group px-4 py-3">
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              checked={anonymous}
+              onChange={(e) => setAnonymous(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0"
+            />
+            <span className="min-w-0">
+              <span className="t-body">匿名发布</span>
+              {/*
+                * **必须说清楚匿名管到哪儿。**
+                *
+                * 不说的话，人会以为连管理员也查不到，
+                * 然后照着一个不存在的保护去写东西 ——
+                * 那比不给匿名这个选项更糟。
+                */}
+              <span className="t-caption mt-0.5 block leading-relaxed text-[var(--ink-tertiary)]">
+                别人看不到你是谁，连头像都不显示。但
+                <strong className="font-medium">处理纠纷时管理员查得到</strong>
+                —— 匿名是对其他用户的，不是对管理员的。
+              </span>
+            </span>
+          </label>
+        </div>
+      )}
 
       <SchedulePicker value={scheduleAt} onChange={setScheduleAt} />
 

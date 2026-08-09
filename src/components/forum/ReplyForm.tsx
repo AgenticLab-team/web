@@ -14,6 +14,7 @@ import { useQuote } from "./QuoteContext";
 import { useServerDraft } from "./use-server-draft";
 
 export function ReplyForm({
+  allowAnonymous = false,
   postId,
   locked,
   lockNotice = null,
@@ -21,6 +22,8 @@ export function ReplyForm({
 }: {
   postId: string;
   locked: boolean;
+  /** 这个版块允许匿名 */
+  allowAnonymous?: boolean;
   /**
    * 锁上之后显示哪一句。
    *
@@ -49,6 +52,7 @@ export function ReplyForm({
   const rootRef = useRef<HTMLDivElement>(null);
 
   const quote = quoteCtx?.quote ?? null;
+  const [anonymous, setAnonymous] = useState(false);
 
   /*
    * 回复框也存服务端。
@@ -93,6 +97,8 @@ export function ReplyForm({
         postId,
         content,
         quotedReplyId: quote?.replyId,
+        // 版块不允许时永远传 false —— 界面藏起来不代表值不会被带上
+        anonymous: allowAnonymous ? anonymous : false,
       });
       if (!result.ok) {
         setError(result.error ?? "回复失败");
@@ -149,6 +155,22 @@ export function ReplyForm({
         }}
         onKeepMine={sync.keepMine}
       />
+
+      {allowAnonymous && (
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={anonymous}
+            onChange={(e) => setAnonymous(e.target.checked)}
+            className="h-4 w-4"
+          />
+          {/* 和发帖那边同一句话 —— 两处说法不一致的话，
+              人会以为其中一处是特例 */}
+          <span className="t-caption text-[var(--ink-secondary)]">
+            匿名回复（别人看不到你是谁，管理员处理纠纷时查得到）
+          </span>
+        </label>
+      )}
 
       {error && (
         <p className="t-footnote text-[var(--danger)]" role="alert">

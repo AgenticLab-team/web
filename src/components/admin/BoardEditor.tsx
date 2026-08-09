@@ -30,6 +30,8 @@ interface Props {
     maxVisibility: Visibility;
     postMinLevel: number;
     locked: boolean;
+    allowAnonymous: boolean;
+    requireTags: boolean;
     livePosts: number;
     childCount: number;
   };
@@ -52,6 +54,8 @@ export function BoardEditor({ board, siblings, impacts }: Props) {
   const [maxVisibility, setMaxVisibility] = useState<Visibility>(board.maxVisibility);
   const [postMinLevel, setPostMinLevel] = useState(board.postMinLevel);
   const [locked, setLocked] = useState(board.locked);
+  const [allowAnonymous, setAllowAnonymous] = useState(board.allowAnonymous);
+  const [requireTags, setRequireTags] = useState(board.requireTags);
   const [reason, setReason] = useState("");
 
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -160,7 +164,44 @@ export function BoardEditor({ board, siblings, impacts }: Props) {
           />
           <span className="t-subhead">锁定（禁止发新帖）</span>
         </label>
+
+        {/*
+          * 这两个开关的列在 schema 里躺了很久，后台一直没法改 ——
+          * 也就是说 `allow_anonymous` 永远是 false（匿名功能等于不存在），
+          * `require_tags` 永远是 false。
+          */}
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={allowAnonymous}
+            onChange={(e) => setAllowAnonymous(e.target.checked)}
+            className="h-4 w-4"
+          />
+          <span className="t-subhead">允许匿名发帖与回复</span>
+        </label>
+
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={requireTags}
+            onChange={(e) => setRequireTags(e.target.checked)}
+            className="h-4 w-4"
+          />
+          <span className="t-subhead">发帖必须打标签</span>
+        </label>
       </div>
+
+      {allowAnonymous && (
+        /*
+          * 开之前要说清楚匿名管到哪儿。不说的话，管理员会以为
+          * 自己也查不到，于是**该开的时候不敢开**；
+          * 而用户那一侧则可能以为连管理员都看不见。两头都要说。
+          */
+        <p className="t-caption2 leading-relaxed text-[var(--ink-tertiary)]">
+          匿名是对其他用户的：后台的帖子列表里仍然显示真实作者，并标着「匿名发布」——
+          否则处理纠纷时连是谁发的都查不到。
+        </p>
+      )}
 
       <input
         value={reason}
@@ -186,6 +227,8 @@ export function BoardEditor({ board, siblings, impacts }: Props) {
                   maxVisibility,
                   postMinLevel,
                   locked,
+                  allowAnonymous,
+                  requireTags,
                   reason,
                 }),
               impact && impact.affected > 0

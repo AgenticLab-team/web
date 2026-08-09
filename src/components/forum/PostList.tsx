@@ -1,7 +1,7 @@
 import { CheckCircle2, MessageSquare, Pin, Sparkles } from "lucide-react";
 import Link from "next/link";
 
-import { Avatar } from "@/components/Avatar";
+import { ANONYMOUS_PALETTE, Avatar } from "@/components/Avatar";
 import { Empty } from "@/components/ui/primitives";
 import type { PostSummary } from "@/lib/forum/queries";
 
@@ -34,7 +34,9 @@ export function PostList({ posts, showBoard = false }: { posts: PostSummary[]; s
               className="inset-row flex gap-3 px-4 py-3.5 transition-colors hover:bg-[var(--fill)]"
             >
               <Avatar
-                wxId={post.authorId}
+                {...(post.anonymous
+                  ? { paletteIndex: ANONYMOUS_PALETTE }
+                  : { wxId: post.authorId })}
                 name={post.authorName}
                 src={post.authorAvatar}
                 size={38}
