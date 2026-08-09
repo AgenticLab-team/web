@@ -4,18 +4,23 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { audit } from "@/lib/audit";
-import { getCurrentUser } from "@/lib/auth/session";
+import { assertNotPreviewing, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { moderationActions, posts, replies, reports } from "@/lib/db/schema";
+import { posts, replies, reports } from "@/lib/db/schema";
 import { severityForReason } from "@/lib/moderation/rules";
 import { can } from "@/lib/rbac/can";
 
-import { recountBoardPosts } from "./board-stats";
+import {
+  MODERATION_TITLE,
+  moderatePostCore,
+  movePostCore,
+  recordModerationAction,
+  type ModerateAction,
+} from "./manage";
 import { notify } from "./notify";
-import { removeFromIndex } from "./search";
 
 /**
- * 版主工具。
+ * 版主工具（server action 层）。
  *
  * 两条贯穿始终的规则：
  *   1. **处罚必须填理由**。理由非空是数据库约束，不是前端校验 ——
@@ -23,7 +28,9 @@ import { removeFromIndex } from "./search";
  *   2. **必须通知当事人**。悄悄删帖是最招怨的做法：
  *      作者以为自己发出去了，别人却看不到，几天后才发现
  *
- * 版主权限是**限定版块**的，所以每次判定都要把版块作为 scope 传进去。
+ * 权限判定、写入与留痕都在 manage.ts 的核心函数里 ——
+ * 这里只做「取身份 → 拦预览态 → 调核心 → revalidate」，
+ * 薄一点，测试才够得到真正的边界。
  */
 
 export interface ModResult {
@@ -35,170 +42,61 @@ export interface ModResult {
 
 const fail = (error: string): ModResult => ({ ok: false, error });
 
-async function requireModerator(
-  permission: "forum.post.delete.any" | "forum.post.lock" | "forum.post.pin" | "forum.post.feature",
-  boardId: string,
-) {
-  const user = await getCurrentUser();
-  if (!user) return { user: null, error: "请先登录" };
-  const verdict = can(user, permission, { scopeType: "board", scopeId: boardId });
-  if (!verdict.allowed) return { user: null, error: verdict.reason };
-  return { user, error: null };
-}
-
-function record(input: {
-  actorId: string;
-  targetType: "post" | "reply" | "user";
-  targetId: string;
-  targetUserId?: string;
-  action: string;
-  reason: string;
-  reportId?: string;
-}) {
-  return db
-    .insert(moderationActions)
-    .values({
-      actorId: input.actorId,
-      targetType: input.targetType,
-      targetId: input.targetId,
-      targetUserId: input.targetUserId,
-      action: input.action as "delete",
-      reason: input.reason,
-      reportId: input.reportId,
-    })
-    .returning({ id: moderationActions.id })
-    .get();
+/**
+ * 预览态一律拦写。这里的失败模式不是「少拦一次」——
+ * 是管理员以被预览者的身份写了数据，审计从此说不清是谁做的。
+ */
+async function previewBlocked(): Promise<string | null> {
+  try {
+    await assertNotPreviewing();
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : "预览模式下不能执行写操作";
+  }
 }
 
 export async function moderatePost(input: {
   postId: string;
-  action: "hide" | "delete" | "restore" | "lock" | "unlock" | "pin" | "unpin" | "feature" | "unfeature";
+  action: ModerateAction;
   reason: string;
 }): Promise<ModResult> {
-  const reason = input.reason.trim();
-  if (!reason) return fail("必须填写理由");
+  const blocked = await previewBlocked();
+  if (blocked) return fail(blocked);
 
-  const post = db.select().from(posts).where(eq(posts.id, input.postId)).get();
-  if (!post) return fail("帖子不存在");
+  const user = await getCurrentUser();
+  const result = moderatePostCore(user, input);
+  if (!result.ok) return result;
 
-  const permission =
-    input.action === "lock" || input.action === "unlock"
-      ? "forum.post.lock"
-      : input.action === "pin" || input.action === "unpin"
-        ? "forum.post.pin"
-        : input.action === "feature" || input.action === "unfeature"
-          ? "forum.post.feature"
-          : "forum.post.delete.any";
-
-  const { user, error } = await requireModerator(permission, post.boardId);
-  if (!user) return fail(error!);
-
-  const now = Date.now();
-  const patch: Partial<typeof posts.$inferInsert> = {};
-  switch (input.action) {
-    case "hide":
-      patch.status = "hidden";
-      break;
-    case "delete":
-      patch.status = "deleted";
-      patch.deletedAt = now;
-      patch.deletedBy = user.id;
-      patch.deleteReason = reason;
-      break;
-    case "restore":
-      patch.status = "published";
-      patch.deletedAt = null;
-      patch.deletedBy = null;
-      patch.deleteReason = null;
-      break;
-    case "lock":
-      patch.status = "locked";
-      break;
-    case "unlock":
-      patch.status = "published";
-      break;
-    case "pin":
-      patch.pinned = true;
-      break;
-    case "unpin":
-      patch.pinned = false;
-      break;
-    case "feature":
-      patch.featured = true;
-      patch.featuredBy = user.id;
-      patch.featuredAt = now;
-      break;
-    case "unfeature":
-      patch.featured = false;
-      break;
-  }
-
-  db.update(posts).set(patch).where(eq(posts.id, post.id)).run();
-
-  // 状态变了就重算版块计数：删除/隐藏/恢复都会改变「版块里有几篇帖子」。
-  // 以前只加不减，删 10 篇之后版块列表还挂着虚高的数字
-  if (patch.status !== undefined) recountBoardPosts(post.boardId);
-
-  // 删除或隐藏后要从检索索引里摘掉，否则还能被搜到标题
-  if (input.action === "delete" || input.action === "hide") removeFromIndex(post.id);
-
-  const action = record({
-    actorId: user.id,
-    targetType: "post",
-    targetId: post.id,
-    targetUserId: post.authorId,
-    action: input.action,
-    reason,
-  });
-
-  // 通知作者。悄悄删帖是最招怨的做法
-  if (post.authorId !== user.id) {
-    notify({
-      userId: post.authorId,
-      type: "moderation",
-      groupKey: `mod:${post.id}:${input.action}`,
-      title: MODERATION_TITLE[input.action],
-      body: `「${post.title}」· ${reason}`,
-      link: `/forum/p/${post.id}`,
-      actorId: user.id,
-      refType: "post",
-      refId: post.id,
-    });
-  }
-
-  audit({ actorId: user.id }, {
-    action: `forum.post.${input.action}`,
-    targetType: "post",
-    targetId: post.id,
-    targetLabel: post.title,
-    before: { status: post.status, pinned: post.pinned, featured: post.featured },
-    after: patch,
-    reason,
-  });
-
-  revalidatePath(`/forum/p/${post.id}`);
+  revalidatePath(`/forum/p/${input.postId}`);
   revalidatePath("/forum");
-  return { ok: true, actionId: action.id };
+  return result;
 }
 
-const MODERATION_TITLE: Record<string, string> = {
-  hide: "你的帖子被隐藏了",
-  delete: "你的帖子被删除了",
-  restore: "你的帖子已恢复",
-  lock: "你的帖子被锁定了",
-  unlock: "你的帖子已解锁",
-  pin: "你的帖子被置顶了",
-  unpin: "你的帖子取消了置顶",
-  feature: "你的帖子被加精了",
-  unfeature: "你的帖子取消了加精",
-  collapse: "你的回复被折叠了",
-};
+export async function movePost(input: {
+  postId: string;
+  toBoardId: string;
+  reason?: string;
+}): Promise<ModResult> {
+  const blocked = await previewBlocked();
+  if (blocked) return fail(blocked);
+
+  const user = await getCurrentUser();
+  const result = movePostCore(user, input);
+  if (!result.ok) return result;
+
+  revalidatePath(`/forum/p/${input.postId}`);
+  revalidatePath("/forum");
+  return result;
+}
 
 export async function moderateReply(input: {
   replyId: string;
   action: "hide" | "delete" | "restore" | "collapse";
   reason: string;
 }): Promise<ModResult> {
+  const blocked = await previewBlocked();
+  if (blocked) return fail(blocked);
+
   const reason = input.reason.trim();
   if (!reason) return fail("必须填写理由");
 
@@ -236,7 +134,7 @@ export async function moderateReply(input: {
 
   db.update(replies).set(patch).where(eq(replies.id, reply.id)).run();
 
-  const action = record({
+  const action = recordModerationAction({
     actorId: user.id,
     targetType: "reply",
     targetId: reply.id,
