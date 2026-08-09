@@ -58,6 +58,21 @@ export const env = {
     tokenKey: process.env.GITHUB_TOKEN_KEY ?? "",
   },
 
+  /**
+   * 图床（files.mrusercontent.com）。
+   *
+   * **不配也能用**，但走的是上游的访客通道，而那是**按 IP 限流的：
+   * 10 分钟 20 次**。我们是从服务器代传的，全站共用一个出口 IP ——
+   * 也就是不配 key 的话，全站每 10 分钟只能发 20 张图。
+   * 本地开发无所谓，线上必须配，否则第一个热闹的晚上就撞墙。
+   *
+   * key 在 files.mrusercontent.com 登录之后拿（登录态下它的
+   * /agent-prompt 会内嵌一个）。
+   */
+  uploads: {
+    apiKey: process.env.UPLOAD_API_KEY ?? "",
+  },
+
   /** WebAuthn 依赖站点域名，必须与实际访问域一致，否则 Passkey 校验失败 */
   webauthn: {
     rpId: process.env.WEBAUTHN_RP_ID ?? "localhost",

@@ -4,6 +4,8 @@ import DOMPurify from "isomorphic-dompurify";
 import { Marked } from "marked";
 import { codeToHtml } from "shiki";
 
+import { isAllowedImageSource } from "@/lib/image-sources";
+
 import {
   MATHML_ATTRS,
   MATHML_TAGS,
@@ -77,6 +79,38 @@ function configurePurify() {
     }
 
     if (node.tagName === "IMG") {
+      /*
+       * ─────────────────────────────────────────
+       * 图片的来源必须收口
+       * ─────────────────────────────────────────
+       *
+       * `img` 一直是放行标签，而 `src` 一直没有白名单 ——
+       * 也就是说任何人都可以在帖子里放一张**指向自己服务器的图**，
+       * 而每一个打开这篇帖子的人，浏览器都会自动去请求它一次。
+       *
+       * 一张 1×1 的透明图就足够把「谁、在什么时候、用什么设备
+       * 读了这篇」连同 IP 一起送到那台服务器上。读者不会点任何东西，
+       * 也不会看到任何异样。**在一个把隐私当卖点的站上，
+       * 这是最安静的那种泄露。**
+       *
+       * 所以只放行自己的图床和头像那几个域名。别的**不是删掉，
+       * 是降级成一条链接** —— 删掉会让人以为帖子坏了，
+       * 而链接把「要不要去访问那台服务器」这个决定还给读者本人。
+       * 这和新人外链降权是同一条思路。
+       */
+      const src = node.getAttribute("src") ?? "";
+      if (!isAllowedImageSource(src)) {
+        const link = node.ownerDocument.createElement("a");
+        link.setAttribute("href", src);
+        link.setAttribute("target", "_blank");
+        link.setAttribute("rel", "noopener noreferrer nofollow ugc");
+        // 说清楚发生了什么，否则作者会以为自己的图挂了
+        const alt = node.getAttribute("alt")?.trim();
+        link.textContent = alt ? `🖼 ${alt}（站外图片，点开查看）` : "🖼 站外图片（点开查看）";
+        node.parentNode?.replaceChild(link, node);
+        return;
+      }
+
       node.setAttribute("loading", "lazy");
       node.setAttribute("decoding", "async");
     }

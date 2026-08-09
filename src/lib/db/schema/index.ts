@@ -26,3 +26,4 @@ export * from "./join";
 export * from "./push";
 export * from "./exports";
 export * from "./github";
+export * from "./uploads";

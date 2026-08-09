@@ -1,11 +1,12 @@
 "use client";
 
-import { Bold, Code, Eye, Italic, Link2, List, Pencil, Quote } from "lucide-react";
+import { Bold, Code, Eye, ImagePlus, Italic, Link2, List, Pencil, Quote } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { previewMarkdown } from "@/lib/forum/preview";
 
 import { readLocalDraft, writeLocalDraft } from "./local-draft";
+import { filesFromDrop, filesFromPaste, useUpload } from "./use-upload";
 
 /**
  * Markdown 编辑器。
@@ -88,6 +89,23 @@ export function Editor({
   const [previewing, setPreviewing] = useState(false);
   const [restored, setRestored] = useState(false);
   const dirty = useRef(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  /*
+   * 全文的镜像。
+   *
+   * 上传是异步的：几秒后回来要拿**那一刻**的全文去替换占位串，
+   * 而闭包里捕获的 `value` 是发起上传那一刻的旧值 ——
+   * 用它会把这期间敲的字全部抹掉。
+   *
+   * 写在渲染期是被 React Compiler 禁止的（渲染可能被丢弃重来），
+   * 所以放在 effect 里同步。
+   */
+  const valueRef = useRef(value);
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
 
   /*
    * 恢复草稿。
@@ -210,6 +228,64 @@ export function Editor({
     else prefixLines(action.prefix);
   };
 
+  /** 在光标处插一段文本。上传的占位串走这条路 */
+  const insertAtCursor = useCallback(
+    (text: string) => {
+      const el = ref.current;
+      const current = valueRef.current;
+      const at = el ? el.selectionStart : current.length;
+      const next = current.slice(0, at) + text + current.slice(at);
+      valueRef.current = next;
+      setValue(next);
+      dirty.current = true;
+      // 光标落在插入的这段之后，人接着写不会覆盖它
+      requestAnimationFrame(() => {
+        el?.focus();
+        el?.setSelectionRange(at + text.length, at + text.length);
+      });
+    },
+    [setValue],
+  );
+
+  const uploader = useUpload({
+    getValue: () => valueRef.current,
+    setValue: (next) => {
+      setValue(next);
+      dirty.current = true;
+    },
+    insertAtCursor,
+  });
+
+  const pickFile = () => fileInput.current?.click();
+
+  /*
+   * 拖拽的三个事件都要接。
+   *
+   * 只接 onDrop 是不够的：不 preventDefault 掉 dragover 的话，
+   * 浏览器的默认行为是**用这个文件替换掉整个页面** ——
+   * 人拖一张图进来，整篇没保存的正文就没了。
+   */
+  const onDragOver = (e: React.DragEvent) => {
+    if (!e.dataTransfer?.types.includes("Files")) return;
+    e.preventDefault();
+    setDragging(true);
+  };
+  const onDrop = (e: React.DragEvent) => {
+    const files = filesFromDrop(e);
+    if (files.length === 0) return;
+    e.preventDefault();
+    setDragging(false);
+    void uploader.upload(files);
+  };
+
+  const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = filesFromPaste(e);
+    // 剪贴板里没有文件时**什么都不做** —— 拦下来的话粘贴文字会失效
+    if (files.length === 0) return;
+    e.preventDefault();
+    void uploader.upload(files);
+  };
+
   return (
     <div className="overflow-hidden rounded-[var(--radius-card)] bg-[var(--surface)] hairline">
       <div className="flex items-center gap-0.5 border-b border-[var(--separator)] px-2 py-1.5">
@@ -225,6 +301,34 @@ export function Editor({
             <tool.icon className="h-4 w-4" strokeWidth={1.9} aria-hidden />
           </button>
         ))}
+        {/*
+          * 插图放在工具栏最后一个，和别的格式按钮分开一点 ——
+          * 它是唯一一个会产生网络请求、会失败、会花几秒的按钮，
+          * 混在「加粗」旁边会让人以为它一样是瞬时的。
+          */}
+        <button
+          type="button"
+          title="插入图片或视频"
+          aria-label="插入图片或视频"
+          disabled={uploader.busy}
+          onClick={pickFile}
+          className="tap-target rounded-[0.375rem] p-1.5 text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--ink)] disabled:opacity-40"
+        >
+          <ImagePlus className="h-4 w-4" strokeWidth={1.9} aria-hidden />
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            if (e.target.files?.length) void uploader.upload(e.target.files);
+            // 清空，否则连续选同一个文件不会再触发 change
+            e.target.value = "";
+          }}
+        />
+
         <span className="flex-1" />
         <button
           type="button"
@@ -246,19 +350,38 @@ export function Editor({
       </div>
 
       {mode === "write" ? (
-        <textarea
-          ref={ref}
-          name={name}
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value);
-            dirty.current = true;
-          }}
-          onKeyDown={onKeyDown}
-          placeholder={placeholder}
-          style={{ minHeight }}
-          className="t-body w-full resize-y bg-transparent px-4 py-3 outline-none placeholder:text-[var(--ink-quaternary)]"
-        />
+        <div
+          className="relative"
+          onDragOver={onDragOver}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+        >
+          <textarea
+            ref={ref}
+            name={name}
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value);
+              dirty.current = true;
+            }}
+            onKeyDown={onKeyDown}
+            onPaste={onPaste}
+            placeholder={placeholder}
+            style={{ minHeight }}
+            className="t-body w-full resize-y bg-transparent px-4 py-3 outline-none placeholder:text-[var(--ink-quaternary)]"
+          />
+
+          {/*
+            * 拖进来时盖一层。`pointer-events-none` 是必需的 ——
+            * 不加的话这一层会把 drop 事件自己接走，
+            * 于是拖拽在**看起来最像能放开的那一刻**失效。
+            */}
+          {dragging && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-[var(--radius-card)] border-2 border-dashed border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]">
+              <p className="t-subhead font-medium text-[var(--accent)]">松手就传上去</p>
+            </div>
+          )}
+        </div>
       ) : (
         <>
           <input type="hidden" name={name} value={value} />
@@ -272,12 +395,39 @@ export function Editor({
         </>
       )}
 
+      {/*
+        * 上传出错单独一行，而且**不自动消失**。
+        *
+        * 混进下面那条状态栏里的话，「传不上去」和「支持 Markdown」
+        * 会在同一个位置来回换，人根本注意不到出过错 ——
+        * 而他正等着那张图出现。
+        */}
+      {uploader.error && (
+        <div className="flex items-start gap-2 border-t border-[var(--separator)] px-4 py-2">
+          <p className="t-caption flex-1 text-[var(--danger)]" role="alert">
+            {uploader.error}
+          </p>
+          <button
+            type="button"
+            onClick={uploader.clearError}
+            className="t-caption2 shrink-0 text-[var(--ink-tertiary)]"
+          >
+            知道了
+          </button>
+        </div>
+      )}
+
       <div className="t-caption flex items-center justify-between border-t border-[var(--separator)] px-4 py-2 text-[var(--ink-tertiary)]">
         <span>
-          {restored ? (
+          {uploader.busy ? (
+            <span className="text-[var(--accent)]" role="status">
+              正在传 {uploader.active[0]}
+              {uploader.active.length > 1 ? ` 等 ${uploader.active.length} 个` : ""}…
+            </span>
+          ) : restored ? (
             <span className="text-[var(--success)]">已恢复上次的草稿</span>
           ) : (
-            "支持 Markdown · ⌘↵ 发布"
+            "支持 Markdown · 可以直接粘贴或拖入图片 · ⌘↵ 发布"
           )}
         </span>
         <span className="tabular">{value.length}</span>
