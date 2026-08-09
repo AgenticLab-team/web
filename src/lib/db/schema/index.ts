@@ -14,3 +14,4 @@ export * from "./activities";
 export * from "./shop";
 export * from "./alerts";
 export * from "./backup";
+export * from "./members";

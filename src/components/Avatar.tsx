@@ -22,11 +22,23 @@ const PALETTE = [
 
 /** 稳定哈希：同一个 wx_id 永远得到同一个颜色，跨页面不跳变 */
 export function paletteFor(seed: string) {
+  return PALETTE[paletteIndexFor(seed)];
+}
+
+/**
+ * 只取配色下标。
+ *
+ * 有它是为了让**不该拿到 wx_id 的地方**也能有一致的配色：
+ * 成员目录这类页面把下标（0–7）传下来就够了，
+ * 而 wx_id 一旦进了组件的 props，就会被序列化进 RSC 载荷、
+ * 出现在网页源码里 —— 一个只用来算颜色的值不值得冒这个险。
+ */
+export function paletteIndexFor(seed: string): number {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
     hash = (hash * 31 + seed.charCodeAt(i)) | 0;
   }
-  return PALETTE[Math.abs(hash) % PALETTE.length];
+  return Math.abs(hash) % PALETTE.length;
 }
 
 /** 取首个有意义的字符：中文取首字，英文取首字母，emoji 昵称取整个 emoji */
@@ -43,14 +55,24 @@ export function initialOf(name: string): string {
 }
 
 interface AvatarProps {
-  wxId: string;
+  /** 配色种子。不该拿到 wx_id 的页面改传 paletteIndex */
+  wxId?: string;
+  /** 已经算好的配色下标，与 wxId 二选一 */
+  paletteIndex?: number;
   name: string;
   src?: string | null;
   size?: number;
   className?: string;
 }
 
-export function Avatar({ wxId, name, src, size = 40, className = "" }: AvatarProps) {
+export function Avatar({
+  wxId,
+  paletteIndex,
+  name,
+  src,
+  size = 40,
+  className = "",
+}: AvatarProps) {
   const style = { width: size, height: size } as const;
 
   if (src) {
@@ -70,7 +92,7 @@ export function Avatar({ wxId, name, src, size = 40, className = "" }: AvatarPro
     );
   }
 
-  const { bg, fg } = paletteFor(wxId);
+  const { bg, fg } = PALETTE[paletteIndex ?? (wxId ? paletteIndexFor(wxId) : 0)];
   return (
     <span
       aria-label={name}

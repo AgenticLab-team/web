@@ -16,6 +16,18 @@ export const users = sqliteTable(
     siteNickname: text("site_nickname"),
     bio: text("bio"),
 
+    /**
+     * 从成员目录里隐身。
+     *
+     * 默认**不隐身** —— 目录只对同群的人可见，而同群的人本来就在微信里
+     * 看得到你的名字，所以这不构成新的暴露；默认隐身则会让目录一直是空的，
+     * 而一个空目录没人会再打开第二次。
+     * 想彻底不出现的人有这个开关。
+     */
+    directoryHidden: integer("directory_hidden", { mode: "boolean" })
+      .notNull()
+      .default(false),
+
     email: text("email").unique(),
     emailVerifiedAt: integer("email_verified_at"),
 

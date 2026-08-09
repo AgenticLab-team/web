@@ -15,6 +15,7 @@ import { dailyStats, groupMembers, people, roles, userRoles } from "@/lib/db/sch
 import { listPasskeys } from "@/lib/auth/passkey";
 import { getMyRank } from "@/lib/queries/leaderboard";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
+import { mySkills } from "@/lib/members/queries";
 import { isAlwaysOn } from "@/lib/notifications/prefs";
 import { getPrefs } from "@/lib/notifications/store";
 import { equippedTitle, titlesOf } from "@/lib/titles/queries";
@@ -36,6 +37,7 @@ export default async function MePage() {
     fallback: "我",
   });
 
+  const skillCount = mySkills(user.id).length;
   const prefs = getPrefs(user.id);
   const mutedTypes = Object.entries(prefs).filter(
     ([type, v]) => !v.site && !isAlwaysOn(type),
@@ -234,6 +236,17 @@ export default async function MePage() {
             <span className="t-body flex-1">登录与安全</span>
             <span className="t-footnote text-[var(--ink-tertiary)]">
               {passkeyCount ? `${passkeyCount} 个 Passkey` : "未设置 Passkey"}
+            </span>
+            <ChevronRight
+              className="h-4 w-4 shrink-0 text-[var(--ink-quaternary)]"
+              strokeWidth={2}
+              aria-hidden
+            />
+          </Row>
+          <Row href="/me/profile">
+            <span className="t-body flex-1">个人资料</span>
+            <span className="t-footnote text-[var(--ink-tertiary)]">
+              {skillCount === 0 ? "还没填技能标签" : `${skillCount} 个技能标签`}
             </span>
             <ChevronRight
               className="h-4 w-4 shrink-0 text-[var(--ink-quaternary)]"

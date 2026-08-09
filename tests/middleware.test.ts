@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import { PROTECTED_PREFIXES, isProtectedPath, safeRedirect } from "@/lib/auth/routes";
+import { NAV } from "@/lib/nav";
 
 /**
  * 登录门禁与回跳地址的安全性。
@@ -65,10 +66,12 @@ describe("受保护路径匹配", () => {
   });
 
   it("**前缀相同但不是子路径的不能误拦**", () => {
-    // /members 不该因为以 /me 开头就被当成 /me 的子路径
-    assert.equal(isProtectedPath("/members"), false);
+    // /messages 不该因为以 /me 开头就被当成 /me 的子路径
+    assert.equal(isProtectedPath("/messages"), false);
     assert.equal(isProtectedPath("/forum/newest"), false);
     assert.equal(isProtectedPath("/administration"), false);
+    assert.equal(isProtectedPath("/shopping"), false);
+    assert.equal(isProtectedPath("/searchers"), false);
   });
 });
 
@@ -96,6 +99,36 @@ describe("matcher 与前缀表不能脱节", () => {
       assert.ok(
         (PROTECTED_PREFIXES as readonly string[]).includes(prefix),
         `matcher 里的 ${entry} 不在受保护前缀表里`,
+      );
+    }
+  });
+});
+
+const ALL_NAV_ITEMS = NAV.flatMap((s) => s.items);
+
+describe("导航与门禁不能各说各的", () => {
+  it("**导航里标了 requiresAuth 的入口，中间件必须也拦**", () => {
+    /*
+     * 两处分开维护的结果是：导航把入口藏起来了，而路径本身没保护。
+     * 访客直接敲地址会拿到一个 200 的空壳 —— 主体没渲染，
+     * 但标题、加载过程都发生过一遍，然后才被客户端弹走。
+     * /admin 当初就是这个样子，而当时的测试是全绿的。
+     */
+    for (const item of ALL_NAV_ITEMS) {
+      if (!item.requiresAuth || !item.ready) continue;
+      assert.ok(
+        isProtectedPath(item.href),
+        `${item.href} 在导航里要求登录，但不在 PROTECTED_PREFIXES 里`,
+      );
+    }
+  });
+
+  it("反过来也查：拦下来的路径不该在导航里对访客可见", () => {
+    for (const item of ALL_NAV_ITEMS) {
+      if (!isProtectedPath(item.href) || !item.ready) continue;
+      assert.ok(
+        item.requiresAuth || item.permission,
+        `${item.href} 被中间件拦着，但导航对访客也显示它 —— 点进去只会撞登录页`,
       );
     }
   });

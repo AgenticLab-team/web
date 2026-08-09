@@ -7,6 +7,10 @@
  *
  * 注意这个文件会被 middleware 引入，跑在 edge runtime 里：
  * **不能碰数据库、不能引 server-only**。
+ *
+ * 页面里再写一次 redirect() 不能代替这份名单：那样访客拿到的是
+ * 一个 200 的空壳，然后才被客户端弹走 —— 页面主体确实没渲染，
+ * 但地址栏、标题、加载过程全都发生过一遍。/admin 当初就是这个样子。
  */
 
 /** 未登录一律拦下的路径前缀 */
@@ -14,6 +18,9 @@ export const PROTECTED_PREFIXES = [
   "/me",
   "/admin",
   "/notifications",
+  "/members",
+  "/shop",
+  "/search",
   "/forum/new",
   "/forum/convert",
   "/onboarding",
