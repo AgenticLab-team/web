@@ -204,6 +204,13 @@
       "when": 1786251246437,
       "tag": "0028_preview_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1786253780239,
+      "tag": "0029_matrix_snapshots",
+      "breakpoints": true
     }
   ]
 }

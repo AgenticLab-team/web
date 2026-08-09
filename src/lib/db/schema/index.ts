@@ -20,3 +20,4 @@ export * from "./radar";
 export * from "./digest";
 export * from "./seasons";
 export * from "./preview";
+export * from "./matrix";

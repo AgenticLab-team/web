@@ -7,8 +7,10 @@ import { Empty, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import { buildMatrix, categoryLabel, whoHasPermission } from "@/lib/admin/permissions";
 import { MatrixEditor } from "@/components/admin/MatrixEditor";
+import { MatrixHistory } from "@/components/admin/MatrixHistory";
 import { getPermission, type PermissionKey } from "@/lib/rbac/permissions";
 import { startPreviewAction } from "@/lib/rbac/preview-actions";
+import { listSnapshots } from "@/lib/rbac/matrix-snapshots";
 import { findPreviewCandidates, recentPreviews } from "@/lib/rbac/preview-queries";
 import { PREVIEW_PERMISSION } from "@/lib/rbac/preview-rules";
 
@@ -27,6 +29,7 @@ export default async function AdminRolesPage({
 
   const canPreview = admin.has(PREVIEW_PERMISSION as PermissionKey);
   const canEditMatrix = admin.has("role.manage");
+  const snapshots = listSnapshots();
   const candidates = canPreview ? findPreviewCandidates(params.as ?? "") : [];
   const history = recentPreviews();
 
@@ -158,6 +161,10 @@ export default async function AdminRolesPage({
           canEdit={canEditMatrix}
           lookupBase="/admin/roles?lookup="
         />
+      </Section>
+
+      <Section title="矩阵变更历史">
+        <MatrixHistory rows={snapshots} canRollback={canEditMatrix} />
       </Section>
 
       <Section title="以某身份预览">
