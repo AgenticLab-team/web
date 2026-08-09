@@ -30,6 +30,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
 import { postCapabilities } from "@/lib/forum/manage";
 import { getPost, listBoards, listReplies } from "@/lib/forum/queries";
+import { tagsOfPosts } from "@/lib/forum/tags-queries";
 import { consentSummary } from "@/lib/forum/convert-queries";
 import { pollOfPost } from "@/lib/forum/polls-queries";
 import { tipsOfTargets } from "@/lib/forum/tips-queries";
@@ -102,6 +103,7 @@ export default async function PostPage({
   // 只看楼主：走 URL 而不是客户端状态 —— 分享出去的链接也能带着这个视图
   const onlyAuthor = only === "op";
   const replies = onlyAuthor ? allReplies.filter((r) => r.authorId === post.authorId) : allReplies;
+  const postTags = tagsOfPosts([post.id]).get(post.id) ?? [];
 
   // 一次查完整页的反应状态。逐条查的话，50 楼的帖子就是 200 次查询
   const reactionMap = reactionStates(
@@ -237,6 +239,27 @@ export default async function PostPage({
         )}
 
         <h1 className="t-title1 mb-3 leading-snug">{post.title}</h1>
+
+        {/*
+          * 标签摆在标题下面、作者上面。
+          *
+          * 它回答的是「这篇讲什么」，而作者回答的是「谁写的」——
+          * 前者更常是人扫一眼就走的那个决定。
+          * 点进去是这个标签下的其它帖子（可见性照样过一遍）。
+          */}
+        {postTags.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {postTags.map((t) => (
+              <Link
+                key={t.slug}
+                href={`/forum/search?tag=${encodeURIComponent(t.slug)}`}
+                className="t-caption2 inline-flex items-center rounded-[var(--radius-pill)] bg-[var(--fill)] px-2 py-0.5 text-[var(--ink-secondary)] transition-colors hover:bg-[var(--fill-strong)]"
+              >
+                {t.name}
+              </Link>
+            ))}
+          </div>
+        )}
 
         <div className="mb-5 flex items-center gap-2.5">
           {/* 匿名帖的 authorWxId 是 null，PersonLink 会退化成普通 span */}

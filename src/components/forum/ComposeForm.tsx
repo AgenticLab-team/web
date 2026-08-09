@@ -13,6 +13,7 @@ import { relativeTime } from "./PostList";
 
 import { DraftSync } from "./DraftSync";
 import { SchedulePicker } from "./SchedulePicker";
+import { TagInput } from "./TagInput";
 import { clearLocalDraft, readLocalDraft } from "./local-draft";
 import { EMPTY_POLL, PollComposer, type PollDraft } from "./PollComposer";
 import { useServerDraft } from "./use-server-draft";
@@ -37,6 +38,8 @@ export function ComposeForm({
   serverDrafts = {},
   prefill = null,
   githubPromptId,
+  tagSuggestions = [],
+  requireTagBoards = [],
 }: {
   boards: BoardOption[];
   defaultBoard?: string;
@@ -53,12 +56,17 @@ export function ComposeForm({
   prefill?: { title: string; content: string } | null;
   /** 发出去之后要标成「已分享」的那条提示 */
   githubPromptId?: string;
+  /** 站里已有的标签，按用得多的排前面 */
+  tagSuggestions?: { slug: string; name: string; postCount: number }[];
+  /** 哪些版块要求必填标签，按版块 key */
+  requireTagBoards?: string[];
 }) {
   const router = useRouter();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [boardKey, setBoardKey] = useState(defaultBoard ?? boards[0]?.key ?? "");
+  const [tags, setTags] = useState<string[]>([]);
   const [type, setType] = useState<(typeof TYPES)[number]["key"]>("discussion");
   const [title, setTitle] = useState(prefill?.title ?? "");
   const [content, setContent] = useState(prefill?.content ?? "");
@@ -139,6 +147,7 @@ export function ComposeForm({
         boardKey,
         title,
         content,
+        tags,
         // datetime-local 给的是本地时间字符串，转成毫秒再传
         scheduledAt: scheduleAt ? new Date(scheduleAt).getTime() : undefined,
         // 投票帖的类型由服务端按有没有 poll 定 —— 两处各判一次迟早对不上
@@ -339,6 +348,14 @@ export function ComposeForm({
           {error}
         </p>
       )}
+
+      {/* 标签摆在正文之后、定时发布之前：写完才知道该打什么标签，
+          让人先选标签等于让他先给一篇还不存在的东西分类 */}
+      <TagInput
+        suggestions={tagSuggestions}
+        required={requireTagBoards.includes(boardKey)}
+        onChange={setTags}
+      />
 
       <SchedulePicker value={scheduleAt} onChange={setScheduleAt} />
 

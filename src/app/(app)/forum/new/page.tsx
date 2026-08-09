@@ -8,6 +8,7 @@ import { requireFeature } from "@/lib/flags/server";
 import { prefillOf, promptFor } from "@/lib/github/prompts";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildViewerContext } from "@/lib/forum/context";
+import { listTags } from "@/lib/forum/tags-queries";
 import type { DraftSnapshot } from "@/lib/forum/draft-rules";
 import { getDraft } from "@/lib/forum/drafts";
 import { listBoards } from "@/lib/forum/queries";
@@ -92,6 +93,12 @@ export default async function NewPostPage({
           description: b.description,
           maxVisibility: b.maxVisibility,
         }))}
+        tagSuggestions={listTags(12).map((t) => ({
+          slug: t.slug,
+          name: t.name,
+          postCount: t.postCount,
+        }))}
+        requireTagBoards={boards.filter((b) => b.requireTags).map((b) => b.key)}
         defaultBoard={board}
         prefill={prefill}
         githubPromptId={promptRow?.id}

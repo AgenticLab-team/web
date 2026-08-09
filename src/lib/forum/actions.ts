@@ -26,6 +26,8 @@ import { dropDraft } from "./drafts";
 import { checkSchedule } from "./schedule-rules";
 import { autoSubscribe, notifyNewPost, notifyNewReply } from "./notify";
 import { getPost } from "./queries";
+import { cleanTags } from "@/lib/forum/tag-rules";
+import { applyTags } from "@/lib/forum/tags-write";
 import { indexPost, indexReply } from "./search";
 import { canSeePost, normalizePostVisibility } from "./visibility";
 import { checkClosesAt, normalizePollDraft } from "./poll-rules";
@@ -129,6 +131,8 @@ export async function createPost(input: {
   type?: "discussion" | "question" | "showcase";
   visibility?: "public" | "unlisted" | "member" | "private";
   anonymous?: boolean;
+  /** 标签。归一化、去重、封顶都在 tags-write.ts 里 */
+  tags?: string[];
   /**
    * 顺带建一个投票。
    *
@@ -167,6 +171,18 @@ export async function createPost(input: {
     return fail(`该版块需要 L${board.postMinLevel} 才能发帖，你当前 L${user.level}`);
   }
   if (input.anonymous && !board.allowAnonymous) return fail("该版块不允许匿名发帖");
+
+  /*
+   * 版块可以要求必填标签。
+   *
+   * `require_tags` 这一列在 schema 里躺着、后台可以改，而**没有一行代码
+   * 读它** —— 也就是说管理员在后台把它打开，什么都不会发生。
+   * 一个开着却不生效的开关，比没有这个开关更糟。
+   */
+  const wantedTags = cleanTags(input.tags ?? []);
+  if (board.requireTags && wantedTags.length === 0) {
+    return fail("这个版块要求至少一个标签 —— 别人靠它找到你这篇");
+  }
 
   const title = input.title.trim();
   const content = input.content.trim();
@@ -283,6 +299,15 @@ export async function createPost(input: {
         tx.insert(pollOptions).values({ pollId: poll.id, text, sort }).run();
       });
     }
+
+    /*
+     * 标签和帖子**在同一个事务里**写。
+     *
+     * 发完帖再调一次写标签的动作，中间失败会留下一篇没有标签的帖子 ——
+     * 而作者未必知道该回去补，版块要求必填标签时更是直接自相矛盾。
+     * 和上面投票那一段是同一条理由。
+     */
+    if (wantedTags.length > 0) applyTags(tx, row.id, wantedTags, user.id);
 
     // 计数统一走重算，不再手写 +1 —— 「+1」是第二份真相，
     // 群聊转帖那条路当年就是忘了抄这一句，沉淀版因此常年显示 0
