@@ -17,3 +17,4 @@ export * from "./backup";
 export * from "./members";
 export * from "./links";
 export * from "./radar";
+export * from "./digest";

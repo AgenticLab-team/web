@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { BroadcastComposer, BroadcastReview } from "@/components/admin/BroadcastComposer";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { recentDigests } from "@/lib/digest/build";
 import { Empty, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import {
@@ -54,6 +55,8 @@ export default async function AdminBroadcastPage() {
   const gapLeft =
     gap !== null && gap < MIN_SEND_GAP_MS ? Math.ceil((MIN_SEND_GAP_MS - gap) / 60_000) : 0;
 
+  const digests = recentDigests(4);
+
   return (
     <>
       <PageHeader
@@ -77,6 +80,40 @@ export default async function AdminBroadcastPage() {
             那比被风控更难挽回。
           </p>
         </div>
+      )}
+
+      {/* 每周精选是定时任务备好的草稿 —— 摆在最前面，
+          否则一个没人点开的草稿和没生成过完全一样 */}
+      {digests.length > 0 && (
+        <Section title="每周精选">
+          <div className="inset-group">
+            {digests.map((run) => (
+              <div key={run.id} className="inset-row px-4 py-2.5">
+                <p className="t-body flex flex-wrap items-center gap-1.5">
+                  <span className="tabular">{run.weekStart} 那周</span>
+                  {run.broadcastId ? (
+                    <span className="t-caption2" style={{ color: "var(--warning)" }}>
+                      草稿已备好 · {run.itemCount} 条 · 等人复核
+                    </span>
+                  ) : (
+                    <span className="t-caption2 text-[var(--ink-quaternary)]">未生成</span>
+                  )}
+                </p>
+                {run.skipReason && (
+                  <p className="t-caption mt-0.5 leading-relaxed text-[var(--ink-tertiary)]">
+                    {run.skipReason}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+            定时任务每周只<strong>生成草稿</strong>，不发送 ——
+            一个每周自动向一千六百人广播的机器人，被风控只是时间问题，
+            而且没有人会为一条没人看过的自动消息负责。
+            草稿走下面同一套复核与发送流程。
+          </p>
+        </Section>
       )}
 
       <Section title="新建">

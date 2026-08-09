@@ -14,6 +14,9 @@
 | 运行时 | Node 22.23.2（`/usr/local/bin/node`） |
 | 应用 | systemd `agenticlab.service` → 127.0.0.1:3000 |
 | 同步 | systemd `agenticlab-sync.timer`，每 2 分钟 |
+| 健康与告警 | `agenticlab-health.timer`，每 5 分钟（探测 + 告警投递 + 到线自动裁剪）|
+| 备份 | `agenticlab-backup.timer`，每日 04:00（备完顺带推异地）|
+| 每周精选 | `agenticlab-digest.timer`，每周一 09:00 —— **只生成草稿，不发送** |
 | 反代 | nginx，80 → 443 强制跳转 |
 | 证书 | Let's Encrypt，`agenticlab.sh` + `www`，2026-11-06 到期，自动续期 |
 | 上游 | frp 隧道 → `127.0.0.1:8090`（NekoBot） |
