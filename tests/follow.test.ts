@@ -8,7 +8,6 @@ import {
   FOLLOW_TARGETS,
   MAX_FOLLOWS,
   canFollow,
-  canSeeFollowList,
   noticeCopy,
   pickSource,
 } from "@/lib/forum/follow-rules";
@@ -135,12 +134,7 @@ describe("取消关注是真的删掉", () => {
 });
 
 describe("**关注是私密的**", () => {
-  it("只有本人看得到自己的关注列表", () => {
-    assert.equal(canSeeFollowList("u1", "u1"), true);
-    assert.equal(canSeeFollowList("u2", "u1"), false);
-    assert.equal(canSeeFollowList(null, "u1"), false);
-  });
-
+  /* canSeeFollowList 已删：收口是「查询层没有那种签名」，不是一个没人调的判断 */
   it("**查询层没有「看某某关注了谁」这种签名** —— 没有签名就没人会不小心调出来", () => {
     const code = src("lib/forum/follow.ts");
     for (const fn of ["listFollows", "followCount", "isFollowing"]) {

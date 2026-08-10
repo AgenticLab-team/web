@@ -129,19 +129,3 @@ export function releaseExpiredBans(now = Date.now()): ExpiryResult {
   return result;
 }
 
-/** 这个人现在还生效的处罚 —— 「处罚与申诉」那一页要显示还剩多久 */
-export function activePunishment(userId: string, now = Date.now()) {
-  return (
-    db
-      .select()
-      .from(moderationActions)
-      .where(and(eq(moderationActions.targetUserId, userId), isNull(moderationActions.revertedAt)))
-      .orderBy(desc(moderationActions.createdAt))
-      .all()
-      .find(
-        (r) =>
-          (r.action === "ban" || r.action === "suspend") &&
-          isActive({ expiresAt: r.expiresAt, revertedAt: r.revertedAt }, now),
-      ) ?? null
-  );
-}

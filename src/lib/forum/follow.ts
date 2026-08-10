@@ -11,9 +11,15 @@ import type { FollowTarget } from "./follow-rules";
 /**
  * 关注的读取层。
  *
- * 关注列表**只有本人看得到**（见 follow-rules 的 `canSeeFollowList`）——
- * 所以这里每个函数都以 userId 开头，没有「看某某关注了谁」这种签名。
- * 没有那个签名，就没有人能在别处不小心把它调出来。
+ * 关注列表**只有本人看得到**。
+ *
+ * 收口不是靠一个「能不能看」的判断函数，而是靠**签名本身**：
+ * 这里每个函数都以 userId 开头，根本没有「看某某关注了谁」这种签名。
+ * 没有那个签名，就没有人能在别处不小心把它调出来 ——
+ * 而一个要靠调用方记得去问的判断，迟早有一处忘了问。
+ *
+ * （曾经有个 `canSeeFollowList()` 写在 follow-rules 里，
+ *   但没有任何地方调它 —— 它描述的正是这条规矩，却不执行它。已删。）
  */
 
 export function isFollowing(userId: string, target: FollowTarget, targetId: string): boolean {

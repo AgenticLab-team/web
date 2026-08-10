@@ -15,7 +15,6 @@ import {
   filterTypes,
   isAlwaysOn,
   isEnabled,
-  matchesFilter,
   normalizePrefs,
   parseFilter,
   sanitizeSubmission,
@@ -192,20 +191,11 @@ describe("列表筛选", () => {
     assert.deepEqual([...uncovered].sort(), ["accepted", "featured", "reaction", "title"]);
   });
 
-  it("全部不过滤任何东西", () => {
-    assert.equal(matchesFilter({ type: "reaction", readAt: 1 }, "all"), true);
-    assert.equal(filterTypes("all"), null);
-  });
-
-  it("未读只看已读状态，不看类型", () => {
-    assert.equal(matchesFilter({ type: "reaction", readAt: null }, "unread"), true);
-    assert.equal(matchesFilter({ type: "moderation", readAt: 1 }, "unread"), false);
-  });
-
+  /* matchesFilter 已删：页面按 filterTypes() 拼 SQL，不在内存里过滤 */
   it("回复页签盖住三种回复，不含 @", () => {
     const types = filterTypes("reply") ?? [];
     assert.deepEqual([...types].sort(), ["reply_to_post", "reply_to_reply", "subscribed_reply"]);
-    assert.equal(matchesFilter({ type: "mention", readAt: null }, "reply"), false);
+    // @提及不在回复页签里 —— 上面那条 deepEqual 已经把它排除掉了
   });
 
   it("每个页签都有中文名", () => {

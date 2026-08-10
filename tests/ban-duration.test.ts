@@ -301,14 +301,5 @@ describe("到期解封（真数据）", () => {
     assert.equal(dbm.db.select().from(schema.notifications).all().length, 1);
   });
 
-  it("activePunishment 找得出现在生效的那条", () => {
-    ban({ expiresAt: NOW + 86_400_000, reason: "还在生效" });
-    const active = expiry.activePunishment(USER, NOW);
-    assert.equal(active?.reason, "还在生效");
-  });
-
-  it("全都到期时 activePunishment 是 null", () => {
-    ban({ expiresAt: NOW - 1000 });
-    assert.equal(expiry.activePunishment(USER, NOW), null);
-  });
+  /* activePunishment 已删：它是 myModerationRecord 的重复实现，而页面用的是后者 */
 });

@@ -36,11 +36,6 @@ export function isEffectivelyPinned(post: PinState, now: number): boolean {
   return post.pinnedUntil > now;
 }
 
-/** 置顶已经过期、但标记还没清掉 —— 清理任务要认出来 */
-export function isPinExpired(post: PinState, now: number): boolean {
-  return post.pinned && post.pinnedUntil !== null && post.pinnedUntil <= now;
-}
-
 /** 同一个版块同时能有几个**付费**置顶位 */
 export const PAID_PIN_SLOTS = 1;
 

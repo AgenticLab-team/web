@@ -106,10 +106,3 @@ export function allSyncedGroupIds(): string[] {
 }
 
 /** 批量校验，用于「我在哪些群」这类列表 */
-export function filterToVisible<T extends { convId: string }>(
-  user: CurrentUser | null,
-  rows: T[],
-): T[] {
-  const allowed = new Set(visibleGroupIds(user));
-  return rows.filter((row) => allowed.has(row.convId));
-}

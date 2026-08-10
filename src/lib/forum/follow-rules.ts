@@ -170,6 +170,3 @@ export function noticeCopy(input: {
  */
 export const FOLLOWS_ARE_PRIVATE = true;
 
-export function canSeeFollowList(viewerId: string | null, ownerId: string): boolean {
-  return viewerId !== null && viewerId === ownerId;
-}

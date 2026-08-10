@@ -120,11 +120,7 @@ describe("群可见性", () => {
     assert.equal(vis.assertGroupAccess(null, G1), null, "访客不可访问任何群");
   });
 
-  it("filterToVisible 剔除越权行", () => {
-    const rows = [{ convId: G1 }, { convId: G2 }, { convId: G3_UNSYNCED }];
-    assert.deepEqual(vis.filterToVisible(userOf(BOB), rows), [{ convId: G1 }]);
-    assert.deepEqual(vis.filterToVisible(null, rows), []);
-  });
+  /* filterToVisible 已删：生产在 SQL 里按 visibleGroupIds 过滤，行根本不出库 */
 });
 
 describe("排行榜按可见群收口", () => {

@@ -5,7 +5,6 @@ import {
   PAID_PIN_SLOTS,
   checkPinPurchase,
   isEffectivelyPinned,
-  isPinExpired,
   pinRemainingLabel,
   pinUntil,
 } from "@/lib/forum/pin";
@@ -46,12 +45,7 @@ describe("现在还置顶着吗", () => {
     assert.equal(isEffectivelyPinned(state({ pinnedUntil: NOW + 1 }), NOW), true);
   });
 
-  it("认得出「标记还在但已经过期」—— 清理任务靠它", () => {
-    assert.equal(isPinExpired(state({ pinnedUntil: NOW - 1 }), NOW), true);
-    assert.equal(isPinExpired(state({ pinnedUntil: NOW + HOUR }), NOW), false);
-    assert.equal(isPinExpired(state({ pinnedUntil: null }), NOW), false, "手动置顶不会过期");
-    assert.equal(isPinExpired(state({ pinned: false }), NOW), false);
-  });
+  /* isPinExpired 已删：真正生效的是 isEffectivelyPinned 和查询里的 stillPinned */
 });
 
 describe("买置顶的前置检查 —— 全在扣分之前", () => {

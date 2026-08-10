@@ -280,16 +280,6 @@ export function parseFilter(value: string | undefined): NotificationFilter {
   return value && value in FILTER_LABELS ? (value as NotificationFilter) : "all";
 }
 
-export function matchesFilter(
-  item: { type: string; readAt: number | null },
-  filter: NotificationFilter,
-): boolean {
-  if (filter === "all") return true;
-  if (filter === "unread") return item.readAt === null;
-  const types = FILTER_TYPES[filter];
-  return types ? types.includes(item.type) : true;
-}
-
 /**
  * 每个筛选项对应的类型必须真实存在。
  *
