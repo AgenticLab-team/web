@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createPublicKey, verify as verifyRaw } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { after, before, describe, it } from "node:test";
 
 /**
@@ -184,6 +186,84 @@ describe("没配置时的降级", () => {
       subject: "ops@example.com",
     });
     assert.ok(problem?.includes("mailto"));
+  });
+
+  it("**https: 的 subject 也接受** —— 线上用的就是这一种", () => {
+    /*
+     * 线上配的是 `VAPID_SUBJECT=https://agenticlab.sh`，
+     * 而不是脚本里那个占位邮箱 —— 这个值会发给推送服务
+     * （Google / Mozilla）当联系方式，放个人邮箱没必要。
+     *
+     * 校验里只要有人手滑把它收紧成「只认 mailto:」，
+     * 线上推送第二天就全挂，而站内一切正常、没有一页会红。
+     * 所以这条单独钉住。
+     */
+    const keys = wp.generateVapidKeys();
+    assert.equal(
+      wp.configProblem({
+        publicKey: keys.publicKey,
+        privateKey: keys.privateKey,
+        subject: "https://agenticlab.sh",
+      }),
+      null,
+    );
+  });
+
+  it("**真的跑一遍生成脚本，validator 认得它的产出**", () => {
+    /*
+     * `scripts/webpush-keys.ts` 开头写明「故意不 import 项目里的任何
+     * 模块」—— 它要在还没配好环境的机器上能跑。代价是**密钥的编码方式
+     * 在两处各写了一遍**，可以悄悄分叉。
+     *
+     * 分叉的表现很难查：脚本照常打印三行，人照着贴进 .env.local，
+     * 然后健康检查说「配置不全」或「公私钥不匹配」，而两边看起来都没错。
+     *
+     * ── 第一版这条测试是假的 ──
+     *
+     * 它在测试里用 createECDH + base64url **重造**了一对密钥再喂给
+     * validator。那测的是「我以为脚本是这么写的」，不是脚本本身：
+     * 把脚本里的 base64url 改成 base64，这条测试照样全绿。
+     *
+     * 所以现在**真的把脚本跑起来**，解析它打印的东西。
+     */
+    const out = execFileSync(
+      "npx",
+      ["tsx", fileURLToPath(new URL("../scripts/webpush-keys.ts", import.meta.url))],
+      { encoding: "utf8", timeout: 60_000 },
+    );
+
+    const keys: Record<string, string> = {};
+    for (const line of out.split("\n")) {
+      const m = /^(VAPID_[A-Z_]+)=(.+)$/.exec(line.trim());
+      if (m) keys[m[1]] = m[2];
+    }
+
+    assert.ok(keys.VAPID_PUBLIC_KEY, "脚本没打印公钥");
+    assert.ok(keys.VAPID_PRIVATE_KEY, "脚本没打印私钥");
+
+    const problem = wp.configProblem({
+      publicKey: keys.VAPID_PUBLIC_KEY,
+      privateKey: keys.VAPID_PRIVATE_KEY,
+      // subject 用线上那一种，顺带确认它没被脚本的占位值绑死
+      subject: "https://agenticlab.sh",
+    });
+    assert.equal(problem, null, `脚本产出的密钥被 validator 拒了：${problem}`);
+  });
+
+  it("**脚本确实只打印这三个变量**，不多不少", () => {
+    /*
+     * 少一个的话，人贴完还是「配置不全」；
+     * 多一个不认识的，人会以为自己漏配了什么。
+     */
+    const src = readFileSync(
+      new URL("../scripts/webpush-keys.ts", import.meta.url),
+      "utf8",
+    );
+    const printed = [...src.matchAll(/\b(VAPID_[A-Z_]+)=/g)].map((m) => m[1]);
+    assert.deepEqual(
+      [...new Set(printed)].sort(),
+      ["VAPID_PRIVATE_KEY", "VAPID_PUBLIC_KEY", "VAPID_SUBJECT"],
+    );
   });
 
   it("健康检查里「没配置」报 degraded 而不是 ok —— 缺口要一直看得见", () => {
