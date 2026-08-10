@@ -94,8 +94,16 @@ step "同步代码"
 # 排除 .next* 而不是 .next：蓝绿两份产物都在服务器上，
 # 只写 .next 的话 --delete 会把 .next-blue / .next-green 一起删掉,
 # 而其中一份正是此刻在服务的那个版本。
+# `.env.local*` 带星号，不是只排 `.env.local` —— **--delete 会连备份一起删**。
+#
+# 配 VAPID 密钥时踩过一次：改之前先 `cp .env.local .env.local.bak-$(date +%s)`，
+# 下一次部署把那份备份静静删掉了。真出事要回滚配置的那一刻，
+# 备份已经不在了 —— 而那正是唯一需要它的时刻。
+#
+# 同理 `.next*` 也带星号：两份构建产物（.next-blue / .next-green）
+# 都在服务器上，删掉正在跑的那一份等于把站点删了。
 rsync -az --delete \
-  --exclude node_modules --exclude '.next*' --exclude data --exclude .env.local --exclude .git \
+  --exclude node_modules --exclude '.next*' --exclude data --exclude '.env.local*' --exclude .git \
   ./ "$HOST:$REMOTE/"
 
 step "服务器：依赖与迁移"

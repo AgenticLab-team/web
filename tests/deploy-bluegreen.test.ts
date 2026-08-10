@@ -105,7 +105,26 @@ describe("**rsync 不能把线上那份产物删掉**", () => {
 
   it("数据目录和 .env.local 照旧排除", () => {
     assert.match(deploy, /--exclude data/);
-    assert.match(deploy, /--exclude \.env\.local/);
+    assert.match(deploy, /--exclude '?\.env\.local/);
+  });
+
+  it("**排除的是 .env.local\* 而不是 .env.local** —— 备份也得留住", () => {
+    /*
+     * 和上面 .next 那条是同一种错，后果不同。
+     *
+     * 只排 `.env.local` 的话，文件本身安全，而 `--delete` 会把
+     * `.env.local.bak-*` 这类备份**静静删掉**。配 VAPID 密钥时
+     * 踩过一次：改之前先备份了一份，下一次部署它就没了。
+     *
+     * 真出事要回滚配置的那一刻，备份已经不在了 ——
+     * 而那正是唯一需要它的时刻。
+     */
+    assert.match(deploy, /--exclude '\.env\.local\*'/);
+    assert.equal(
+      /--exclude \.env\.local(?![*\w])/.test(deploy),
+      false,
+      "还留着只排除 .env.local 的写法，备份会被 --delete 清掉",
+    );
   });
 });
 
