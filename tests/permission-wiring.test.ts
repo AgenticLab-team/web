@@ -126,7 +126,7 @@ describe("**planned 里只该剩「功能真没做」的**", () => {
    * 所以现在这张表该只剩第一类。写死在这里：新增一个 planned
    * 要动这一行，也就要有人过一眼它属于哪一类。
    */
-  it("清单就是这 7 个，全是功能没做", () => {
+  it("清单就是这 6 个，全是功能没做", () => {
     const planned = PERMISSION_LIST.filter((p) => p.status === "planned").map((p) => p.key);
     assert.deepEqual(
       [...planned].sort(),
@@ -141,12 +141,15 @@ describe("**planned 里只该剩「功能真没做」的**", () => {
        * 它属于第三类：**功能被否掉了**，既不是「没做」也不是
        * 「被更粗的权限管着」。留着等于承诺一件已经决定不做的事。
        */
+      /*
+       * `user.delete` 从这里下来了 —— **接上了**，不是退役。
+       * 自助注销在「登录与安全」页，后台删号走 admin/user-actions。
+       */
       [
         "broadcast.email",
         "module.config",
         "module.install",
         "permission.override",
-        "user.delete",
         "user.export",
         "user.merge",
       ],
@@ -176,7 +179,6 @@ describe("planned 的要说清楚为什么", () => {
        *     这种更值得警惕：它意味着**细粒度的授权做不到**
        */
       const notImplemented = [
-        "user.delete",
         "user.merge",
         "user.export",
         "permission.override",

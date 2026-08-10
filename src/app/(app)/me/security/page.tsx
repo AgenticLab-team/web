@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
 
 import type { Metadata } from "next";
+import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { LoginNameSetup } from "@/components/auth/LoginNameSetup";
+import { DeleteAccount } from "@/components/me/DeleteAccount";
 import { PasswordSetup } from "@/components/auth/PasswordSetup";
 import { GitHubPanel } from "@/components/github/GitHubPanel";
 import { PasskeySetup } from "@/components/passkey/PasskeySetup";
@@ -184,6 +186,29 @@ export default async function SecurityPage({
         <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
           失败的尝试也会记下来。看到不是你本人的登录，
           先下线全部设备，再重新设置 Passkey。
+        </p>
+      </Section>
+
+      {/*
+        注销放在这一页的最后。
+
+        它属于「账号」而不是「隐私」—— 隐私页管的是「谁能看到你」，
+        这里管的是「这个账号还在不在」。而且它必须和「下线全部设备」
+        这类操作在同一屏：都是**对账号本身**动手的事。
+
+        默认收起来。这一页别的都是日常设置，一个红色的不可撤销按钮
+        常驻在那儿，会让每次进来看看登录记录的人都紧张一下 ——
+        但也不能藏进二级页面：一个找不到的注销入口，
+        和没有注销一样，区别只是前者还显得像有。
+      */}
+      <Section title="注销">
+        <div className="px-1">
+          <DeleteAccount />
+        </div>
+        <p className="t-caption mt-3 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+          想先把自己的数据拿走？去
+          <Link href="/me/export" className="text-[var(--accent)]">导出数据</Link>
+          。注销之后就导不了了。
         </p>
       </Section>
     </>

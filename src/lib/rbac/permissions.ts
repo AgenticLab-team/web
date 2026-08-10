@@ -107,7 +107,7 @@ export const PERMISSIONS = [
   { key: "user.bind.manual", category: "user", label: "手动绑定用户", dangerLevel: 2 },
   { key: "user.session.revoke", category: "user", label: "远程下线用户", dangerLevel: 1 },
   { key: "user.suspend", category: "user", label: "封禁 / 解封", dangerLevel: 2 },
-  { key: "user.delete", category: "user", label: "删除账号", dangerLevel: 3, status: "planned" },
+  { key: "user.delete", category: "user", label: "删除账号", dangerLevel: 3 },
   { key: "user.merge", category: "user", label: "合并重复账号", dangerLevel: 3, status: "planned" },
   { key: "user.export", category: "user", label: "导出用户数据", dangerLevel: 2, status: "planned" },
 

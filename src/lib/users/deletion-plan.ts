@@ -185,6 +185,18 @@ export const PURGE_TABLES = DELETION_PLAN.filter((p) => p.disposition === "purge
 );
 
 /**
+ * 注销确认要手打的那个词。
+ *
+ * 放在这里而不是 `delete-actions.ts` —— 那个文件带 `"use server"`，
+ * 而**「use server」文件只允许导出 async 函数**：导出一个常量会让
+ * 整个构建失败（而且报的是「该模块没有任何导出」，第一眼看不出原因）。
+ *
+ * 放这里也更顺：这个文件本来就是「注销这件事的规矩」，
+ * 服务端动作和界面都从这儿取，不会有第二份。
+ */
+export const CONFIRM_WORD = "注销我的账号";
+
+/**
  * 确认页上必须说清楚的三件事。
  *
  * 单独放在这里、并由测试盯着**每一条都出现在界面上** ——

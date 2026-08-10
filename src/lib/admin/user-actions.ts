@@ -22,6 +22,7 @@ import {
 import { db } from "@/lib/db";
 import { moderationActions, roles, userNotes, userRoles, users } from "@/lib/db/schema";
 import { revertInviteReward } from "@/lib/invites/settle";
+import { deleteAccount } from "@/lib/users/delete";
 import { grantPoints } from "@/lib/points/ledger";
 import { resolveDisplayName } from "@/lib/users/display-name";
 import { invalidatePermissionCache } from "@/lib/rbac/can";
@@ -339,5 +340,71 @@ export async function addUserNote(input: {
   });
 
   revalidatePath(`/admin/users/${input.userId}`);
+  return { ok: true };
+}
+
+/**
+ * 管理员删除一个账号。
+ *
+ * ─────────────────────────────────────────
+ * 这不是「封禁的加强版」
+ * ─────────────────────────────────────────
+ *
+ * 封禁是**可撤销**的：人还在，随时能放回来。删除不可撤销 ——
+ * 而且它抹掉的是这个人在站里的身份，不只是他的访问权。
+ *
+ * 所以绝大多数「这个人有问题」的情形要用的是封禁，不是删除。
+ * 删除只留给两种：本人要求（而他自己点不了，比如账号已被封）、
+ * 以及法律/合规要求。
+ *
+ * 因此**必须写理由**，而且理由会进审计 —— 一次说不出理由的删号，
+ * 事后没有人能解释它为什么发生。
+ */
+export async function deleteUserAccount(input: {
+  userId: string;
+  reason: string;
+}): Promise<AdminActionResult> {
+  const admin = await requireWritableAdmin("user.delete");
+
+  const reason = input.reason.trim();
+  // 理由比封禁那边要求得更长 —— 不可撤销的操作，「清理」两个字不算理由
+  if (reason.length < 6) return fail("删除账号必须写清楚理由（至少 6 个字）");
+
+  /*
+   * 不能删自己。
+   *
+   * 管理员删掉自己之后，他名下的角色也跟着没了 ——
+   * 如果他恰好是唯一一个有 user.delete 的人，这个能力就永远消失了。
+   * 自助注销那条路照样走得通，只是不能从后台按这个键。
+   */
+  if (input.userId === admin.user.id) {
+    return fail("不能在后台删除自己的账号 —— 要注销请走「登录与安全」里的自助注销");
+  }
+
+  const target = db.select().from(users).where(eq(users.id, input.userId)).get();
+  if (!target) return fail("用户不存在");
+  if (target.status === "deleted") return fail("这个账号已经注销过了");
+
+  /*
+   * 审计先写、且带上删除前的样子。
+   *
+   * 删完之后 users 那一行只剩一个壳，昵称微信号全清空了 ——
+   * 审计里不留一份「删的是谁」的话，日志翻出来是一串查不到人的 id，
+   * 而这正是最需要查得清楚的一类操作。
+   */
+  audit(
+    { actorId: admin.user.id },
+    {
+      action: "user.delete",
+      targetType: "user",
+      targetId: input.userId,
+      targetLabel: target.siteNickname ?? target.wxNickname ?? input.userId,
+      before: { status: target.status, wxId: target.wxId },
+      reason,
+    },
+  );
+
+  deleteAccount(input.userId, { by: admin.user.id, reason });
+  revalidatePath("/admin/users");
   return { ok: true };
 }
