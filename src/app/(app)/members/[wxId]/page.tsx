@@ -24,7 +24,11 @@ import {
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { isFollowing } from "@/lib/forum/follow";
+import { Portrait } from "@/components/members/Portrait";
+import { TitleRow } from "@/components/members/TitleRow";
 import { personProfileFor } from "@/lib/members/person";
+import { catchphraseFor, topEmojiFor, topMentionPartner } from "@/lib/members/phrases";
+import { titlesOf } from "@/lib/titles/queries";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { dateKey } from "@/lib/time";
 import { eq } from "drizzle-orm";
@@ -76,6 +80,27 @@ export default async function PersonPage({
    * 点了之后永远不会有任何动静。
    */
   const account = db.select({ id: users.id }).from(users).where(eq(users.wxId, wxId)).get();
+
+  /*
+   * 「这个人是什么样的」那一块。
+   *
+   * 两条都**限定在共同群里**，而且都过隐私开关 ——
+   * 关掉「别人能搜到我的发言」的人，这一块对别人不显示。
+   * 理由见 lib/members/phrases.ts：聚合出来的画像比原始内容更进一步。
+   */
+  const catchphrase = catchphraseFor(user, wxId, convIds);
+  const partner = topMentionPartner(user, wxId, convIds);
+  const emoji = topEmojiFor(user, wxId, convIds);
+
+  /*
+   * 称号。整套系统早就在（获取、购买、续期、结算、过期），
+   * **唯独主页上不显示** —— 一个只有本人在设置页里看得见的荣誉，
+   * 等于没有荣誉。
+   *
+   * 只显示还生效的：过期的称号留在他自己的记录里，
+   * 但摆在主页上会变成一句不准的话。
+   */
+  const titles = account ? titlesOf(account.id).filter((t) => t.active) : [];
   /*
    * 他发过的帖。
    *
@@ -127,11 +152,24 @@ export default async function PersonPage({
         </div>
       </Card>
 
+      <TitleRow titles={titles} />
+
       <div className="mb-4 grid grid-cols-3 gap-2.5">
         <StatTile label="发言" value={profile.messages} />
         <StatTile label="被 @" value={mentionCount} />
         <StatTile label="被回复" value={replyCount} />
       </div>
+
+      {/*
+        * 排在那三个数字**之后**：数字是硬事实，这两条是归纳出来的。
+        * 归纳的东西放前面会让人先读到一句可能不准的话。
+        */}
+      <Portrait
+        catchphrase={catchphrase}
+        emoji={emoji}
+        partner={partner}
+        partnerHref={partner ? `/members/${encodeURIComponent(partner.wxId)}` : null}
+      />
 
       {/*
         * 他发过的帖排在 GitHub 之前：这是站内的东西，

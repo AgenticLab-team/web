@@ -71,6 +71,15 @@ export const DELETION_PLAN: readonly TablePlan[] = [
   { table: "group_member_events", disposition: "wx-space", why: "进群、退群、改名的事件流，来自上游。它记的是微信那一侧发生的事，和站内账号无关" },
   { table: "season_standings", disposition: "wx-space", why: "赛季名次按 wx_id 结算。抹掉会让当季名次凭空空一格，而名次是公开过的事实" },
   { table: "link_mentions", disposition: "wx-space", why: "「谁在群里贴过这个链接」按 wx_id 记，属于群聊那一侧" },
+  {
+    table: "person_phrases",
+    disposition: "wx-space",
+    why:
+      "「常挂在嘴边」是从群消息里归纳出来的，按 wx_id 存。" +
+      "它跟着消息走：注销站内账号不等于退群，那些消息还在，下一轮定时任务照样会重算出来。" +
+      "**但注销之后它对别人就不再显示了** —— 主页那一栏走的是 unsearchableWxIds，" +
+      "而没有账号的人本来就不在成员目录里。真要抹掉，得连群消息一起删",
+  },
   { table: "join_requests", disposition: "wx-space", why: "按 wx_id 记的入群申请。它记录的是「这个微信号申请过」，和站内账号不是一回事" },
 
   /* ── 纯属这个账号的痕迹：删 ───────────────────────── */

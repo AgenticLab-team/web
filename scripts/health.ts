@@ -27,6 +27,7 @@ import {
 import { runSteps, summarize, tickFailureReport, tickHealth } from "@/lib/ops/tick";
 import { settleDueSeasons } from "@/lib/seasons/settle";
 import { autoPruneIfNeeded } from "@/lib/storage/auto";
+import { computePersonPhrases } from "@/lib/members/phrases";
 import { settleAll } from "@/lib/titles/settle";
 
 async function main() {
@@ -123,6 +124,24 @@ async function main() {
         r.granted || r.expired || r.renewed || r.reminded
           ? `授予 ${r.granted} · 到期 ${r.expired} · 续费 ${r.renewed}（失败 ${r.renewFailed}）· 提醒 ${r.reminded}`
           : "无变化",
+    },
+    {
+      /*
+       * 「常挂在嘴边」全站重算一轮。
+       *
+       * 放在定时任务里而不是打开主页时现算：实测一个说了四千条消息的人
+       * 现算要 1.9 秒，加上基准（同群其他人的片段统计）还要 1.5 秒 ——
+       * 那等于每看一次别人的主页就卡三秒。
+       *
+       * 而整轮全站只要几秒，因为绝大多数人消息数不到门槛，
+       * 在统计之前就返回了。
+       */
+      name: "常挂在嘴边",
+      run: () => computePersonPhrases(),
+      describe: (r: ReturnType<typeof computePersonPhrases>) =>
+        r.skipped
+          ? "跳过（还没到重算的时候）"
+          : `${r.groups} 个群 · ${r.people} 人够门槛 · 算出 ${r.written} 个（${r.ms}ms）`,
     },
     {
       /*

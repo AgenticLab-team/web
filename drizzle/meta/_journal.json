@@ -351,6 +351,20 @@
       "when": 1786358270261,
       "tag": "0052_wonderful_living_mummy",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "6",
+      "when": 1786361295861,
+      "tag": "0053_elite_doomsday",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "6",
+      "when": 1786362591249,
+      "tag": "0054_round_vermin",
+      "breakpoints": true
     }
   ]
 }
