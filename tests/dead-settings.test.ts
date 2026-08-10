@@ -144,13 +144,53 @@ describe("**标着 planned 的要么真没接，要么就该改回来**", () => 
     const planned = DEFAULT_SETTINGS.filter((d) => d.status === "planned").map((d) => d.key);
     assert.deepEqual(
       planned.sort(),
-      ["forum.collapse_threshold", "storage.media_cache_max_bytes", "storage.thumb_max_edge"],
+      /*
+       * `forum.collapse_threshold` 从这张表里下来了 —— 退役，不是接上。
+       *
+       * 它的名字叫「净反应阈值」、默认 -3，也就是预设了**存在负面反应**。
+       * 而四种反应全是正向的（schema 里写死的设计），
+       * 净分永远不会变成负数 —— 这个阈值一次也不可能被触及。
+       *
+       * 剩下两个是同一个上游限制卡着：/v1/messages 不返回媒体地址。
+       */
+      ["storage.media_cache_max_bytes", "storage.thumb_max_edge"],
       "planned 清单变了 —— 如果是新增，先想想能不能直接接上",
     );
   });
 });
 
 describe("**退役要退干净**", () => {
+  it("**退役名单本身不会悄悄少一条**", () => {
+    /*
+     * 这一条是被一次真实的事故催出来的：往 RETIRED_SETTINGS 里插新条目时
+     * 正好覆盖掉了 `digest.enabled` 的 key 那一行，两条被并成了一条 ——
+     * **全量 5855 个测试一个都没红**，是 tsc 的「同名属性」报错才发现的。
+     *
+     * 退役名单少一条的后果是安静的：seed 不再删那个键，
+     * 于是一个早就不该存在的旋钮又回到后台设置页上，
+     * 而管理员没有任何办法知道它是不管用的。
+     *
+     * 所以和 planned 一样钉死：改这张表要动这一行，也就要有人过一眼。
+     */
+    assert.deepEqual(
+      RETIRED_SETTINGS.map((r) => r.key).sort(),
+      [
+        "digest.auto_send",
+        "digest.enabled",
+        "digest.per_group_weekly_limit",
+        "forum.collapse_threshold",
+        "site.name",
+      ],
+      "退役名单变了 —— 少一条的话，那个旋钮会重新出现在后台",
+    );
+  });
+
+  it("**每条退役都写得出为什么**", () => {
+    for (const r of RETIRED_SETTINGS) {
+      assert.ok(r.why && r.why.length > 20, `${r.key} 的退役理由太短，等于没写`);
+    }
+  });
+
   it("退役的键不能还留在默认清单里", () => {
     // 两张表都有的话，seed 先删后插，结果是它又回来了
     const keys = new Set(DEFAULT_SETTINGS.map((d) => d.key));

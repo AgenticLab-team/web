@@ -51,6 +51,17 @@ export const RETIRED_SETTINGS: readonly { key: string; why: string }[] = [
     why: "站点名来自环境变量 SITE_NAME（env.site.name）—— 它在构建期和没有数据库的地方也要用。两处各存一份的结果是后台改了名字而页面标题不变",
   },
   {
+    key: "forum.collapse_threshold",
+    why:
+      "它的默认值是 -3、名字叫「净反应阈值」—— 也就是说它预设了**存在负面反应**。" +
+      "而四种反应（有用 / 洞见 / 精准 / 喜欢）全是正向的，这是 schema 里写死的设计" +
+      "（「只有点赞的话信息量太少，分不出『有用』和『喜欢』」）：净分永远不会变成负数，" +
+      "这个阈值**一次也不可能被触及**。" +
+      "折叠功能本身是有的，走的是版主人工折叠（replies.collapsed + collapse_reason，界面已接）。" +
+      "要做投票自动折叠，就得先引入「踩」—— 那是一个 118 人、彼此都认识的社群里的" +
+      "社群氛围决策，不该由一个设置项的默认值悄悄替大家做掉",
+  },
+  {
     key: "digest.enabled",
     why: "改名成 `module.digest.enabled`，归进模块登记表 —— 周报是个后台任务，和同步、雷达、裁剪是同一类东西，摆在同一页上才看得出「这个站有哪些定时任务在跑」。旧键留着的话，两个开关名字都在，谁也说不清拨哪个",
   },
@@ -629,15 +640,6 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
     min: 1,
     max: 500,
   },
-  {
-    key: "forum.collapse_threshold",
-    value: "-3",
-    type: "int",
-    category: "forum",
-    label: "回复被折叠的净反应阈值",
-    status: "planned",
-  },
-
   // ── 站点 ────────────────────────────────────────────────────
   {
     key: "site.registration_open",
