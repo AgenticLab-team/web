@@ -115,6 +115,24 @@ export const DEFAULT_RULES: Record<string, AlertRule> = {
    * 同步、结算、告警全都停在那一刻。
    */
   cron: { fireAfterMs: 30 * 60_000, renotifyAfterMs: 12 * 3600_000, retryAfterMs: 10 * 60_000 },
+  /*
+   * 采集停了 —— **丢掉的数据补不回来**。
+   *
+   * 线上已经因此永久丢了 15 天（2026-07-15 ~ 07-29）：上游对账
+   * 证实那段上游自己也没有。等发现的时候，那半个月就是没了。
+   *
+   * 所以报得比别的项急一点。但也不用抢那几分钟：判定这一侧
+   * 已经按每个群自己的节奏容忍过至少 12 小时了，
+   * 能走到 down 的时候，事情已经发生一阵子了 ——
+   * 这里的 10 分钟只是在滤掉一次探测抖动。
+   *
+   * 重提醒 6 小时一次：它不会自愈，得有人去把机器人拉起来。
+   */
+  collection: {
+    fireAfterMs: 10 * 60_000,
+    renotifyAfterMs: 6 * 3600_000,
+    retryAfterMs: 10 * 60_000,
+  },
 };
 
 export function ruleFor(component: string): AlertRule {
@@ -215,8 +233,28 @@ export function decideAlert(input: FireInput): FireVerdict {
  * 报信的人和出事的人是同一个。硬发只会失败，
  * 而失败的发送会让人以为「没告警 = 没事」。
  */
+/**
+ * 这条告警能不能靠微信发出去。
+ *
+ * ─────────────────────────────────────────
+ * 报信的人和出事的人是同一个
+ * ─────────────────────────────────────────
+ *
+ * 微信通道**本身就走上游**。上游断了的时候，
+ * 「上游断了」这条告警也发不出去。
+ *
+ * `collection` 是同一类：它 down 的含义就是「机器人没在收数据」，
+ * 而发告警要靠的正是那个机器人。指望它把自己掉线的消息发出来，
+ * 和指望上游报告自己断线一样 —— 每五分钟重试一次只会刷满日志，
+ * 而**告警已经在库里，notifyError 也写清楚了**，
+ * 该看到的一条都不少。
+ *
+ * 这两项真正的兜底是 `/api/health` 返回 503：
+ * 那是唯一不依赖上游的通道，留给外部监控去打。
+ */
 export function canDeliverViaWechat(component: string): boolean {
-  return alertComponentFor(component) !== "upstream";
+  const alertComponent = alertComponentFor(component);
+  return alertComponent !== "upstream" && alertComponent !== "collection";
 }
 
 export function formatAlert(input: {
@@ -255,6 +293,7 @@ const HINTS: Record<string, string> = {
   offsite: "看 /admin/backup：是没配置、传失败，还是该做恢复演练了",
   cron: "journalctl -u agenticlab-health -n 50 —— 详情里已经写了是哪一步",
   disk: "跑存储裁剪，或清理媒体缓存",
+  collection: "接口通不通看 upstream；接口是通的就去看机器人在不在线、有没有被踢出群",
 };
 
 export const COMPONENT_LABELS: Record<string, string> = {
@@ -267,6 +306,7 @@ export const COMPONENT_LABELS: Record<string, string> = {
   cron: "定时任务",
   auth: "管理员登录保护",
   sync: "同步任务",
+  collection: "采集（有没有新数据进来）",
 };
 
 export function componentLabel(component: string): string {

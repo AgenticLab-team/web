@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 
 import { desc, inArray, sql } from "drizzle-orm";
 
+import { listGroupsForAdmin } from "@/lib/admin/groups";
 import { passkeyLockoutRisk } from "@/lib/auth/passkey-enforcement";
 import { describeRisk } from "@/lib/auth/passkey-policy";
 import { db, sqlite } from "@/lib/db";
@@ -16,6 +17,7 @@ import { pushSubscriptionSummary } from "@/lib/notifications/push-store";
 import { configProblem, webPushConfigured } from "@/lib/notifications/webpush";
 import { offsiteSummary } from "@/lib/backup/offsite";
 import { getSettingInt } from "@/lib/settings/store";
+import { classifyCollection } from "@/lib/sync/collection-health";
 
 /**
  * 健康探测。
@@ -258,6 +260,29 @@ export function probeWebPush(): HealthReport {
 }
 
 /** 跑一轮完整探测并落库 */
+/**
+ * 采集有没有在收数据。
+ *
+ * ─────────────────────────────────────────
+ * `upstream_api` 回答不了这个问题
+ * ─────────────────────────────────────────
+ *
+ * 那一项问的是「接口通不通」。而线上丢掉的那 15 天里，
+ * 接口大概率一直是通的 —— 只是**没有新数据**：
+ * 返回 200、内容为空，探测一路绿灯，归档静静地缺了半个月。
+ *
+ * 逐群的新鲜度判定 `classifyFreshness` 早就有了，
+ * 但它只渲染在群页上，从没进过 `system_health`，够不到告警。
+ * 这一项就是把它接上去。
+ */
+export function probeCollection(now = Date.now()): HealthReport {
+  const groups = listGroupsForAdmin(now).filter((g) => g.syncEnabled);
+  const verdict = classifyCollection({
+    groups: groups.map((g) => ({ level: g.freshness.level, dailyAverage: g.dailyAverage })),
+  });
+  return { component: "collection", status: verdict.status, detail: verdict.detail };
+}
+
 export async function runHealthChecks(): Promise<HealthReport[]> {
   const reports = [
     // 上游一次返回两条（隧道 + API），摊平进来
@@ -267,6 +292,7 @@ export async function runHealthChecks(): Promise<HealthReport[]> {
     probeOffsite(),
     probeAuthPolicy(),
     probeWebPush(),
+    probeCollection(),
   ];
   for (const report of reports) {
     db.insert(systemHealth)
@@ -278,7 +304,8 @@ export async function runHealthChecks(): Promise<HealthReport[]> {
           | "disk"
           | "offsite"
           | "auth"
-          | "web_push",
+          | "web_push"
+          | "collection",
         status: report.status,
         detail: report.detail,
         latencyMs: report.latencyMs,
@@ -344,7 +371,7 @@ export function unhealthySince(components: string[]): number | null {
     .where(
       inArray(
         systemHealth.component,
-        components as ("upstream_api" | "frp_tunnel" | "db" | "disk" | "offsite")[],
+        components as ("upstream_api" | "frp_tunnel" | "db" | "disk" | "offsite" | "collection")[],
       ),
     )
     .orderBy(desc(systemHealth.checkedAt))

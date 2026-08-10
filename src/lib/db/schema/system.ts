@@ -149,7 +149,25 @@ export const systemHealth = sqliteTable(
   {
     id: ulidPk(),
     component: text("component", {
-      enum: ["upstream_api", "frp_tunnel", "db", "disk", "offsite", "mail", "cron", "auth", "web_push"],
+      enum: [
+        "upstream_api",
+        "frp_tunnel",
+        "db",
+        "disk",
+        "offsite",
+        "mail",
+        "cron",
+        "auth",
+        "web_push",
+        /*
+         * 「数据还在不在进来」——**和 upstream_api 不是一回事**。
+         *
+         * 那一项问接口通不通；这一项问有没有新数据。线上丢掉的
+         * 那 15 天里接口大概率一直是通的，只是没有内容，
+         * 于是探测一路绿灯而归档静静地缺了半个月。
+         */
+        "collection",
+      ],
     }).notNull(),
     status: text("status", { enum: ["ok", "degraded", "down"] }).notNull(),
     detail: text("detail"),
