@@ -111,7 +111,7 @@ export function grantAchievementsFor(userId: string, now = Date.now()): string[]
      */
     notify({
       userId,
-      type: "system",
+      type: "title",
       groupKey: `title:${spec.id}`,
       title: `解锁称号「${spec.name}」`,
       body: spec.description ?? undefined,
@@ -186,7 +186,7 @@ export function settleTitles(now = Date.now()): SettleResult {
     const days = Math.max(1, Math.ceil(((row.expiresAt ?? now) - now) / 86_400_000));
     notify({
       userId: row.userId,
-      type: "system",
+      type: "title",
       groupKey: `title-expiry:${row.id}`,
       title: `称号「${row.titleName}」${days} 天后到期`,
       body: row.autoRenew
@@ -254,7 +254,7 @@ function tryRenew(row: ExpiringRow, now: number): boolean {
 
   notify({
     userId: row.userId,
-    type: "system",
+    type: "title",
     groupKey: `title-renewed:${row.id}:${row.expiresAt}`,
     title: `称号「${row.titleName}」已自动续费`,
     body: `扣了 ${row.price} 分。不想续了可以在个人页关掉自动续费`,
@@ -282,7 +282,7 @@ function expireOne(row: ExpiringRow): void {
 
   notify({
     userId: row.userId,
-    type: "system",
+    type: "title",
     groupKey: `title-expired:${row.id}`,
     title: `称号「${row.titleName}」已到期`,
     body:

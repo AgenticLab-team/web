@@ -212,8 +212,14 @@ export const TYPE_META: TypeMeta[] = [
   {
     type: "system",
     label: "系统公告",
-    hint: "站点维护、规则变更这类事",
+    hint: "站点维护、规则变更，以及你的发言被整理成帖子这类和你本人有关的事",
     section: "account",
+  },
+  {
+    type: "title",
+    label: "解锁称号",
+    hint: "拿到新称号时告诉你一声",
+    section: "recognition",
   },
 ];
 

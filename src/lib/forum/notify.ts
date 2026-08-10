@@ -29,18 +29,24 @@ import { canSeePost } from "./visibility";
  * 新的动静应该重新冒出来，而不是悄悄改掉一条他已读的。
  */
 
-export type NotificationType =
-  | "mention"
-  | "reply_to_post"
-  | "reply_to_reply"
-  | "subscribed_reply"
-  | "reaction"
-  | "featured"
-  | "accepted"
-  | "moderation"
-  | "system"
-  | "keyword"
-  | "new_post";
+/**
+ * ─────────────────────────────────────────
+ * 这里原来手抄了一份类型清单
+ * ─────────────────────────────────────────
+ *
+ * schema 里有 `NOTIFICATION_TYPES`，这里又列了一遍同样的十一个 ——
+ * 两份手写的清单，迟早有一份落后。
+ *
+ * 真的落后了：给称号解锁加 `title` 这一类时，schema 那份加上了、
+ * 这一份没有，于是 `notify({ type: "title" })` 过不了类型检查 ——
+ * **而报错指向的是调用点，不是这份抄件**。运气好在它是编译期错误；
+ * 换成运行时的分支判断（比如「这一类要不要推送」），
+ * 表现就会是「某一类通知静悄悄地不生效」。
+ *
+ * 现在只有一处定义，从 schema 那份派生。
+ */
+export type { NotificationType } from "@/lib/notifications/prefs";
+import type { NotificationType } from "@/lib/notifications/prefs";
 
 export interface NotifyInput {
   userId: string;

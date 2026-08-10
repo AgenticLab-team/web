@@ -112,7 +112,7 @@ export async function grantTitle(input: {
   // 悄悄发一个称号等于没发 —— 用户不会主动去翻个人页
   notify({
     userId: input.userId,
-    type: "system",
+    type: "title",
     groupKey: `title:${title.id}`,
     title: `你获得了称号「${title.name}」`,
     body: reason,

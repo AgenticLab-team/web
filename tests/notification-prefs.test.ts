@@ -181,9 +181,15 @@ describe("列表筛选", () => {
       ]),
     );
     const uncovered = NOTIFICATION_TYPES.filter((t) => !covered.has(t));
-    // reaction / featured / accepted 只在「全部」里，这是有意的：
-    // 它们量大且不紧急，单开一个页签只会占位置
-    assert.deepEqual([...uncovered].sort(), ["accepted", "featured", "reaction"]);
+    /*
+     * reaction / featured / accepted / title 只在「全部」里，这是有意的：
+     * 它们量大且不紧急，单开一个页签只会占位置。
+     *
+     * `title`（解锁称号）是后来从 `system` 里拆出来的 ——
+     * 它以前混在「与你的账号有关」那一档里，而那一档是**关不掉**的，
+     * 于是不关心徽章的人被迫收一串静不了音的消息。
+     */
+    assert.deepEqual([...uncovered].sort(), ["accepted", "featured", "reaction", "title"]);
   });
 
   it("全部不过滤任何东西", () => {
@@ -232,5 +238,76 @@ describe("**页签清单只有一份**", () => {
     const fn = code.slice(code.indexOf("function notificationCounts"));
     assert.match(fn.slice(0, 900), /TYPE_FILTERS/);
     assert.doesNotMatch(fn.slice(0, 900), /"mention", "reply"/);
+  });
+});
+
+/* ───────────────────────────────────────────────────────────────
+ * 称号解锁不该关不掉
+ *
+ * 线上 27 条 `system` 通知里 **26 条是「解锁称号」**，
+ * 而 `system` 在 ALWAYS_ON 里 —— 关不掉。
+ *
+ * 于是不关心徽章的人被迫收一串静不了音的消息。
+ * 而 ALWAYS_ON 存在的理由恰恰是相反的：
+ * 「一旦有一类消息可能被关掉，所有没收到的消息都不能再说明什么」——
+ * 反过来，**关不掉的噪音会让人忽略整个通道**，
+ * 连带把真正要紧的那一条一起淹掉。
+ * ─────────────────────────────────────────────────────────────── */
+
+describe("**称号解锁是可以关掉的**", () => {
+  it("它有自己的类型", () => {
+    assert.ok((NOTIFICATION_TYPES as readonly string[]).includes("title"));
+  });
+
+  it("**不在 ALWAYS_ON 里**", () => {
+    assert.equal(isAlwaysOn("title"), false);
+  });
+
+  it("而「系统公告」仍然关不掉 —— 它装的是你的发言被整理成帖子这类事", () => {
+    assert.equal(isAlwaysOn("system"), true);
+    assert.equal(isAlwaysOn("moderation"), true);
+  });
+
+  it("偏好面板里能找到它", () => {
+    const meta = TYPE_META.find((m) => m.type === "title");
+    assert.ok(meta, "偏好面板里没有这一项，等于关不掉");
+    assert.equal(meta.section, "recognition");
+  });
+
+  it("**发称号的地方真的改了类型**", () => {
+    const settle = readFileSync(new URL("../src/lib/titles/settle.ts", import.meta.url), "utf8");
+    assert.equal(settle.includes('type: "system"'), false, "还在发 system");
+    assert.match(settle, /type: "title"/);
+  });
+
+  it("**历史通知会被改签** —— 不改的话它们永远躺在「系统公告」下面", () => {
+    /*
+     * 用户按类型筛选、按类型静音时看到的都是错的。
+     * 幂等：改完一次之后那条 UPDATE 再也匹配不到行。
+     */
+    const seed = readFileSync(new URL("../src/lib/db/seed.ts", import.meta.url), "utf8");
+    assert.match(seed, /LIKE '解锁称号%'/);
+    assert.match(seed, /set\(\{ type: "title" \}\)/);
+  });
+});
+
+describe("**类型清单只有一份**", () => {
+  it("notify.ts 不再自己抄一份", () => {
+    /*
+     * 它原来手写了同样的十一个类型。两份手写的清单迟早有一份落后 ——
+     * 而真的落后了：加 `title` 时 schema 那份加上了、这一份没有，
+     * 于是调用点过不了类型检查，**而报错指向的是调用点，不是抄件**。
+     *
+     * 运气好在它是编译期错误。换成运行时的分支判断
+     * （比如「这一类要不要推送」），表现就会是
+     * 「某一类通知静悄悄地不生效」。
+     */
+    const notify = readFileSync(new URL("../src/lib/forum/notify.ts", import.meta.url), "utf8");
+    assert.equal(
+      /export type NotificationType =\s*\n?\s*\|/.test(notify),
+      false,
+      "notify.ts 又自己列了一份类型清单",
+    );
+    assert.match(notify, /export type \{ NotificationType \}/);
   });
 });

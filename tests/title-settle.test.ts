@@ -6,6 +6,8 @@ import { after, before, beforeEach, describe, it } from "node:test";
 
 import { eq } from "drizzle-orm";
 
+import { isAlwaysOn } from "@/lib/notifications/prefs";
+
 /**
  * 称号的自动授予与到期结算。
  *
@@ -150,18 +152,37 @@ describe("成就称号真的会被授予", () => {
     const list = notifications("alice");
     assert.equal(list.length, 1);
     assert.match(list[0].title, /解锁称号「常客」/);
-    assert.equal(list[0].type, "system");
+    // 称号解锁有自己的类型 —— 它以前混在关不掉的 system 里
+    assert.equal(list[0].type, "title");
   });
 
-  it("成就通知走 system —— 关不掉", () => {
-    // 用户把 system 关掉也照发：解锁通知属于「与账号有关」那一类
+  it("**不想要就能关掉**", () => {
+    /*
+     * 它以前走 `system`，而 `system` 在 ALWAYS_ON 里 —— 关不掉。
+     * 线上 27 条 system 通知里 26 条是「解锁称号」，
+     * 和「你在群里的发言被整理成了帖子」共用同一个静不了音的开关。
+     *
+     * ALWAYS_ON 存在的理由是「对当事人不利的消息不该能被静音」，
+     * 而拿到一个徽章不属于那一类。**关不掉的噪音会让人忽略整个通道**，
+     * 连带把真正要紧的那一条一起淹掉 —— 那正是 ALWAYS_ON 想防的事。
+     */
     prefsStore.savePrefs("alice", {
       ...prefsStore.getPrefs("alice"),
-      system: { site: false, email: false, push: false },
+      title: { site: false, email: false, push: false },
     });
     title({ conditionKind: "streakBest", conditionValue: 30 });
     settle.grantAchievementsFor("alice", NOW);
-    assert.equal(notifications("alice").length, 1);
+    assert.equal(notifications("alice").length, 0, "关掉了还在发");
+  });
+
+  it("**关掉称号通知不影响「你的发言被整理成帖子」** —— 那一条仍然关不掉", () => {
+    // 这正是把它们拆开的理由：两件事的分量差着一个数量级
+    prefsStore.savePrefs("alice", {
+      ...prefsStore.getPrefs("alice"),
+      title: { site: false, email: false, push: false },
+    });
+    assert.equal(isAlwaysOn("system"), true);
+    assert.equal(isAlwaysOn("title"), false);
   });
 
   it("停用的称号不授予", () => {
