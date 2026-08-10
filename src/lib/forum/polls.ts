@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { pollOptions, pollVotes, polls, posts } from "@/lib/db/schema";
 
 import { buildViewerContext } from "./context";
+import { validateChoices } from "./poll-choice";
 import { checkClosesAt, normalizePollDraft } from "./poll-rules";
 import { getPost } from "./queries";
 
@@ -103,9 +104,20 @@ export async function castVote(input: {
     .all()
     .map((o) => o.id);
 
-  const chosen = [...new Set(input.optionIds)].filter((id) => validOptions.includes(id));
-  if (chosen.length === 0) return fail("请选择一个选项");
-  if (!poll.multi && chosen.length > 1) return fail("这是单选投票");
+  /*
+   * 选项的合法性判定走 `validateChoices` —— 这里不再自己筛一遍。
+   *
+   * 原来是内联的一行 filter，而一次变异普查发现：把它改成恒真，
+   * 全量测试一条都不红。而它一旦失效，一次请求就能给**别的投票**的
+   * 选项加票（optionId 是客户端送上来的）。
+   */
+  const verdict = validateChoices({
+    submitted: input.optionIds,
+    validIds: validOptions,
+    multi: poll.multi,
+  });
+  if (!verdict.ok) return fail(verdict.error!);
+  const chosen = verdict.chosen;
 
   db.transaction((tx) => {
     /*

@@ -232,6 +232,24 @@ describe("到期解封（真数据）", () => {
     assert.equal(statusOf(), "banned");
   });
 
+  it("**只有封禁类的处罚会触发解封** —— 一条到期的禁言不该放人", () => {
+    /*
+     * 扫描里那句 `.filter((r) => r.action === "ban" || r.action === "suspend")`
+     * 在一次变异普查里逃掉了：改成恒真，全量测试一条都不红。
+     *
+     * 危害有限（`stillPunished` 和 `statusAfterExpiry` 各挡一层），
+     * 但它是这条链上的第一道 —— 而第一道恰恰是最该有测试的：
+     * 后面两道是**兜底**，靠兜底工作的系统只是还没撞上那个组合。
+     *
+     * 这里造的正是那个组合：一条到期的 mute，而当事人是 banned
+     * 状态、且没有别的封禁记录（数据不一致时真会出现）。
+     */
+    ban({ action: "mute", expiresAt: NOW - 1000 });
+    const r = expiry.releaseExpiredBans(NOW);
+    assert.equal(r.unbanned, 0, "一条到期的禁言把人放出来了");
+    assert.equal(statusOf(), "banned");
+  });
+
   it("**永久的永远不解**", () => {
     ban({ expiresAt: null });
     assert.equal(expiry.releaseExpiredBans(NOW).unbanned, 0);
