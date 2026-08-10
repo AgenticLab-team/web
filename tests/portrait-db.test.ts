@@ -418,3 +418,83 @@ describe("**最常用的表情**", () => {
     assert.ok(phrases.topEmojiFor(viewer("alice"), "alice", ["g1"]), "他自己该看得到");
   });
 });
+
+describe("**两份隐私名单一次取完，语义一个字都不能变**", () => {
+  /*
+   * 合并只是为了少问一遍「这个人有没有豁免权」（那次判定本身要跑两条
+   * 查询，而成员目录两份名单都要）。**合并最容易出的错是顺手改了语义**
+   * —— 比如漏掉「自己永远看得见自己」，或者把两个开关的方向搞反。
+   * 那种错不会有任何地方报警，只会让一批人被重新暴露出去。
+   */
+  let privacy: typeof import("@/lib/privacy/queries");
+
+  before(async () => {
+    privacy = await import("@/lib/privacy/queries");
+  });
+
+  const setup = () => {
+    addUser("u_a", "wx_a", true);
+    addUser("u_b", "wx_b", false);
+    dbm.db.insert(schema.users).values({ id: "u_c", wxId: "wx_c", status: "active" }).run();
+    dbm.db
+      .insert(schema.userPrivacy)
+      .values({ userId: "u_c", searchableByOthers: true, hideFromLeaderboard: true })
+      .run();
+  };
+
+  it("和分开取的结果一模一样", () => {
+    setup();
+    const v = viewer("wx_a");
+    const both = privacy.hiddenWxIds(v);
+    assert.deepEqual(both.unsearchable.sort(), privacy.unsearchableWxIds(v).sort());
+    assert.deepEqual(both.leaderboard.sort(), privacy.leaderboardHiddenWxIds(v).sort());
+  });
+
+  it("两个开关不会串", () => {
+    setup();
+    const got = privacy.hiddenWxIds(viewer("wx_a"));
+    assert.deepEqual(got.unsearchable, ["wx_b"], "关搜索的那个跑到榜单名单里了");
+    assert.deepEqual(got.leaderboard, ["wx_c"], "关榜单的那个跑到搜索名单里了");
+  });
+
+  it("**自己永远不在名单里** —— 他自己看自己照常看得到", () => {
+    setup();
+    const got = privacy.hiddenWxIds(viewer("wx_b"));
+    assert.equal(got.unsearchable.includes("wx_b"), false);
+  });
+
+  it("**管理员看得到全部** —— 举报要处理，一个当事人能关掉的审核等于没有审核", () => {
+    /*
+     * 这条豁免收在 privacy/queries.ts 里，调用点一律不许自己再判一遍
+     * （见 leaderboard.test.ts 那条同样的规矩）——
+     * 各写一遍的话，漏的方向永远是「把关掉开关的人重新暴露出去」。
+     *
+     * 用用户级授权把 viewer 变成有豁免权的人，比铺一套身份组便宜得多。
+     */
+    setup();
+    dbm.db
+      .insert(schema.permissionOverrides)
+      .values({
+        id: "po_1",
+        userId: "u_a",
+        permissionKey: "moderation.queue",
+        granted: true,
+        reason: "测试",
+        grantedBy: "u_a",
+      })
+      .run();
+
+    const got = privacy.hiddenWxIds(
+      { id: "u_a", wxId: "wx_a", status: "active" } as never,
+    );
+    assert.deepEqual(got.leaderboard, [], "管理员那边还在藏人");
+    assert.deepEqual(got.unsearchable, []);
+  });
+
+  it("没设过隐私的人不在任何名单里", () => {
+    setup();
+    const got = privacy.hiddenWxIds(viewer("wx_a"));
+    assert.equal(got.unsearchable.includes("wx_a"), false);
+    assert.equal(got.leaderboard.includes("wx_a"), false);
+  });
+});

@@ -243,6 +243,23 @@ export default async function MembersPage({
                           </p>
                         )}
 
+                        {/*
+                          * 他常挂在嘴边的那个词。
+                          *
+                          * 一本通讯录和一个社区的区别，就在于你翻的时候
+                          * 能不能想起这个人是谁 —— 简介是他自己写的场面话，
+                          * 而「常说：哈哈哈」是他真的在群里的样子。
+                          *
+                          * 做得很轻（小字、引号、不加底色）：它是**风味**，
+                          * 不是又一个字段。做重了这一行就变成五条信息并排，
+                          * 而并排的信息等于没有信息。
+                          */}
+                        {member.catchphrase && (
+                          <p className="t-caption2 mt-1 text-[var(--ink-tertiary)]">
+                            常说「{member.catchphrase}」
+                          </p>
+                        )}
+
                         {member.tags.length > 0 ? (
                           <div className="mt-1.5 flex flex-wrap gap-1">
                             {member.tags.map((t) => (

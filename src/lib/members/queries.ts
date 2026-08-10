@@ -7,8 +7,9 @@ import { db } from "@/lib/db";
 import { groupMembers, people, userSkills, users } from "@/lib/db/schema";
 import { paletteIndexFor } from "@/components/Avatar";
 import { isModuleEnabled } from "@/lib/modules/state";
-import { leaderboardHiddenWxIds } from "@/lib/privacy/queries";
+import { hiddenWxIds } from "@/lib/privacy/queries";
 import { matchesQuery, preferredLabel, visibleFacets, type TagFacet } from "@/lib/members/tags";
+import { catchphrasesFor } from "@/lib/members/phrases";
 import { equippedTitles } from "@/lib/titles/queries";
 import { resolveDisplayName } from "@/lib/users/display-name";
 
@@ -44,6 +45,13 @@ export interface DirectoryMember {
    * 出现在网页源码里。一个只用来算颜色的值不值得冒这个险。
    */
   paletteIndex: number;
+  /**
+   * 他「常挂在嘴边」的那个词。没有就是 `null` ——
+   * 说话少的人、说话和大家一样的人本来就归纳不出什么。
+   *
+   * 这里只放**词**，不放 wx_id：和 `hasProfile` 同一条边界。
+   */
+  catchphrase: string | null;
   /**
    * 有没有站内主页可以点进去。
    *
@@ -120,17 +128,28 @@ export function resolveSort(value: string | undefined): MemberSort {
     : "tags";
 }
 
-/** 和我共同在群里的注册用户 id */
-function peersOf(user: CurrentUser): string[] {
+/**
+ * 我在哪几个群里。
+ *
+ * **算一次，传给下面几个用它的函数。** 原来 `peersOf` 和
+ * `sharedGroupCounts` 各查一遍，一模一样的一条 SQL 跑两次；
+ * 再加一个用到它的功能就是第三次。这种重复不会让任何东西出错，
+ * 只是让「这一页要跑多少条查询」这个数字慢慢往上爬 ——
+ * 而那正是 N+1 守卫在盯的东西。
+ */
+function myGroupIds(user: CurrentUser): string[] {
   if (!user.wxId) return [];
-
-  const myGroups = db
+  return db
     .select({ convId: groupMembers.convId })
     .from(groupMembers)
     .where(and(eq(groupMembers.wxId, user.wxId), isNull(groupMembers.leftAt)))
     .all()
     .map((g) => g.convId);
+}
 
+/** 和我共同在群里的注册用户 id */
+function peersOf(user: CurrentUser, myGroups: string[]): string[] {
+  if (!user.wxId) return [];
   if (myGroups.length === 0) return [];
 
   const peerWxIds = db
@@ -151,18 +170,15 @@ function peersOf(user: CurrentUser): string[] {
 }
 
 /** 每个人和我共同在几个群 */
-function sharedGroupCounts(user: CurrentUser, userIds: string[]): Map<string, number> {
+function sharedGroupCounts(
+  user: CurrentUser,
+  userIds: string[],
+  myGroupList: string[],
+): Map<string, number> {
   const counts = new Map<string, number>();
   if (!user.wxId || userIds.length === 0) return counts;
 
-  const myGroups = new Set(
-    db
-      .select({ convId: groupMembers.convId })
-      .from(groupMembers)
-      .where(and(eq(groupMembers.wxId, user.wxId), isNull(groupMembers.leftAt)))
-      .all()
-      .map((g) => g.convId),
-  );
+  const myGroups = new Set(myGroupList);
 
   const rows = db
     .select({ id: users.id, convId: groupMembers.convId })
@@ -216,7 +232,9 @@ export function memberDirectory(
   // 关掉之后目录为空；标签数据本身保留，而且要说清楚是被关了
   if (!isModuleEnabled("directory")) return { ...empty, moduleOff: true };
 
-  const peerIds = peersOf(user);
+  // 我在哪几个群 —— 这一页有三处要用，算一次传下去
+  const myGroups = myGroupIds(user);
+  const peerIds = peersOf(user, myGroups);
   if (peerIds.length === 0) return empty;
 
   const rows = db
@@ -260,7 +278,14 @@ export function memberDirectory(
    * 每加一个能按人找到内容的入口，就得回来问一遍
    * 「这个人关掉了开关的话，这里会不会漏」—— 这次的答案是会。
    */
-  const noMetrics = new Set(leaderboardHiddenWxIds(user));
+  /*
+   * 两份隐私名单一次取完 —— 这一页两份都要：
+   * 积分和活跃度看「出现在榜单上」，「常挂在嘴边」看「别人能搜到我的发言」。
+   * 分开取的话那次权限判定会跑两遍，白多三条查询。
+   */
+  const privacyLists = hiddenWxIds(user);
+  const noMetrics = new Set(privacyLists.leaderboard);
+  const noPhrase = new Set(privacyLists.unsearchable);
   const now = options.now ?? Date.now();
 
   const skills = db
@@ -277,9 +302,23 @@ export function memberDirectory(
     byUser.set(s.userId, list);
   }
 
-  const shared = sharedGroupCounts(user, visible.map((r) => r.id));
+  const shared = sharedGroupCounts(user, visible.map((r) => r.id), myGroups);
   // 批量取称号 —— 逐个查会在成员数上打出 N+1
   const titles = equippedTitles(visible.map((r) => r.id));
+  /*
+   * 「常挂在嘴边」。同样批量取，理由和称号一样。
+   *
+   * ⚠ 传进去的是 wx_id，**拿回来的只有词** —— wx_id 绝不能进
+   * DirectoryMember：它会被序列化进 RSC 载荷、出现在网页源码里，
+   * 而拿着 wx_id 就能在微信里直接加人（这一条在 hasProfile 那里
+   * 已经写过一遍，这里是同一条边界的第二个入口）。
+   */
+  const phrases = catchphrasesFor(
+    user,
+    visible.map((r) => r.wxId).filter((w): w is string => Boolean(w)),
+    myGroups,
+    noPhrase,
+  );
 
   let members: DirectoryMember[] = visible.map((row) => {
     const profile = row.wxId ? profiles.get(row.wxId) : undefined;
@@ -301,6 +340,14 @@ export function memberDirectory(
       sharedGroups: shared.get(row.id) ?? 0,
       points: metricsOk ? row.points : null,
       activity: metricsOk ? activityBucket(profile?.lastSeen, now) : null,
+      /*
+       * 一个词，让这一行是个人而不是一条记录。
+       *
+       * 隐身的人（noMetrics）连这个也不给 —— 和积分、活跃度同一条口径：
+       * 他关掉的是「被别人从发言里找出来」，而这正是一句从发言里
+       * 归纳出来的话。
+       */
+      catchphrase: metricsOk && row.wxId ? (phrases.get(row.wxId) ?? null) : null,
       isMe: row.id === user.id,
     };
   });

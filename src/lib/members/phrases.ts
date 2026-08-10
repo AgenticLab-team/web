@@ -414,3 +414,61 @@ const MIN_EMOJI = 5;
 
 /** 至少来回 @ 过这么多次，才谈得上「最常」 */
 export const MIN_MENTIONS_FOR_PARTNER = 5;
+
+/**
+ * 一批人的「常挂在嘴边」—— 成员目录用。
+ *
+ * ═════════════════════════════════════════
+ * 为什么是批量，而不是每行调一次 catchphraseFor
+ * ═════════════════════════════════════════
+ *
+ * 目录一页最多列几百人。每行一次查询就是几百条 SQL，
+ * 而且 `unsearchableWxIds` 每次都要重新算一遍隐私名单 ——
+ * 那是这个项目的地方病（N+1），性能守卫也盯着。
+ *
+ * ═════════════════════════════════════════
+ * 返回的是 wx_id → 词，**调用方不许把 wx_id 传下去**
+ * ═════════════════════════════════════════
+ *
+ * 目录那一层专门不把 wx_id 放进给客户端的结构里：它会被序列化进
+ * RSC 载荷、出现在网页源码里，而拿着 wx_id 就能在微信里直接加人。
+ * 这个函数在服务端把词取出来就够了 —— 过去的是词，不是号。
+ */
+export function catchphrasesFor(
+  viewer: CurrentUser | null,
+  wxIds: readonly string[],
+  convIds: readonly string[],
+  /**
+   * 已经算好的隐私名单。调用方同时还要别的名单时传进来，
+   * 省掉一次重复的权限判定（那一次判定本身就要跑两条查询）。
+   * 不传就自己算 —— 默认必须是安全的那一边。
+   */
+  hiddenWxIds?: ReadonlySet<string>,
+): Map<string, string> {
+  const out = new Map<string, string>();
+  if (wxIds.length === 0 || convIds.length === 0) return out;
+
+  const hidden = hiddenWxIds ?? new Set(unsearchableWxIds(viewer));
+  const wanted = wxIds.filter((w) => !hidden.has(w));
+  if (wanted.length === 0) return out;
+
+  const rows = db
+    .select({
+      wxId: personPhrases.wxId,
+      phrase: personPhrases.phrase,
+      score: personPhrases.score,
+    })
+    .from(personPhrases)
+    .where(
+      and(inArray(personPhrases.wxId, wanted), inArray(personPhrases.convId, [...convIds])),
+    )
+    // 同一个人可能在几个群里各有一个 —— 排好序之后取先遇到的那个
+    .orderBy(desc(personPhrases.score))
+    .all();
+
+  for (const row of rows) {
+    if (!row.phrase) continue;
+    if (!out.has(row.wxId)) out.set(row.wxId, row.phrase);
+  }
+  return out;
+}

@@ -212,3 +212,51 @@ export function unsearchableWxIds(viewer: CurrentUser | null): string[] {
     .filter((wxId): wxId is string => wxId !== null && wxId !== viewer?.wxId);
 }
 
+
+export interface HiddenWxIds {
+  /** 关掉了「出现在榜单上」的人 */
+  leaderboard: string[];
+  /** 关掉了「别人能搜到我的发言」的人 */
+  unsearchable: string[];
+}
+
+/**
+ * 两份名单一次取完。
+ *
+ * ─────────────────────────────────────────
+ * 分开取的代价不是一条 SQL，是三条
+ * ─────────────────────────────────────────
+ *
+ * `leaderboardHiddenWxIds` 和 `unsearchableWxIds` 各自都要先问一次
+ * 「这个人有没有豁免权」，而那次 `can()` 判定本身就要跑两条查询 ——
+ * 于是同时要两份名单的页面（成员目录就是）白白多跑三条。
+ *
+ * 三条查询不会让任何东西出错，只会让「这一页要跑多少条」这个数字
+ * 慢慢往上爬。N+1 守卫盯的正是这个数字，而它盯得对：
+ * 这类重复一次加三条，加着加着就没有人记得每一条是为什么了。
+ *
+ * **两个开关的语义一个字都没变** —— 只是少问了两遍同一个问题。
+ */
+export function hiddenWxIds(viewer: CurrentUser | null): HiddenWxIds {
+  if (bypassesPrivacy(viewer)) return { leaderboard: [], unsearchable: [] };
+
+  const rows = db
+    .select({
+      wxId: users.wxId,
+      hideFromLeaderboard: userPrivacy.hideFromLeaderboard,
+      searchableByOthers: userPrivacy.searchableByOthers,
+    })
+    .from(userPrivacy)
+    .innerJoin(users, eq(users.id, userPrivacy.userId))
+    .all();
+
+  const leaderboard: string[] = [];
+  const unsearchable: string[] = [];
+  for (const row of rows) {
+    // 自己永远看得见自己 —— 和两个单独取的函数同一条口径
+    if (!row.wxId || row.wxId === viewer?.wxId) continue;
+    if (row.hideFromLeaderboard) leaderboard.push(row.wxId);
+    if (!row.searchableByOthers) unsearchable.push(row.wxId);
+  }
+  return { leaderboard, unsearchable };
+}
