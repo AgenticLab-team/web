@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { HealthSparkline } from "@/components/admin/HealthSparkline";
+import { MirrorAudit } from "@/components/admin/MirrorAudit";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Callout, Card, Empty, PageNote } from "@/components/ui/primitives";
 import {
@@ -93,10 +94,13 @@ export default async function CommunityHealthPage() {
               </li>
             ))}
           </ul>
-          <p className="t-caption mt-1.5 text-[var(--ink-tertiary)]">
-            12 个群同时安静这么久不太可能，多半是回填没补到那一段。
-            按天回看翻到那几天会是空的，而页面只会说「这天没有消息」——
-            和真的没人说话长得一模一样。趋势与势头也会因此偏低，
+          <p className="t-caption mt-1.5 leading-relaxed text-[var(--ink-tertiary)]">
+            12 个群同时安静这么久不太可能。缺口有两种来源，要做的事完全相反：
+            <span className="text-[var(--ink-secondary)]">同步漏了</span>能补，
+            <span className="text-[var(--ink-secondary)]">上游本来就没有</span>补不了。
+            下面「和上游对账」按一下就能分清。
+            另外，按天回看翻到那几天会是空的，而页面只会说「这天没有消息」——
+            和真的没人说话长得一模一样；趋势与势头也会因此偏低，
             所以基线落在缺口上时这一页不给结论。
           </p>
         </Callout>
@@ -114,6 +118,16 @@ export default async function CommunityHealthPage() {
           </ul>
         </Callout>
       )}
+
+      {/*
+        对账紧跟在缺口提示后面。
+
+        它是那条提示唯一的下一步 —— 隔着十二张卡片放在页尾的话，
+        看到缺口的人不会滚到那里，只会记住「有个缺口」然后什么也不做。
+      */}
+      <Card className="mb-4">
+        <MirrorAudit />
+      </Card>
 
       <div className="space-y-3">
         {groups.map((g) => (
