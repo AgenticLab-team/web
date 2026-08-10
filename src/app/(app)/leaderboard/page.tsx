@@ -131,6 +131,13 @@ export default async function LeaderboardPage({
       <PageNote>
         高质量消息 = 长度 ≥ 15 字的文本或引用回复，口径与群里机器人报的排名一致。
         {period !== "all" && "箭头是相对上一个同长度周期的名次变化。"}
+        {!user && (
+          <>
+            {" "}
+            还没加入本站的群成员在这里<strong>不具名</strong> ——
+            名次和条数是真的，只是名字和头像要等他自己来了才显示。
+          </>
+        )}
       </PageNote>
 
       {!user && (

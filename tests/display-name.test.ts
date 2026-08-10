@@ -121,21 +121,31 @@ describe("展示路径不泄露 wx_id（数据库往返）", () => {
       .run();
   });
 
+  /*
+   * 这几条测的是**名字兜底**，所以要以成员身份看。
+   *
+   * 访客那一侧另有一层：没注册过本站的人一律显示「群成员」——
+   * 那是「不给看」，和这里的「查不到名字」是两件事，
+   * 混在一起的话，一个真的没有昵称的人和一个没注册的人
+   * 会长成同一个样子，而它们该由不同的机制去修。
+   */
+  const asMember = { id: "u_me", wxId: "wx_me" } as never;
+
   it("排行榜：没有 people 记录的人显示占位，不显示 wx_id", () => {
-    const entries = board.getLeaderboard({ convIds: [G], period: "all" });
+    const entries = board.getLeaderboard({ convIds: [G], period: "all", viewer: asMember });
     const nameless = entries.find((e) => e.wxId === NAMELESS);
     assert.equal(nameless?.name, FALLBACK_DISPLAY_NAME);
   });
 
   it("**排行榜：存量脏数据（displayName 存的是 wx_id）也被拦住**", () => {
     // 这是对历史数据的兜底 —— 修了同步逻辑不等于老数据自动变干净
-    const entries = board.getLeaderboard({ convIds: [G], period: "all" });
+    const entries = board.getLeaderboard({ convIds: [G], period: "all", viewer: asMember });
     const poisoned = entries.find((e) => e.wxId === POISONED);
     assert.equal(poisoned?.name, FALLBACK_DISPLAY_NAME);
   });
 
   it("排行榜：有正常昵称的人不受影响", () => {
-    const entries = board.getLeaderboard({ convIds: [G], period: "all" });
+    const entries = board.getLeaderboard({ convIds: [G], period: "all", viewer: asMember });
     assert.equal(entries.find((e) => e.wxId === NAMED)?.name, "有名字的");
   });
 

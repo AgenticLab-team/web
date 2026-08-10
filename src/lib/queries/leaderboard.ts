@@ -4,7 +4,7 @@ import { and, desc, eq, gte, inArray, notInArray, sql } from "drizzle-orm";
 
 import type { CurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { dailyStats, people } from "@/lib/db/schema";
+import { dailyStats, people, users } from "@/lib/db/schema";
 import { leaderboardHiddenWxIds } from "@/lib/privacy/queries";
 import { currentSeason } from "@/lib/seasons/queries";
 import { dateRangeOf } from "@/lib/seasons/rules";
@@ -188,12 +188,56 @@ export function getLeaderboard(options: BoardOptions): BoardEntry[] {
       .map((p) => [p.wxId, p]),
   );
 
+  /*
+   * ─────────────────────────────────────────
+   * 没注册过这个站的人，对访客不具名
+   * ─────────────────────────────────────────
+   *
+   * 榜单是按 `daily_stats` 的 wx_id 聚合的 —— 也就是说
+   * **群里的每一个人都在榜上，包括从没打开过这个站的人**。
+   * 线上第 4 活跃的那位就没有账号。
+   *
+   * 而退出榜单的开关（`user_privacy.hide_from_leaderboard`）
+   * 需要一个账号才拨得动。于是暴露对所有人成立，
+   * 而退出只对加入过的人开放 —— 这条不对称站不住。
+   *
+   * 隐私页自己写着：「这个站把发言量做成了对未登录访客公开的榜单，
+   * 这是微信里不存在的暴露」。一个从没来过的人，
+   * 不该因为别人建了这个站而把微信昵称和头像挂到公网上。
+   *
+   * ─────────────────────────────────────────
+   * 只对访客隐去名字，不隐去这个人
+   * ─────────────────────────────────────────
+   *
+   * 名次和条数照旧 —— 那是社区真实的活跃分布，抹掉它等于让榜单说假话。
+   * 隐去的只有身份：名字和头像。
+   *
+   * 登录成员看得到全名：他们和这些人在同一批群里，
+   * 那些昵称他们每天都在微信里看见，这里没有多出新的暴露。
+   */
+  const anonymize = !options.viewer;
+  const registered = anonymize
+    ? new Set(
+        db
+          .select({ wxId: users.wxId })
+          .from(users)
+          .where(inArray(users.wxId, current.map((r) => r.wxId)))
+          .all()
+          .map((u) => u.wxId)
+          .filter((w): w is string => Boolean(w)),
+      )
+    : null;
+
   return current.map((row, index) => ({
     rank: index + 1,
     wxId: row.wxId,
     // 兜底绝不能是 wx_id —— 排行榜对未登录访客公开，wx_id 漏出去就是隐私事故
-    name: resolveDisplayName([profiles.get(row.wxId)?.name], { wxId: row.wxId }),
-    avatarUrl: profiles.get(row.wxId)?.avatar ?? null,
+    name:
+      registered && !registered.has(row.wxId)
+        ? "群成员"
+        : resolveDisplayName([profiles.get(row.wxId)?.name], { wxId: row.wxId }),
+    avatarUrl:
+      registered && !registered.has(row.wxId) ? null : (profiles.get(row.wxId)?.avatar ?? null),
     quality: Number(row.quality),
     messages: Number(row.messages),
     chars: Number(row.chars),
