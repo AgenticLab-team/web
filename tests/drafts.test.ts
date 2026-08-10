@@ -8,7 +8,6 @@ import {
   DIVERGED_MS,
   MAX_DRAFT_CHARS,
   SERVER_SAVE_INTERVAL_MS,
-  canReadDraft,
   checkConflict,
   checkDraft,
   draftKey,
@@ -151,12 +150,12 @@ describe("本地和服务端各有一份，用哪个", () => {
 });
 
 describe("**草稿只有本人碰得到**", () => {
-  it("规则层说死了", () => {
-    assert.equal(canReadDraft("u1", "u1"), true);
-    assert.equal(canReadDraft("u2", "u1"), false);
-    assert.equal(canReadDraft(null, "u1"), false);
-  });
-
+  /*
+   * 这里原来有一条「规则层说死了」，测的是 canReadDraft() ——
+   * 而那个函数没有任何调用方。真正的收口是查询层：
+   * drafts.ts 里每个函数的 where 都带着 userId，而且**根本没有
+   * 「按 id 取草稿」的签名**。下面两条测的才是那个。
+   */
   it("**查询层没有「按 id 取草稿」的签名** —— 没有签名，后台就渲染不出来", () => {
     /*
      * 草稿是还没发表的东西。已发表的内容有可见性规则、有版主、有审计；

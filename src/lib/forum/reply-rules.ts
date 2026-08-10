@@ -122,12 +122,3 @@ export function collapsedView(input: {
 /** 编辑说明必填的最短长度 —— 「改了个错字」也是说明 */
 export const MIN_EDIT_NOTE = 0;
 
-/**
- * 改过就要标出来，没有「小改不算」这一说。
- *
- * 给出「改动很小就不标记」的口子之后，它会被用来
- * 悄悄改掉一句话的意思 —— 而那正是最需要标出来的那种改动。
- */
-export function shouldMarkEdited(): boolean {
-  return true;
-}

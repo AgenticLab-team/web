@@ -11,7 +11,6 @@ import {
   canSeeFollowList,
   noticeCopy,
   pickSource,
-  unfollowIsDelete,
 } from "@/lib/forum/follow-rules";
 import { tabBarItems } from "@/lib/nav";
 import { stripComments as strip } from "./_source";
@@ -129,8 +128,6 @@ describe("取消关注是真的删掉", () => {
      * 退订按钮下一次回帖就失效了。关注只有手动一条路进来，
      * 留一行「已静音」只会让列表里堆着自己已经取消的东西。
      */
-    for (const t of FOLLOW_TARGETS) assert.equal(unfollowIsDelete(t), true);
-
     const actions = strip(src("lib/forum/follow-actions.ts"));
     assert.match(actions, /db\.delete\(subscriptions\)/);
     assert.doesNotMatch(actions, /mutedAt: Date\.now\(\)/);

@@ -8,7 +8,6 @@ import {
   canEditReply,
   checkReplyContent,
   collapsedView,
-  shouldMarkEdited,
 } from "@/lib/forum/reply-rules";
 import { stripComments as strip } from "./_source";
 
@@ -96,15 +95,15 @@ describe("内容校验", () => {
 });
 
 describe("**改过就标，没有「小改不算」**", () => {
-  it("永远返回 true", () => {
-    /*
-     * 给出「改动很小就不标记」的口子之后，它会被用来
-     * 悄悄改掉一句话的意思 —— 而那正是最需要标出来的那种改动。
-     */
-    assert.equal(shouldMarkEdited(), true);
-  });
-
   it("action 里确实 +1 了 edit_count", () => {
+    /*
+     * 这里原来还有一条「shouldMarkEdited() 永远返回 true」——
+     * 而那个函数没有任何调用方，测它等于测一个不参与决策的常量。
+     * 真正的保证是下面这一句：编辑回复时无条件 +1。
+     *
+     * 「给出小改不算的口子就会被用来悄悄改意思」那段理由，
+     * 已经挪到 actions.ts 那一行旁边。
+     */
     const code = strip(src("lib/forum/actions.ts"));
     const fn = code.slice(code.indexOf("function editReply"));
     assert.match(fn, /editCount: sql`\$\{replies\.editCount\} \+ 1`/);

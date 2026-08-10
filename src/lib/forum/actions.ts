@@ -728,6 +728,16 @@ export async function editReply(input: {
     .set({
       content: gate.content,
       contentHtml: rendered.html,
+      /*
+       * 改过就标，**没有「小改不算」这一说**。
+       *
+       * 给出「改动很小就不标记」的口子之后，它会被用来悄悄改掉
+       * 一句话的意思 —— 而那正是最需要标出来的那种改动。
+       *
+       * （这段理由原来挂在 reply-rules 里一个恒返回 true 的
+       *   `shouldMarkEdited()` 上，而那个函数没有任何调用方 ——
+       *   规则写在一个没人问的地方，等于没写。现在它就在这一行旁边。）
+       */
       editCount: sql`${replies.editCount} + 1`,
       lastEditedAt: Date.now(),
     })

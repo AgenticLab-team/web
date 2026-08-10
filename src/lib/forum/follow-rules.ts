@@ -156,19 +156,6 @@ export function noticeCopy(input: {
 }
 
 /**
- * 退关是**真的删掉**，不是静音。
- *
- * 帖子订阅用静音，因为发帖回帖会自动订阅回来 ——
- * 删掉的话退订按钮下一次回帖就失效了。
- * 而关注人／版块／标签只有手动一条路进来，
- * 没有任何东西会把它加回去，留一行「已静音」只会让
- * 「我关注的」列表里堆着一串自己已经取消的东西。
- */
-export function unfollowIsDelete(target: FollowTarget): boolean {
-  return FOLLOW_TARGETS.includes(target);
-}
-
-/**
  * 谁能看见「谁关注了谁」。
  *
  * ─────────────────────────────────────────

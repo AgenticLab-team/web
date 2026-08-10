@@ -150,7 +150,3 @@ export function pickDraft(input: {
   return { pick: local.updatedAt >= server.updatedAt ? "local" : "server", ask: false };
 }
 
-/** 草稿只有本人看得到 —— 它是还没发表的东西，连管理员也不该翻 */
-export function canReadDraft(viewerId: string | null, ownerId: string): boolean {
-  return viewerId !== null && viewerId === ownerId;
-}

@@ -62,6 +62,17 @@ export async function toggleFollow(
     .get();
 
   if (existing) {
+    /*
+     * 关注人／版块／标签取消时**删行**，不是静音。
+     *
+     * 帖子订阅那一路才用静音（见 forum/social.ts）—— 因为发帖回帖会
+     * 自动订阅回来，删掉的话退订按钮下一次回帖就失效了。
+     * 而这三种只有手动一条路进来，没有任何东西会把它加回去，
+     * 留一行「已静音」只会让「我关注的」列表里堆着自己已经取消的东西。
+     *
+     * 这个区分由**走哪条代码路径**决定（类型 FollowTarget 已经保证了），
+     * 不需要运行时再判一次。
+     */
     db.delete(subscriptions).where(eq(subscriptions.id, existing.id)).run();
     revalidatePath("/me/following");
     return { ok: true, following: false };
