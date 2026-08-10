@@ -1,0 +1,278 @@
+[
+  {
+    "file": "lib/a11y/audit.ts",
+    "pred": "(e) => hasAttr(e.attrs, \"label\")"
+  },
+  {
+    "file": "lib/activities/actions.ts",
+    "pred": "(r): r is typeof r & { key: string } => Boolean(r.key)"
+  },
+  {
+    "file": "lib/activities/post-quality.ts",
+    "pred": "(l) => l.length >= 10"
+  },
+  {
+    "file": "lib/admin/approval-actions.ts",
+    "pred": "(r) => r.expiresAt !== null && r.expiresAt <= now"
+  },
+  {
+    "file": "lib/admin/approval-queries.ts",
+    "pred": "(r) => r.status === \"pending\" && !isExpired(r.expiresAt, now)"
+  },
+  {
+    "file": "lib/admin/approval-queries.ts",
+    "pred": "(s) => DANGEROUS_SETTING_KEYS.includes(s.key)"
+  },
+  {
+    "file": "lib/admin/community-health.ts",
+    "pred": "(v) => Number.isFinite(v) && v > 0"
+  },
+  {
+    "file": "lib/admin/economy.ts",
+    "pred": "(n) => n >= config.dailyMintCap"
+  },
+  {
+    "file": "lib/admin/economy.ts",
+    "pred": "(n) => n >= config.dailyMintCap * 0.8"
+  },
+  {
+    "file": "lib/admin/group-actions.ts",
+    "pred": "(j) => checkRetry(j).ok"
+  },
+  {
+    "file": "lib/admin/report-actions.ts",
+    "pred": "(r) => r.status === \"open\" || r.status === \"reviewing\""
+  },
+  {
+    "file": "lib/admin/report-actions.ts",
+    "pred": "(r) => r.status === \"open\" || r.status === \"reviewing\""
+  },
+  {
+    "file": "lib/admin/reports.ts",
+    "pred": "(r) => r.targetType === \"post\""
+  },
+  {
+    "file": "lib/admin/reports.ts",
+    "pred": "(r) => r.targetType === \"reply\""
+  },
+  {
+    "file": "lib/admin/reports.ts",
+    "pred": "(r) => !r.assignedTo"
+  },
+  {
+    "file": "lib/admin/setting-actions.ts",
+    "pred": "(w): w is string => w !== null"
+  },
+  {
+    "file": "lib/alerts/dispatch.ts",
+    "pred": "(a) => a.notifyError !== null"
+  },
+  {
+    "file": "lib/auth/bind-queue-queries.ts",
+    "pred": "(t): t is number => t != null"
+  },
+  {
+    "file": "lib/auth/bind-queue-queries.ts",
+    "pred": "(r) => isActionable(r.createdAt, now)"
+  },
+  {
+    "file": "lib/auth/bind-queue.ts",
+    "pred": "(r) => !r.matched"
+  },
+  {
+    "file": "lib/auth/passkey.ts",
+    "pred": "(c) => c.credentialId"
+  },
+  {
+    "file": "lib/backup/offsite.ts",
+    "pred": "(o) => o.key.endsWith(\".db.gz\")"
+  },
+  {
+    "file": "lib/db/repairs.ts",
+    "pred": "(r) => typeof r.h === \"string\""
+  },
+  {
+    "file": "lib/flags/registry.ts",
+    "pred": "(x): x is string => typeof x === \"string\""
+  },
+  {
+    "file": "lib/flags/server.ts",
+    "pred": "(k) => !FLAG_KEYS.includes(k)"
+  },
+  {
+    "file": "lib/forum/bookmark-queries.ts",
+    "pred": "(v): v is string => Boolean(v)"
+  },
+  {
+    "file": "lib/forum/bookmark-queries.ts",
+    "pred": "(v): v is string => Boolean(v)"
+  },
+  {
+    "file": "lib/forum/convert-queries.ts",
+    "pred": "(e) => e.status === \"pending\""
+  },
+  {
+    "file": "lib/forum/convert.ts",
+    "pred": "(wxId) => wxId !== user.wxId,"
+  },
+  {
+    "file": "lib/forum/convert.ts",
+    "pred": "(e) => e.status !== \"granted\""
+  },
+  {
+    "file": "lib/forum/convert.ts",
+    "pred": "(e) => e.status === \"granted\""
+  },
+  {
+    "file": "lib/forum/follow.ts",
+    "pred": "(r) => r.target === target"
+  },
+  {
+    "file": "lib/forum/follow.ts",
+    "pred": "(v): v is string => Boolean(v)"
+  },
+  {
+    "file": "lib/forum/polls.ts",
+    "pred": "(id) => validOptions.includes(id)"
+  },
+  {
+    "file": "lib/forum/queries.ts",
+    "pred": "(r) => canSeePost(toVisibilityInfo(r.post), viewer).visible"
+  },
+  {
+    "file": "lib/forum/queries.ts",
+    "pred": "(board) => { switch (board.visibleTo) { case \"public\": case \"unlisted\": return true; case "
+  },
+  {
+    "file": "lib/health.ts",
+    "pred": "(g) => g.syncEnabled"
+  },
+  {
+    "file": "lib/invites/queries.ts",
+    "pred": "(r) => r.lastCheckinDate !== null && r.status === \"active\""
+  },
+  {
+    "file": "lib/links/enrich.ts",
+    "pred": "(l) => options.force || needsEnrichment(l)"
+  },
+  {
+    "file": "lib/links/enrich.ts",
+    "pred": "(l) => l.aiTitle && l.aiSummary"
+  },
+  {
+    "file": "lib/links/enrich.ts",
+    "pred": "(l) => l.aiCheckedAt && !l.aiTitle"
+  },
+  {
+    "file": "lib/links/queries.ts",
+    "pred": "(i) => i.saved"
+  },
+  {
+    "file": "lib/moderation/expiry.ts",
+    "pred": "(r) => r.action === \"ban\" || r.action === \"suspend\""
+  },
+  {
+    "file": "lib/notifications/actions.ts",
+    "pred": "([type, v]) => !v.site && !isAlwaysOn(type)"
+  },
+  {
+    "file": "lib/points/admin.ts",
+    "pred": "(v): v is string => Boolean(v)"
+  },
+  {
+    "file": "lib/points/admin.ts",
+    "pred": "(r) => r.operatorId"
+  },
+  {
+    "file": "lib/points/admin.ts",
+    "pred": "(r) => r.revertsId"
+  },
+  {
+    "file": "lib/points/rules.ts",
+    "pred": "(n) => n > 0"
+  },
+  {
+    "file": "lib/privacy/queries.ts",
+    "pred": "(wxId): wxId is string => wxId !== null"
+  },
+  {
+    "file": "lib/queries/digest.ts",
+    "pred": "(r) => canSeePost(toVisibilityInfo(r.post), viewer).visible"
+  },
+  {
+    "file": "lib/queries/digest.ts",
+    "pred": "(r) => r.post.createdAt > since"
+  },
+  {
+    "file": "lib/queries/leaderboard.ts",
+    "pred": "(w): w is string => Boolean(w)"
+  },
+  {
+    "file": "lib/rbac/role-actions.ts",
+    "pred": "(r) => r.id !== id"
+  },
+  {
+    "file": "lib/rbac/role-settle.ts",
+    "pred": "(r) => r.autoGrantRule != null"
+  },
+  {
+    "file": "lib/search/rag.ts",
+    "pred": "(x): x is { hit: SemanticHit; source: RagSource } => x.source !== null"
+  },
+  {
+    "file": "lib/search/semantic.ts",
+    "pred": "(r): r is typeof r & { vector: Buffer } => r.vector != null"
+  },
+  {
+    "file": "lib/search/semantic.ts",
+    "pred": "(w) => { const ids = JSON.parse(w.ids) as string[]; const senders = db .select({ senderWxI"
+  },
+  {
+    "file": "lib/search/semantic.ts",
+    "pred": "(c) => !tainted.has(c.id)"
+  },
+  {
+    "file": "lib/seasons/rules.ts",
+    "pred": "(a) => a.titleKey"
+  },
+  {
+    "file": "lib/shop/queries.ts",
+    "pred": "(r) => includeDisabled || r.enabled"
+  },
+  {
+    "file": "lib/shop/queries.ts",
+    "pred": "(o) => o.shipping !== null"
+  },
+  {
+    "file": "lib/storage/queries.ts",
+    "pred": "(f) => f.endsWith(\".ndjson.gz\")"
+  },
+  {
+    "file": "lib/sync/member-events.ts",
+    "pred": "(r): r is { userId: string; wxId: string } => r.wxId !== null"
+  },
+  {
+    "file": "lib/sync/members.ts",
+    "pred": "(m) => !m.leftAt"
+  },
+  {
+    "file": "lib/sync/members.ts",
+    "pred": "(m) => !m.leftAt && !upstreamIds.has(m.wxId)"
+  },
+  {
+    "file": "lib/sync/members.ts",
+    "pred": "(m) => !m.left"
+  },
+  {
+    "file": "lib/uploads/client.ts",
+    "pred": "(e): e is string => e !== null"
+  },
+  {
+    "file": "lib/upstream/usage.ts",
+    "pred": "isError"
+  },
+  {
+    "file": "lib/users/delete.ts",
+    "pred": "(p) => !p.via"
+  }
+]
