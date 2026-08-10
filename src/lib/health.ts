@@ -4,14 +4,15 @@ import { execFileSync } from "node:child_process";
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { desc, inArray, sql } from "drizzle-orm";
+import { count, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { listGroupsForAdmin } from "@/lib/admin/groups";
 import { passkeyLockoutRisk } from "@/lib/auth/passkey-enforcement";
 import { describeRisk } from "@/lib/auth/passkey-policy";
 import { db, sqlite } from "@/lib/db";
-import { storageSnapshots, systemHealth } from "@/lib/db/schema";
+import { githubConnections, storageSnapshots, systemHealth } from "@/lib/db/schema";
 import { env } from "@/lib/env";
+import { githubEnabled } from "@/lib/github/secret";
 import { NekoBotError, nekobot } from "@/lib/nekobot/client";
 import { pushSubscriptionSummary } from "@/lib/notifications/push-store";
 import { configProblem, webPushConfigured } from "@/lib/notifications/webpush";
@@ -259,6 +260,71 @@ export function probeWebPush(): HealthReport {
   };
 }
 
+/**
+ * GitHub 生态接没接上。
+ *
+ * ═════════════════════════════════════════
+ * 「不配就整个消失」是对的，但它太安静了
+ * ═════════════════════════════════════════
+ *
+ * 没配 OAuth 时绑定入口不渲染、路由 404 —— 这个设计本身没问题
+ * （半套配置比没配置更糟：按钮照常出现、点下去走到一半才在
+ * GitHub 那边失败，而用户会以为是自己的 GitHub 有问题）。
+ *
+ * 但它安静到**站长看不出这一整块是关着的**。线上实测：
+ * 绑定 0 人、仓库缓存 0 条 —— 不是没人想用，是入口根本没出现过，
+ * 而后台任何一处都没说这件事。
+ *
+ * 一个「做了但没人看得见」的功能和没做，唯一的区别就是
+ * 有没有一个地方说得出它是关着的。
+ *
+ * ═════════════════════════════════════════
+ * 没配不算故障
+ * ═════════════════════════════════════════
+ *
+ * 状态是 `degraded` 不是 `down`：站长可能就是不想接 GitHub。
+ * 报成 down 会让总状态一直红着，而一个一直红着的仪表盘
+ * 会让真出事那次也没人看 —— 和 frp 那次是同一个道理。
+ */
+export function probeGithub(): HealthReport {
+  if (!githubEnabled()) {
+    return {
+      component: "github",
+      status: "degraded",
+      detail:
+        "没配 OAuth（GITHUB_CLIENT_ID / SECRET / TOKEN_KEY）—— " +
+        "绑定入口不渲染、路由 404，主页项目展示和「要不要发帖分享」整块都不会出现",
+    };
+  }
+
+  const linked = db.select({ n: count() }).from(githubConnections).get()?.n ?? 0;
+  const shown =
+    db
+      .select({ n: count() })
+      .from(githubConnections)
+      .where(eq(githubConnections.showOnProfile, true))
+      .get()?.n ?? 0;
+
+  /*
+   * 配了但一个人都没绑，仍然值得说一句 —— 那多半意味着入口埋得太深，
+   * 而不是大家都不想绑。
+   */
+  if (linked === 0) {
+    return {
+      component: "github",
+      status: "degraded",
+      detail: "已配置，但还没有人绑定 —— 入口在「我的 → 账号安全」里",
+    };
+  }
+
+  const token = env.github.apiToken ? "有只读 token（5000 次/小时）" : "没配只读 token（按服务器 IP 60 次/小时，容易撞限流）";
+  return {
+    component: "github",
+    status: "ok",
+    detail: `${linked} 人绑定 · ${shown} 人在主页展示项目 · ${token}`,
+  };
+}
+
 /** 跑一轮完整探测并落库 */
 /**
  * 采集有没有在收数据。
@@ -293,6 +359,7 @@ export async function runHealthChecks(): Promise<HealthReport[]> {
     probeAuthPolicy(),
     probeWebPush(),
     probeCollection(),
+    probeGithub(),
   ];
   for (const report of reports) {
     db.insert(systemHealth)

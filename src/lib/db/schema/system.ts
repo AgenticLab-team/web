@@ -167,6 +167,14 @@ export const systemHealth = sqliteTable(
          * 于是探测一路绿灯而归档静静地缺了半个月。
          */
         "collection",
+        /*
+         * GitHub 生态接没接上。
+         *
+         * 「不配就整个消失」是对的设计，但它安静到站长看不出
+         * 这一整块是关着的 —— 线上实测绑定 0 人、仓库缓存 0 条，
+         * 不是没人想用，是入口根本没出现过。
+         */
+        "github",
       ],
     }).notNull(),
     status: text("status", { enum: ["ok", "degraded", "down"] }).notNull(),

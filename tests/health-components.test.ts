@@ -99,3 +99,52 @@ describe("读回来的是每个组件最新的那一行", () => {
     assert.match(health, /PARTITION BY component ORDER BY checked_at DESC/);
   });
 });
+
+describe("**GitHub 生态：关着的时候要说得出来**", () => {
+  /*
+   * 「不配就整个消失」是对的设计（半套配置更糟：按钮照常出现、
+   * 点下去走到一半才在 GitHub 那边失败，用户会以为是自己的问题）。
+   *
+   * 但它安静到**站长看不出这一整块是关着的**。线上实测：
+   * 绑定 0 人、仓库缓存 0 条 —— 不是没人想用，是入口根本没出现过，
+   * 而后台任何一处都没说这件事。
+   *
+   * 一个「做了但没人看得见」的功能和没做，唯一的区别就是
+   * 有没有一个地方说得出它是关着的。
+   */
+  const body = strip(health);
+
+  it("有这一项探测，而且进了那一轮", () => {
+    assert.match(body, /export function probeGithub\(\)/);
+    assert.match(body, /probeGithub\(\),/);
+  });
+
+  it("**没配时是 degraded，不是 down**", () => {
+    /*
+     * 站长可能就是不想接 GitHub。报成 down 会让总状态一直红着，
+     * 而一个一直红着的仪表盘会让真出事那次也没人看 ——
+     * 和上面 frp 那次是同一个道理。
+     */
+    const fn = body.slice(body.indexOf("export function probeGithub"));
+    const stop = fn.indexOf("\nexport ");
+    const seg = stop === -1 ? fn : fn.slice(0, stop);
+    assert.equal(seg.includes('status: "down"'), false, "没配被报成了故障");
+    assert.match(seg, /status: "degraded"/);
+  });
+
+  it("**说得出缺哪几个环境变量** —— 只说「没配」等于让人去翻代码", () => {
+    assert.match(body, /GITHUB_CLIENT_ID/);
+  });
+
+  it("配了但没人绑，也要说一句 —— 那多半是入口埋得太深", () => {
+    assert.match(body, /还没有人绑定/);
+  });
+
+  it("**组件名在 schema 的枚举里** —— 不在的话这一行写不进库", () => {
+    const schema = readFileSync(
+      new URL("../src/lib/db/schema/system.ts", import.meta.url),
+      "utf8",
+    );
+    assert.match(schema, /"github",/);
+  });
+});
