@@ -16,7 +16,24 @@ import { getLeaderboard, getMyRank, PERIODS, type Period } from "@/lib/queries/l
 import { allSyncedGroupIds, visibleGroupsFor } from "@/lib/queries/visibility";
 import { currentSeasonView } from "@/lib/seasons/queries";
 
-export const metadata: Metadata = { title: "排行" };
+export const metadata: Metadata = { title: "排行" ,
+  /*
+   * ─────────────────────────────────────────
+   * 能看，但不收录
+   * ─────────────────────────────────────────
+   *
+   * 「未登录访客还是可以看见大榜单的」是定下来的规矩，这一条不动。
+   *
+   * 但**「打开链接看得到」和「用名字能在谷歌里搜出来」是两件事**：
+   * 后者意味着一个人的微信昵称、头像和发言量会绑在他的名字上、
+   * 被任何一个搜他的人看到 —— 而他当初只是加了个微信群。
+   *
+   * robots.txt 里也写了一条，但那只是君子协定；
+   * **真正生效的是这里** —— 不守规矩的爬虫照样会抓页面，
+   * 而 noindex 是给守规矩的那些看的最后一道。
+   */
+  robots: { index: false, follow: true },
+};
 export const dynamic = "force-dynamic";
 
 function hrefFor(period: Period, scope?: string) {
