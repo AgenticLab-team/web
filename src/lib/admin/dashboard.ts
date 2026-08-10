@@ -21,6 +21,7 @@ import {
   users,
 } from "@/lib/db/schema";
 import { shiftDateKey, startOfDayMs, todayKey } from "@/lib/time";
+import { departureCount } from "@/lib/admin/users";
 
 /**
  * 后台仪表盘的数据。
@@ -192,9 +193,25 @@ export interface CommunityScale {
   groups: number;
   messages: number;
   posts: number;
+  /**
+   * 近 30 天进出。
+   *
+   * ─────────────────────────────────────────
+   * 一个光秃秃的总数看不出方向
+   * ─────────────────────────────────────────
+   *
+   * 「已绑定 123」这个数字，在涨和在跌的时候长得一模一样 ——
+   * 而这两种情况一个说明社群在长，一个说明该找人聊聊了。
+   *
+   * 注销功能上线之后这件事才真正成立：在此之前人只进不出，
+   * 总数本身就是增长曲线。现在不是了。
+   */
+  joined30d: number;
+  left30d: number;
 }
 
-export function communityScale(): CommunityScale {
+export function communityScale(now = Date.now()): CommunityScale {
+  const since = now - 30 * 86_400_000;
   return {
     people: db.select({ n: sql<number>`count(*)` }).from(people).get()?.n ?? 0,
     boundUsers:
@@ -205,6 +222,17 @@ export function communityScale(): CommunityScale {
     messages: db.select({ n: sql<number>`count(*)` }).from(messages).get()?.n ?? 0,
     posts:
       db.select({ n: sql<number>`count(*)` }).from(posts).where(isNull(posts.deletedAt)).get()?.n ?? 0,
+    /*
+     * 按 `first_bound_at` 算「进」，不按 created_at ——
+     * 注销重绑会新建一行，拿 created_at 的话那个人会被当成新人再数一次。
+     */
+    joined30d:
+      db
+        .select({ n: sql<number>`count(*)` })
+        .from(users)
+        .where(and(isNull(users.deletedAt), gte(users.firstBoundAt, since)))
+        .get()?.n ?? 0,
+    left30d: departureCount(since),
   };
 }
 

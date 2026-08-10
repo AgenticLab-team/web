@@ -198,8 +198,39 @@ export default async function AdminDashboard() {
             <span className="tabular t-subhead">{scale.people.toLocaleString("zh-CN")}</span>
           </Row>
           <Row>
-            <span className="t-body flex-1">已绑定账号</span>
-            <span className="tabular t-subhead">{scale.boundUsers}</span>
+            <span className="min-w-0 flex-1">
+              <span className="t-body block">已绑定账号</span>
+              {/*
+                近 30 天的进出。
+
+                光一个「123」在涨和在跌的时候长得一模一样 ——
+                而这两种情况一个说明社群在长，一个说明该找人聊聊了。
+                注销上线之后这件事才真正成立：在此之前人只进不出。
+
+                两个数都是 0 时整行不显示 —— 一个常年写着「+0 −0」的
+                角标，看两天就会被眼睛自动跳过。
+              */}
+              {(scale.joined30d > 0 || scale.left30d > 0) && (
+                <span className="t-caption block text-[var(--ink-tertiary)]">
+                  近 30 天
+                  {scale.joined30d > 0 && (
+                    <span style={{ color: "var(--success)" }}> +{scale.joined30d}</span>
+                  )}
+                  {scale.left30d > 0 && (
+                    <span style={{ color: "var(--ink-secondary)" }}> −{scale.left30d}</span>
+                  )}
+                  {scale.left30d > 0 && (
+                    <>
+                      {" · "}
+                      <Link href="/admin/users" className="text-[var(--accent)]">
+                        看看他们留了什么话
+                      </Link>
+                    </>
+                  )}
+                </span>
+              )}
+            </span>
+            <span className="tabular t-subhead shrink-0">{scale.boundUsers}</span>
           </Row>
           <Row>
             <span className="t-body flex-1">接入的群</span>

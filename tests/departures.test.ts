@@ -125,6 +125,63 @@ describe("查询", async () => {
   });
 });
 
+describe("**进出要摆在一起看**", async () => {
+  const dbm = await import("@/lib/db");
+  const schema = await import("@/lib/db/schema");
+  const { communityScale } = await import("@/lib/admin/dashboard");
+  const { deleteAccount } = await import("@/lib/users/delete");
+
+  const now = Date.UTC(2026, 7, 20);
+  const day = 86_400_000;
+
+  function member(id: string, boundAt: number) {
+    dbm.db
+      .insert(schema.users)
+      .values({ id, wxId: `wx_${id}`, status: "active", firstBoundAt: boundAt })
+      .run();
+  }
+
+  it("**近 30 天的进和出都算得出来**", () => {
+    dbm.db.delete(schema.users).run();
+    member("new1", now - 5 * day);
+    member("new2", now - 10 * day);
+    member("old1", now - 90 * day);
+    const gone = "gone1";
+    member(gone, now - 20 * day);
+    deleteAccount(gone, { by: gone, reason: "走了" });
+
+    const scale = communityScale(now);
+    assert.equal(scale.joined30d, 2, "把 90 天前进来的也算成了新人");
+    assert.equal(scale.left30d, 1);
+    // 注销掉的不算在已绑定里
+    assert.equal(scale.boundUsers, 3);
+  });
+
+  it("**按 first_bound_at 算「进」，不按 created_at**", () => {
+    /*
+     * 注销重绑会新建一行。拿 created_at 的话，那个人会被当成新人
+     * 再数一次 —— 而他其实是回来的，不是新来的。
+     */
+    const code = readCode("lib/admin/dashboard.ts");
+    assert.match(code, /gte\(users\.firstBoundAt, since\)/);
+    assert.equal(code.includes("gte(users.createdAt, since)"), false);
+  });
+
+  it("**两个数都是 0 时整行不显示**", () => {
+    /*
+     * 一个常年写着「+0 −0」的角标，看两天就会被眼睛自动跳过 ——
+     * 然后真的有人走的那天也一起被跳过了。
+     */
+    const page = readCode("app/(app)/admin/page.tsx");
+    assert.match(page, /scale\.joined30d > 0 \|\| scale\.left30d > 0/);
+  });
+
+  it("**有人走的时候给一条去看留言的路**", () => {
+    const page = readCode("app/(app)/admin/page.tsx");
+    assert.match(page, /看看他们留了什么话/);
+  });
+});
+
 describe("**只给理由，不给身份**", () => {
   const query = readCode("lib/admin/users.ts");
   const page = readCode("app/(app)/admin/users/page.tsx");
