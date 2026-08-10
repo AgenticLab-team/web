@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, gt, inArray, isNull, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNotNull, isNull, like, or, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { resolveDisplayName } from "@/lib/users/display-name";
@@ -364,4 +364,72 @@ export function userFacets() {
     status: byStatus.map((r) => ({ value: r.status, count: Number(r.n) })),
     roles: byRole.map((r) => ({ key: r.key, name: r.name, count: Number(r.n) })),
   };
+}
+
+/**
+ * 离开的人。
+ *
+ * ─────────────────────────────────────────
+ * 注销之后这些人从后台整个消失了
+ * ─────────────────────────────────────────
+ *
+ * `listUsersForAdmin` 的第一个条件就是 `isNull(users.deleted_at)` ——
+ * 注销掉的账号不在任何一个列表里、也不进状态分布。
+ *
+ * 而注销表单上明明白白写着「想说点什么吗？**只有管理员看得到**」——
+ * 收了理由却没有任何地方读得到，那句话就是假的。
+ * 一个社群最该知道的事之一恰恰是「为什么有人走」。
+ *
+ * ─────────────────────────────────────────
+ * 给的是理由，不是身份
+ * ─────────────────────────────────────────
+ *
+ * 注销把昵称、头像、wx_id 全清空了，就是为了让这个人不再被认出来。
+ * 在这里顺着 `prior_wx_id` 反查回昵称的话，等于把刚做掉的匿名化
+ * 又拆开 —— 而且是在一个每天都有人打开的页面上。
+ *
+ * 所以这一档只给**时间、是谁发起的、以及那句话**。
+ * 真需要知道具体是谁（合规、纠纷），去审计日志 ——
+ * 那里留着 `targetLabel`，而查审计这件事本身也会被审计。
+ * 顺手看得到的和特意去查的，不该是同一个门槛。
+ */
+export interface Departure {
+  id: string;
+  deletedAt: number;
+  /** 自助注销还是管理员操作 */
+  bySelf: boolean;
+  reason: string | null;
+}
+
+export function listDepartures(limit = 50): Departure[] {
+  return db
+    .select({
+      id: users.id,
+      deletedAt: users.deletedAt,
+      deletedBy: users.deletedBy,
+      reason: users.deleteReason,
+    })
+    .from(users)
+    .where(isNotNull(users.deletedAt))
+    .orderBy(desc(users.deletedAt))
+    .limit(limit)
+    .all()
+    .map((row) => ({
+      id: row.id,
+      deletedAt: row.deletedAt ?? 0,
+      // 自己删自己 = 自助注销；别人删的 = 后台操作
+      bySelf: row.deletedBy === row.id,
+      reason: row.reason?.trim() || null,
+    }));
+}
+
+/** 最近 N 天走了几个人 —— 后台首页的一行数字用 */
+export function departureCount(sinceMs: number): number {
+  return Number(
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(users)
+      .where(and(isNotNull(users.deletedAt), gte(users.deletedAt, sinceMs)))
+      .get()?.n ?? 0,
+  );
 }
