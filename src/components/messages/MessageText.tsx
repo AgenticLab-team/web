@@ -70,7 +70,7 @@ export function MessageText({ content, mentions, currentNames }: MessageTextProp
           title={
             mention.status === "ambiguous"
               ? "有多名同名成员，无法确定是谁"
-              : "无法确定是谁 —— 对方可能已改名或退群"
+              : "这个名字在这个群里对不上任何人 —— 微信的 @ 是自由文本，可能只是随口写的"
           }
         >
           {literal}

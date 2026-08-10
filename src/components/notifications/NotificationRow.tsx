@@ -62,10 +62,19 @@ export function NotificationRow({
   title,
   body,
   timeLabel,
+  targetGone = false,
 }: {
   id: string;
   type: string;
   href: string | null;
+  /**
+   * 它指向的东西已经没了（帖子被删、消息被清）。
+   *
+   * 线上 95 条通知里有 10 条是这样 —— 点一下是个 404。
+   * 一条点了给 404 的通知，第二次之后人就不再点任何通知了：
+   * **一个不可信的入口比没有入口更糟**。
+   */
+  targetGone?: boolean;
   readAt: number | null;
   title: string;
   body: string | null;
@@ -108,6 +117,16 @@ export function NotificationRow({
         {body && (
           <span className="t-caption mt-0.5 block truncate text-[var(--ink-tertiary)]">{body}</span>
         )}
+        {targetGone && (
+          /*
+           * 如实说，而不是删掉这条通知 ——
+           * 那件事确实发生过，抹掉等于篡改历史，
+           * 而且用户会记得自己见过这条、然后找不到了。
+           */
+          <span className="t-caption2 mt-0.5 block text-[var(--ink-quaternary)]">
+            这条内容已经被删掉了
+          </span>
+        )}
         <span className="tabular t-caption mt-0.5 block text-[var(--ink-quaternary)]">
           {timeLabel}
         </span>
@@ -131,7 +150,15 @@ export function NotificationRow({
    * 「系统公告」这类没有落点，而它们同样会一直亮着红点 ——
    * 一条永远消不掉的未读，最后会让人把整个通知页当成噪音。
    */
-  if (!href) {
+  /*
+   * 没有链接的、以及**目标已经没了**的，都渲染成按钮而不是链接。
+   *
+   * 「系统公告」这类没有落点，而它们同样会一直亮着红点 ——
+   * 一条永远消不掉的未读，最后会让人把整个通知页当成噪音。
+   *
+   * 目标没了的那些同理：还能点掉，但不再假装点进去有东西。
+   */
+  if (!href || targetGone) {
     return (
       <button type="button" onClick={mark} className={className} aria-label="标记为已读">
         {inner}

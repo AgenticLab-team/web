@@ -92,6 +92,7 @@ export default async function NotificationsPage({
               type={item.type}
               href={item.link}
               readAt={item.readAt}
+              targetGone={item.targetGone}
               title={item.title}
               body={item.body}
               /* 时间在服务端算好再传 —— 这条边界上只传数据 */

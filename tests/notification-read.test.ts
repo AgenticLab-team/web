@@ -54,7 +54,8 @@ describe("**每一条都要能单独点掉**", () => {
      * 最后会让人把整个通知页当成噪音。
      */
     const row = src("components/notifications/NotificationRow.tsx");
-    assert.match(row, /if \(!href\)/);
+    // 目标已被删掉的那些走同一条路 —— 都是「点得掉、但不假装点进去有东西」
+    assert.match(row, /if \(!href \|\| targetGone\)/);
     assert.match(row, /<button type="button" onClick=\{mark\}/);
   });
 

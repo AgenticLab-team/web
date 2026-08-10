@@ -3,7 +3,7 @@ import "server-only";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { notifications, posts, subscriptions, users } from "@/lib/db/schema";
+import { messages, notifications, posts, subscriptions, users } from "@/lib/db/schema";
 import {
   FILTER_LABELS,
   TYPE_FILTERS,
@@ -249,13 +249,98 @@ export function listNotifications(
   const types = filterTypes(filter);
   if (types) conditions.push(inArray(notifications.type, types as NotificationType[]));
 
-  return db
+  const rows = db
     .select()
     .from(notifications)
     .where(and(...conditions))
     .orderBy(desc(notifications.updatedAt))
     .limit(limit)
     .all();
+
+  return withTargetAlive(rows);
+}
+
+/**
+ * 标出那些**点进去什么也没有**的通知。
+ *
+ * ─────────────────────────────────────────
+ * 线上 95 条里有 10 条是死链
+ * ─────────────────────────────────────────
+ *
+ * 「有人回复了你的帖子」，而那篇帖子后来被删了 ——
+ * 通知还在列表里，点一下是个 404。
+ *
+ * **不删掉这条通知**：那件事确实发生过，抹掉它等于篡改历史，
+ * 而且用户会记得自己见过这条、然后找不到了。
+ *
+ * 也**不假装它还在**：一条点了给 404 的通知，
+ * 第二次之后人就不再点任何通知了 —— 一个不可信的入口
+ * 比没有入口更糟。
+ *
+ * 所以如实标出来：条目还在、不可点、写明原因。
+ *
+ * ─────────────────────────────────────────
+ * 只判「东西还在不在」，不判「你看不看得到」
+ * ─────────────────────────────────────────
+ *
+ * 可见性是那一页自己的事（帖子页有完整的收口）。
+ * 这里再判一遍就是第二套可见性逻辑，而两套迟早分叉。
+ */
+function withTargetAlive<T extends { link: string | null }>(rows: T[]) {
+  const postIds = new Set<string>();
+  const msgIds = new Set<string>();
+
+  for (const row of rows) {
+    const target = parseTarget(row.link);
+    if (target?.kind === "post") postIds.add(target.id);
+    if (target?.kind === "message") msgIds.add(target.id);
+  }
+
+  const alivePosts = postIds.size
+    ? new Set(
+        db
+          .select({ id: posts.id })
+          .from(posts)
+          .where(and(inArray(posts.id, [...postIds]), isNull(posts.deletedAt)))
+          .all()
+          .map((p) => p.id),
+      )
+    : new Set<string>();
+
+  const aliveMsgs = msgIds.size
+    ? new Set(
+        db
+          .select({ id: messages.id })
+          .from(messages)
+          .where(inArray(messages.id, [...msgIds]))
+          .all()
+          .map((m) => m.id),
+      )
+    : new Set<string>();
+
+  return rows.map((row) => {
+    const target = parseTarget(row.link);
+    if (!target) return { ...row, targetGone: false };
+    const alive = target.kind === "post" ? alivePosts.has(target.id) : aliveMsgs.has(target.id);
+    return { ...row, targetGone: !alive };
+  });
+}
+
+/**
+ * 从链接里认出它指向什么。
+ *
+ * 认不出来的（设置页、外部地址）一律当成「还在」——
+ * 判不准的时候不该把一个好链接说成坏的。
+ */
+function parseTarget(link: string | null): { kind: "post" | "message"; id: string } | null {
+  if (!link) return null;
+  const post = /^\/forum\/p\/([A-Za-z0-9]+)/.exec(link);
+  if (post) return { kind: "post", id: post[1] };
+  if (link.startsWith("/archive")) {
+    const m = /[?&]m=([^&#]+)/.exec(link);
+    if (m) return { kind: "message", id: decodeURIComponent(m[1]) };
+  }
+  return null;
 }
 
 /** 每个筛选页签下有多少条 —— 空页签要能提前看出来，而不是点进去才发现 */
