@@ -78,6 +78,23 @@ async function getJson<T>(path: string, token: string | null): Promise<T> {
   return (await res.json()) as T;
 }
 
+/**
+ * 问一个**公开**接口。给资源库展开 GitHub 链接用。
+ *
+ * 用站点自己的只读 token（`GITHUB_API_TOKEN`，一个 scope 都不勾），
+ * 不用任何用户的 token。两个理由：
+ *
+ *   · 用户 token 的配额是他的，我们替全站办事不该花他的额度
+ *   · 更要紧的是**权限边界**：拿某个人的 token 去问，问到的范围
+ *     就是他能看见的范围 —— 他能看见的私有仓库会开始有响应，
+ *     于是别人贴一条私有链接，我们会替他展开给所有人看
+ *
+ * 不配 token 也能跑，只是限流严得多（按服务器 IP 每小时 60 次）。
+ */
+export async function githubJson<T>(path: string): Promise<T> {
+  return getJson<T>(path, env.github.apiToken || null);
+}
+
 export interface GithubUser {
   id: string;
   login: string;

@@ -233,8 +233,15 @@ describe("界面要标出哪条是机器写的", () => {
   });
 
   it("**原标题不丢** —— 要能对得上这条到底指向哪", () => {
+    /*
+     * 现在显示出来的标题有两种来源（GitHub 给的、模型整理的），
+     * 所以这里比的是「上面到底显示了哪一个」而不是写死 aiTitle ——
+     * 写死的话，一条 GitHub 链接的原文会被判成「和 aiTitle 相同」
+     * 而不再显示，那正是这条测试要防的事。
+     */
     const page = readFileSync(new URL("../src/app/(app)/links/page.tsx", import.meta.url), "utf8");
-    assert.match(page, /item\.title !== item\.aiTitle/);
+    assert.match(page, /const shown = item\.factTitle \?\? item\.aiTitle/);
+    assert.match(page, /item\.title !== shown/);
   });
 
   it("整理出来的标题和简介也能被搜到", () => {

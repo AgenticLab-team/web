@@ -38,6 +38,17 @@ export interface LinkItem {
    */
   aiTitle: string | null;
   aiSummary: string | null;
+  /**
+   * 从**来源本身**问来的标题与简介（目前只有 GitHub）。
+   *
+   * 和 ai* 再分一层，理由和上面那条一样、方向相反：这一份不是猜的，
+   * 界面上要标成「来自 GitHub」而不是「AI 整理」——
+   * 把权威信息标成机器写的，那句提示本身就成了假话，
+   * 而下一次人看到真正机器写的那条时也就不会当回事了。
+   */
+  factTitle: string | null;
+  factSummary: string | null;
+  factSource: string | null;
   shareCount: number;
   firstSharedAt: number;
   lastSharedAt: number;
@@ -119,7 +130,10 @@ export function listLinks(user: CurrentUser | null, query: LinkQuery = {}): Link
   const rows = sqlite
     .prepare(
       `SELECT l.id, l.url, l.domain, l.title, l.note,
-              l.ai_title AS aiTitle, l.ai_summary AS aiSummary, l.share_count AS shareCount,
+              l.ai_title AS aiTitle, l.ai_summary AS aiSummary,
+              l.fact_title AS factTitle, l.fact_summary AS factSummary,
+              l.fact_source AS factSource,
+              l.share_count AS shareCount,
               l.vote_count AS voteCount,
               l.first_shared_at AS firstSharedAt, l.last_shared_at AS lastSharedAt,
               COUNT(m.id) AS visibleShares,
@@ -140,6 +154,9 @@ export function listLinks(user: CurrentUser | null, query: LinkQuery = {}): Link
     note: string | null;
     aiTitle: string | null;
     aiSummary: string | null;
+    factTitle: string | null;
+    factSummary: string | null;
+    factSource: string | null;
     voteCount: number;
     shareCount: number;
     firstSharedAt: number;
@@ -177,6 +194,9 @@ export function listLinks(user: CurrentUser | null, query: LinkQuery = {}): Link
     note: row.note,
     aiTitle: row.aiTitle,
     aiSummary: row.aiSummary,
+    factTitle: row.factTitle,
+    factSummary: row.factSummary,
+    factSource: row.factSource,
     voteCount: row.voteCount ?? 0,
     voted: votedIds.has(row.id),
     shareCount: row.shareCount,
@@ -226,7 +246,10 @@ export function listLinks(user: CurrentUser | null, query: LinkQuery = {}): Link
           (i.note ?? "").toLowerCase().includes(needle) ||
           // 整理出来的标题和简介也要能搜到 —— 不然「台风」搜不出中央气象台那条
           (i.aiTitle ?? "").toLowerCase().includes(needle) ||
-          (i.aiSummary ?? "").toLowerCase().includes(needle),
+          (i.aiSummary ?? "").toLowerCase().includes(needle) ||
+          // 来源给的那一份同样要能搜到 —— 搜 "next.js" 得搜得出那个仓库
+          (i.factTitle ?? "").toLowerCase().includes(needle) ||
+          (i.factSummary ?? "").toLowerCase().includes(needle),
       );
     }
   }

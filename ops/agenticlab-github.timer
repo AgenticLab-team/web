@@ -1,0 +1,23 @@
+[Unit]
+Description=每小时给新收录的 GitHub 链接补一次事实
+
+# 为什么是每小时而不是跟着同步跑（每 2 分钟）：
+#
+# 这一步**要打外网、有配额**。不配 GITHUB_API_TOKEN 时 GitHub
+# 按服务器 IP 每小时只给 60 次，而我们全站共用一个出口 IP。
+# 跟着同步跑的话，一次批量入库能把配额瞬间烧干，
+# 之后一小时内**任何**一条链接都问不到 —— 包括真正新的那些。
+#
+# 每小时一轮、每轮最多 30 条，正好卡在配额一半以内，
+# 留出余量给手动重跑（npm run links -- --github --force）。
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+AccuracySec=1min
+# 服务器重启过、错过了几轮的话，起来之后补一次 ——
+# 不补的话那几条会一直等到下一个整点，而它们已经在列表里显示成裸域名了
+Persistent=true
+
+[Install]
+WantedBy=timers.target

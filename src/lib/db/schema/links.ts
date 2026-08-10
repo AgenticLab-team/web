@@ -58,6 +58,32 @@ export const links = sqliteTable(
     aiCheckedAt: integer("ai_checked_at"),
     aiModel: text("ai_model"),
 
+    /*
+     * 从**来源自己**问来的标题与简介 —— 目前只有 GitHub。
+     *
+     * 为什么不复用上面那两列：那两列的注释写得很清楚，分开存是为了
+     * 「界面上要能说清楚哪一条是机器写的」。而这两列恰恰是反过来的
+     * 一种出身 —— GitHub 的 API 直接告诉我们这个仓库叫什么、
+     * 是干什么的，**它不是猜的**。塞进 ai_* 里等于让界面把一条
+     * 权威信息标成「机器写的」，那条提示本身就成了假话。
+     *
+     * 顺带：有了它，GitHub 链接根本不必去问模型 ——
+     * 省一次调用，而且答案比模型猜的准。
+     */
+    factTitle: text("fact_title"),
+    factSummary: text("fact_summary"),
+    /** 这份事实是从哪问来的。目前只有 `github` */
+    factSource: text("fact_source"),
+    /**
+     * 问过来源的时间。
+     *
+     * 和 aiCheckedAt 同一个用法：问过但对方说没有（仓库删了、
+     * 转私有了）时，这里有值而 factTitle 为空 —— 靠它区分
+     * 「还没问过」和「问过了，确实没有」，否则每次同步都会
+     * 把同一批问不到的链接再问一遍。
+     */
+    factCheckedAt: integer("fact_checked_at"),
+
     /** 管理员隐藏：广告、失效、不宜出现在列表里的 */
     hidden: integer("hidden", { mode: "boolean" }).notNull().default(false),
     hiddenReason: text("hidden_reason"),

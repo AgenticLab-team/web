@@ -56,6 +56,19 @@ export const env = {
     clientId: process.env.GITHUB_CLIENT_ID ?? "",
     clientSecret: process.env.GITHUB_CLIENT_SECRET ?? "",
     tokenKey: process.env.GITHUB_TOKEN_KEY ?? "",
+    /**
+     * 只读 token，用来问「这个仓库/issue 是什么」。**它是配额，不是权限。**
+     *
+     * 不配也能跑 —— 那几个接口本来就公开。区别在限流：
+     * 带 token 每小时 5000 次，不带是**按服务器 IP 60 次**，
+     * 而我们全站共用一个出口 IP，资源库里 213 条链接一轮就撞墙。
+     *
+     * 建 token 时**一个 scope 都不要勾**。勾了 `repo` 的话，
+     * 私有仓库会开始有响应 —— 于是别人贴一条私有仓库链接，
+     * 我们会替他把标题和简介展开给所有人看。
+     * 这一条是这个变量唯一真正危险的地方。
+     */
+    apiToken: process.env.GITHUB_API_TOKEN ?? "",
   },
 
   /**

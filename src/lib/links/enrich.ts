@@ -4,6 +4,7 @@ import { and, asc, desc, eq, gt, isNull, lt, or } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { linkMentions, links, messages, people } from "@/lib/db/schema";
+import { hasAuthoritativeFacts } from "@/lib/github/link-lookup";
 import { LlmError, LlmNotConfigured, chat } from "@/lib/llm/client";
 import { resolveDisplayName } from "@/lib/users/display-name";
 
@@ -117,7 +118,18 @@ export async function enrichLinks(options: { limit?: number; force?: boolean } =
     .orderBy(desc(links.shareCount))
     .limit(options.limit ?? 50)
     .all()
-    .filter((l) => options.force || needsEnrichment(l));
+    .filter((l) => options.force || needsEnrichment(l))
+    /*
+     * 已经从来源本身问到答案的（现在只有 GitHub），**一律不问模型**。
+     *
+     * 不是省钱那么简单：模型在这里只能猜，而 GitHub 直接告诉了我们
+     * 这个仓库叫什么、是干什么的。两份并存的话，界面上必然要挑一份显示 ——
+     * 挑猜的那份是错的，挑准的那份则意味着刚才那次调用白花了。
+     *
+     * `force` 也不例外。重跑整理是为了换模型重来一遍，
+     * 而这些条目的答案根本不来自模型。
+     */
+    .filter((l) => !hasAuthoritativeFacts(l));
 
   for (const link of candidates) {
     report.scanned++;
@@ -208,8 +220,16 @@ export function enrichProgress(): {
   untouched: number;
 } {
   const all = db.select().from(links).where(eq(links.hidden, false)).all();
-  const enriched = all.filter((l) => l.aiTitle && l.aiSummary).length;
-  const checked = all.filter((l) => l.aiCheckedAt && !l.aiTitle).length;
+  /*
+   * 「已整理」要把**来源给的那一份**也算上。
+   *
+   * 只数 ai_* 的话，GitHub 那些条目会永远待在「还没整理」里 ——
+   * 而它们的简介比模型写的还准。后台那个数字会变成一个
+   * 无论跑多少轮都补不完的缺口，然后有人会一直去点「再跑一批」，
+   * 每一次都在为一批不需要模型的链接付钱。
+   */
+  const enriched = all.filter((l) => (l.aiTitle && l.aiSummary) || hasAuthoritativeFacts(l)).length;
+  const checked = all.filter((l) => l.aiCheckedAt && !l.aiTitle && !hasAuthoritativeFacts(l)).length;
   return {
     total: all.length,
     enriched,

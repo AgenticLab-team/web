@@ -21,6 +21,7 @@
 | 健康与告警 | `agenticlab-health.timer`，每 5 分钟。一轮里六步：存储快照 · 自动裁剪 ·<br>置顶到期 · 赛季结算 · 称号结算 · 告警投递。**每一步都是隔开的** ——<br>一步失败不影响其它步，失败会写成 `cron` 组件的健康状态，<br>连续 30 分钟才报警（`journalctl -u agenticlab-health` 看详情）|
 | 备份 | `agenticlab-backup.timer`，每日 04:00。本机快照失败直接退出；<br>**推异地与恢复演练标为非致命** —— 「异地还没配」不该和<br>「本机备份没做成」共用一个红灯 |
 | 每周精选 | `agenticlab-digest.timer`，每周一 09:00 —— **只生成草稿，不发送** |
+| GitHub 事实 | `agenticlab-github.timer`，每小时。给资源库里新收录的 GitHub 链接<br>问出权威标题与简介（`ops/agenticlab-github.*`）。**只问没问过的**，<br>平时一条都不发。不跟着同步跑是因为它要打外网且有配额：<br>不配 `GITHUB_API_TOKEN` 时按**服务器 IP** 每小时只有 60 次，<br>一次批量入库就能烧干，之后一小时任何链接都问不到 |
 | 反代 | nginx，80 → 443 强制跳转 |
 | 边缘 | Cloudflare（代理开启）。源站 ufw 只放行 CF 网段的 80/443，<br>外加 22（SSH）和 7000（frp）。**3000 端口原本是 `*:3000`**，<br>也就是 Next 直接对公网可达、绕过 nginx 和 CF —— 现在被挡住了 |
 | 真实客户端 IP | `set_real_ip_from` CF 网段 + `real_ip_header CF-Connecting-IP`，<br>并且 `X-Forwarded-For` 传的是 `$remote_addr` 而不是<br>`$proxy_add_x_forwarded_for`。**后者会把客户端自己发来的<br>XFF 原样保留**，而应用取的是第一个 —— 那样按 IP 限流<br>当场失效、审计日志可以随便伪造。改网段重跑<br>`bash scripts/lockdown-cloudflare.sh` |

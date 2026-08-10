@@ -179,8 +179,13 @@ export default async function LinksPage({
                             * 有整理过的标题就用它 —— 原来那个多半只是域名。
                             * 但原文不丢:下面那行小字会把它带出来,
                             * 让人对得上「这条到底指向哪」。
+                            *
+                            * **来源给的排在模型前面**：GitHub 直接告诉我们
+                            * 这个仓库叫什么，那不是猜的。
                             */}
-                          <span className="min-w-0 break-all">{item.aiTitle ?? item.title}</span>
+                          <span className="min-w-0 break-all">
+                            {item.factTitle ?? item.aiTitle ?? item.title}
+                          </span>
                           <ExternalLink
                             className="h-3 w-3 shrink-0 translate-y-px text-[var(--ink-quaternary)]"
                             strokeWidth={2.2}
@@ -188,7 +193,25 @@ export default async function LinksPage({
                           />
                         </a>
 
-                        {item.aiSummary ? (
+                        {item.factSummary ? (
+                          <p className="t-caption mt-0.5 leading-relaxed text-[var(--ink-secondary)]">
+                            {item.factSummary}
+                            {/*
+                              * 这一份是**来源自己说的**，所以标的是出处，
+                              * 不是「AI 整理」。
+                              *
+                              * 两种都标成机器写的话，那句提示就废了：
+                              * 人看见它出现在一条明显准确的条目上，
+                              * 下次真正机器写的那条出现时也不会再当回事。
+                              */}
+                            <span
+                              className="ml-1 align-baseline text-[var(--ink-quaternary)]"
+                              title="来自 GitHub 接口，不是模型整理的"
+                            >
+                              · 来自 GitHub
+                            </span>
+                          </p>
+                        ) : item.aiSummary ? (
                           <p className="t-caption mt-0.5 leading-relaxed text-[var(--ink-secondary)]">
                             {item.aiSummary}
                             {/*
@@ -214,7 +237,11 @@ export default async function LinksPage({
                         )}
 
                         <p className="t-caption2 mt-1 text-[var(--ink-quaternary)]">
-                          {item.aiTitle && item.title !== item.aiTitle ? `${item.title} · ` : ""}
+                          {(() => {
+                            // 上面显示的是哪一个，这里就把原文带出来对照
+                            const shown = item.factTitle ?? item.aiTitle;
+                            return shown && item.title !== shown ? `${item.title} · ` : "";
+                          })()}
                           {item.domainLabel}
                           {item.sharers.length > 0 && ` · ${item.sharers.join("、")} 分享`}
                           {item.visibleShares > 1 && ` · 被分享 ${item.visibleShares} 次`}

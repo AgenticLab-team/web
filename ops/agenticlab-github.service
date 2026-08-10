@@ -1,0 +1,12 @@
+[Unit]
+Description=Agentic Lab — 给资源库里的 GitHub 链接问出权威标题与简介
+After=network.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/agenticlab
+ExecStart=/usr/local/bin/npm run links -- --github --limit 30
+# 只问「还没问过」的那些，所以平时一条都不会跑；
+# 有新链接进来的那一小时才会真的发请求
+TimeoutStartSec=600
