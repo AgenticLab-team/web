@@ -11,6 +11,7 @@ import {
   needsEnrichment,
   parseEnrichResponse,
 } from "@/lib/links/enrich-rules";
+import { stripComments as strip } from "./_source";
 
 /**
  * 用大模型给资源库补标题和简介。
@@ -293,5 +294,60 @@ describe("**没有语境就不用问**", () => {
 
   it("空白凑不出语境", () => {
     assert.equal(hasEnoughContext({ ...base, sharedIn: "    ", context: ["  ", " "] }), false);
+  });
+});
+
+/* ───────────────────────────────────────────────────────────────
+ * 「最有用」不能只靠点赞
+ *
+ * 线上 213 条链接，**被赞过的只有 2 条** —— 也就是说那一档
+ * 实际上是在按时间排。而这一页的价值恰恰是
+ * 「两百条里值得看的就那么十几条」。
+ *
+ * 「有几个人在群里贴过它」这个信号一直就在数据里，
+ * 不需要任何人动手。
+ * ─────────────────────────────────────────────────────────────── */
+
+describe("**按分享次数排**", () => {
+  const q = strip(readFileSync(new URL("../src/lib/links/queries.ts", import.meta.url), "utf8"));
+  const page = strip(
+    readFileSync(new URL("../src/app/(app)/links/page.tsx", import.meta.url), "utf8"),
+  );
+
+  it("多了一档 shares", () => {
+    assert.match(q, /export type LinkSort = "recent" \| "votes" \| "shares"/);
+  });
+
+  it("**用 visibleShares，不是 shareCount**", () => {
+    /*
+     * 后者是全站次数。拿它排序的话，顺序本身就泄露了别的群的热度：
+     * 一条你在自己群里从没见过的链接排在最前面，
+     * 这件事等于告诉你「别处有人在热议它」。
+     *
+     * 这一页别处早就只显示 visibleShares 了 ——
+     * 排序漏掉的话，前面所有的小心都白做。
+     */
+    const block = q.slice(q.indexOf('query.sort === "shares"'));
+    assert.match(block.slice(0, 300), /b\.visibleShares - a\.visibleShares/);
+    assert.equal(/b\.shareCount - a\.shareCount/.test(block.slice(0, 300)), false, "拿全站次数排了");
+  });
+
+  it("同分时按最近分享 —— 否则同分的顺序会随新消息乱跳", () => {
+    const block = q.slice(q.indexOf('query.sort === "shares"'));
+    assert.match(block.slice(0, 300), /b\.lastSharedAt - a\.lastSharedAt/);
+  });
+
+  it("**它是默认档** —— 这一页是资源库，不是时间线", () => {
+    assert.match(page, /: "shares";/);
+  });
+
+  it("最近分享还在，一键就能切回去", () => {
+    assert.match(page, /query\(\{ sort: "recent" \}\)/);
+  });
+
+  it("三档都指得出自己是哪一档 —— 不能有两个同时高亮", () => {
+    for (const key of ["shares", "recent", "votes"]) {
+      assert.match(page, new RegExp(`bySort === "${key}"`), `${key} 那一档没接上`);
+    }
   });
 });

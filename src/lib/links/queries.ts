@@ -56,7 +56,22 @@ export interface DomainFacet {
   count: number;
 }
 
-export type LinkSort = "recent" | "votes";
+/**
+ * 排序方式。
+ *
+ * ─────────────────────────────────────────
+ * 「最有用」不能只靠点赞
+ * ─────────────────────────────────────────
+ *
+ * 线上 213 条链接，**被赞过的只有 2 条**。也就是说
+ * 「最有用」这一档实际上是按时间排的 —— 而这一页的价值
+ * 恰恰是「两百条里值得看的就那么十几条」。
+ *
+ * 而「有几个人在群里分享过它」这个信号**一直就在数据里**，
+ * 不需要任何人动手：一条被三个人在两个群里贴过的链接，
+ * 比一条只被贴过一次的更可能值得看。
+ */
+export type LinkSort = "recent" | "votes" | "shares";
 
 export interface LinkQuery {
   /** 排序：默认按最近被分享；「最有用」按点赞数 */
@@ -225,6 +240,22 @@ export function listLinks(user: CurrentUser | null, query: LinkQuery = {}): Link
   if (query.sort === "votes") {
     items = [...items].sort(
       (a, b) => b.voteCount - a.voteCount || b.lastSharedAt - a.lastSharedAt,
+    );
+  }
+
+  /*
+   * 按分享次数排 —— **用 visibleShares，不是 shareCount**。
+   *
+   * 后者是全站次数。拿它排序的话，顺序本身就泄露了别的群的热度：
+   * 一条你在自己群里从没见过的链接排在最前面，
+   * 这件事等于告诉你「别处有人在热议它」。
+   *
+   * 这一页的其它地方（那个次数标）早就只显示 visibleShares 了，
+   * 排序漏掉的话，前面所有的小心都白做。
+   */
+  if (query.sort === "shares") {
+    items = [...items].sort(
+      (a, b) => b.visibleShares - a.visibleShares || b.lastSharedAt - a.lastSharedAt,
     );
   }
 

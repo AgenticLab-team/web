@@ -1,4 +1,4 @@
-import { ExternalLink, Link2, ThumbsUp } from "lucide-react";
+import { ExternalLink, Link2, ThumbsUp, Users } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/primitives";
 import { requireFeature } from "@/lib/flags/server";
 import { getCurrentUser } from "@/lib/auth/session";
-import { listLinks } from "@/lib/links/queries";
+import { listLinks, type LinkSort } from "@/lib/links/queries";
 
 export const metadata: Metadata = { title: "资源库" };
 export const dynamic = "force-dynamic";
@@ -50,12 +50,20 @@ export default async function LinksPage({
 
   const params = await searchParams;
   const savedOnly = params.saved === "1";
-  const byVotes = params.sort === "votes";
+  /*
+   * 默认按「多人分享」。
+   *
+   * 这一页是个**资源库**，不是时间线 —— 打开它的人要的是
+   * 「这两百条里哪些值得看」，而不是「最近谁贴了什么」。
+   * 后者一键就在旁边。
+   */
+  const bySort: LinkSort =
+    params.sort === "votes" ? "votes" : params.sort === "recent" ? "recent" : "shares";
   const result = listLinks(user, {
     domain: params.d,
     q: params.q,
     savedOnly,
-    sort: byVotes ? "votes" : "recent",
+    sort: bySort,
   });
 
   const query = (over: Record<string, string | undefined>) => {
@@ -99,13 +107,22 @@ export default async function LinksPage({
             *
             * 两组做的是同一件事（把列表收窄），中间一道竖线就够分开了。
             * 排序仍然排在前面：「最有用」是这个页面真正的价值 ——
-            * 两百条链接里值得看的就那么十几条，而只有点赞数能把它们浮上来。
+            * 两百条链接里值得看的就那么十几条。
+            *
+            * 而**只靠点赞浮不上来**：线上 213 条里被赞过的只有 2 条，
+            * 于是那一档实际上是在按时间排。「有几个人在群里贴过它」
+            * 这个信号一直就在数据里，不需要任何人动手 ——
+            * 所以它是默认档。
             */}
           <PillRow>
-            <Pill href={query({ sort: undefined })} active={!byVotes}>
+            <Pill href={query({ sort: undefined })} active={bySort === "shares"}>
+              <Users className="h-3 w-3" strokeWidth={2.2} aria-hidden />
+              多人分享
+            </Pill>
+            <Pill href={query({ sort: "recent" })} active={bySort === "recent"}>
               最近分享
             </Pill>
-            <Pill href={query({ sort: "votes" })} active={byVotes}>
+            <Pill href={query({ sort: "votes" })} active={bySort === "votes"}>
                 <ThumbsUp className="h-3 w-3" strokeWidth={2.2} aria-hidden />
                 最有用
             </Pill>
