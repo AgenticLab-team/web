@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ArchiveMessage } from "@/components/messages/ArchiveMessage";
+import { DayCurve } from "@/components/messages/DayCurve";
 import { ChatTabs } from "@/components/shell/ChatTabs";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Pagination } from "@/components/ui/Pagination";
@@ -36,6 +37,7 @@ import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { currentNamesFor } from "@/lib/queries/people";
 import { todayKey } from "@/lib/time";
 import { DayNav } from "@/components/ui/DayNav";
+import { dayCurve } from "@/lib/messages/day-curve";
 
 export const metadata: Metadata = { title: "按天回看" };
 export const dynamic = "force-dynamic";
@@ -119,6 +121,15 @@ export default async function ArchivePage({
   const { rows, dropped, total, slice } = day_;
 
   /*
+   * 曲线在 messagesOfDay **之后**算。
+   *
+   * 前面那句会 notFound —— 不是这个人能看的群就走不到这里。
+   * 放在它前面的话，一次越权请求仍然会先跑一遍聚合，
+   * 而且拿到的是那个群真实的一天形状。
+   */
+  const curve = dayCurve(convId, day);
+
+  /*
    * 提及与回复上下文一次取齐。提及里 resolved 的人用**当前**昵称渲染
    * （落库时存的字面昵称只是证据，昵称随时会变），
    * 所以还要按 wx_id 再查一遍当前显示名。
@@ -189,6 +200,18 @@ export default async function ArchivePage({
         action="/archive"
         hidden={{ group: convId, order: carry.order }}
       />
+
+      {/*
+        活跃度曲线紧跟在日期导航后面。
+
+        真实的一天不是均匀的：白天零星几句，晚上某个话题突然炸出
+        三百条。线上最热闹的那天 1,274 条、48 个人 —— 落到这一天
+        之后还有几十页，「上周三那个讨论」照样得一页页找。
+
+        放在列表**上面**：放下面的话，人已经开始翻了才看见它，
+        那时它救不了什么。
+      */}
+      <DayCurve curve={curve} group={convId} order={carry.order} />
 
       {/* 裁剪过的一天和冷清的一天长得一模一样 —— 必须说出来 */}
       {dropped > 0 && (
