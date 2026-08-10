@@ -38,6 +38,9 @@ describe("真库", async () => {
 
   after(() => rmSync(tmp, { recursive: true, force: true }));
 
+  /* 按 key 取，不按下标 —— 加一条修复就不该让别的测试红 */
+  const fixedOf = (key: string) => runRepairs(dbm.db).find((r) => r.key === key)!.fixed;
+
   const reset = () => {
     dbm.db.delete(schema.dailyStats).run();
     dbm.db.delete(schema.notifications).run();
@@ -62,24 +65,22 @@ describe("真库", async () => {
       reset();
       // 双重编码：先 stringify 数组，再把那个字符串当值 stringify 一次
       rawStats("2026-08-08", JSON.stringify(JSON.stringify(hours())));
-      const [, r] = runRepairs(dbm.db);
-      assert.equal(r.fixed, 1);
+      assert.equal(fixedOf("daily-stats-double-encoded-hours"), 1);
       assert.deepEqual(JSON.parse(histogramOf("2026-08-08")!), hours());
     });
 
     it("**正常的行不动**", () => {
       reset();
       rawStats("2026-08-09", JSON.stringify(hours()));
-      const [, r] = runRepairs(dbm.db);
-      assert.equal(r.fixed, 0);
+      assert.equal(fixedOf("daily-stats-double-encoded-hours"), 0);
       assert.deepEqual(JSON.parse(histogramOf("2026-08-09")!), hours());
     });
 
     it("**幂等** —— 跑第二遍不再匹配到任何行", () => {
       reset();
       rawStats("2026-08-08", JSON.stringify(JSON.stringify(hours())));
-      assert.equal(runRepairs(dbm.db)[1].fixed, 1);
-      assert.equal(runRepairs(dbm.db)[1].fixed, 0, "第二遍还在改，说明不幂等");
+      assert.equal(fixedOf("daily-stats-double-encoded-hours"), 1);
+      assert.equal(fixedOf("daily-stats-double-encoded-hours"), 0, "第二遍还在改，说明不幂等");
     });
 
     it("**形状不对就不动** —— 猜错比坏数据更糟", () => {
@@ -90,20 +91,20 @@ describe("真库", async () => {
       reset();
       rawStats("2026-08-10", JSON.stringify(JSON.stringify([1, 2, 3]))); // 只有 3 个
       const before = histogramOf("2026-08-10");
-      assert.equal(runRepairs(dbm.db)[1].fixed, 0);
+      assert.equal(fixedOf("daily-stats-double-encoded-hours"), 0);
       assert.equal(histogramOf("2026-08-10"), before);
     });
 
     it("里面不是数字也不动", () => {
       reset();
       rawStats("2026-08-11", JSON.stringify(JSON.stringify(Array(24).fill("x"))));
-      assert.equal(runRepairs(dbm.db)[1].fixed, 0);
+      assert.equal(fixedOf("daily-stats-double-encoded-hours"), 0);
     });
 
     it("压根不是 JSON 也不炸", () => {
       reset();
       rawStats("2026-08-12", '"这不是 JSON');
-      assert.equal(runRepairs(dbm.db)[1].fixed, 0);
+      assert.equal(fixedOf("daily-stats-double-encoded-hours"), 0);
     });
   });
 
@@ -117,7 +118,7 @@ describe("真库", async () => {
     it("解锁称号改成 title", () => {
       reset();
       notif("system", "解锁称号「常客」");
-      assert.equal(runRepairs(dbm.db)[0].fixed, 1);
+      assert.equal(fixedOf("notification-title-type"), 1);
       const [row] = dbm.db.select().from(schema.notifications).all();
       assert.equal(row.type, "title");
     });
@@ -125,15 +126,15 @@ describe("真库", async () => {
     it("**别的 system 通知不动** —— 「你的发言被整理成了帖子」要留在关不掉那一档", () => {
       reset();
       notif("system", "你在群里的发言被整理成了帖子");
-      assert.equal(runRepairs(dbm.db)[0].fixed, 0);
+      assert.equal(fixedOf("notification-title-type"), 0);
       assert.equal(dbm.db.select().from(schema.notifications).all()[0].type, "system");
     });
 
     it("幂等", () => {
       reset();
       notif("system", "解锁称号「常客」");
-      assert.equal(runRepairs(dbm.db)[0].fixed, 1);
-      assert.equal(runRepairs(dbm.db)[0].fixed, 0);
+      assert.equal(fixedOf("notification-title-type"), 1);
+      assert.equal(fixedOf("notification-title-type"), 0);
     });
   });
 
@@ -147,7 +148,10 @@ describe("真库", async () => {
 
     it("**没有需要修的时候安安静静** —— fixed 全是 0", () => {
       reset();
-      assert.deepEqual(runRepairs(dbm.db).map((r) => r.fixed), [0, 0]);
+      assert.ok(
+        runRepairs(dbm.db).every((r) => r.fixed === 0),
+        "没有需要修的时候还在改东西",
+      );
     });
   });
 });
@@ -159,12 +163,34 @@ describe("接线", () => {
     assert.match(seed, /filter\(\(r\) => r\.fixed > 0\)/);
   });
 
-  it("**读的那一侧仍然有兜底** —— 修复是补数据，不是替代防御", () => {
+  it("**落库那一侧不再读回旧直方图** —— 双重编码读崩那一类从根上没有了", () => {
     /*
-     * 兜底去掉的话，任何一行新的坏数据都会让同步整批失败；
-     * 而只有兜底没有修复的话，坏数据会永远显示成零。两个都要。
+     * 原来的写法是「读回来 + 累加 + 写回去」，所以必须防着
+     * 读到一个不是数组的东西（那个兜底就是这么来的）。
+     *
+     * 现在是从消息表重算再覆盖 —— **根本不读那一列**，
+     * 于是不管库里存的是什么形状，下一次同步都会把它写正。
+     * 这比加一层兜底强：兜底只是不炸，重算是真的修好。
      */
     const sync = readFileSync(new URL("../src/lib/sync/messages.ts", import.meta.url), "utf8");
-    assert.match(sync, /Array\.isArray\(raw\)/);
+    const flush = sync.slice(sync.indexOf("export function flushDailyStats"));
+    assert.equal(flush.includes("hourHistogram as number[]"), false, "又去读回旧直方图了");
+    assert.equal(flush.includes("previousHours"), false);
+    assert.match(flush, /strftime\('%H'/);
+  });
+
+  it("**同步那一侧记的是「碰过哪些天」，不是「新写了几条」**", () => {
+    /*
+     * 这是那 26 条漏计数的根源：原来只有新写入的消息才进桶，
+     * 于是一条「上一轮写进去、没来得及统计」的消息，
+     * 这一轮会被主键冲突跳过，缺口永远补不上。
+     *
+     * 现在记 key 的那一句在 `changes === 0` 判断**之前**。
+     */
+    const sync = readFileSync(new URL("../src/lib/sync/messages.ts", import.meta.url), "utf8");
+    const touchAt = sync.indexOf("touched.add(");
+    const skipAt = sync.indexOf("if (result.changes === 0) continue;");
+    assert.ok(touchAt > 0 && skipAt > 0);
+    assert.ok(touchAt < skipAt, "记「碰过」跑到跳过判断后面去了 —— 缺口补不上");
   });
 });

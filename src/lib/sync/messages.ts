@@ -19,7 +19,7 @@ import { isQualityMessage } from "@/lib/quality";
 import { scanMessages } from "@/lib/radar/engine";
 import { isModuleEnabled } from "@/lib/modules/state";
 import { getSettingInt } from "@/lib/settings/store";
-import { dateKey, hourOf } from "@/lib/time";
+import { dateKey } from "@/lib/time";
 
 import { runSyncJob, type SyncOptions, type SyncResult } from "./job";
 
@@ -48,15 +48,6 @@ export const BUCKET_KEY_SEP = "\u0000";
 
 export function bucketKey(wxId: string, date: string): string {
   return `${wxId}${BUCKET_KEY_SEP}${date}`;
-}
-
-export interface DayBucket {
-  messages: number;
-  qualityMessages: number;
-  charsTotal: number;
-  firstMsgAt: number;
-  lastMsgAt: number;
-  hours: number[];
 }
 
 /**
@@ -93,7 +84,17 @@ export async function syncGroupMessages(
     let fetched = 0;
     let written = 0;
     let maxTs = cursor?.lastTs ?? 0;
-    const buckets = new Map<string, DayBucket>();
+    /*
+     * 这一轮碰过哪些「人 × 天」。
+     *
+     * **已经存在的消息也要记进来** —— 那正是漏计数的来源：
+     * 消息写进去之后、统计落库之前那一轮失败了，重跑时它因为
+     * 主键冲突被跳过，于是永远不会被计入。
+     *
+     * 记的是键不是计数：落库那一步会拿这些键从消息表重算，
+     * 所以「碰过」就够了，多记几天只是多算一次，不会算错。
+     */
+    const touched = new Set<string>();
 
     /*
      * 名册整轮同步取一次。@昵称 必须在**落库这一刻**解析成 wx_id ——
@@ -149,6 +150,18 @@ export async function syncGroupMessages(
             .onConflictDoNothing()
             .run();
 
+          /*
+           * 不管是不是新写的，都记下它那一天要重算。
+           *
+           * 放在 `changes === 0` 判断**之前** —— 放后面的话，
+           * 一条上一轮写进去、没来得及统计的消息，
+           * 这一轮会被跳过，那个缺口就永远补不上了。
+           */
+          if (!msg.is_send) {
+            touched.add(bucketKey(msg.sender_wx_id, dateKey(msg.create_time)));
+          }
+          if (msg.create_time > maxTs) maxTs = msg.create_time;
+
           if (result.changes === 0) continue;
           written++;
 
@@ -197,29 +210,6 @@ export async function syncGroupMessages(
             );
           }
 
-          if (msg.create_time > maxTs) maxTs = msg.create_time;
-
-          // 只统计真人发言，机器人自己的消息不进榜也不计分
-          if (msg.is_send) continue;
-          const key = bucketKey(msg.sender_wx_id, dateKey(msg.create_time));
-          let bucket = buckets.get(key);
-          if (!bucket) {
-            bucket = {
-              messages: 0,
-              qualityMessages: 0,
-              charsTotal: 0,
-              firstMsgAt: msg.create_time,
-              lastMsgAt: msg.create_time,
-              hours: new Array(24).fill(0),
-            };
-            buckets.set(key, bucket);
-          }
-          bucket.messages++;
-          if (quality) bucket.qualityMessages++;
-          bucket.charsTotal += msg.length;
-          bucket.firstMsgAt = Math.min(bucket.firstMsgAt, msg.create_time);
-          bucket.lastMsgAt = Math.max(bucket.lastMsgAt, msg.create_time);
-          bucket.hours[hourOf(msg.create_time)]++;
         }
       });
 
@@ -255,7 +245,7 @@ export async function syncGroupMessages(
       }
     }
 
-    flushDailyStats(convId, buckets);
+    flushDailyStats(convId, touched);
 
     db.insert(syncCursors)
       .values({ kind: "messages", scope: convId, lastTs: maxTs })
@@ -275,53 +265,102 @@ export async function syncGroupMessages(
  * 用累加而非覆盖：一天的消息会分多次同步进来，直接覆盖会把先前批次的计数抹掉。
  * 重叠窗口重拉的消息因为主键冲突已被跳过，不会重复计数。
  */
-export function flushDailyStats(convId: string, buckets: Map<string, DayBucket>) {
-  if (buckets.size === 0) return;
+/**
+ * 把这一轮碰过的那些「人 × 天」重新算一遍。
+ *
+ * ─────────────────────────────────────────
+ * 从累加改成重算
+ * ─────────────────────────────────────────
+ *
+ * 原来是「这一轮新写了 N 条 → 在原数字上 +N」。累加有一个
+ * **注定会发生**的漏洞：消息写进去之后、统计落库之前那一轮失败了，
+ * 重跑时消息因为主键冲突被跳过（`changes === 0` → `continue`），
+ * 于是那几条**永远不会被计入**。
+ *
+ * 这不是假想：线上对照下来，`daily_stats` 比 `messages` 少 26 条，
+ * 14 个人的数字对不上 —— 而榜单是按这张表排的。
+ *
+ * 而这些数字**完全可以从 messages 推导**（存储裁剪只清正文、不删行）。
+ * 所以改成：记下这一轮碰过哪些天，然后拿那几天重算。
+ *
+ * 重算是**幂等**的 —— 同一轮跑两遍、失败之后重跑，结果都一样。
+ * 累加做不到这一点，而做不到的代价是一个没人看得出来的慢性偏差。
+ */
+export function flushDailyStats(convId: string, touched: Set<string>) {
+  if (touched.size === 0) return;
 
   db.transaction((tx) => {
-    for (const [key, bucket] of buckets) {
+    for (const key of touched) {
       const [wxId, date] = key.split(BUCKET_KEY_SEP);
 
-      const existing = tx
-        .select()
-        .from(dailyStats)
-        .where(
-          and(
-            eq(dailyStats.wxId, wxId),
-            eq(dailyStats.convId, convId),
-            eq(dailyStats.date, date),
-          ),
-        )
-        .get();
+      /*
+       * 直接从消息表算。
+       *
+       * `is_send = 0` —— 机器人自己的消息不进榜也不计分，
+       * 这条口径必须和采集那一侧一致，否则重算会把它们算进来。
+       */
+      const row = tx
+        .all<{
+          messages: number;
+          quality: number;
+          chars: number;
+          firstAt: number;
+          lastAt: number;
+        }>(
+          sql`SELECT count(*) AS messages,
+                     sum(is_quality) AS quality,
+                     sum(length) AS chars,
+                     min(ts) AS firstAt,
+                     max(ts) AS lastAt
+              FROM messages
+              WHERE conv_id = ${convId} AND sender_wx_id = ${wxId}
+                AND is_send = 0
+                AND date(ts / 1000, 'unixepoch', '+8 hours') = ${date}`,
+        )[0];
 
-      // 列是 json 模式，Drizzle 自己负责序列化。早期版本在冲突分支里
-      // 又手动 JSON.stringify 了一次，双重编码后读回来是字符串不是数组，
-      // 于是增量同步一到已存在的行就炸。这里统一按数组读写。
-      const raw = existing?.hourHistogram;
-      const previousHours = Array.isArray(raw) ? (raw as number[]) : new Array(24).fill(0);
-      const mergedHours = previousHours.map((v, i) => v + bucket.hours[i]);
+      if (!row || !row.messages) continue;
+
+      /*
+       * 小时分布同样重算。
+       *
+       * 东八区：日期边界和 `dateKey` 一直是按东八区切的，
+       * 这里少加 8 小时的话，凌晨那几条会落到前一天，
+       * 而那种错要等到有人盯着热力图才看得出来。
+       */
+      const hourRows = tx.all<{ h: number; n: number }>(
+        sql`SELECT CAST(strftime('%H', ts / 1000, 'unixepoch', '+8 hours') AS INTEGER) AS h,
+                   count(*) AS n
+            FROM messages
+            WHERE conv_id = ${convId} AND sender_wx_id = ${wxId}
+              AND is_send = 0
+              AND date(ts / 1000, 'unixepoch', '+8 hours') = ${date}
+            GROUP BY h`,
+      );
+      const hours = new Array(24).fill(0);
+      for (const h of hourRows) hours[h.h] = Number(h.n);
 
       tx.insert(dailyStats)
         .values({
           wxId,
           convId,
           date,
-          messages: bucket.messages,
-          qualityMessages: bucket.qualityMessages,
-          charsTotal: bucket.charsTotal,
-          firstMsgAt: bucket.firstMsgAt,
-          lastMsgAt: bucket.lastMsgAt,
-          hourHistogram: mergedHours,
+          messages: Number(row.messages),
+          qualityMessages: Number(row.quality ?? 0),
+          charsTotal: Number(row.chars ?? 0),
+          firstMsgAt: Number(row.firstAt),
+          lastMsgAt: Number(row.lastAt),
+          hourHistogram: hours,
         })
         .onConflictDoUpdate({
           target: [dailyStats.wxId, dailyStats.convId, dailyStats.date],
+          // 重算 = 覆盖，不是累加
           set: {
-            messages: sql`${dailyStats.messages} + ${bucket.messages}`,
-            qualityMessages: sql`${dailyStats.qualityMessages} + ${bucket.qualityMessages}`,
-            charsTotal: sql`${dailyStats.charsTotal} + ${bucket.charsTotal}`,
-            firstMsgAt: sql`MIN(${dailyStats.firstMsgAt}, ${bucket.firstMsgAt})`,
-            lastMsgAt: sql`MAX(${dailyStats.lastMsgAt}, ${bucket.lastMsgAt})`,
-            hourHistogram: mergedHours,
+            messages: Number(row.messages),
+            qualityMessages: Number(row.quality ?? 0),
+            charsTotal: Number(row.chars ?? 0),
+            firstMsgAt: Number(row.firstAt),
+            lastMsgAt: Number(row.lastAt),
+            hourHistogram: hours,
             updatedAt: Date.now(),
           },
         })

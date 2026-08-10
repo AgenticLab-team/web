@@ -106,6 +106,80 @@ const REPAIRS: readonly Repair[] = [
       return fixed;
     },
   },
+  {
+    key: "daily-stats-drift",
+    why:
+      "统计原来是累加的：消息写进去之后、统计落库之前那一轮失败了，" +
+      "重跑时消息因为主键冲突被跳过，那几条**永远不会被计入**。" +
+      "线上对照下来 `daily_stats` 比 `messages` 少 26 条、14 个人对不上 —— " +
+      "而榜单是按这张表排的。落库那一侧已经改成从消息表重算，" +
+      "这一条把**历史上漏掉的**补回来",
+    run: (tx) => {
+      /*
+       * 只重算**对不上的**那几行。
+       *
+       * 全表重算也能得到正确结果，但那样每次启动都要扫一遍 45000 条，
+       * 而且日志里永远看不出「这次到底有没有漂移」——
+       * 一个每次都说「修了 3831 行」的修复，和没有修复一样没信息。
+       */
+      const drifted = tx.all<{ wxId: string; convId: string; date: string }>(
+        sql`SELECT s.wx_id AS wxId, s.conv_id AS convId, s.date AS date
+            FROM daily_stats s
+            LEFT JOIN (
+              SELECT sender_wx_id AS wx_id, conv_id,
+                     date(ts / 1000, 'unixepoch', '+8 hours') AS date,
+                     count(*) AS n, sum(is_quality) AS q, sum(length) AS c
+              FROM messages WHERE is_send = 0
+              GROUP BY wx_id, conv_id, date
+            ) m
+              ON m.wx_id = s.wx_id AND m.conv_id = s.conv_id AND m.date = s.date
+            WHERE s.messages != coalesce(m.n, 0)
+               OR s.quality_messages != coalesce(m.q, 0)
+               OR s.chars_total != coalesce(m.c, 0)`,
+      );
+
+      let fixed = 0;
+      for (const row of drifted) {
+        const agg = tx.all<{ n: number; q: number; c: number; first: number; last: number }>(
+          sql`SELECT count(*) AS n, sum(is_quality) AS q, sum(length) AS c,
+                     min(ts) AS first, max(ts) AS last
+              FROM messages
+              WHERE conv_id = ${row.convId} AND sender_wx_id = ${row.wxId}
+                AND is_send = 0
+                AND date(ts / 1000, 'unixepoch', '+8 hours') = ${row.date}`,
+        )[0];
+
+        // 一条消息都没有的那几行是别的来源留下的，不动它
+        if (!agg || !agg.n) continue;
+
+        const hourRows = tx.all<{ h: number; n: number }>(
+          sql`SELECT CAST(strftime('%H', ts / 1000, 'unixepoch', '+8 hours') AS INTEGER) AS h,
+                     count(*) AS n
+              FROM messages
+              WHERE conv_id = ${row.convId} AND sender_wx_id = ${row.wxId}
+                AND is_send = 0
+                AND date(ts / 1000, 'unixepoch', '+8 hours') = ${row.date}
+              GROUP BY h`,
+        );
+        const hours = new Array(24).fill(0);
+        for (const h of hourRows) hours[h.h] = Number(h.n);
+
+        tx.run(
+          sql`UPDATE daily_stats
+              SET messages = ${Number(agg.n)},
+                  quality_messages = ${Number(agg.q ?? 0)},
+                  chars_total = ${Number(agg.c ?? 0)},
+                  first_msg_at = ${Number(agg.first)},
+                  last_msg_at = ${Number(agg.last)},
+                  hour_histogram = ${JSON.stringify(hours)},
+                  updated_at = ${Date.now()}
+              WHERE wx_id = ${row.wxId} AND conv_id = ${row.convId} AND date = ${row.date}`,
+        );
+        fixed++;
+      }
+      return fixed;
+    },
+  },
 ];
 
 /** 每条修复的说明 —— 测试要求每条都写得出为什么 */
