@@ -133,26 +133,6 @@ export const users = sqliteTable(
   ],
 );
 
-/** 外部身份。现在只有 wechat，预留 github/google 等，将来接入不用动 users 表 */
-export const userIdentities = sqliteTable(
-  "user_identities",
-  {
-    id: ulidPk(),
-    userId: text("user_id").notNull(),
-    provider: text("provider").notNull(),
-    externalId: text("external_id").notNull(),
-    displayName: text("display_name"),
-    avatarUrl: text("avatar_url"),
-    raw: text("raw", { mode: "json" }),
-    linkedAt: now("linked_at"),
-    unlinkedAt: integer("unlinked_at"),
-  },
-  (t) => [
-    uniqueIndex("user_identities_provider_external_idx").on(t.provider, t.externalId),
-    index("user_identities_user_idx").on(t.userId),
-  ],
-);
-
 /** 登录凭证。绑定成功后强制引导设置至少一种，之后不再依赖微信 */
 export const credentials = sqliteTable(
   "credentials",

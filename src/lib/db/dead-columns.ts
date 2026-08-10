@@ -73,27 +73,6 @@ export const DEAD_COLUMNS: readonly DeadColumn[] = [
     why: "这个开关守的是作息（几点睡几点起），而作息要逐小时的直方图才暴露得出来。成员目录只给「本周 / 本月」这一档粗粒度，没有可藏的东西 —— 理由写在 lib/members/queries.ts 里",
   },
 
-  /* ── 身份 ────────────────────────────────────────────────── */
-  {
-    column: "user_identities.provider",
-    disposition: "superseded",
-    why: "整张 user_identities 表没有任何地方用。GitHub 绑定走的是 github_connections（有 token、有作用域、有校验），多账号体系没有做也暂时不需要",
-  },
-  {
-    column: "user_identities.external_id",
-    disposition: "superseded",
-    why: "同 user_identities.provider",
-  },
-  {
-    column: "user_identities.linked_at",
-    disposition: "superseded",
-    why: "同 user_identities.provider",
-  },
-  {
-    column: "user_identities.unlinked_at",
-    disposition: "superseded",
-    why: "同 user_identities.provider",
-  },
   {
     column: "users.email_verified_at",
     disposition: "planned",

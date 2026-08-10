@@ -319,8 +319,29 @@ describe("**索引里用到的列不算死列**", () => {
     assert.equal(isRead(t, "detectedAt"), true);
   });
 
-  it("**但一张死表的索引救不活它** —— user_identities 整张没人用", () => {
-    const t = ALL.find((x) => x.sqlName === "user_identities")!;
-    assert.equal(isRead(t, "provider"), false, "死表被它自己的索引洗白了");
+  it("**但一张死表的索引救不活它**", () => {
+    /*
+     * 这一条原来拿 `user_identities` 当例子 —— 那张表整张没人用
+     * （GitHub 绑定走 github_connections），而它自己身上有索引。
+     * 认索引就等于让一张死表把它所有的列都洗白。
+     *
+     * 那张表现在已经删掉了，所以改成造一张**根本不存在**的表来测规则
+     * 本身。列名故意用上一条那个 `detectedAt`：它在真 schema 里只出现在
+     * 索引定义里，别处一次都没有 —— 于是这两条构成一对干净的对照：
+     *
+     *   同一个列名，**活表** → 算在用（上一条）
+     *   同一个列名，**死表** → 判死（这一条）
+     *
+     * 差别只有「这张表有没有人用」，正是要守的那条规则。
+     *
+     * 拿真表当例子有个坏处：那张表哪天被用起来，这条测试就红了，
+     * 而红的原因和它要守的规则毫无关系。
+     */
+    const ghost: (typeof ALL)[number] = {
+      varName: "tableThatDoesNotExistAnywhere",
+      sqlName: "ghost_table",
+      cols: [{ ts: "detectedAt", sql: "detected_at" }],
+    };
+    assert.equal(isRead(ghost, "detectedAt"), false, "死表被索引洗白了");
   });
 });
