@@ -174,6 +174,95 @@ export function parseGithubUrl(raw: string): GithubRef | null {
   return null;
 }
 
+/** 这条 ref 在缓存里的唯一键 */
+export function refKey(ref: GithubRef): string {
+  switch (ref.kind) {
+    case "repo":
+      return `repo:${ref.owner}/${ref.repo}`;
+    case "issue":
+    case "pr":
+      /*
+       * **issue 和 PR 共用一个键。**
+       *
+       * 在 GitHub 那边它们本来就是同一个编号空间：同一个号既能用
+       * `/issues/` 也能用 `/pull/` 打开。分两个键的结果是同一件东西
+       * 抓两遍、缓存两份，而且两份可能显示得不一样 ——
+       * 同一篇帖子里出现两种写法时，读者会看到两张自相矛盾的卡片。
+       */
+      return `issue:${ref.owner}/${ref.repo}#${ref.number}`;
+    case "commit":
+      return `commit:${ref.owner}/${ref.repo}@${ref.sha}`;
+    case "code": {
+      const span = ref.lines ? `#L${ref.lines.from}-L${ref.lines.to}` : "";
+      return `code:${ref.owner}/${ref.repo}@${ref.sha}/${ref.path}${span}`;
+    }
+  }
+}
+
+/** 规范化后的地址 —— 卡片点过去用它，**不用接口回的那个** */
+export function canonicalUrl(ref: GithubRef): string {
+  const base = `https://github.com/${ref.owner}/${ref.repo}`;
+  switch (ref.kind) {
+    case "repo":
+      return base;
+    case "issue":
+      return `${base}/issues/${ref.number}`;
+    case "pr":
+      return `${base}/pull/${ref.number}`;
+    case "commit":
+      return `${base}/commit/${ref.sha}`;
+    case "code": {
+      const span = ref.lines ? `#L${ref.lines.from}-L${ref.lines.to}` : "";
+      return `${base}/blob/${ref.sha}/${ref.path}${span}`;
+    }
+  }
+}
+
+/**
+ * 从**已经渲染好并消过毒的**正文 HTML 里，把 GitHub 链接捞出来。
+ *
+ * ─────────────────────────────────────────
+ * 为什么从 HTML 捞而不是从 markdown 源文捞
+ * ─────────────────────────────────────────
+ *
+ * 因为存下来的是 HTML（`forum_posts.content_html`），源文另存一份，
+ * 而**真正显示给读者的是 HTML**。从源文捞的话，
+ * 任何一处「源文里有、渲染后没了」的差异都会变成
+ * 一张指向读者根本看不见的东西的卡片 —— 比如代码块里的那条链接。
+ *
+ * HTML 是我们自己消过毒的，`href` 一定是双引号包着的属性值，
+ * 所以这个正则不需要一个完整的 HTML 解析器。
+ *
+ * ─────────────────────────────────────────
+ * 上限不是性能考虑，是版面考虑
+ * ─────────────────────────────────────────
+ *
+ * 一篇贴了三十条链接的帖子，底下跟三十张卡片就不是帖子了。
+ * 超过上限就一张都不显示更糟（读者会以为漏了），所以取前几条 ——
+ * 它们通常是作者最先想说的那几个。
+ */
+export const MAX_MENTIONS = 4;
+
+export function refsInHtml(html: string, limit = MAX_MENTIONS): GithubRef[] {
+  const seen = new Set<string>();
+  const out: GithubRef[] = [];
+  for (const m of html.matchAll(/href="([^"]+)"/g)) {
+    /*
+     * 消毒时 `&` 会被写成 `&amp;` —— 不还原的话带查询串的地址
+     * 解析出来是错的。只还原这一个：别的实体不会出现在 href 里，
+     * 而在这里做一次完整的实体解码等于把一个 HTML 解析器塞进来。
+     */
+    const ref = parseGithubUrl(m[1].replace(/&amp;/g, "&"));
+    if (!ref) continue;
+    const key = refKey(ref);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(ref);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 /*
  * `owner/repo#123` 那种简写**故意还没写**。
  *

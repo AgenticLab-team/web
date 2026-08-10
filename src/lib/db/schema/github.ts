@@ -159,3 +159,46 @@ export const githubSharePrompts = sqliteTable(
     index("github_prompts_user_status_idx").on(t.userId, t.status),
   ],
 );
+
+/**
+ * 帖子正文里提到的 GitHub 东西 —— 一份**全站共用**的事实缓存。
+ *
+ * ═════════════════════════════════════════
+ * 为什么不能把卡片直接烤进正文 HTML
+ * ═════════════════════════════════════════
+ *
+ * 帖子的 HTML 是**发表那一刻渲染好存下来的**（`forum_posts.content_html`）。
+ * 把「★ 1.2k」写进去的话，那个数字就永远停在发帖那天，
+ * 而且看不出它是旧的 —— 一个停住的数字比没有数字更坏。
+ *
+ * 所以正文里存的始终只是一条普通链接，卡片在**读的时候**才从这张表拼出来。
+ *
+ * ═════════════════════════════════════════
+ * 按 ref 存，不按帖子存
+ * ═════════════════════════════════════════
+ *
+ * 同一个仓库会被十个人在十篇帖子里贴到。按帖子存等于同一份事实抄十遍，
+ * 刷新时要么漏掉几份、要么问十遍 —— 而 GitHub 的配额是按小时算的。
+ *
+ * 主键是 `lib/github/link-refs.ts` 的 refKey：issue 和 PR 共用一个键，
+ * 因为在 GitHub 那边它们本来就是同一个编号空间。
+ */
+export const githubFacts = sqliteTable("github_facts", {
+  /** refKey：`repo:owner/name` / `issue:owner/name#12` */
+  key: text("key").primaryKey(),
+  kind: text("kind", { enum: ["repo", "issue", "pr"] }).notNull(),
+  /** 点过去的地址。**以我们解析出来的为准**，不用接口回的 —— 仓库改名后两者会不一致 */
+  url: text("url").notNull(),
+  title: text("title").notNull(),
+  summary: text("summary"),
+  /**
+   * 问到的时间。
+   *
+   * 和资源库那边同一个用法：问过但对方说没有（删了 / 转私有）时，
+   * 这里有值而 title 为空串 —— 靠它区分「还没问过」和「问过了，确实没有」。
+   * 没有这个区分的话，一个删掉的仓库会被每一次渲染重新问一遍。
+   */
+  checkedAt: integer("checked_at").notNull(),
+  /** 对方说没有。为真时不渲染卡片，正文里那条链接原样留着 */
+  gone: integer("gone", { mode: "boolean" }).notNull().default(false),
+});

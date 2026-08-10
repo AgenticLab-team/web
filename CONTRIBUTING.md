@@ -26,6 +26,21 @@ npm test                  # 全部测试
 三条都得干净。`npm test` 用 tsx 的 test runner 跑，**它不做类型检查** ——
 所以 `tsc` 那一条不能省。
 
+`npm test` 里面是**两条跑法**，一条都不能少：
+
+| | 跑什么 | 为什么分开 |
+|---|---|---|
+| `test:server` | `tests/*.test.ts` | 带 `--conditions=react-server`，服务端组件和 `server-only` 模块靠它才 import 得进来 |
+| `test:ui` | `tests/ui/*.test.ts` | **不带**那个条件。带上的话 `react-dom/server` 和 `lucide-react` 都 import 不进来 —— 前者直接报「不支持」，后者拿不到 `createContext` |
+
+所以**要把组件真的渲染出来看**的测试，放 `tests/ui/`。
+这个仓库里大量组件测试只在读源码字符串，不是不想渲染，
+是主跑法下渲染不了 —— 而读字符串守得住「这一行别被删」，
+守不住它到底渲染成了什么。
+
+`tests/test-lanes.test.ts` 盯着这件事：两条都要被 `npm test` 跑到、
+`tests/ui/` 不许是空的、放进去的必须真的渲染了东西。
+
 ## 写代码时
 
 - **注释用中文，写「为什么」。** 这个仓库里长注释很多，

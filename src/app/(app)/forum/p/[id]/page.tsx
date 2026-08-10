@@ -8,12 +8,14 @@ import { PersonLink } from "@/components/PersonLink";
 import { AcceptButton } from "@/components/forum/AcceptButton";
 import { BountyBadge } from "@/components/forum/BountyBadge";
 import { ConsentPanel } from "@/components/forum/ConsentPanel";
+import { MentionCards } from "@/components/github/MentionCards";
 import { PollWidget } from "@/components/forum/PollWidget";
 import { TipButton } from "@/components/forum/TipButton";
 import { PostActions } from "@/components/forum/PostActions";
 import { PostManageMenu } from "@/components/forum/PostManageMenu";
 import { ShareSheet } from "@/components/share/ShareSheet";
 import { env } from "@/lib/env";
+import { mentionsFor } from "@/lib/github/mentions";
 import { canSharePost, shareText } from "@/lib/share/rules";
 import { relativeTime } from "@/components/forum/PostList";
 import { QuoteButton } from "@/components/forum/QuoteButton";
@@ -119,6 +121,8 @@ export default async function PostPage({
   const isAsker = user?.id === post.authorId;
   const consent = consentSummary(post.id, user?.wxId ?? null);
   const poll = pollOfPost(post.id, user?.id ?? null);
+  // 正文里提到的 GitHub 东西。**只读缓存**，不联网 —— 见 lib/github/mentions.ts
+  const mentions = mentionsFor(post.contentHtml);
   const tipTotals = tipsOfTargets([
     { type: "post", id: post.id },
     ...replies.map((r) => ({ type: "reply" as const, id: r.id })),
@@ -347,6 +351,15 @@ export default async function PostPage({
             {post.linkNotice}
           </p>
         )}
+
+        {/*
+          * 「这篇提到的」—— 从正文里那几条 GitHub 链接拼出来的。
+          *
+          * 排在正文之后、互动栏之前：读完了才补充，不打断阅读。
+          * 只读缓存，缓存里没有就整块不出现 —— 渲染这条路上绝不联网，
+          * 否则 GitHub 慢一秒我们的帖子就慢一秒。
+          */}
+        <MentionCards cards={mentions} />
 
         {poll && <PollWidget poll={poll} canVote={Boolean(user)} />}
 

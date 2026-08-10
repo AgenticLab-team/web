@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseGithubUrl } from "@/lib/github/link-refs";
+import {
+  MAX_MENTIONS,
+  canonicalUrl,
+  parseGithubUrl,
+  refKey,
+  refsInHtml,
+} from "@/lib/github/link-refs";
 
 /**
  * 认 GitHub 链接。
@@ -230,5 +236,120 @@ describe("编号和名字的边界", () => {
     ]) {
       assert.equal(parseGithubUrl(u), null, `${u} 被认了`);
     }
+  });
+});
+
+describe("缓存键", () => {
+  it("**issue 和 PR 共用一个键** —— 编号空间本来就是同一个", () => {
+    /*
+     * 同一个号既能用 /issues/ 也能用 /pull/ 打开。分两个键的结果是
+     * 同一件东西抓两遍、缓存两份，而同一篇帖子里出现两种写法时，
+     * 读者会看到两张自相矛盾的卡片。
+     */
+    const a = parseGithubUrl("https://github.com/a/b/issues/9")!;
+    const b = parseGithubUrl("https://github.com/a/b/pull/9")!;
+    assert.equal(refKey(a), refKey(b));
+  });
+
+  it("不同东西的键不撞", () => {
+    const sha = "0".repeat(40);
+    const keys = [
+      "https://github.com/a/b",
+      "https://github.com/a/b/issues/1",
+      "https://github.com/a/b/issues/2",
+      `https://github.com/a/b/commit/${sha}`,
+      `https://github.com/a/b/blob/${sha}/x.ts`,
+      `https://github.com/a/b/blob/${sha}/x.ts#L1-L2`,
+      "https://github.com/a/c",
+    ].map((u) => refKey(parseGithubUrl(u)!));
+    assert.equal(new Set(keys).size, keys.length, "有两条不同的链接算出了同一个键");
+  });
+});
+
+describe("规范化地址", () => {
+  it("**issue 和 PR 的键一样，但地址不能一样**", () => {
+    /*
+     * 键相同是因为编号空间相同；而点过去要落在对的那一页上。
+     * 两者都用 /issues/ 的话，一个 PR 的卡片会把人带到 issue 视图 ——
+     * 看不到 diff，也看不到评审。
+     */
+    const pr = parseGithubUrl("https://github.com/a/b/pull/9")!;
+    const issue = parseGithubUrl("https://github.com/a/b/issues/9")!;
+    assert.equal(canonicalUrl(pr), "https://github.com/a/b/pull/9");
+    assert.equal(canonicalUrl(issue), "https://github.com/a/b/issues/9");
+  });
+
+  it("每一种都回得去", () => {
+    const sha = "0".repeat(40);
+    for (const u of [
+      "https://github.com/a/b",
+      "https://github.com/a/b/issues/1",
+      "https://github.com/a/b/pull/2",
+      `https://github.com/a/b/commit/${sha}`,
+      `https://github.com/a/b/blob/${sha}/src/x.ts`,
+      `https://github.com/a/b/blob/${sha}/src/x.ts#L1-L2`,
+    ]) {
+      assert.equal(canonicalUrl(parseGithubUrl(u)!), u, `${u} 转不回去`);
+    }
+  });
+
+  it("**规范化过的地址还能再解析一次** —— 不然缓存和链接会错位", () => {
+    const ref = parseGithubUrl("https://github.com/a/b.git")!;
+    const back = parseGithubUrl(canonicalUrl(ref))!;
+    assert.equal(refKey(back), refKey(ref));
+  });
+});
+
+describe("从正文 HTML 里捞", () => {
+  it("捞得出来", () => {
+    const html = '<p>看这个 <a href="https://github.com/a/b">a/b</a></p>';
+    assert.deepEqual(refsInHtml(html), [{ kind: "repo", owner: "a", repo: "b" }]);
+  });
+
+  it("**同一个东西只算一次** —— 贴两遍不该出两张卡", () => {
+    const html =
+      '<a href="https://github.com/a/b">x</a><a href="https://github.com/a/b/">y</a>';
+    assert.equal(refsInHtml(html).length, 1);
+  });
+
+  it("issue 和 PR 两种写法也只算一次", () => {
+    const html =
+      '<a href="https://github.com/a/b/issues/9">x</a><a href="https://github.com/a/b/pull/9">y</a>';
+    assert.equal(refsInHtml(html).length, 1);
+  });
+
+  it("不是 GitHub 的链接不捞", () => {
+    assert.deepEqual(refsInHtml('<a href="https://example.com/a/b">x</a>'), []);
+  });
+
+  it("**长得像的也不捞** —— 这一层同样不能成为绕过口", () => {
+    assert.deepEqual(refsInHtml('<a href="https://github.com.evil.com/a/b">x</a>'), []);
+  });
+
+  it("**`&amp;` 要还原** —— 不还原的话带查询串的地址解析出来是错的", () => {
+    const html = '<a href="https://github.com/a/b?x=1&amp;y=2">x</a>';
+    assert.deepEqual(refsInHtml(html), [{ kind: "repo", owner: "a", repo: "b" }]);
+  });
+
+  it("**有上限** —— 三十张卡片跟在帖子底下就不是帖子了", () => {
+    const html = Array.from(
+      { length: 30 },
+      (_, i) => `<a href="https://github.com/a/r${i}">x</a>`,
+    ).join("");
+    assert.equal(refsInHtml(html).length, MAX_MENTIONS);
+  });
+
+  it("**超了取前几条，不是一张都不给** —— 一张都不给读者会以为漏了", () => {
+    const html = Array.from(
+      { length: 10 },
+      (_, i) => `<a href="https://github.com/a/r${i}">x</a>`,
+    ).join("");
+    const got = refsInHtml(html);
+    assert.ok(got.length > 0);
+    assert.equal(got[0].kind === "repo" && got[0].repo, "r0", "取的不是最前面那几条");
+  });
+
+  it("空正文不出错", () => {
+    assert.deepEqual(refsInHtml(""), []);
   });
 });
