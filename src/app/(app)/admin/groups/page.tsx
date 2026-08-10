@@ -208,9 +208,26 @@ export default async function AdminGroupsPage() {
                     <p className="tabular t-caption mt-0.5 text-[var(--ink-tertiary)]">
                       {group.liveMessages.toLocaleString("zh-CN")} 条
                       {group.liveMessages !== group.messageCount && (
-                        <span style={{ color: "var(--warning)" }}>
+                        /*
+                         * ─────────────────────────────────────────
+                         * 这个差额是**正常的**，不再标成警告
+                         * ─────────────────────────────────────────
+                         *
+                         * 上游那两个接口口径不同：`/conversations` 的会话计数里
+                         * 含着一批 `/messages` 根本不返回的东西（撤回、系统提示之类），
+                         * 而站里的归档是从 `/messages` 拉的。
+                         *
+                         * 实测三个群：本地条数和上游 `/messages` 的 total
+                         * **一条不差**，而会话计数比它们多 4~11%。
+                         *
+                         * 也就是说这个差额**永远追不平**。用黄色标出来的话，
+                         * 后台上就常驻一个消不掉的告警 ——
+                         * 而一个永远在响的告警，会让人连真的那次也一起无视。
+                         */
+                        <span className="text-[var(--ink-quaternary)]">
                           {" "}
-                          （记录里是 {group.messageCount.toLocaleString("zh-CN")}）
+                          （上游会话计数 {group.messageCount.toLocaleString("zh-CN")}，
+                          含撤回等拉不到的）
                         </span>
                       )}{" "}
                       · 日均 {group.dailyAverage.toFixed(1)} · {group.memberCount} 人 · 阈值{" "}

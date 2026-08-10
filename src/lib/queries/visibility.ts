@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 import type { CurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -23,6 +23,24 @@ import { groupMembers, groups } from "@/lib/db/schema";
 export interface VisibleGroup {
   convId: string;
   name: string;
+  /**
+   * **站里真的有多少条** —— 不是上游报的那个数。
+   *
+   * ─────────────────────────────────────────
+   * 两个数字差 6.5%，而且永远追不平
+   * ─────────────────────────────────────────
+   *
+   * `groups.message_count` 来自上游的 `/conversations`，
+   * 而站里的归档是从 `/messages` 拉的 —— 上游这两个接口口径不同：
+   * 会话计数里含着一批 `/messages` 根本不返回的东西（撤回、系统提示之类）。
+   *
+   * 实测三个群：本地条数和上游 `/messages` 的 total **一条不差**，
+   * 而 `/conversations` 报的比它们都多 4~11%。
+   *
+   * 所以拿会话计数当「这个群有多少消息」显示，
+   * 等于告诉人一个他在这个站里**永远翻不到**的数字 ——
+   * 他点进去按天翻，怎么数都差一截。
+   */
   messageCount: number;
   memberCount: number;
 }
@@ -35,7 +53,8 @@ export function visibleGroupsFor(user: CurrentUser | null): VisibleGroup[] {
     .select({
       convId: groups.convId,
       name: groups.name,
-      messageCount: groups.messageCount,
+      // 站里真的有多少条，不是上游会话接口报的那个（见上面那段）
+      messageCount: sql<number>`(SELECT count(*) FROM messages WHERE messages.conv_id = ${groups.convId})`,
       memberCount: groups.memberCount,
     })
     .from(groupMembers)
