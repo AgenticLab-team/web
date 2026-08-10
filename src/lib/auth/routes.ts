@@ -41,6 +41,14 @@ export const PROTECTED_PREFIXES = [
   "/forum/new",
   "/forum/convert",
   "/onboarding",
+  /*
+   * 新人补课包。它把群名、常驻成员、活跃时段一次全端出来 ——
+   * 「群列表属于隐私」这条规矩下，它比大多数页面更不能漏。
+   *
+   * 页面里已经有 redirect 了，但那不算数（见文件开头）：
+   * 访客拿到的会是一个 200 的空壳。
+   */
+  "/welcome",
 ] as const;
 
 /**

@@ -192,6 +192,60 @@ describe("真库", async () => {
       assert.equal(statsOf("wx_b"), 1);
     });
 
+    it("**条数全对、只有直方图短的行也要修** —— 线上正是这样漏掉 4 行", () => {
+      /*
+       * ─────────────────────────────────────────
+       * 这种行没有任何征兆
+       * ─────────────────────────────────────────
+       *
+       * `messages` 完全正确（线上那几行是 78 = 78），榜单、积分、
+       * 条数全对 —— 错的只有「这一天什么时候热闹」。
+       *
+       * 第一版的判定只比三个计数列，于是这四行躺在库里没人发现，
+       * 直到做补课页的节奏条时才对出来：
+       * 整群直方图合计 11,503，而消息 11,631。
+       *
+       * 结论是：**一个只比一半列的一致性检查，
+       * 会让人以为另一半也检查过了**。
+       */
+      reset();
+      msg("wx_h", 3);
+      msg("wx_h", 3);
+      msg("wx_h", 21);
+
+      // 条数写对，直方图写短 —— 精确复现线上那四行
+      dbm.db.run(
+        sql`INSERT INTO daily_stats (wx_id, conv_id, date, messages, quality_messages, chars_total, hour_histogram, updated_at)
+            VALUES ('wx_h', 'g_a', '2026-08-08', 3, 0, 60,
+                    '[0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]', 0)`,
+      );
+
+      assert.equal(fixedOf("daily-stats-drift"), 1, "直方图短了却没被挑出来");
+
+      const hours = dbm.db.all<{ h: string }>(
+        sql`SELECT hour_histogram AS h FROM daily_stats WHERE wx_id = 'wx_h'`,
+      )[0].h;
+      const parsed = JSON.parse(typeof hours === "string" ? hours : JSON.stringify(hours));
+      assert.equal(parsed[3], 2);
+      assert.equal(parsed[21], 1);
+      assert.equal(
+        parsed.reduce((a: number, b: number) => a + b, 0),
+        3,
+        "修完之后直方图仍然和条数对不上",
+      );
+    });
+
+    it("**直方图是 NULL 的行也算漂移**", () => {
+      // json_each(NULL) 一行都不返回 —— 兜底写成 -1 才不会被当成 0 条
+      reset();
+      msg("wx_n", 5);
+      dbm.db.run(
+        sql`INSERT INTO daily_stats (wx_id, conv_id, date, messages, quality_messages, chars_total, hour_histogram, updated_at)
+            VALUES ('wx_n', 'g_a', '2026-08-08', 1, 0, 20, NULL, 0)`,
+      );
+      assert.equal(fixedOf("daily-stats-drift"), 1);
+    });
+
     it("**对得上的不动** —— 否则每次启动都说修了几千行，等于没说", () => {
       reset();
       msg("wx_c", 9, true);

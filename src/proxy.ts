@@ -127,5 +127,6 @@ export const config = {
     "/forum/:path*",
     "/forum",
     "/onboarding",
+    "/welcome",
   ],
 };

@@ -217,7 +217,21 @@ export default async function HomePage() {
 
           {/* 群列表是隐私：只有自己所在的群才列出来，访客一个都看不到 */}
           {myGroups.length > 0 && (
-            <Section title="我在的群">
+            <Section
+              title="我在的群"
+              /*
+               * 补课包的入口挂在这里，而不是主导航上。
+               *
+               * 它是**新人**用的东西 —— 常驻成员每天看见一个「补课」
+               * 标签，只会觉得这个站在教他做人。挂在群列表旁边，
+               * 想补的人找得到，不需要的人不会被反复提醒。
+               */
+              action={
+                <Link href="/welcome" className="t-caption text-[var(--accent)]">
+                  补课
+                </Link>
+              }
+            >
               <Group>
                 {myGroups.map((group) => (
                   <Row key={group.convId}>

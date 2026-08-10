@@ -113,7 +113,10 @@ const REPAIRS: readonly Repair[] = [
       "重跑时消息因为主键冲突被跳过，那几条**永远不会被计入**。" +
       "线上对照下来 `daily_stats` 比 `messages` 少 26 条、14 个人对不上 —— " +
       "而榜单是按这张表排的。落库那一侧已经改成从消息表重算，" +
-      "这一条把**历史上漏掉的**补回来",
+      "这一条把**历史上漏掉的**补回来。" +
+      "后来又补了一条判定：**小时分布也要和条数对得上** —— " +
+      "线上还剩 4 行是「条数全对、只有直方图是短的」，" +
+      "那种行光比计数永远发现不了",
     run: (tx) => {
       /*
        * **从消息那一侧扫起**，不是从 daily_stats 扫起。
@@ -130,6 +133,25 @@ const REPAIRS: readonly Repair[] = [
        * 只重算**对不上的**，不全表重算：后者每次启动都要扫一遍
        * 45000 条，而且日志里永远看不出「这次到底有没有漂移」——
        * 一个每次都说「修了 3831 行」的修复，和没有修复一样没信息。
+       *
+       * ─────────────────────────────────────────
+       * 直方图也要比 —— 只比计数会漏掉一整类
+       * ─────────────────────────────────────────
+       *
+       * 第一版的 WHERE 只比三个计数列。线上因此漏掉 4 行：
+       * messages 完全正确（78 = 78），榜单、积分、条数全对，
+       * **只有小时分布是短的**（直方图加起来才 5）。
+       *
+       * 那种行没有任何征兆，是做补课页的节奏条时才对出来的：
+       * 整群直方图合计 11,503，而消息 11,631。
+       *
+       * 教训是：**一个只比一半列的一致性检查，
+       * 会让人以为另一半也检查过了**。
+       *
+       * json_valid 兜住早期双重编码的行 —— 那种行 sum 出来是 0，
+       * 一样会被挑出来重算，正是想要的结果；
+       * 直方图为 NULL 时 json_each 一行都不返回，所以兜底写成 -1，
+       * 否则「没有直方图」会被当成「0 条」而与真实条数比出相等。
        */
       const drifted = tx.all<{ wxId: string; convId: string; date: string }>(
         sql`SELECT m.wx_id AS wxId, m.conv_id AS convId, m.date AS date
@@ -145,7 +167,13 @@ const REPAIRS: readonly Repair[] = [
             WHERE s.wx_id IS NULL
                OR s.messages != m.n
                OR s.quality_messages != coalesce(m.q, 0)
-               OR s.chars_total != coalesce(m.c, 0)`,
+               OR s.chars_total != coalesce(m.c, 0)
+               -- 直方图也要比（为什么见上面那段注释）
+               OR coalesce(
+                    (SELECT sum(value) FROM json_each(s.hour_histogram)
+                      WHERE json_valid(s.hour_histogram)),
+                    -1
+                  ) != m.n`,
       );
 
       let fixed = 0;

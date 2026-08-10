@@ -44,11 +44,30 @@ export default async function OnboardingPage() {
 
       <PasskeySetup items={passkeys} />
 
+      {/*
+        ─────────────────────────────────────────
+        绑定完成之后，下一步不该是「进入社区」
+        ─────────────────────────────────────────
+
+        「进入社区」把人扔在首页上 —— 而他此刻对这 45,000 条记录
+        没有任何上下文，不知道这个群平时聊什么、谁是常驻、
+        几点开口有人接。看两眼就退出去了。
+
+        所以主出口改成补课包，「直接进去」留作次要选项：
+        想跳过的人一点就走，不拦。
+      */}
+      <Link
+        href="/welcome"
+        className="t-subhead mt-8 inline-flex min-h-11 items-center justify-center rounded-[var(--radius-control)] bg-[var(--fill)] px-5 font-medium text-[var(--ink)] transition active:scale-[0.97]"
+      >
+        先看看群里在聊什么
+      </Link>
+
       <Link
         href="/"
-        className="t-subhead mt-8 text-center text-[var(--ink-tertiary)] transition active:opacity-60"
+        className="t-subhead mt-3 text-center text-[var(--ink-tertiary)] transition active:opacity-60"
       >
-        {passkeys.length ? "进入社区" : "以后再说"}
+        {passkeys.length ? "直接进入社区" : "以后再说"}
       </Link>
     </main>
     </ToastProvider>
