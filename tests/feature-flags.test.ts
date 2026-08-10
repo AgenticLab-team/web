@@ -154,7 +154,6 @@ describe("**库里查不到时按什么算**", () => {
      */
     assert.equal(defaultEnabled("forum"), true);
     assert.equal(defaultEnabled("shop"), true);
-    assert.equal(defaultEnabled("rag_qa"), false);
   });
 
   it("清单外的 key 一律关 —— 拼错一个字不该放行任何东西", () => {
@@ -164,7 +163,6 @@ describe("**库里查不到时按什么算**", () => {
 
   it("空库时 evaluate 走默认值", () => {
     assert.equal(evaluate(undefined, guest, "forum"), true);
-    assert.equal(evaluate(undefined, guest, "rag_qa"), false);
   });
 });
 
@@ -182,8 +180,11 @@ describe("**清单要说清楚每个开关管着什么**", () => {
 
   it("**没接线的开关要标出来** —— 否则这一页自己就成了新的死开关", () => {
     const planned = FLAGS.filter((f) => f.status === "planned").map((f) => f.key);
-    // 这三个对应的功能确实还没做
-    for (const k of ["rag_qa", "temp_mailbox", "external_users"]) {
+    /*
+     * `rag_qa` 从这张表里下来了 —— 功能做了（搜索页的「问一句」），
+     * 所以它现在是 wired、默认开着。剩下这两个确实还没做。
+     */
+    for (const k of ["temp_mailbox", "external_users"]) {
       assert.ok(planned.includes(k), `${k} 该标成 planned`);
     }
   });
@@ -434,7 +435,7 @@ describe("**status 必须说实话**", () => {
   it("planned 清单就是这三个 —— 新增要有人过一眼", () => {
     assert.deepEqual(
       FLAGS.filter((f) => f.status === "planned").map((f) => f.key).sort(),
-      ["external_users", "rag_qa", "temp_mailbox"],
+      ["external_users", "temp_mailbox"],
     );
   });
 

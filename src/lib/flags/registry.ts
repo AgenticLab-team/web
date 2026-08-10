@@ -18,8 +18,8 @@
  * 开关必须说清楚自己管着什么
  * ─────────────────────────────────────────
  *
- * 十个里有三个（rag_qa / temp_mailbox / external_users）
- * 对应的功能**根本还没做**。把它们和真开关摆在同一个列表里、
+ * 原本十个里有三个（rag_qa / temp_mailbox / external_users）
+ * 对应的功能**根本还没做**（rag_qa 现在做了，剩两个）。把它们和真开关摆在同一个列表里、
  * 长得一模一样，等于在修死开关的过程中又造了三个新的：
  * 点一下，什么都不会发生。
  *
@@ -101,9 +101,10 @@ export const FLAGS: readonly FlagSpec[] = [
   },
   {
     key: "rag_qa",
-    label: "群聊 RAG 问答",
-    effect: "功能还没做，开关现在不管任何事",
-    status: "planned",
+    label: "群聊问答",
+    effect: "关掉之后搜索页上的「问一句」那一档消失，只剩关键词和语义两种搜法",
+    status: "wired",
+    navKeys: ["chat"],
   },
   {
     key: "temp_mailbox",

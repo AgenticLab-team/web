@@ -680,5 +680,5 @@ export const DEFAULT_FLAGS: readonly {
   { key: "shop", enabled: true, description: "积分商店" },
   { key: "events", enabled: true, description: "活动系统" },
   { key: "temp_mailbox", enabled: false, description: "临时邮箱" },
-  { key: "rag_qa", enabled: false, description: "群聊 RAG 问答" },
+  { key: "rag_qa", enabled: true, description: "群聊问答（搜索页的「问一句」）" },
 ];

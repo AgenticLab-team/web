@@ -1,4 +1,4 @@
-import { Sparkles, User } from "lucide-react";
+import { MessageCircleQuestion, Sparkles, User } from "lucide-react";
 import { requireFeature } from "@/lib/flags/server";
 import type { Metadata } from "next";
 import { Suspense } from "react";
@@ -7,6 +7,7 @@ import { MessageHitList } from "@/components/search/MessageHitList";
 import { featureEnabled } from "@/lib/flags/server";
 import { SemanticHits, SemanticNotice } from "@/components/search/SemanticHits";
 import { ChatTabs } from "@/components/shell/ChatTabs";
+import { RagAnswer } from "@/components/search/RagAnswer";
 import { PageHeader } from "@/components/shell/PageHeader";
 import {
   Empty,
@@ -20,6 +21,7 @@ import { CardListSkeleton } from "@/components/ui/Skeleton";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth/session";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
 import { myMessageCount, searchMessages } from "@/lib/search/messages";
+import { askGroups } from "@/lib/search/rag";
 import { semanticSearch } from "@/lib/search/semantic";
 import { env } from "@/lib/env";
 
@@ -54,6 +56,18 @@ export default async function SearchPage({
   const onlyMine = params.mine === "1";
 
   const semantic = params.mode === "semantic";
+  /*
+   * 问答挂在同一个搜索框下面，作为第三档。
+   *
+   * 单开一页的话，人得先知道它存在才会去 —— 而「群里聊过 X 吗」
+   * 和「搜 X」本来就是同一个念头的两种说法。放在一起，
+   * 关键词搜不到的时候顺手换一档就试了。
+   *
+   * 开关关掉时这一档直接不存在（不是点了没反应）——
+   * 一个点了没反应的标签比没有这个标签糟。
+   */
+  const canAsk = featureEnabled("rag_qa", user);
+  const asking = canAsk && params.mode === "ask";
 
   const result = searchMessages(user, {
     query,
@@ -133,6 +147,12 @@ export default async function SearchPage({
             <Sparkles className="h-3 w-3" strokeWidth={2.2} aria-hidden />
             意思差不多的
         </Pill>
+        {canAsk && (
+          <Pill href={href({ mode: "ask" })} active={asking}>
+            <MessageCircleQuestion className="h-3 w-3" strokeWidth={2.2} aria-hidden />
+            问一句
+          </Pill>
+        )}
       </PillRow>
 
       <PillRow wrap>
@@ -154,15 +174,33 @@ export default async function SearchPage({
         />
       ) : !query ? (
         <Empty
-          title={semantic ? "描述一下当时在聊什么" : "输入关键词开始搜"}
+          title={
+            asking
+              ? "问一句，比如「群里聊过怎么部署吗」"
+              : semantic
+                ? "描述一下当时在聊什么"
+                : "输入关键词开始搜"
+          }
           hint={
-            semantic
+            asking
+              ? "只在你所在的群里检索，答案后面会附上原话出处 —— 群里没聊过就直说没聊过"
+              : semantic
               ? "不用记得原话 —— 「有人推荐过的那个部署工具」这种说法也搜得到"
               : mineCount > 0
                 ? `你在群里说过 ${mineCount.toLocaleString("zh-CN")} 条，试试搜自己说过的话`
                 : "只会搜到你所在群的内容"
           }
         />
+      ) : asking ? (
+        /*
+         * 问答比语义检索还慢：一次嵌入 + 一次对话补全，
+         * 最坏情况几十秒。同样挂 Suspense，让搜索框先到。
+         * key 带上 mode —— 只用 query 的话，同一个词在两档之间
+         * 切换不会重新挂起，会拿另一档的旧结果充数。
+         */
+        <Suspense key={`ask:${query}`} fallback={<CardListSkeleton cards={3} avatar={false} />}>
+          <AskResults user={user} query={query} />
+        </Suspense>
       ) : semantic ? (
         /*
          * 语义检索要打一次嵌入接口（几百毫秒，超时上限 20 秒）。
@@ -192,6 +230,16 @@ export default async function SearchPage({
       </PageNote>
     </>
   );
+}
+
+/**
+ * 问答结果。
+ *
+ * 和语义检索一样单独成组件挂 Suspense —— 它更慢（嵌入 + 对话两跳），
+ * 整页等它的话，搜索框和筛选也一起卡住。
+ */
+async function AskResults({ user, query }: { user: CurrentUser | null; query: string }) {
+  return <RagAnswer result={await askGroups(user, query)} />;
 }
 
 /** 语义检索结果。单独成组件是为了能挂在 Suspense 里流式送达 —— 见调用处 */
