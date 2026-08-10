@@ -97,6 +97,39 @@ describe("拆分之后不许留断链", () => {
     assert.deepEqual(bad, []);
   });
 
+  it("**文档里提到的代码文件必须真的存在** —— 反方向的断链同样会误导", () => {
+    /*
+     * 上一条挡的是「代码指向不存在的文档」。这一条是反过来。
+     *
+     * LESSONS.md 这类文档大量引用具体文件（`见 lib/quality.ts`、
+     * `tests/_source.ts` 的 stripComments）—— 那是它的价值所在：
+     * 一条读得懂但找不到落点的教训，等于没有。
+     *
+     * 而代码是会动的：这一轮就删掉了一整张表。文件一旦搬走或改名，
+     * 文档不会有任何提示，**只会在下一个人按图索骥时白花半小时**，
+     * 然后他会开始怀疑这份文档里别的条目是不是也过期了 ——
+     * 一条断链会连累整份文档的可信度。
+     */
+    const bad: string[] = [];
+    for (const f of docs) {
+      if (FOR_AI.has(f)) continue;
+      const body = read(f);
+      /*
+       * 只认**明确带目录前缀**的路径（lib/…、src/…、tests/…、scripts/…、
+       * ops/…、drizzle/…）。不加这个限制的话，正文里随手写的
+       * `a/b` 之类也会被当成路径。
+       */
+      for (const m of body.matchAll(
+        /\b((?:src|lib|tests|scripts|ops|drizzle|app|components)\/[\w./[\]()-]+\.(?:ts|tsx|sql|css|conf|service))/g,
+      )) {
+        const ref = m[1];
+        const candidates = [ref, join("src", ref)];
+        if (!candidates.some((c) => existsSync(join(root, c)))) bad.push(`${f} → ${ref}`);
+      }
+    }
+    assert.deepEqual(bad, [], "文档里指向的这些文件不存在了");
+  });
+
   it("归档的那份自己标着「不描述现状」", () => {
     const archived = read("docs/archive/PLAN-2026-08-08.md").slice(0, 600);
     assert.match(archived, /已归档/);
