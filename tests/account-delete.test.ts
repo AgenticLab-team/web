@@ -38,7 +38,7 @@ describe("注销", async () => {
   const schema = await import("@/lib/db/schema");
   const { migrate } = await import("drizzle-orm/better-sqlite3/migrator");
   migrate(dbm.db, { migrationsFolder: "./drizzle" });
-  const { deleteAccount, hadAccountBefore } = await import("@/lib/users/delete");
+  const { deleteAccount } = await import("@/lib/users/delete");
   const { DELETION_PLAN } = await import("@/lib/users/deletion-plan");
   const { sql, eq } = await import("drizzle-orm");
 
@@ -277,17 +277,20 @@ describe("注销", async () => {
   });
 
   describe("**注销重绑不能绕过一次性规则**", () => {
-    it("认得出这个微信号以前有过账号", () => {
+    it("prior_wx_id 留下了，一次性规则才认得出这是同一个人", () => {
       /*
        * 邀请那条「一个人只能被邀请一次」是按 user_id 判的，
        * 而重绑会拿到新的 user_id —— 没有 prior_wx_id 的话，
        * 注销就成了反复领邀请奖励的通道。
+       *
+       * 真正的判定与完整的重绑链路在 tests/delete-rebind.test.ts。
        */
       seed();
-      assert.equal(hadAccountBefore(MY_WX), false, "还没注销就说有过");
       run();
-      assert.equal(hadAccountBefore(MY_WX), true);
-      assert.equal(hadAccountBefore("wxid_someone_else"), false);
+      const row = one<{ prior_wx_id: string | null }>(
+        `select prior_wx_id from users where id = '${ME}'`,
+      );
+      assert.equal(row.prior_wx_id, MY_WX);
     });
   });
 

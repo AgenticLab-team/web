@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { inviteUses, invites, users } from "@/lib/db/schema";
@@ -102,9 +102,51 @@ export function findByCode(code: string) {
   return db.select().from(invites).where(eq(invites.code, normalizeCode(code))).get() ?? null;
 }
 
+/**
+ * 这个人是不是已经被邀请过了。
+ *
+ * ─────────────────────────────────────────
+ * 光看 user_id 是不够的 —— 注销会换一个新的
+ * ─────────────────────────────────────────
+ *
+ * 这条规则存在的理由写在 rules.ts 里：
+ * 「不限制的话，**注销重注册**就能反复给同一个邀请人送奖励。」
+ *
+ * 而它一直只按 `user_id` 判 —— 在站里还没有注销功能的时候，
+ * 那等价于按人判。注销做出来之后就不再等价了：
+ * 注销 → 重新绑定同一个微信 → 拿到一个全新的 user_id →
+ * `invite_uses` 里查不到 → **规则自己描述的那条路被打开了**。
+ *
+ * 所以再顺着 `prior_wx_id` 问一次：这个微信号以前有过账号吗。
+ * 有过的话，那些旧账号被邀请过没有。
+ */
 export function isAlreadyInvited(userId: string): boolean {
+  const direct =
+    db.select().from(inviteUses).where(eq(inviteUses.invitedUserId, userId)).get() !== undefined;
+  if (direct) return true;
+
+  /*
+   * 顺着 wx_id 找这个人所有的历史账号（含注销掉的那些）。
+   *
+   * 注销时 `wx_id` 被清空、抄进了 `prior_wx_id`，
+   * 所以两边都要看：现在这个账号的 wx_id，以及所有 prior_wx_id
+   * 等于它的旧账号。
+   */
+  const me = db.select({ wxId: users.wxId }).from(users).where(eq(users.id, userId)).get();
+  if (!me?.wxId) return false;
+
+  const priorIds = db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.priorWxId, me.wxId))
+    .all()
+    .map((r) => r.id);
+
+  if (priorIds.length === 0) return false;
+
   return (
-    db.select().from(inviteUses).where(eq(inviteUses.invitedUserId, userId)).get() !== undefined
+    db.select().from(inviteUses).where(inArray(inviteUses.invitedUserId, priorIds)).get() !==
+    undefined
   );
 }
 

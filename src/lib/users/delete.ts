@@ -146,18 +146,3 @@ export function deleteAccount(
 
   return { purged, anonymized, ok: true };
 }
-
-/**
- * 这个微信号以前有过账号吗。
- *
- * 一次性规则（邀请奖励、新人礼包这类）要用它 ——
- * 只查 `wx_id` 的话，注销过的人看起来就是全新的。
- */
-export function hadAccountBefore(wxId: string): boolean {
-  const row = db
-    .select({ n: sql<number>`count(*)` })
-    .from(users)
-    .where(sql`${users.priorWxId} = ${wxId}`)
-    .get();
-  return Number(row?.n ?? 0) > 0;
-}
