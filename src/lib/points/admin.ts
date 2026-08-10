@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, gte, inArray, isNotNull, like, or, sql } from "drizzle-orm";
+import { and, desc, gte, inArray, isNotNull, like, or, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { pointsLedger, users } from "@/lib/db/schema";
@@ -305,31 +305,3 @@ export function riskQueue(): RiskItem[] {
   return sortRisks(items);
 }
 
-/** 找人用 —— 人工调整那一栏要先选中一个账号 */
-export function findUsers(keyword: string, limit = 8) {
-  const kw = `%${keyword.trim()}%`;
-  if (!keyword.trim()) return [];
-  return db
-    .select({
-      id: users.id,
-      wxId: users.wxId,
-      siteNickname: users.siteNickname,
-      wxNickname: users.wxNickname,
-      points: users.points,
-      level: users.level,
-    })
-    .from(users)
-    .where(or(like(users.siteNickname, kw), like(users.wxNickname, kw), like(users.wxId, kw)))
-    .limit(limit)
-    .all()
-    .map((u) => ({
-      id: u.id,
-      name: resolveDisplayName([u.siteNickname, u.wxNickname], { wxId: u.wxId, fallback: "成员" }),
-      points: u.points,
-      level: u.level,
-    }));
-}
-
-export function ledgerEntry(id: string) {
-  return db.select().from(pointsLedger).where(eq(pointsLedger.id, id)).get() ?? null;
-}

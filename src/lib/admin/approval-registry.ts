@@ -54,9 +54,5 @@ export function getApprovalHandler(key: string): ApprovalHandler<never> | undefi
   return registry.get(key);
 }
 
-export function listApprovalHandlers(): ApprovalHandler<never>[] {
-  return [...registry.values()];
-}
-
 /** 待批记录的有效期。过期的不能再执行 —— 当时的判断依据早就变了 */
 export const APPROVAL_TTL_MS = 24 * 3600_000;

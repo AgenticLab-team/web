@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { groupMemberEvents, groupMembers, groups } from "@/lib/db/schema";
@@ -167,11 +167,3 @@ export async function syncAllMembers(options: SyncOptions = {}): Promise<SyncRes
   };
 }
 
-/** 待处理的进出群事件，供权限回收任务消费 */
-export function pendingMemberEvents() {
-  return db
-    .select()
-    .from(groupMemberEvents)
-    .where(isNull(groupMemberEvents.processedAt))
-    .all();
-}

@@ -4,7 +4,7 @@ import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { inviteUses, invites, users } from "@/lib/db/schema";
-import { ancestorsOf, buildTree, describeInvite, normalizeCode } from "@/lib/invites/rules";
+import { describeInvite, normalizeCode } from "@/lib/invites/rules";
 import { paginate, type PageSlice } from "@/lib/pagination";
 import { resolveDisplayName } from "@/lib/users/display-name";
 
@@ -159,43 +159,6 @@ export interface TreeUser {
   createdAt: number;
   /** 这个人有没有真的用起来 —— 拉了一堆从不打卡的人是最典型的刷邀请 */
   checkedIn: boolean;
-}
-
-function loadTreeUsers(): TreeUser[] {
-  return db
-    .select({
-      id: users.id,
-      invitedBy: users.invitedBy,
-      site: users.siteNickname,
-      wx: users.wxNickname,
-      wxId: users.wxId,
-      status: users.status,
-      points: users.points,
-      createdAt: users.createdAt,
-      lastCheckinDate: users.lastCheckinDate,
-    })
-    .from(users)
-    .where(isNull(users.deletedAt))
-    .all()
-    .map((u) => ({
-      id: u.id,
-      invitedBy: u.invitedBy,
-      name: resolveDisplayName([u.site, u.wx], { wxId: u.wxId, fallback: "社区成员" }),
-      status: u.status,
-      points: u.points,
-      createdAt: u.createdAt,
-      checkedIn: u.lastCheckinDate !== null,
-    }));
-}
-
-/** 某人的下游 —— 他拉来了谁，那些人又拉来了谁 */
-export function inviteTree(rootId: string) {
-  return buildTree(loadTreeUsers(), rootId);
-}
-
-/** 某人的上游 —— 他是谁拉来的。出问题时这是第一个要问的 */
-export function inviteAncestors(userId: string) {
-  return ancestorsOf(loadTreeUsers(), userId);
 }
 
 export interface InviteUseRow {

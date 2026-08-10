@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, gt, isNull, lte } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, lte } from "drizzle-orm";
 
 import { db, sqlite } from "@/lib/db";
 import { seasonStandings, seasons } from "@/lib/db/schema";
@@ -92,14 +92,6 @@ export function currentSeasonView(now = Date.now()): SeasonView | null {
   return row ? viewOf(row, now) : null;
 }
 
-export function seasonByKey(key: string): SeasonRow | null {
-  return db.select().from(seasons).where(eq(seasons.key, key)).get() ?? null;
-}
-
-export function listSeasons(limit = 12): SeasonRow[] {
-  return db.select().from(seasons).orderBy(desc(seasons.startsAt)).limit(limit).all();
-}
-
 /** 已经结束但还没结算的 —— 结算任务扫这个 */
 export function pendingSettlement(now = Date.now()): SeasonRow[] {
   return db
@@ -166,23 +158,3 @@ export function seasonBoard(
   return rankStandings(rows);
 }
 
-/** 某个人在某赛季的名次；不在榜上返回 null */
-export function myStanding(
-  row: SeasonRow,
-  wxId: string | null,
-  convIds: string[],
-): Standing | null {
-  if (!wxId) return null;
-  // 取全量再找自己 —— 榜只有几十人，多一次聚合不如少一段特例代码
-  return seasonBoard(row, convIds, 500).find((s) => s.wxId === wxId) ?? null;
-}
-
-/** 历届冠亚季军，给赛季历史页 */
-export function podiumOf(seasonId: string) {
-  return db
-    .select()
-    .from(seasonStandings)
-    .where(and(eq(seasonStandings.seasonId, seasonId), lte(seasonStandings.rank, 3)))
-    .orderBy(asc(seasonStandings.rank))
-    .all();
-}

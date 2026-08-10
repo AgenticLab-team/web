@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { appeals, moderationActions, users } from "@/lib/db/schema";
@@ -165,12 +165,3 @@ export function appealFacets() {
   };
 }
 
-/** 尚未被申诉、且未撤销的处罚 —— 用户档案页的「可申诉」入口靠它 */
-export function appealableActions(userId: string) {
-  return db
-    .select()
-    .from(moderationActions)
-    .where(and(eq(moderationActions.targetUserId, userId), isNull(moderationActions.revertedAt)))
-    .orderBy(desc(moderationActions.createdAt))
-    .all();
-}

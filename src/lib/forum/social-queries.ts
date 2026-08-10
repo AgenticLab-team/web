@@ -78,10 +78,3 @@ export function readFloor(userId: string, postId: string): number {
   );
 }
 
-export function listBookmarks(userId: string) {
-  return db
-    .select({ postId: bookmarks.postId, createdAt: bookmarks.createdAt })
-    .from(bookmarks)
-    .where(eq(bookmarks.userId, userId))
-    .all();
-}

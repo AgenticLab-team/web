@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { groupMembers, messages, people, users } from "@/lib/db/schema";
 import { normalizeAvatarUrl } from "@/lib/avatar";
 import { nekobot } from "@/lib/nekobot/client";
-import { FALLBACK_DISPLAY_NAME, resolveDisplayName } from "@/lib/users/display-name";
+import { resolveDisplayName } from "@/lib/users/display-name";
 
 import { runSyncJob, type SyncOptions, type SyncResult } from "./job";
 
@@ -200,33 +200,3 @@ async function harvestAvatars(): Promise<Map<string, string>> {
   return result;
 }
 
-/** 批量取显示名，供排行榜、检索结果等处使用 */
-export function displayNamesOf(wxIds: string[]): Map<string, string> {
-  if (wxIds.length === 0) return new Map();
-  const rows = db.select({ wxId: people.wxId, name: people.displayName }).from(people).all();
-  const all = new Map(rows.map((r) => [r.wxId, r.name]));
-  // 查不到的人给占位而不是回传 wx_id —— 这个函数的返回值就是拿去展示的
-  return new Map(wxIds.map((id) => [id, resolveDisplayName([all.get(id)], { wxId: id })]));
-}
-
-export function peopleByIds(wxIds: string[]) {
-  const rows = db.select().from(people).all();
-  const map = new Map(rows.map((r) => [r.wxId, r]));
-  return new Map(
-    wxIds.map((id) => [
-      id,
-      map.get(id) ?? {
-        wxId: id,
-        displayName: FALLBACK_DISPLAY_NAME,
-        avatarUrl: null,
-        avatarSource: null,
-        messages: 0,
-        qualityMessages: 0,
-        groupCount: 0,
-        firstSeen: null,
-        lastSeen: null,
-        updatedAt: 0,
-      },
-    ]),
-  );
-}

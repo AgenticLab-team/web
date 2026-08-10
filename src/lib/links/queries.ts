@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { CurrentUser } from "@/lib/auth/session";
 import { db, sqlite } from "@/lib/db";
@@ -279,17 +279,6 @@ function buildDomainFacets(items: LinkItem[]): DomainFacet[] {
     .slice(0, 12);
 }
 
-/** 后台看全站，前台看同群 —— 两者不同是对的 */
-export function allLinksForAdmin(limit = 200) {
-  return db
-    .select()
-    .from(links)
-    .orderBy(sql`${links.lastSharedAt} DESC`)
-    .limit(limit)
-    .all()
-    .map((l) => ({ ...l, domainLabel: domainLabel(l.domain) }));
-}
-
 export function linkStats() {
   const row = sqlite
     .prepare(
@@ -300,18 +289,6 @@ export function linkStats() {
     )
     .get() as { total: number; hidden: number; domains: number };
   return row;
-}
-
-export function isSaved(userId: string, linkIds: string[]): Set<string> {
-  if (linkIds.length === 0) return new Set();
-  return new Set(
-    db
-      .select({ linkId: linkSaves.linkId })
-      .from(linkSaves)
-      .where(and(eq(linkSaves.userId, userId), inArray(linkSaves.linkId, linkIds)))
-      .all()
-      .map((s) => s.linkId),
-  );
 }
 
 /**
@@ -354,15 +331,3 @@ export function recountVotes(linkId: string): number {
   return count;
 }
 
-/** 我给哪些链接点过赞 —— 一次查完，避免每条一次查询 */
-export function myVotes(userId: string, linkIds: string[]): Set<string> {
-  if (linkIds.length === 0) return new Set();
-  return new Set(
-    db
-      .select({ linkId: linkVotes.linkId })
-      .from(linkVotes)
-      .where(and(eq(linkVotes.userId, userId), inArray(linkVotes.linkId, linkIds)))
-      .all()
-      .map((r) => r.linkId),
-  );
-}

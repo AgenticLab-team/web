@@ -235,11 +235,3 @@ export function whoHasPermission(permission: PermissionKey): PermissionHolder[] 
   return [...holders.values()].sort((a, b) => b.grantedAt - a.grantedAt);
 }
 
-/** 某个身份组的权限变更会影响多少人 —— 保存前给出影响面 */
-export function roleHolderCount(roleId: string): number {
-  return db
-    .select({ id: userRoles.id })
-    .from(userRoles)
-    .where(and(eq(userRoles.roleId, roleId), isNull(userRoles.revokedAt)))
-    .all().length;
-}

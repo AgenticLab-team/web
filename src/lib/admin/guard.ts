@@ -79,10 +79,3 @@ export async function requireWritableAdmin(
   return requireAdmin(permission);
 }
 
-/** 不跳转的版本，用于条件渲染导航项 */
-export async function adminContextOrNull(): Promise<AdminContext | null> {
-  const user = await getCurrentUser();
-  if (!user || !can(user, ADMIN_ENTRY_PERMISSION).allowed) return null;
-  const permissions = effectivePermissions(user);
-  return { user, permissions, has: (key) => permissions.has(key) };
-}

@@ -386,7 +386,3 @@ export function unhealthySince(components: string[]): number | null {
   return since;
 }
 
-/** @deprecated 用 {@link unhealthySince} —— 只看 down 会漏掉持续降级 */
-export function downSince(component: string): number | null {
-  return unhealthySince([component]);
-}

@@ -5,7 +5,7 @@ import { and, eq, gt, isNull, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { permissionOverrides, rolePermissions, roles, userRoles, users } from "@/lib/db/schema";
 
-import { dangerLevelOf, type PermissionKey } from "./permissions";
+import { type PermissionKey } from "./permissions";
 
 /**
  * 全站唯一的权限判定入口。
@@ -212,20 +212,6 @@ export class PermissionError extends Error {
     super(decision.reason);
     this.name = "PermissionError";
   }
-}
-
-export function require_(
-  actor: Actor,
-  permission: PermissionKey,
-  resource?: ResourceContext,
-): void {
-  const decision = can(actor, permission, resource);
-  if (!decision.allowed) throw new PermissionError(permission, decision);
-}
-
-/** 危险操作要额外确认身份或走双人复核，这里给出等级供调用方决策 */
-export function dangerOf(permission: PermissionKey): number {
-  return dangerLevelOf(permission);
 }
 
 /** 一次性取出某人的全部有效权限，用于后台的「以某身份预览」与权限反查 */

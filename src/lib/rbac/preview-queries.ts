@@ -1,6 +1,6 @@
 import "server-only";
 
-import { desc, eq, isNull, like, or } from "drizzle-orm";
+import { desc, eq, like, or } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { previewSessions, roles, userRoles, users } from "@/lib/db/schema";
@@ -110,12 +110,3 @@ export function recentPreviews(limit = 20): PreviewHistoryRow[] {
   }));
 }
 
-/** 现在有几个人正处在预览态 —— 挂着没退出的那种 */
-export function livePreviewCount(nowMs: number): number {
-  return db
-    .select()
-    .from(previewSessions)
-    .where(isNull(previewSessions.endedAt))
-    .all()
-    .filter((r) => r.expiresAt > nowMs).length;
-}

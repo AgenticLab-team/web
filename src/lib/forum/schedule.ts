@@ -187,6 +187,3 @@ function whenLabel(at: number, now: number): string {
   return `${fmt(at, { month: "numeric", day: "numeric" })} ${hhmm}`;
 }
 
-export function scheduledCount(userId: string): number {
-  return listScheduled(userId).length;
-}

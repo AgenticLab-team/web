@@ -6,7 +6,6 @@ import { db } from "@/lib/db";
 import {
   activities,
   activityApplications,
-  activityEvents,
   users,
 } from "@/lib/db/schema";
 import { evaluateEligibility, type Rule } from "@/lib/activities/eligibility";
@@ -252,15 +251,6 @@ export function listApplications(
       createdAt: app.createdAt,
     };
   });
-}
-
-export function applicationEvents(applicationId: string) {
-  return db
-    .select()
-    .from(activityEvents)
-    .where(eq(activityEvents.applicationId, applicationId))
-    .orderBy(activityEvents.createdAt)
-    .all();
 }
 
 /**

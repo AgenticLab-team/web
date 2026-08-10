@@ -178,18 +178,3 @@ export function sendableGroups() {
     .all();
 }
 
-/** 当前生效的站内公告 */
-export function activeAnnouncements(now = Date.now()) {
-  return db
-    .select()
-    .from(broadcasts)
-    .where(
-      and(
-        eq(broadcasts.channel, "site"),
-        eq(broadcasts.status, "sent"),
-        sql`(${broadcasts.expiresAt} is null or ${broadcasts.expiresAt} > ${now})`,
-      ),
-    )
-    .orderBy(desc(broadcasts.createdAt))
-    .all();
-}

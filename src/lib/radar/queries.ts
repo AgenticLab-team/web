@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { keywordHits, keywordSubs } from "@/lib/db/schema";
@@ -60,34 +60,6 @@ export function mySubs(userId: string, now = Date.now()): RadarSub[] {
         .all(),
     };
   });
-}
-
-export function subById(userId: string, subId: string) {
-  return (
-    db
-      .select()
-      .from(keywordSubs)
-      .where(and(eq(keywordSubs.id, subId), eq(keywordSubs.userId, userId)))
-      .get() ?? null
-  );
-}
-
-/**
- * 一个订阅的完整命中记录。
- *
- * **被封顶压掉的那些也列出来**，标成「没通知」——
- * 不列的话，用户看到「今天提醒 5 次」会以为总共就响了 5 次，
- * 而实际上可能响了三十次。少通知是有意的，瞒着不说不是。
- */
-export function hitsOf(userId: string, subId: string, limit = 50) {
-  if (!subById(userId, subId)) return [];
-  return db
-    .select()
-    .from(keywordHits)
-    .where(eq(keywordHits.subId, subId))
-    .orderBy(desc(keywordHits.hitAt))
-    .limit(limit)
-    .all();
 }
 
 export { checkNoise };
