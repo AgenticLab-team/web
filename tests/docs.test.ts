@@ -120,7 +120,15 @@ describe("拆分之后不许留断链", () => {
        * `a/b` 之类也会被当成路径。
        */
       for (const m of body.matchAll(
-        /\b((?:src|lib|tests|scripts|ops|drizzle|app|components)\/[\w./[\]()-]+\.(?:ts|tsx|sql|css|conf|service))/g,
+        /*
+         * `tsx` 必须排在 `ts` 前面。正则的选择分支是**从左到右取第一个能
+         * 匹配上的**，不是取最长的 —— 写成 `ts|tsx` 的话
+         * `NudgeCard.tsx` 会在 `.ts` 处收手，于是这条守卫报出一个
+         * 谁也找不到的 `NudgeCard.ts`：**它会把每一个正确的 .tsx 引用
+         * 都判成断链**，而人的第一反应是去改文档（改不好），
+         * 不是来怀疑这条正则。
+         */
+        /\b((?:src|lib|tests|scripts|ops|drizzle|app|components)\/[\w./[\]()-]+\.(?:tsx|ts|sql|css|conf|service))/g,
       )) {
         const ref = m[1];
         const candidates = [ref, join("src", ref)];

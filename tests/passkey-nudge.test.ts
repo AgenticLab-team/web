@@ -326,9 +326,18 @@ describe("接线", () => {
   });
 
   it("**首页真的渲染了它** —— 一个没有人看得到的提醒等于没做", () => {
+    /*
+     * 首页上现在是一个**统一的提示位**（HomeNudge）：Passkey、
+     * 装到桌面、开推送三件事共用它，而且一次只出一个 ——
+     * 三张卡片摞在首页上，头一屏就全是「你还没做这个」。
+     *
+     * 所以这里断言的是「服务端算出了该不该提，并把结论传下去」，
+     * 而不是某个具体组件名。挑哪一个的规则在 lib/nudges/rules.ts。
+     */
     const page = strip(src("app/(app)/page.tsx"));
-    assert.match(page, /<PasskeyNudge/);
+    assert.match(page, /<HomeNudge/);
     assert.match(page, /passkeyNudgeFor\(/);
+    assert.match(page, /passkeyEligible=\{nudge !== null\}/);
   });
 
   it("**首页也用 getRealUser 取这张卡** —— 预览别人时不该看到别人的提醒", () => {

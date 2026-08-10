@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { NotificationRow } from "@/components/notifications/NotificationRow";
-import { PushNudge } from "@/components/notifications/PushNudge";
-import { configProblem } from "@/lib/notifications/webpush";
 import { redirect } from "next/navigation";
 
 import { relativeTime } from "@/components/forum/PostList";
@@ -23,8 +21,6 @@ export default async function NotificationsPage({
 }: {
   searchParams: Promise<{ f?: string }>;
 }) {
-  // 推送配好了才提 —— 没配的话那条提示指向一个开不了的开关
-  const pushConfigured = configProblem() === null;
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/notifications");
 
@@ -54,7 +50,6 @@ export default async function NotificationsPage({
       />
 
       {/* 推送开关藏在设置页第三屏，没人找得到 —— 用不了的环境这里一个字都不会出现 */}
-      <PushNudge configured={pushConfigured} />
 
       {/* 页签上带条数：空页签要能提前看出来，而不是点进去才发现 */}
       <PillRow>

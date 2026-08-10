@@ -47,11 +47,42 @@ URL="${DEPLOY_URL:-https://agenticlab.sh}"
 UPSTREAM_CONF=/etc/nginx/conf.d/agenticlab-upstream.conf
 # 首屏 JS 预算（字节，**压缩后**）。
 #
-# 量压缩后是因为那才是用户真的要下的东西：同一批 chunk 未压缩 362 KB、
-# 压缩后 109 KB，按前者定预算等于按一个没有人经历过的数字做决定。
-# 当前 109 KB，预算 160 KB —— 留出成长空间，但不至于悄悄翻倍。
-# 调高它要在提交信息里说清楚换来了什么。
-JS_BUDGET="${JS_BUDGET:-163840}"
+# 量压缩后是因为那才是用户真的要下的东西：按未压缩定预算等于按一个
+# 没有人经历过的数字做决定。
+#
+# ── 8-10 重定：原来那条守卫量的根本不是它说的那个东西 ──
+#
+# 它抓 chunk 用的是 `[a-z0-9_]*\.js`，**字符类里没有连字符**。
+# 而 Turbopack 的 chunk 名是随机串，里面出不出现 `-` 全看这次构建的运气。
+# 后果不是少算几个字节，是那个 chunk 在它眼里**根本不存在**：
+#
+#   · 首页两个带 `-` 的 chunk 之一（14 KB gz）装的正是我们自己的界面代码
+#     （「配色方案」「离线期间有 N 条新通知」「关掉这条公告」都在里面）——
+#     **它声称要保护的那部分，一直在它的视野之外**
+#   · 更糟的是这个漏法**逐次构建随机**：同一份代码，这次哈希带 `-`
+#     就少算 20 KB，下次不带就全算上。8-08 记的「当前 109 KB」和
+#     8-10 量到的 186 KB 之间那 77 KB，多半就是这么来的 ——
+#     一个会自己乱跳的读数，比没有读数更坏：
+#     有人会照着它去修一个不存在的膨胀。
+#
+# 修好正则之后的实测：总共 185 KB，其中 **171 KB 是框架地板**
+# （react-dom + Next 客户端运行时；用一个空白 404 页量出来的，
+# 那几个 chunk 里一个中文字符都没有，没有一行是我们写的），
+# 我们自己的只有 14 KB。原来 160 KB 的预算连地板都装不下 ——
+# 也就是说修好正则之后它会**永远红**，而一条永远红的守卫比没有更糟：
+# 红过三次就没有人再看它，真正该拦的那次一样不会有人看。
+#
+# 所以拆成两个数：
+#
+#   · APP_JS_BUDGET —— 首页比空白 404 页**多拉**的那部分（现在 14 KB）。
+#     这才是我们自己的代码，也是唯一一个改代码能改动的数。
+#     加一个重的客户端组件会直接顶到这里。
+#   · JS_BUDGET —— 总量上限（现在 185 KB），留得松。它拦的是另一类事：
+#     框架自己爆了（升级引入一大坨）。那不是我们写的，但用户照样要下，
+#     所以仍然要有人知道。
+FLOOR_PROBE_PATH="${FLOOR_PROBE_PATH:-/__js-budget-floor-probe__}"
+APP_JS_BUDGET="${APP_JS_BUDGET:-40960}"
+JS_BUDGET="${JS_BUDGET:-215040}"
 
 step() { printf '\n\033[1m→ %s\033[0m\n' "$1"; }
 note() { printf '  %s\n' "$1"; }
@@ -210,16 +241,54 @@ for attempt in $(seq 1 10); do
     # 没有哪一次值得拦下来，而半年后首页要下三百 KB。
     # 量的是**首页真的会拉的那几个 chunk**，不是构建产物总大小：
     # 后者包含所有路由，涨了也不一定影响任何人。
+    #
+    # 地板（框架自己那一份）用一个**不存在的路径**量：它渲染的是
+    # 空白 404，拉到的就是「任何一页都躲不掉」的那几个 chunk。
+    # 首页减去它，剩下的才是我们自己加上去的。
     step "首屏体积"
-    bytes=0
-    for chunk in $(curl -s -m 10 "$URL/" | grep -o '/_next/static/chunks/[a-z0-9_]*\.js' | sort -u); do
-      # 带上 Accept-Encoding：量的是用户真的要下的字节数
-      size=$(curl -s -m 10 -H 'Accept-Encoding: br, gzip' -o /dev/null -w '%{size_download}' "$URL$chunk" || echo 0)
-      bytes=$((bytes + size))
-    done
-    printf '  首页 JS %s KB（压缩后，预算 %s KB）\n' "$((bytes / 1024))" "$((JS_BUDGET / 1024))"
+
+    # 名字里的**连字符**必须收进字符类。
+    #
+    # 原来写的是 `[a-z0-9_]*`，于是 `290o-o0p8zxxi.js` 这种带 `-` 的
+    # 整个匹配不上 —— 不是少算几个字节，是**那个 chunk 根本不存在**。
+    # 而首页恰好只有两个带 `-` 的 chunk，其中一个（14 KB gz）
+    # 装的正是我们自己的界面代码（「配色方案」「关掉这条公告」都在里面）。
+    #
+    # 也就是说：这条守卫量到的一直是框架，**它声称要保护的那部分
+    # 从来就在它的视野之外**。和 schema 扫描那次是同一个病 ——
+    # 正则漏掉一类命名，守卫照常变绿，没有任何地方会喊。
+    chunks_of() {
+      curl -s -m 10 "$1" | grep -oE '/_next/static/chunks/[A-Za-z0-9_-]+\.js' | sort -u
+    }
+    sum_of() {
+      local total=0 size
+      while read -r chunk; do
+        [ -n "$chunk" ] || continue
+        # 带上 Accept-Encoding：量的是用户真的要下的字节数
+        size=$(curl -s -m 10 -H 'Accept-Encoding: br, gzip' -o /dev/null -w '%{size_download}' "$URL$chunk" || echo 0)
+        total=$((total + size))
+      done
+      printf '%s' "$total"
+    }
+
+    home_list=$(chunks_of "$URL/")
+    floor_list=$(chunks_of "$URL$FLOOR_PROBE_PATH")
+    app_list=$(comm -23 <(printf '%s\n' "$home_list") <(printf '%s\n' "$floor_list"))
+
+    bytes=$(printf '%s\n' "$home_list" | sum_of)
+    app_bytes=$(printf '%s\n' "$app_list" | sum_of)
+    floor_bytes=$((bytes - app_bytes))
+
+    printf '  首页 JS %s KB＝框架地板 %s KB ＋ 我们自己的 %s KB（预算 %s KB）\n' \
+      "$((bytes / 1024))" "$((floor_bytes / 1024))" \
+      "$((app_bytes / 1024))" "$((APP_JS_BUDGET / 1024))"
+
+    if [ "$app_bytes" -gt "$APP_JS_BUDGET" ]; then
+      fail "首页自己的 JS 超预算 —— 是我们加进去的，要么拆包/换成服务端组件，要么调高 APP_JS_BUDGET 并说明换来了什么"
+    fi
     if [ "$bytes" -gt "$JS_BUDGET" ]; then
-      fail "首屏 JS 超预算 —— 要么拆包，要么明确调高 JS_BUDGET 并说明为什么"
+      # 这一条不是我们写的代码涨的，但用户照样要下 —— 所以仍然要拦
+      fail "首屏 JS 总量超上限（地板 $((floor_bytes / 1024)) KB）—— 框架这一层变重了，确认是升级带来的再调 JS_BUDGET"
     fi
 
     step "完成"

@@ -243,6 +243,64 @@ describe("原来那些检查一条都不能少", () => {
   });
 });
 
+describe("**首屏体积：量的必须是它说的那个东西**", () => {
+  /*
+   * ─────────────────────────────────────────
+   * 一条会自己乱跳的读数，比没有读数更坏
+   * ─────────────────────────────────────────
+   *
+   * 原来抓 chunk 用的是 `[a-z0-9_]*\.js`，**字符类里没有连字符**。
+   * Turbopack 的 chunk 名是随机串，带不带 `-` 全看这次构建的运气 ——
+   * 带了就整个匹配不上，那个 chunk 在守卫眼里根本不存在。
+   *
+   * 于是同一份代码，这次少算 20 KB、下次全算上。8-08 记的
+   * 「当前 109 KB」和 8-10 量到的 186 KB 之间那 77 KB 多半就是这么来的，
+   * 而且**漏掉的恰好是我们自己那个 chunk** —— 它声称要保护的东西
+   * 一直在它视野之外。
+   *
+   * 这类错没有任何地方会喊：守卫照常输出一个数字，照常变绿。
+   * 所以只能在这儿钉住。
+   */
+
+  it("**chunk 名的字符类必须收下连字符**", () => {
+    const line = deploy.split("\n").find((l) => l.includes("_next/static/chunks/"));
+    assert.ok(line, "抓 chunk 那一行没了");
+    assert.match(line, /\[A-Za-z0-9_-\]/, "字符类漏了 `-`，带连字符的 chunk 会被整个丢掉");
+  });
+
+  it("**分开量「框架地板」和「我们自己的」** —— 只有后者是改代码能改动的", () => {
+    /*
+     * 实测 185 KB 里 171 KB 是框架（react-dom + Next 客户端运行时，
+     * 那几个 chunk 里一个中文字符都没有）。拿总量当预算的话，
+     * 预算要么松到拦不住我们自己加的东西，要么紧到永远红。
+     */
+    assert.match(deploy, /APP_JS_BUDGET/);
+    assert.match(deploy, /FLOOR_PROBE_PATH/);
+    assert.match(deploy, /comm -23/, "地板是靠「首页 chunk 减去空白 404 的 chunk」算的");
+  });
+
+  it("**地板探针必须是一个真的不存在的路径**", () => {
+    /*
+     * 探针要是指到一个真页面上，它自己的代码会被算进地板，
+     * 于是「我们自己的」那个数被系统性地压小 —— 一样是量错东西。
+     */
+    const m = deploy.match(/FLOOR_PROBE_PATH="\$\{FLOOR_PROBE_PATH:-([^}]*)\}"/);
+    assert.ok(m, "探针路径没了");
+    assert.match(m[1], /probe|__/, `探针指向了 ${m[1]}，这看着像一个真实路由`);
+  });
+
+  it("**两个预算都要真的拦** —— 只打印不 fail 等于没有", () => {
+    const budgetBlock = deploy.slice(deploy.indexOf("首屏体积"));
+    assert.match(budgetBlock, /app_bytes" -gt "\$APP_JS_BUDGET/);
+    assert.match(budgetBlock, /bytes" -gt "\$JS_BUDGET/);
+    assert.equal(
+      (budgetBlock.match(/fail "首[屏页]/g) ?? []).length,
+      2,
+      "两条预算各要有自己的 fail",
+    );
+  });
+});
+
 describe("安装脚本", () => {
   it("幂等：把写死的 proxy_pass 换成 upstream，重复跑不会换第二次", () => {
     assert.match(install, /proxy_pass http:\/\/agenticlab_app/);

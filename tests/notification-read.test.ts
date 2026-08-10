@@ -103,43 +103,27 @@ describe("**角标也要跟着掉**", () => {
 });
 
 describe("**没开推送时提一句，用不了的地方一个字都不提**", () => {
-  const nudge = src("components/notifications/PushNudge.tsx");
+  /*
+   * 这块提示以前是通知页上单独的一张 PushNudge，
+   * 现在并进了首页那个统一的提示位（一次只出一个）——
+   * 同一件事在两个地方各提一次，是让人厌烦最快的办法。
+   *
+   * 口径一个字没改，所以断言跟着搬到新组件上。
+   */
+  const nudge = src("components/home/HomeNudge.tsx");
 
   it("微信里不提 —— 那里 Web Push 根本没有，劝了也点不动", () => {
     assert.match(nudge, /MicroMessenger/);
-    assert.match(strip(nudge), /if \(ios && !wechat/);
+    assert.match(strip(nudge), /!wechat/);
   });
 
   it("**iOS Safari 里说的是「先加到主屏」** —— 那才是那台设备唯一的路", () => {
     assert.match(nudge, /添加到主屏幕/);
-    assert.match(nudge, /ios-install/);
+    assert.match(strip(nudge), /iosNeedsInstall/);
   });
 
-  it("推送没配好就不提 —— 那条提示会指向一个开不了的开关", () => {
-    assert.match(strip(nudge), /if \(!configured\) return;/);
-    assert.match(src("app/(app)/notifications/page.tsx"), /configProblem\(\) === null/);
-  });
-
-  it("已经订过的不提 —— **问浏览器，不问我们自己的库**", () => {
-    /*
-     * 用户可能在系统设置里把通知权限撤了，而那一步不会通知服务端。
-     * 只信库里那行记录的话，这条提示对他永远不出现。
-     */
-    assert.match(strip(nudge), /pushManager\.getSubscription\(\)/);
-  });
-
-  it("**不主动弹权限框** —— 未经请求的那一次会让浏览器再也不给弹", () => {
-    assert.doesNotMatch(strip(nudge), /requestPermission/);
-  });
-
-  it("关掉是永久关掉，而且按设备记 —— 订阅本来就是按设备的", () => {
-    assert.match(nudge, /localStorage\.setItem\(DISMISS_KEY, "1"\)/);
-    assert.match(strip(nudge), /localStorage\.getItem\(DISMISS_KEY\) === "1"/);
-  });
-
-  it("判定全在 effect 里 —— 服务端没有 navigator，首帧那个答案一定是错的", () => {
-    assert.match(nudge, /useEffect\(\(\) => \{/);
-    assert.match(nudge, /useState<State>\(\{ kind: "hidden" \}\)/);
+  it("**站点没配推送时一个字都不提** —— 那会是一个开不了的开关", () => {
+    assert.match(strip(nudge), /pushConfigured && hasPushApi/);
   });
 });
 

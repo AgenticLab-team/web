@@ -3,11 +3,12 @@ import Link from "next/link";
 
 import { LeaderboardList } from "@/components/LeaderboardList";
 import { DigestCard } from "@/components/home/DigestCard";
-import { PasskeyNudge } from "@/components/passkey/PasskeyNudge";
+import { HomeNudge } from "@/components/home/HomeNudge";
 import { CheckinCard } from "@/components/points/CheckinCard";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Empty, EmptyAction, Group, Row, Section, StatTile } from "@/components/ui/primitives";
 import { passkeyNudgeFor } from "@/lib/auth/passkey-nudge";
+import { configProblem } from "@/lib/notifications/webpush";
 import { getCurrentUser, getRealUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { messages, people } from "@/lib/db/schema";
@@ -71,6 +72,11 @@ export default async function HomePage() {
    */
   const realUser = user ? await getRealUser() : null;
   const nudge = realUser && realUser.id === user?.id ? passkeyNudgeFor(realUser) : null;
+  /*
+   * 站点配了推送吗 —— 没配的话连提都不该提：
+   * 那会是一个点了做不到的按钮，而一次做不到会让人再也不试第二回。
+   */
+  const pushConfigured = configProblem() === null;
 
   const scope = inArray(messages.convId, allIds);
   const totals = db
@@ -132,10 +138,21 @@ export default async function HomePage() {
             排在摘要后面的话，手机上它在第一屏之外，等于不存在。
             没有它的时候这一段完全不渲染，不留空位。
           */}
-          {nudge && (
-            <Section>
-              <PasskeyNudge title={nudge.title} body={nudge.body} />
-            </Section>
+          {/*
+            提示位：**一次只出一个**。
+
+            现在有三件事想提醒：加 Passkey、装到桌面/主屏、开设备推送。
+            三张卡片摞在这儿，头一屏就全是「你还没做这个」——
+            而人打开首页是来看社区发生了什么的。三条同时在的结果是
+            每一条都变成背景噪音，三件事一件都不会做。
+
+            挑哪一个在 lib/nudges/rules.ts 里（按依赖排：iOS 上
+            不装到主屏就收不到推送，所以那种情况下安装排在推送前面）。
+            服务端只把「这个账号该不该提 Passkey」算好传下去，
+            装没装、能不能推送是**这台设备**的事，只有客户端知道。
+          */}
+          {user && (
+            <HomeNudge passkeyEligible={nudge !== null} pushConfigured={pushConfigured} />
           )}
 
           {user && (
