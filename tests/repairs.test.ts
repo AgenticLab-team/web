@@ -42,6 +42,8 @@ describe("真库", async () => {
   const fixedOf = (key: string) => runRepairs(dbm.db).find((r) => r.key === key)!.fixed;
 
   const reset = () => {
+    // 消息表也要清 —— 统计现在是从它算出来的，留着上一条用例的数据会串味
+    dbm.db.delete(schema.messages).run();
     dbm.db.delete(schema.dailyStats).run();
     dbm.db.delete(schema.notifications).run();
   };
@@ -135,6 +137,66 @@ describe("真库", async () => {
       notif("system", "解锁称号「常客」");
       assert.equal(fixedOf("notification-title-type"), 1);
       assert.equal(fixedOf("notification-title-type"), 0);
+    });
+  });
+
+  describe("**统计漂移**", () => {
+    let n = 0;
+    const msg = (wxId: string, hour: number, quality = false) =>
+      dbm.db
+        .insert(schema.messages)
+        .values({
+          id: `dm${++n}`,
+          convId: "g_a",
+          senderWxId: wxId,
+          isSend: false,
+          type: "text",
+          content: "内容",
+          length: 20,
+          isQuality: quality,
+          ts: Date.UTC(2026, 7, 8, hour - 8),
+        })
+        .run();
+
+    const statsOf = (wxId: string) =>
+      dbm.db
+        .all<{ n: number }>(
+          sql`SELECT messages AS n FROM daily_stats WHERE wx_id = ${wxId}`,
+        )[0]?.n;
+
+    it("数字不对的行会被重算", () => {
+      reset();
+      msg("wx_a", 3);
+      msg("wx_a", 4);
+      dbm.db.run(
+        sql`INSERT INTO daily_stats (wx_id, conv_id, date, messages, quality_messages, chars_total, hour_histogram, updated_at)
+            VALUES ('wx_a', 'g_a', '2026-08-08', 1, 0, 20, '[0]', 0)`,
+      );
+      assert.equal(fixedOf("daily-stats-drift"), 1);
+      assert.equal(statsOf("wx_a"), 2);
+    });
+
+    it("**统计行压根不存在的也要补上** —— 那是这个 bug 最彻底的形态", () => {
+      /*
+       * 第一版的修复是 `FROM daily_stats LEFT JOIN messages`，
+       * 只看得见「有行但数字不对」的那些。
+       *
+       * 线上验证时正好撞见：14 行修好之后还剩 1 个人对不上，
+       * 查下来他那一天**根本没有统计行**。
+       * 「修好了」和「全修好了」差的就是这条 JOIN 的方向。
+       */
+      reset();
+      msg("wx_b", 7);
+      assert.equal(statsOf("wx_b"), undefined, "前提：这一天没有统计行");
+      assert.equal(fixedOf("daily-stats-drift"), 1);
+      assert.equal(statsOf("wx_b"), 1);
+    });
+
+    it("**对得上的不动** —— 否则每次启动都说修了几千行，等于没说", () => {
+      reset();
+      msg("wx_c", 9, true);
+      assert.equal(fixedOf("daily-stats-drift"), 1);
+      assert.equal(fixedOf("daily-stats-drift"), 0, "第二遍还在改，说明不幂等");
     });
   });
 

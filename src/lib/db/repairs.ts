@@ -116,24 +116,34 @@ const REPAIRS: readonly Repair[] = [
       "这一条把**历史上漏掉的**补回来",
     run: (tx) => {
       /*
-       * 只重算**对不上的**那几行。
+       * **从消息那一侧扫起**，不是从 daily_stats 扫起。
        *
-       * 全表重算也能得到正确结果，但那样每次启动都要扫一遍 45000 条，
-       * 而且日志里永远看不出「这次到底有没有漂移」——
+       * 第一版是 `FROM daily_stats LEFT JOIN messages`，
+       * 它只看得见「已经有统计行、但数字不对」的那些 ——
+       * 而**统计行压根没写过**的那种漏掉了，
+       * 那恰恰是这个 bug 最彻底的形态：消息进来了，统计一次都没落。
+       *
+       * 线上验证时正是这样：14 行修好之后还剩 1 个人对不上，
+       * 查下来他那一天根本没有统计行。「修好了」和「全修好了」
+       * 差的就是这一条 JOIN 的方向。
+       *
+       * 只重算**对不上的**，不全表重算：后者每次启动都要扫一遍
+       * 45000 条，而且日志里永远看不出「这次到底有没有漂移」——
        * 一个每次都说「修了 3831 行」的修复，和没有修复一样没信息。
        */
       const drifted = tx.all<{ wxId: string; convId: string; date: string }>(
-        sql`SELECT s.wx_id AS wxId, s.conv_id AS convId, s.date AS date
-            FROM daily_stats s
-            LEFT JOIN (
+        sql`SELECT m.wx_id AS wxId, m.conv_id AS convId, m.date AS date
+            FROM (
               SELECT sender_wx_id AS wx_id, conv_id,
                      date(ts / 1000, 'unixepoch', '+8 hours') AS date,
                      count(*) AS n, sum(is_quality) AS q, sum(length) AS c
               FROM messages WHERE is_send = 0
               GROUP BY wx_id, conv_id, date
             ) m
-              ON m.wx_id = s.wx_id AND m.conv_id = s.conv_id AND m.date = s.date
-            WHERE s.messages != coalesce(m.n, 0)
+            LEFT JOIN daily_stats s
+              ON s.wx_id = m.wx_id AND s.conv_id = m.conv_id AND s.date = m.date
+            WHERE s.wx_id IS NULL
+               OR s.messages != m.n
                OR s.quality_messages != coalesce(m.q, 0)
                OR s.chars_total != coalesce(m.c, 0)`,
       );
@@ -164,16 +174,27 @@ const REPAIRS: readonly Repair[] = [
         const hours = new Array(24).fill(0);
         for (const h of hourRows) hours[h.h] = Number(h.n);
 
+        /*
+         * upsert —— 统计行可能**根本不存在**（那正是最彻底的那种漏）。
+         * 只 UPDATE 的话，`changes` 是 0，而 fixed 却加了一，
+         * 于是日志说修好了、数字还是错的。
+         */
         tx.run(
-          sql`UPDATE daily_stats
-              SET messages = ${Number(agg.n)},
-                  quality_messages = ${Number(agg.q ?? 0)},
-                  chars_total = ${Number(agg.c ?? 0)},
-                  first_msg_at = ${Number(agg.first)},
-                  last_msg_at = ${Number(agg.last)},
-                  hour_histogram = ${JSON.stringify(hours)},
-                  updated_at = ${Date.now()}
-              WHERE wx_id = ${row.wxId} AND conv_id = ${row.convId} AND date = ${row.date}`,
+          sql`INSERT INTO daily_stats
+                (wx_id, conv_id, date, messages, quality_messages, chars_total,
+                 first_msg_at, last_msg_at, hour_histogram, updated_at)
+              VALUES (${row.wxId}, ${row.convId}, ${row.date},
+                      ${Number(agg.n)}, ${Number(agg.q ?? 0)}, ${Number(agg.c ?? 0)},
+                      ${Number(agg.first)}, ${Number(agg.last)},
+                      ${JSON.stringify(hours)}, ${Date.now()})
+              ON CONFLICT(wx_id, conv_id, date) DO UPDATE SET
+                messages = excluded.messages,
+                quality_messages = excluded.quality_messages,
+                chars_total = excluded.chars_total,
+                first_msg_at = excluded.first_msg_at,
+                last_msg_at = excluded.last_msg_at,
+                hour_histogram = excluded.hour_histogram,
+                updated_at = excluded.updated_at`,
         );
         fixed++;
       }
