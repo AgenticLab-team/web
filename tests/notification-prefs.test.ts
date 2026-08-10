@@ -284,10 +284,13 @@ describe("**称号解锁是可以关掉的**", () => {
     /*
      * 用户按类型筛选、按类型静音时看到的都是错的。
      * 幂等：改完一次之后那条 UPDATE 再也匹配不到行。
+     *
+     * 改签和别的一次性数据修复放在一起（lib/db/repairs.ts）——
+     * 它们有一批共同的要求：幂等、说得出为什么、报得出修了几行。
      */
-    const seed = readFileSync(new URL("../src/lib/db/seed.ts", import.meta.url), "utf8");
-    assert.match(seed, /LIKE '解锁称号%'/);
-    assert.match(seed, /set\(\{ type: "title" \}\)/);
+    const repairs = readFileSync(new URL("../src/lib/db/repairs.ts", import.meta.url), "utf8");
+    assert.match(repairs, /LIKE '解锁称号%'/);
+    assert.match(repairs, /SET type = 'title'/);
   });
 });
 

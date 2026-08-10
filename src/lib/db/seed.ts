@@ -1,17 +1,17 @@
 import "server-only";
 
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { db } from "./index";
 import {
   featureFlags,
-  notifications,
   permissions as permissionsTable,
   rolePermissions,
   roles,
   settings,
 } from "./schema";
 import { RETIRED_FLAGS } from "@/lib/flags/registry";
+import { runRepairs } from "./repairs";
 import { PERMISSIONS, RETIRED_PERMISSIONS } from "@/lib/rbac/permissions";
 import { BUILTIN_ROLES, resolveRolePermissions } from "@/lib/rbac/roles";
 import { seedBoards } from "@/lib/forum/seed-boards";
@@ -27,8 +27,8 @@ export interface SeedReport {
   permissionsRetired: number;
   /** 这次启动清掉了几个退役的功能开关 */
   flagsRetired: number;
-  /** 这次启动把几条历史通知改了类型 */
-  notificationsRetagged: number;
+  /** 这次启动修好的历史数据 —— 空数组表示没有需要修的 */
+  repaired: { key: string; fixed: number }[];
   settings: number;
   /** 这次启动清掉了几个退役的配置项 —— 数字不为零时值得在日志里看见 */
   settingsRetired: number;
@@ -49,7 +49,7 @@ export function seedDatabase(): SeedReport {
     rolePermissions: 0,
     permissionsRetired: 0,
     flagsRetired: 0,
-    notificationsRetagged: 0,
+    repaired: [],
     settings: 0,
     settingsRetired: 0,
     flags: 0,
@@ -197,30 +197,11 @@ export function seedDatabase(): SeedReport {
     }
 
     /*
-     * ─────────────────────────────────────────
-     * 历史通知改签：称号解锁从 system 挪到 title
-     * ─────────────────────────────────────────
-     *
-     * 称号解锁原来发的是 `system`，而 `system` 是**关不掉**的
-     * （见 prefs.ts 的 ALWAYS_ON）—— 线上 27 条 system 通知里
-     * 有 26 条是「解锁称号」，和「你在群里的发言被整理成了帖子」
-     * 共用同一个静不了音的开关。
-     *
-     * 新发的已经改了类型，而**旧的不改的话，它们会永远躺在
-     * 「系统公告」那一档下面** —— 用户按类型筛选、按类型静音时
-     * 看到的都是错的。
-     *
-     * 幂等：改完一次之后这条 UPDATE 就再也匹配不到行。
-     * 按标题前缀认，是因为这批通知的标题是机器生成的固定格式。
+     * 一次性数据修复 —— 代码里的 bug 修掉之后，
+     * 它写进库里的坏数据不会自己变好。每一条都是幂等的，
+     * 修完之后再也匹配不到行。说明见 lib/db/repairs.ts。
      */
-    const retagged = tx
-      .update(notifications)
-      .set({ type: "title" })
-      .where(
-        sql`${notifications.type} = 'system' AND ${notifications.title} LIKE '解锁称号%'`,
-      )
-      .run();
-    if (retagged.changes > 0) report.notificationsRetagged = retagged.changes;
+    report.repaired = runRepairs(tx as never).filter((r) => r.fixed > 0);
 
     /*
      * 退役的开关先从库里清掉 —— 后台那一页读的是库里的行，
