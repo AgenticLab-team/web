@@ -126,12 +126,22 @@ describe("**planned 里只该剩「功能真没做」的**", () => {
    * 所以现在这张表该只剩第一类。写死在这里：新增一个 planned
    * 要动这一行，也就要有人过一眼它属于哪一类。
    */
-  it("清单就是这 8 个，全是功能没做", () => {
+  it("清单就是这 7 个，全是功能没做", () => {
     const planned = PERMISSION_LIST.filter((p) => p.status === "planned").map((p) => p.key);
     assert.deepEqual(
       [...planned].sort(),
+      /*
+       * `badge.manage` 从这里下来了 —— **退役**，不是接上。
+       *
+       * 「徽章」这个概念这个站明确决定不做：称号那边写着
+       * 「数量刻意少。称号一多就变成徽章墙，每一个都不值钱了」。
+       * 它想管的事已经有主 —— 授予荣誉走 user.title.grant，
+       * 自动解锁走成就条件，上架出售走商店。
+       *
+       * 它属于第三类：**功能被否掉了**，既不是「没做」也不是
+       * 「被更粗的权限管着」。留着等于承诺一件已经决定不做的事。
+       */
       [
-        "badge.manage",
         "broadcast.email",
         "module.config",
         "module.install",
@@ -223,6 +233,42 @@ describe("**退役要退干净**", () => {
    * 就是给了第三套判断的入口，而三套迟早分叉。
    */
   const keys = new Set(PERMISSION_LIST.map((p) => p.key));
+
+  it("**退役名单本身不会悄悄少一条**", () => {
+    /*
+     * 这一条是被两次真实事故催出来的。
+     *
+     * 一次是往这张表里加条目时，一段正则把新加的 4 条连着删掉了 ——
+     * **全量测试一个都没红**，是手动数了一遍才发现的。
+     * 另一次在设置那边：插新条目时覆盖掉了旁边一条的 key，
+     * 两条被并成一条，同样全绿，靠 tsc 的「同名属性」报错才抓到。
+     *
+     * 少一条的后果是安静的：seed 不再清理那个权限点，
+     * 于是一个早就不该存在的勾又回到角色编辑页上，
+     * 而它不对应任何一个具体动作 —— 授出去之后没有人说得清多了什么能力。
+     *
+     * 所以和 planned 一样钉死：改这张表要动这一行。
+     */
+    assert.deepEqual(
+      RETIRED_PERMISSIONS.map((r) => r.key).sort(),
+      [
+        "activity.apply",
+        "activity.view",
+        "badge.manage",
+        "digest.manage",
+        "forum.react",
+        "forum.view",
+        "moderation.action",
+      ],
+      "退役名单变了 —— 少一条的话，那个勾会重新出现在角色编辑页上",
+    );
+  });
+
+  it("**每条退役都写得出为什么**", () => {
+    for (const r of RETIRED_PERMISSIONS) {
+      assert.ok(r.why && r.why.length > 20, `${r.key} 的退役理由太短，等于没写`);
+    }
+  });
 
   it("退役的不能还留在清单里", () => {
     for (const r of RETIRED_PERMISSIONS) {

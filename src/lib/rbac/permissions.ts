@@ -124,7 +124,6 @@ export const PERMISSIONS = [
   { key: "points.adjust.large", category: "points", label: "大额积分调整", dangerLevel: 3 },
   { key: "points.rules.manage", category: "points", label: "配置积分规则", dangerLevel: 2 },
   { key: "points.recount", category: "points", label: "重算积分", dangerLevel: 2 },
-  { key: "badge.manage", category: "points", label: "管理徽章", dangerLevel: 1, status: "planned" },
 
   // ── 审核 ────────────────────────────────────────────────────
   { key: "moderation.queue", category: "moderation", label: "处理举报队列" },
@@ -212,6 +211,17 @@ export const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key) as PermissionKey[];
  * 就是给了第三套判断的入口，而三套迟早分叉。
  */
 export const RETIRED_PERMISSIONS: readonly { key: string; why: string }[] = [
+  {
+    key: "badge.manage",
+    why:
+      "「徽章」这个概念这个站**明确决定不做**：称号系统里那句注释写着" +
+      "「数量刻意少。称号一多就变成徽章墙，每一个都不值钱了 —— " +
+      "『我有 27 个称号』和『我有 0 个』给人的感觉是一样的」" +
+      "（见 lib/titles/builtin.ts）。" +
+      "它想管的事已经有主：授予荣誉走 `user.title.grant`，" +
+      "自动解锁走成就条件（lib/titles/settle.ts），上架出售走商店那一套。" +
+      "留着它等于承诺一个已经被否掉的功能 —— 勾上之后没有人说得清多了什么能力",
+  },
   {
     key: "forum.view",
     why: "论坛能不能看已经有两层在管：访客由 `site.forum_public` 决定进不进得来，成员由版块的 `visible_to` 决定看得到哪些版块。再加一个权限点就是第三套判断 —— 而三套一旦分叉，最松的那一套就是漏的那个口",
