@@ -21,6 +21,7 @@ import { renderMarkdown } from "@/lib/markdown";
 import { assertGroupAccess } from "@/lib/queries/visibility";
 import { resolveDisplayName } from "@/lib/users/display-name";
 import { can } from "@/lib/rbac/can";
+import { consentGate } from "@/lib/forum/consent-gate";
 
 import { recountBoardPosts } from "./board-stats";
 import { notify } from "./notify";
@@ -276,15 +277,18 @@ export async function raiseVisibility(input: {
   });
   if (!verdict.allowed) return fail(verdict.reason);
 
+  /*
+   * 同意判定走 `consentGate` —— 这里不再自己数一遍。
+   *
+   * 原来是内联的两行 filter，而一次变异普查发现：把它们改掉，
+   * 全量测试一条都不红 —— 这个函数在测试里一次都没被调用过
+   * （它带 "use server"，开头就要 getCurrentUser）。
+   * 拆出去之后这条约束才有了一个测得到的落点。
+   */
   const source = db.select().from(postSources).where(eq(postSources.postId, post.id)).get();
   if (source) {
-    const log = (source.consentLog as ConsentEntry[] | null) ?? [];
-    const pending = log.filter((e) => e.status !== "granted");
-    if (pending.length > 0) {
-      return fail(
-        `还有 ${pending.length} 位原作者没有同意（${log.filter((e) => e.status === "granted").length}/${log.length}）`,
-      );
-    }
+    const gate = consentGate(source.consentLog as ConsentEntry[] | null);
+    if (!gate.ok) return fail(gate.reason!);
   }
 
   const board = db.select().from(boards).where(eq(boards.id, post.boardId)).get();
