@@ -5,7 +5,7 @@ import { and, desc, eq, gte, inArray, notInArray, sql } from "drizzle-orm";
 import type { CurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { dailyStats, people, users } from "@/lib/db/schema";
-import { leaderboardHiddenWxIds } from "@/lib/privacy/queries";
+import { leaderboardPrivacy } from "@/lib/privacy/queries";
 import { currentSeason } from "@/lib/seasons/queries";
 import { dateRangeOf } from "@/lib/seasons/rules";
 import { shiftDateKey, todayKey } from "@/lib/time";
@@ -46,6 +46,30 @@ export interface BoardEntry {
   chars: number;
   /** 上一周期的名次，用于显示升降箭头 */
   previousRank: number | null;
+  /**
+   * 这一行**别人看不到**。
+   *
+   * ─────────────────────────────────────────
+   * 只有能绕过隐私的人才拿得到这个字段
+   * ─────────────────────────────────────────
+   *
+   * 管理员看到的是完整的榜（`leaderboardHiddenWxIds` 对他返回空名单），
+   * 而界面上不标出来的话，他会以为公开的榜就长这样 ——
+   * 然后照着一个**只有他自己看得到的名次**去发公告、发奖。
+   * 那是一次好心办出来的隐私事故。
+   *
+   * 反过来，这个字段绝不能给普通成员：告诉他们「谁把自己藏了」，
+   * 等于把那个开关直接废掉 —— 藏起来的人反而更显眼。
+   * 所以非特权视角下它恒为 undefined，不是 false。
+   */
+  hiddenFromOthers?: boolean;
+  /**
+   * 访客看到的是「群成员」—— 这个人还没注册过本站。
+   *
+   * 和上面那条一样只给特权视角：管理员要知道自己看到的名字，
+   * 有哪些是访客看不到的。
+   */
+  anonymousToGuests?: boolean;
 }
 
 export interface BoardOptions {
@@ -161,7 +185,18 @@ export function getLeaderboard(options: BoardOptions): BoardEntry[] {
   const limit = options.limit ?? 50;
   const { from, to, previousFrom, previousTo } = rangeFor(period);
 
-  const hidden = leaderboardHiddenWxIds(options.viewer ?? null);
+  /*
+   * 一次算完：该排除谁、这个人是不是管理员、以及（只对管理员）
+   * 哪几行别人看不到。
+   *
+   * 豁免判定全部在 `privacy/queries.ts` 里 —— 这里再判一遍的话，
+   * 一是权限解析要跑两遍（一次榜单多三条 SQL），
+   * 二是漏判的方向永远是「把关掉开关的人重新暴露出去」。
+   */
+  const privacy = leaderboardPrivacy(options.viewer ?? null);
+  const hidden = privacy.hidden;
+  const privileged = privacy.privileged;
+  const hiddenSet = privacy.hiddenForAudit;
 
   // 赛季有结束日，所以上界要传进去 —— 不传的话看历史赛季会把之后的也算进来
   const current = aggregate(from, to ?? null, options.convIds, options.convId, limit, hidden);
@@ -216,7 +251,9 @@ export function getLeaderboard(options: BoardOptions): BoardEntry[] {
    * 那些昵称他们每天都在微信里看见，这里没有多出新的暴露。
    */
   const anonymize = !options.viewer;
-  const registered = anonymize
+  /* 特权视角也要知道「访客看到的是谁」，所以这一步对它同样要跑 */
+  const needRegistered = anonymize || privileged;
+  const registered = needRegistered
     ? new Set(
         db
           .select({ wxId: users.wxId })
@@ -233,11 +270,19 @@ export function getLeaderboard(options: BoardOptions): BoardEntry[] {
     wxId: row.wxId,
     // 兜底绝不能是 wx_id —— 排行榜对未登录访客公开，wx_id 漏出去就是隐私事故
     name:
-      registered && !registered.has(row.wxId)
+      anonymize && registered && !registered.has(row.wxId)
         ? "群成员"
         : resolveDisplayName([profiles.get(row.wxId)?.name], { wxId: row.wxId }),
     avatarUrl:
-      registered && !registered.has(row.wxId) ? null : (profiles.get(row.wxId)?.avatar ?? null),
+      anonymize && registered && !registered.has(row.wxId)
+        ? null
+        : (profiles.get(row.wxId)?.avatar ?? null),
+    ...(privileged
+      ? {
+          hiddenFromOthers: hiddenSet?.has(row.wxId) ?? false,
+          anonymousToGuests: !(registered?.has(row.wxId) ?? true),
+        }
+      : {}),
     quality: Number(row.quality),
     messages: Number(row.messages),
     chars: Number(row.chars),

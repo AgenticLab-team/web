@@ -46,6 +46,36 @@ export function LeaderboardList({
                     {isMe && (
                       <span className="t-caption ml-1.5 text-[var(--accent)]">你</span>
                     )}
+                    {/*
+                      * ─────────────────────────────────────────
+                      * 这两个标只有能绕过隐私的人看得到
+                      * ─────────────────────────────────────────
+                      *
+                      * 管理员看到的是**完整**的榜。不标出来的话，
+                      * 他会以为公开的榜就长这样，然后照着一个
+                      * 只有他自己看得见的名次去发公告、发奖 ——
+                      * 那是一次好心办出来的隐私事故。
+                      *
+                      * 字段本身在查询层就只给特权视角，
+                      * 所以这里不需要再判一次「他是不是管理员」：
+                      * 普通成员拿到的 entry 上根本没有这两个字段。
+                      */}
+                    {entry.hiddenFromOthers && (
+                      <span
+                        className="t-caption2 ml-1.5 rounded-[var(--radius-pill)] bg-[var(--warning)]/12 px-1.5 py-0.5 align-middle text-[var(--warning)]"
+                        title="这个人把自己从榜单上藏起来了 —— 只有你看得到这一行"
+                      >
+                        仅你可见
+                      </span>
+                    )}
+                    {entry.anonymousToGuests && (
+                      <span
+                        className="t-caption2 ml-1.5 rounded-[var(--radius-pill)] bg-[var(--fill)] px-1.5 py-0.5 align-middle text-[var(--ink-tertiary)]"
+                        title="这个人还没注册本站 —— 未登录访客看到的是「群成员」，没有名字和头像"
+                      >
+                        访客不具名
+                      </span>
+                    )}
                   </p>
                   <p className="tabular t-caption text-[var(--ink-tertiary)]">
                     {entry.messages} 条 · 均 {Math.round(entry.chars / Math.max(entry.messages, 1))} 字

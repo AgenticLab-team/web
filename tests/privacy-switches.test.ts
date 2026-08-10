@@ -274,7 +274,14 @@ describe("**每一条检索路径都要接上，一条都不能漏**", () => {
   }
 
   it("榜单接上了", () => {
-    assert.match(strip(src("lib/queries/leaderboard.ts")), /leaderboardHiddenWxIds\(/);
+    /*
+     * 榜单走的是 `leaderboardPrivacy` —— 它一次算完两件事：
+     * 「该排除谁」和「哪几行别人看不到」（后者只给管理员）。
+     *
+     * 分成两次调用的话，权限解析要跑两遍，一次榜单查询多三条 SQL；
+     * 而且豁免判定就散成了两处。
+     */
+    assert.match(strip(src("lib/queries/leaderboard.ts")), /leaderboardPrivacy\(/);
   });
 
   it("**关键词检索的过滤落在 SQL 里**，不是查出来再 filter", () => {

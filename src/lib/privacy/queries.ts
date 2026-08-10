@@ -90,13 +90,84 @@ export function privacyOf(userId: string): PrivacySettings {
  * 标着「仅自己可见」。否则用户没有任何办法确认开关生效了，
  * 只能靠相信，而只能靠相信的隐私开关跟没有是一样的。
  */
+/**
+ * 谁把自己从榜单上藏起来了 —— **不看视角**。
+ *
+ * ─────────────────────────────────────────
+ * 这个函数的返回值不能直接给人看
+ * ─────────────────────────────────────────
+ *
+ * `leaderboardHiddenWxIds` 回答的是「这个视角下该排除谁」，
+ * 对管理员返回空名单（他看得到完整的榜）。
+ *
+ * 而管理员还需要另一个答案：**这几行里哪些是别人看不到的** ——
+ * 不知道的话，他会照着一个只有自己看得见的名次去发公告、发奖。
+ *
+ * 两个问题不同，所以是两个函数。**调用这一个之前必须先确认
+ * 调用方有绕过隐私的权限** —— 把「谁藏了自己」告诉普通成员，
+ * 等于把那个开关直接废掉：藏起来的人反而更显眼。
+ */
+/**
+ * 榜单要用的那一整套判定，**一次算完**。
+ *
+ * ─────────────────────────────────────────
+ * 为什么不是两个函数各调一次
+ * ─────────────────────────────────────────
+ *
+ * 榜单需要两件事：「该排除谁」和「这几行里哪些是别人看不到的」。
+ * 分开调的话，`bypassesPrivacy` 会被判两遍 ——
+ * 而它背后是一次完整的权限解析（角色、权限、例外），
+ * 一次榜单查询因此多花三条 SQL。
+ *
+ * 更要紧的是**豁免判定必须只写在这个文件里**：
+ * 调用点各写一遍的话，漏判的方向是「把关掉开关的人重新暴露出去」，
+ * 而那种漏没有人看得出来。`tests/privacy-switches.test.ts`
+ * 逐个文件盯着这一条。
+ */
+export interface LeaderboardPrivacy {
+  /** 这个视角下该从榜上排除的 wx_id */
+  hidden: string[];
+  /** 这个人能不能看到完整的榜（管理员） */
+  privileged: boolean;
+  /**
+   * 谁把自己藏起来了 —— **只在 privileged 时才有值**。
+   *
+   * 给普通成员的话等于把那个开关直接废掉：藏起来的人反而更显眼。
+   */
+  hiddenForAudit: Set<string> | null;
+}
+
+export function leaderboardPrivacy(viewer: CurrentUser | null): LeaderboardPrivacy {
+  const privileged = bypassesPrivacy(viewer);
+  const all = hiddenWxIdsForAudit();
+
+  return {
+    // 管理员看得到完整的榜，所以排除名单是空的
+    hidden: privileged ? [] : all.filter((wxId) => wxId !== viewer?.wxId),
+    privileged,
+    hiddenForAudit: privileged ? new Set(all) : null,
+  };
+}
+
+function hiddenWxIdsForAudit(): string[] {
+  return db
+    .select({ wxId: users.wxId })
+    .from(userPrivacy)
+    .innerJoin(users, eq(users.id, userPrivacy.userId))
+    .where(eq(userPrivacy.hideFromLeaderboard, true))
+    .all()
+    .map((r) => r.wxId)
+    .filter((wxId): wxId is string => wxId !== null);
+}
+
 export function leaderboardHiddenWxIds(viewer: CurrentUser | null): string[] {
   /*
    * 管理员看到的是完整的榜。
    *
-   * ⚠ 界面上**还没有**把「别人看不到的那几行」标出来 ——
+   * 界面上会把「别人看不到的那几行」标出来 —— 见
+   * `hiddenWxIdsForAudit` 和 `BoardEntry.hiddenFromOthers`。
    * 不标的话管理员会以为公开的榜就长这样，然后照着一个只有他
-   * 自己看得到的名次去发公告、发奖。记在 ROADMAP.md 里了。
+   * 自己看得到的名次去发公告、发奖。
    */
   if (bypassesPrivacy(viewer)) return [];
 
