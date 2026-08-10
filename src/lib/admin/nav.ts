@@ -220,6 +220,16 @@ export const ADMIN_NAV: AdminNavSection[] = [
         ready: true,
       },
       {
+        key: "community",
+        href: "/admin/community",
+        label: "社群健康度",
+        icon: "activity",
+        permission: "group.manage",
+        alsoAllows: ["group.stats.read"],
+        description: "活跃趋势、发言集中度、沉默比例、退潮预警",
+        ready: true,
+      },
+      {
         key: "groups",
         href: "/admin/groups",
         label: "群与数据源",
