@@ -23,12 +23,13 @@
  * · `hide_from_directory` —— **重复的**。`users.directory_hidden`
  *   才是真正接了线的那个（成员目录、`DirectoryToggle` 都用它）。
  *   同一件事两个字段，迟早分叉，而分叉那天用户以为自己隐身了。
- * · `hide_activity_hours` —— **它守的东西不存在**。`hour_histogram`
- *   每天都在写，但没有任何地方读它来展示，活跃时段热力图根本没做。
- *   给一个不存在的功能配开关，本身就是这里要治的那个病。
- *   哪天真做了热力图，再把它加回来 —— 它暴露的是一个人的作息。
+ * · ~~`hide_activity_hours`~~ —— 当初删掉是因为**它守的东西不存在**：
+ *   `hour_histogram` 每天都在写，但没有任何地方读它来展示。
+ *   那条注释里留了一句「哪天真做了热力图，再把它加回来 ——
+ *   它暴露的是一个人的作息」。**8-10 主页上做了，所以它回来了**
+ *   （见下面第四个开关）。
  *
- * 剩下两个是真的有暴露面、也真的能关上的：
+ * 剩下这几个都是真的有暴露面、也真的能关上的：
  */
 
 /**
@@ -104,6 +105,26 @@ export const PRIVACY_SWITCHES = [
       "另外站长和处理举报的管理员仍然搜得到：有人举报一条发言、" +
       "而发言的人自己关掉了搜索的话，这个举报就没法处理了",
   },
+  {
+    key: "hideActivityHours",
+    label: "在主页上显示我一般什么时候说话",
+    /** 字段叫 hide_*，开关问的是「要不要显示」 */
+    inverted: true,
+    source: "user_privacy",
+    detail:
+      "关掉之后，你的主页上不再出现那张「一般什么时候说话」的条形图。" +
+      "别的统计（发言数、常挂在嘴边）不受影响",
+    /*
+     * 这一条的 exposure 要说得比别的更直白 —— 它和别的开关不是一个量级：
+     * 别的开关暴露的是「你说过什么」，这一条暴露的是**你什么时候醒着**。
+     */
+    exposure:
+      "逐小时的分布会露出作息 —— 几点睡、几点起、是不是上夜班、" +
+      "哪天开始作息变了。这些是同群的人翻聊天记录也拼不出来的东西",
+    limit:
+      "它管的是那张图。「本周活跃过」那种粗粒度的标记还在 —— " +
+      "那说的是「这个人还在」，不是你的生活规律",
+  },
 ] as const;
 
 export type PrivacyKey = (typeof PRIVACY_SWITCHES)[number]["key"];
@@ -113,6 +134,14 @@ export const PRIVACY_DEFAULTS: Record<PrivacyKey, boolean> = {
   directoryHidden: false,
   hideFromLeaderboard: false,
   searchableByOthers: true,
+  /*
+   * 默认**显示**。
+   *
+   * 和别的开关同一条理由：默认全藏的话，这些统计一开始就是空的，
+   * 没有人会再打开第二次去看。而这一项本身也不是秘密 ——
+   * 同群的人翻记录能看出个大概，图只是把它说清楚了。
+   */
+  hideActivityHours: false,
 };
 
 export function isPrivacyKey(value: string): value is PrivacyKey {
@@ -147,6 +176,7 @@ export function withDefaults(row: Partial<PrivacySettings> | null | undefined): 
     directoryHidden: row?.directoryHidden ?? PRIVACY_DEFAULTS.directoryHidden,
     hideFromLeaderboard: row?.hideFromLeaderboard ?? PRIVACY_DEFAULTS.hideFromLeaderboard,
     searchableByOthers: row?.searchableByOthers ?? PRIVACY_DEFAULTS.searchableByOthers,
+    hideActivityHours: row?.hideActivityHours ?? PRIVACY_DEFAULTS.hideActivityHours,
   };
 }
 

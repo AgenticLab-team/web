@@ -27,6 +27,7 @@ import { isFollowing } from "@/lib/forum/follow";
 import { Portrait } from "@/components/members/Portrait";
 import { TitleRow } from "@/components/members/TitleRow";
 import { personProfileFor } from "@/lib/members/person";
+import { activityHoursFor } from "@/lib/members/activity";
 import { catchphraseFor, topEmojiFor, topMentionPartner } from "@/lib/members/phrases";
 import { titlesOf } from "@/lib/titles/queries";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
@@ -91,6 +92,11 @@ export default async function PersonPage({
   const catchphrase = catchphraseFor(user, wxId, convIds);
   const partner = topMentionPartner(user, wxId, convIds);
   const emoji = topEmojiFor(user, wxId, convIds);
+  /*
+   * 作息走**自己的**开关（8-10 加回来的第四个）——
+   * 它露的是「你什么时候醒着」，和「你说过什么」不是一个量级。
+   */
+  const hours = activityHoursFor(user, wxId, convIds);
 
   /*
    * 称号。整套系统早就在（获取、购买、续期、结算、过期），
@@ -166,6 +172,7 @@ export default async function PersonPage({
         */}
       <Portrait
         catchphrase={catchphrase}
+        hours={hours}
         emoji={emoji}
         partner={partner}
         partnerHref={partner ? `/members/${encodeURIComponent(partner.wxId)}` : null}

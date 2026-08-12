@@ -1,6 +1,7 @@
-import { AtSign, MessageSquareQuote, Smile } from "lucide-react";
+import { AtSign, Clock, MessageSquareQuote, Smile } from "lucide-react";
 import Link from "next/link";
 
+import { formatWindow, type HourSummary } from "@/lib/members/hours";
 import type { CatchphraseView, EmojiView, MentionPartner } from "@/lib/members/phrases";
 
 /**
@@ -27,17 +28,19 @@ import type { CatchphraseView, EmojiView, MentionPartner } from "@/lib/members/p
 
 export function Portrait({
   catchphrase,
+  hours,
   emoji,
   partner,
   /** 用来跳到那个人的主页；他没有站内账号也照样跳得过去（主页按 wxId 走） */
   partnerHref,
 }: {
   catchphrase: CatchphraseView | null;
+  hours: HourSummary | null;
   emoji: EmojiView | null;
   partner: MentionPartner | null;
   partnerHref: string | null;
 }) {
-  if (!catchphrase && !emoji && !partner) return null;
+  if (!catchphrase && !hours && !emoji && !partner) return null;
 
   return (
     <div className="mb-4 space-y-2">
@@ -64,6 +67,64 @@ export function Portrait({
               说过 {catchphrase.hits} 次 · 横跨 {catchphrase.days} 天 · 是同群其他人的{" "}
               {catchphrase.lift < 10 ? catchphrase.lift.toFixed(1) : Math.round(catchphrase.lift)} 倍
             </p>
+          </div>
+        </div>
+      )}
+
+      {hours && (
+        <div className="inset-group flex items-start gap-2.5 px-3.5 py-3">
+          <span
+            className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--ink-tertiary)]"
+            style={{ background: "var(--fill)" }}
+            aria-hidden
+          >
+            <Clock className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="t-caption2 text-[var(--ink-quaternary)]">一般什么时候说话</p>
+            <p className="t-body mt-0.5 font-medium">
+              {hours.label ?? "各个时段都有"}
+              <span className="t-caption ml-1.5 font-normal text-[var(--ink-tertiary)]">
+                {formatWindow(hours.from, hours.to)} 最多
+              </span>
+            </p>
+
+            {/*
+              * 24 根细条，一根一小时。
+              *
+              * 用 aria-hidden + 上面那句话承担语义：读屏念 24 个数字
+              * 是没有意义的，而「傍晚最活跃，18:00–21:00 最多」
+              * 已经把这张图说完了。
+              *
+              * 每根都留一点最小高度（哪怕是 0）—— 全塌下去的话
+              * 那一段看起来像是渲染坏了，而不是「这几个小时没人说话」。
+              */}
+            <div className="mt-2 flex h-6 items-end gap-px" aria-hidden>
+              {hours.bars.map((v, h) => (
+                <span
+                  key={h}
+                  className="flex-1 rounded-[1px]"
+                  style={{
+                    height: `${Math.max(6, v * 100)}%`,
+                    background:
+                      v > 0
+                        ? `color-mix(in srgb, var(--accent) ${Math.round(25 + v * 75)}%, transparent)`
+                        : "var(--fill)",
+                  }}
+                />
+              ))}
+            </div>
+            {/*
+              * 标出 0 / 6 / 12 / 18 —— 没有刻度的话，
+              * 这排条子只是好看，读不出「几点」。
+              */}
+            <div className="t-caption2 mt-1 flex justify-between text-[var(--ink-quaternary)]" aria-hidden>
+              <span>0</span>
+              <span>6</span>
+              <span>12</span>
+              <span>18</span>
+              <span>24</span>
+            </div>
           </div>
         </div>
       )}

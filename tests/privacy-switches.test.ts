@@ -90,6 +90,7 @@ describe("**默认什么都不藏**", () => {
       directoryHidden: false,
       hideFromLeaderboard: true,
       searchableByOthers: true,
+      hideActivityHours: false,
     });
   });
 });
@@ -138,6 +139,7 @@ describe("摘要", () => {
     directoryHidden: false,
     hideFromLeaderboard: false,
     searchableByOthers: true,
+    hideActivityHours: false,
     ...over,
   });
 
@@ -165,10 +167,16 @@ describe("**三个开关在一处**", () => {
    * 而这一页顶上那句话已经说清了这种失败：一个隐私开关最坏的形态
    * 不是没有，是让人以为它管得比实际多。
    */
-  it("清单里就是这三个", () => {
+  it("清单里就是这四个", () => {
+    /*
+     * 第四个（作息）是 8-10 加回来的。它当初被删掉的理由是
+     * 「守的东西不存在」—— `hour_histogram` 每天在写但没人展示。
+     * 那条注释同时留了一句「哪天真做了热力图，再把它加回来 ——
+     * 它暴露的是一个人的作息」，而主页上那张图就是那一天。
+     */
     assert.deepEqual(
       PRIVACY_SWITCHES.map((s) => s.key),
-      ["directoryHidden", "hideFromLeaderboard", "searchableByOthers"],
+      ["directoryHidden", "hideFromLeaderboard", "searchableByOthers", "hideActivityHours"],
     );
   });
 
@@ -177,6 +185,7 @@ describe("**三个开关在一处**", () => {
     assert.equal(sourceOf("directoryHidden"), "users");
     assert.equal(sourceOf("hideFromLeaderboard"), "user_privacy");
     assert.equal(sourceOf("searchableByOthers"), "user_privacy");
+    assert.equal(sourceOf("hideActivityHours"), "user_privacy");
   });
 
   it("**写入按 source 分流，界面不知道有两张表**", () => {

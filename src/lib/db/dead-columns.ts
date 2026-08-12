@@ -68,12 +68,6 @@ export interface DeadColumn {
 export const DEAD_COLUMNS: readonly DeadColumn[] = [
   /* ── 隐私 ────────────────────────────────────────────────── */
   {
-    column: "user_privacy.hide_activity_hours",
-    disposition: "decided-against",
-    why: "这个开关守的是作息（几点睡几点起），而作息要逐小时的直方图才暴露得出来。成员目录只给「本周 / 本月」这一档粗粒度，没有可藏的东西 —— 理由写在 lib/members/queries.ts 里",
-  },
-
-  {
     column: "users.email_verified_at",
     disposition: "planned",
     why: "站内没有邮箱验证流程 —— 登录靠微信绑定码和 Passkey。邮件群发做了之后才用得上（那时候要能区分「填过」和「验过」）",

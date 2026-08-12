@@ -21,11 +21,20 @@ const render = async (node: unknown): Promise<string> => {
 const CATCH = { phrase: "卧槽", hits: 129, days: 12, lift: 5.9 };
 const EMOJI = { emoji: "旺柴", hits: 52 };
 const PARTNER = { wxId: "wx_bob", name: "小明", count: 31 };
+const HOURS = {
+  bars: Array.from({ length: 24 }, (_, h) => (h >= 21 || h <= 1 ? 1 : 0.1)),
+  from: 21,
+  to: 23,
+  share: 0.62,
+  label: "深夜型",
+  total: 800,
+};
 
 const portrait = (over: Partial<Parameters<typeof Portrait>[0]> = {}) =>
   render(
     Portrait({
       catchphrase: null,
+      hours: null,
       emoji: null,
       partner: null,
       partnerHref: null,
@@ -99,7 +108,10 @@ describe("@ 得最多", () => {
 
 describe("**什么都没有时整块不出现**", () => {
   it("三样全空 → null", async () => {
-    assert.equal(Portrait({ catchphrase: null, emoji: null, partner: null, partnerHref: null }), null);
+    assert.equal(
+      Portrait({ catchphrase: null, hours: null, emoji: null, partner: null, partnerHref: null }),
+      null,
+    );
     assert.equal(await portrait(), "");
   });
 
@@ -173,5 +185,45 @@ describe("称号", () => {
     const html = await render(TitleRow({ titles: [title({ icon: null })] }));
     assert.match(html, /元老/);
     assert.equal(html.includes("<span aria-hidden></span>"), false);
+  });
+});
+
+describe("一般什么时候说话", () => {
+  it("标签、窗口、24 根条子都在", async () => {
+    const html = await portrait({ hours: HOURS });
+    assert.match(html, /深夜型/);
+    assert.match(html, /21:00–24:00/);
+    // 一根一小时，少一根图就和小时对不上了
+    const bars = html.match(/rounded-\[1px\]/g) ?? [];
+    assert.equal(bars.length, 24);
+  });
+
+  it("**有刻度** —— 没有刻度这排条子只是好看，读不出几点", async () => {
+    const html = await portrait({ hours: HOURS });
+    for (const tick of [">0<", ">6<", ">12<", ">18<", ">24<"]) {
+      assert.ok(html.includes(tick), `缺刻度 ${tick}`);
+    }
+  });
+
+  it("**图对读屏隐藏** —— 念 24 个数字没有意义，上面那句话已经说完了", async () => {
+    const html = await portrait({ hours: HOURS });
+    assert.match(html, /aria-hidden="true"/);
+  });
+
+  it("**作息散的人也画图，只是不给标签**", async () => {
+    /*
+     * 整块不显示的话，「作息很散」这个事实本身也丢了 ——
+     * 而它同样是一句关于这个人的真话。
+     */
+    const html = await portrait({ hours: { ...HOURS, label: null } });
+    assert.match(html, /各个时段都有/);
+    assert.equal((html.match(/rounded-\[1px\]/g) ?? []).length, 24);
+  });
+
+  it("**零的那几个小时也留一点高度** —— 全塌下去像是渲染坏了", async () => {
+    const html = await portrait({
+      hours: { ...HOURS, bars: HOURS.bars.map((_, h) => (h === 3 ? 1 : 0)) },
+    });
+    assert.equal(/height:\s*0%/.test(html), false, "有条子高度是 0");
   });
 });

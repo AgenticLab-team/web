@@ -59,6 +59,7 @@ export function privacyOf(userId: string): PrivacySettings {
     .select({
       hideFromLeaderboard: userPrivacy.hideFromLeaderboard,
       searchableByOthers: userPrivacy.searchableByOthers,
+      hideActivityHours: userPrivacy.hideActivityHours,
     })
     .from(userPrivacy)
     .where(eq(userPrivacy.userId, userId))
@@ -218,6 +219,8 @@ export interface HiddenWxIds {
   leaderboard: string[];
   /** 关掉了「别人能搜到我的发言」的人 */
   unsearchable: string[];
+  /** 关掉了「在主页上显示我一般什么时候说话」的人 */
+  activityHours: string[];
 }
 
 /**
@@ -238,13 +241,14 @@ export interface HiddenWxIds {
  * **两个开关的语义一个字都没变** —— 只是少问了两遍同一个问题。
  */
 export function hiddenWxIds(viewer: CurrentUser | null): HiddenWxIds {
-  if (bypassesPrivacy(viewer)) return { leaderboard: [], unsearchable: [] };
+  if (bypassesPrivacy(viewer)) return { leaderboard: [], unsearchable: [], activityHours: [] };
 
   const rows = db
     .select({
       wxId: users.wxId,
       hideFromLeaderboard: userPrivacy.hideFromLeaderboard,
       searchableByOthers: userPrivacy.searchableByOthers,
+      hideActivityHours: userPrivacy.hideActivityHours,
     })
     .from(userPrivacy)
     .innerJoin(users, eq(users.id, userPrivacy.userId))
@@ -252,11 +256,13 @@ export function hiddenWxIds(viewer: CurrentUser | null): HiddenWxIds {
 
   const leaderboard: string[] = [];
   const unsearchable: string[] = [];
+  const activityHours: string[] = [];
   for (const row of rows) {
     // 自己永远看得见自己 —— 和两个单独取的函数同一条口径
     if (!row.wxId || row.wxId === viewer?.wxId) continue;
     if (row.hideFromLeaderboard) leaderboard.push(row.wxId);
     if (!row.searchableByOthers) unsearchable.push(row.wxId);
+    if (row.hideActivityHours) activityHours.push(row.wxId);
   }
-  return { leaderboard, unsearchable };
+  return { leaderboard, unsearchable, activityHours };
 }

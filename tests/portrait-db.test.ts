@@ -498,3 +498,88 @@ describe("**两份隐私名单一次取完，语义一个字都不能变**", () 
     assert.equal(got.leaderboard.includes("wx_a"), false);
   });
 });
+
+describe("**一般什么时候说话：作息有自己的开关**", () => {
+  let activity: typeof import("@/lib/members/activity");
+
+  before(async () => {
+    activity = await import("@/lib/members/activity");
+  });
+
+  const hoursRow = (convId: string, wxId: string, hist: number[], date: string) => {
+    dbm.db
+      .insert(schema.dailyStats)
+      .values({ wxId, convId, date, messages: hist.reduce((a, b) => a + b, 0), hourHistogram: hist })
+      .run();
+  };
+  const nightly = () => Array.from({ length: 24 }, (_, h) => (h >= 22 || h <= 0 ? 40 : 1));
+
+  beforeEach(() => dbm.db.delete(schema.dailyStats).run());
+
+  it("算得出来", () => {
+    hoursRow("g1", "alice", nightly(), "2026-01-01");
+    const got = activity.activityHoursFor(viewer("bob"), "alice", ["g1"]);
+    assert.equal(got?.from, 22);
+    assert.equal(got?.label, "深夜型");
+  });
+
+  it("**跨群相加** —— 一个人在两个群里的作息是同一套作息", () => {
+    hoursRow("g1", "alice", nightly(), "2026-01-01");
+    hoursRow("g2", "alice", nightly(), "2026-01-01");
+    const one = activity.activityHoursFor(viewer("bob"), "alice", ["g1"])!;
+    const two = activity.activityHoursFor(viewer("bob"), "alice", ["g1", "g2"])!;
+    assert.equal(two.total, one.total * 2);
+  });
+
+  it("**只算共同群** —— 和别的统计同一条边界", () => {
+    hoursRow("g2", "alice", nightly(), "2026-01-01");
+    assert.equal(activity.activityHoursFor(viewer("bob"), "alice", ["g1"]), null);
+  });
+
+  it("**关掉作息开关之后别人看不到**", () => {
+    dbm.db.insert(schema.users).values({ id: "u_x", wxId: "alice", status: "active" }).run();
+    dbm.db
+      .insert(schema.userPrivacy)
+      .values({ userId: "u_x", hideActivityHours: true })
+      .run();
+    hoursRow("g1", "alice", nightly(), "2026-01-01");
+    assert.equal(activity.activityHoursFor(viewer("bob"), "alice", ["g1"]), null);
+  });
+
+  it("**他自己照常看得到**", () => {
+    dbm.db.insert(schema.users).values({ id: "u_x", wxId: "alice", status: "active" }).run();
+    dbm.db
+      .insert(schema.userPrivacy)
+      .values({ userId: "u_x", hideActivityHours: true })
+      .run();
+    hoursRow("g1", "alice", nightly(), "2026-01-01");
+    assert.ok(activity.activityHoursFor(viewer("alice"), "alice", ["g1"]));
+  });
+
+  it("**关掉「别人能搜到我的发言」不影响这一条** —— 两个开关各管各的", () => {
+    /*
+     * 共用一个开关的话，想藏作息的人得连发言一起藏 ——
+     * 而那两件事的代价完全不同。
+     */
+    dbm.db.insert(schema.users).values({ id: "u_x", wxId: "alice", status: "active" }).run();
+    dbm.db
+      .insert(schema.userPrivacy)
+      .values({ userId: "u_x", searchableByOthers: false, hideActivityHours: false })
+      .run();
+    hoursRow("g1", "alice", nightly(), "2026-01-01");
+    assert.ok(activity.activityHoursFor(viewer("bob"), "alice", ["g1"]), "被别的开关连坐了");
+  });
+
+  it("**库里那一列是脏的也不能崩** —— 它是 JSON，什么都可能存进去", () => {
+    dbm.db
+      .insert(schema.dailyStats)
+      .values({ wxId: "alice", convId: "g1", date: "2026-01-02", messages: 5, hourHistogram: "坏了" })
+      .run();
+    hoursRow("g1", "alice", nightly(), "2026-01-01");
+    assert.ok(activity.activityHoursFor(viewer("bob"), "alice", ["g1"]));
+  });
+
+  it("一行都没有时返回 null", () => {
+    assert.equal(activity.activityHoursFor(viewer("bob"), "alice", ["g1"]), null);
+  });
+});
