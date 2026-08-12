@@ -4,6 +4,7 @@ import { AlertTriangle, TrendingDown, TrendingUp } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { AdminActions, AdminButton, AdminRow, adminFieldClass } from "@/components/admin/ui";
 import { saveLevels } from "@/lib/points/level-actions";
 import { MAX_LEVEL_NAME, checkLevels, previewShift, type LevelDef } from "@/lib/points/level-rules";
 
@@ -55,17 +56,19 @@ export function LevelEditor({
     <div className="space-y-3">
       <div className="inset-group">
         {rows.map((row, i) => (
-          <div key={row.level} className="inset-row flex flex-wrap items-center gap-2 px-4 py-3">
+          <AdminRow key={row.level} className="flex-wrap">
             <span className="tabular t-subhead w-8 shrink-0 font-medium text-[var(--ink-tertiary)]">
               L{row.level}
             </span>
 
+            {/* 两个框换成全站统一的 fill 底 —— 原来是「1px 边框 + canvas 底」，
+                和后台其它二十来个输入框不是一套长相 */}
             <input
               value={row.name}
               onChange={(e) => update(i, { name: e.target.value })}
               maxLength={MAX_LEVEL_NAME}
               aria-label={`L${row.level} 的名字`}
-              className="t-body w-24 shrink-0 rounded-[var(--radius-control)] border border-[var(--separator)] bg-[var(--canvas)] px-2 py-1.5 outline-none focus:border-[var(--accent)]"
+              className={`w-24 shrink-0 ${adminFieldClass}`}
             />
 
             <span className="t-caption shrink-0 text-[var(--ink-tertiary)]">累计满</span>
@@ -77,7 +80,8 @@ export function LevelEditor({
               disabled={i === 0}
               onChange={(e) => update(i, { requires: Number(e.target.value) })}
               aria-label={`L${row.level} 需要多少累计积分`}
-              className="tabular t-body w-24 shrink-0 rounded-[var(--radius-control)] border border-[var(--separator)] bg-[var(--canvas)] px-2 py-1.5 outline-none focus:border-[var(--accent)] disabled:opacity-50"
+              title={i === 0 ? "L1 的门槛固定是 0，改了刚注册的人就算不出等级" : undefined}
+              className={`tabular w-24 shrink-0 ${adminFieldClass}`}
             />
             <span className="t-caption shrink-0 text-[var(--ink-tertiary)]">分</span>
 
@@ -96,12 +100,12 @@ export function LevelEditor({
                 解锁：{unlocks[row.level].join("、")}
               </span>
             )}
-          </div>
+          </AdminRow>
         ))}
       </div>
 
       {!verdict.ok && (
-        <p className="t-caption flex items-start gap-1.5 text-[var(--danger)]">
+        <p role="alert" className="t-caption flex items-start gap-1.5 text-[var(--danger)]">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2.2} aria-hidden />
           {verdict.error}
         </p>
@@ -136,10 +140,11 @@ export function LevelEditor({
         </div>
       )}
 
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
+      <AdminActions>
+        <AdminButton
+          tone="primary"
           disabled={pending || !dirty || !verdict.ok}
+          title={dirty ? undefined : "门槛还没改动"}
           onClick={() =>
             startTransition(async () => {
               const r = await saveLevels(rows);
@@ -151,26 +156,35 @@ export function LevelEditor({
               }
             })
           }
-          className="t-subhead rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] transition active:scale-[0.97] disabled:opacity-40"
         >
-          保存门槛
-        </button>
+          {/* 按钮上写清楚会波及多少人 —— 这一下会把所有人的等级重算一遍 */}
+          {dirty && shift && shift.demoted > 0
+            ? `保存门槛（${shift.demoted} 人会降级）`
+            : "保存门槛"}
+        </AdminButton>
         {dirty && (
-          <button
-            type="button"
+          <AdminButton
+            tone="quiet"
             onClick={() => {
               setRows(initial);
               setSaved(false);
             }}
-            className="t-caption px-2 py-2 text-[var(--ink-tertiary)]"
           >
             改回去
-          </button>
+          </AdminButton>
         )}
-        {saved && <span className="t-caption text-[var(--success)]">存好了，等级已经重算</span>}
-      </div>
+        {saved && (
+          <span role="status" className="t-caption text-[var(--success)]">
+            存好了，等级已经重算
+          </span>
+        )}
+      </AdminActions>
 
-      {error && <p className="t-caption text-[var(--danger)]">{error}</p>}
+      {error && (
+        <p role="alert" className="t-caption text-[var(--danger)]">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

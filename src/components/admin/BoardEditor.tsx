@@ -3,6 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import {
+  AdminActions,
+  AdminButton,
+  AdminChip,
+  AdminNote,
+  adminFieldClass,
+} from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import { deleteBoard, updateBoard } from "@/lib/admin/board-actions";
 import { VISIBILITY_OPTIONS } from "@/lib/admin/board-rules";
@@ -79,13 +86,9 @@ export function BoardEditor({ board, siblings, impacts }: Props) {
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="t-footnote rounded-[var(--radius-pill)] bg-[var(--fill)] px-3 py-1.5 font-medium text-[var(--ink-secondary)]"
-      >
+      <AdminChip aria-expanded={false} onClick={() => setOpen(true)}>
         编辑
-      </button>
+      </AdminChip>
     );
   }
 
@@ -93,10 +96,10 @@ export function BoardEditor({ board, siblings, impacts }: Props) {
     <div className="animate-rise mt-3 space-y-3 rounded-[var(--radius-card)] bg-[var(--canvas)] p-3.5">
       <div className="grid gap-2 sm:grid-cols-2">
         <Field label="名称">
-          <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+          <input value={name} onChange={(e) => setName(e.target.value)} className={adminFieldClass} />
         </Field>
         <Field label="图标（emoji）">
-          <input value={icon} onChange={(e) => setIcon(e.target.value)} className={inputClass} />
+          <input value={icon} onChange={(e) => setIcon(e.target.value)} className={adminFieldClass} />
         </Field>
       </div>
 
@@ -104,7 +107,7 @@ export function BoardEditor({ board, siblings, impacts }: Props) {
         <input
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className={inputClass}
+          className={adminFieldClass}
         />
       </Field>
 
@@ -152,15 +155,15 @@ export function BoardEditor({ board, siblings, impacts }: Props) {
             min={0}
             value={postMinLevel}
             onChange={(e) => setPostMinLevel(Number(e.target.value))}
-            className={`tabular ${inputClass}`}
+            className={`tabular ${adminFieldClass}`}
           />
         </Field>
-        <label className="flex items-center gap-2 self-end pb-2">
+        <label className="flex min-h-11 items-center gap-2.5 self-end pb-2">
           <input
             type="checkbox"
             checked={locked}
             onChange={(e) => setLocked(e.target.checked)}
-            className="h-4 w-4"
+            className="h-5 w-5 shrink-0 accent-[var(--accent)]"
           />
           <span className="t-subhead">锁定（禁止发新帖）</span>
         </label>
@@ -170,22 +173,22 @@ export function BoardEditor({ board, siblings, impacts }: Props) {
           * 也就是说 `allow_anonymous` 永远是 false（匿名功能等于不存在），
           * `require_tags` 永远是 false。
           */}
-        <label className="flex items-center gap-2">
+        <label className="flex min-h-11 items-center gap-2.5">
           <input
             type="checkbox"
             checked={allowAnonymous}
             onChange={(e) => setAllowAnonymous(e.target.checked)}
-            className="h-4 w-4"
+            className="h-5 w-5 shrink-0 accent-[var(--accent)]"
           />
           <span className="t-subhead">允许匿名发帖与回复</span>
         </label>
 
-        <label className="flex items-center gap-2">
+        <label className="flex min-h-11 items-center gap-2.5">
           <input
             type="checkbox"
             checked={requireTags}
             onChange={(e) => setRequireTags(e.target.checked)}
-            className="h-4 w-4"
+            className="h-5 w-5 shrink-0 accent-[var(--accent)]"
           />
           <span className="t-subhead">发帖必须打标签</span>
         </label>
@@ -207,13 +210,18 @@ export function BoardEditor({ board, siblings, impacts }: Props) {
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         placeholder="理由（必填，会记入审计日志）"
-        className={inputClass}
+        className={adminFieldClass}
       />
 
-      <div className="flex gap-2">
-        <button
-          type="button"
+      <AdminActions>
+        {/* 收紧可见性会把已发出去的帖子从别人眼前拿走 —— 那一档归 danger。
+            普通改名改简介是 primary。同一个按钮按后果换档，
+            比常年一个绿色「保存」诚实 */}
+        <AdminButton
+          tone={impact && impact.affected > 0 ? "danger" : "primary"}
+          className="flex-1"
           disabled={pending || !reason.trim() || !name.trim()}
+          title={reason.trim() ? undefined : "先写一句理由"}
           onClick={() =>
             run(
               () =>
@@ -236,18 +244,13 @@ export function BoardEditor({ board, siblings, impacts }: Props) {
                 : "已保存",
             )
           }
-          className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
         >
-          保存
-        </button>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="t-subhead rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 text-[var(--ink-secondary)]"
-        >
+          {impact && impact.affected > 0 ? `保存并降级 ${impact.affected} 篇` : "保存"}
+        </AdminButton>
+        <AdminButton tone="quiet" onClick={() => setOpen(false)}>
           取消
-        </button>
-      </div>
+        </AdminButton>
+      </AdminActions>
 
       <details className="pt-1" onToggle={(e) => setConfirmDelete(e.currentTarget.open)}>
         <summary className="t-caption cursor-pointer list-none text-[var(--ink-tertiary)]">
@@ -264,7 +267,8 @@ export function BoardEditor({ board, siblings, impacts }: Props) {
                 <select
                   value={moveTo}
                   onChange={(e) => setMoveTo(e.target.value)}
-                  className={inputClass}
+                  aria-label="把里面的帖子搬到哪个版块"
+                  className={adminFieldClass}
                 >
                   {siblings.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -274,11 +278,15 @@ export function BoardEditor({ board, siblings, impacts }: Props) {
                 </select>
               </>
             ) : (
-              <p className="t-caption text-[var(--ink-tertiary)]">这个版块是空的，可以直接删。</p>
+              <AdminNote className="px-0">这个版块是空的，可以直接删。</AdminNote>
             )}
-            <button
-              type="button"
+            {/* 删版块不可逆 —— 实心红。原来是 12% 淡红底，
+                和「退款」那种撤得回来的动作长得一样 */}
+            <AdminButton
+              tone="danger"
+              block
               disabled={pending || !reason.trim() || (board.livePosts > 0 && !moveTo)}
+              title={reason.trim() ? undefined : "先在上面填一句理由"}
               onClick={() =>
                 run(
                   () =>
@@ -290,20 +298,17 @@ export function BoardEditor({ board, siblings, impacts }: Props) {
                   "已删除",
                 )
               }
-              className="t-subhead w-full rounded-[var(--radius-control)] px-4 py-2 font-medium disabled:opacity-40"
-              style={{ background: "color-mix(in srgb, var(--danger) 12%, transparent)", color: "var(--danger)" }}
             >
-              确认删除（需要先填理由）
-            </button>
+              {board.livePosts > 0
+                ? `搬走 ${board.livePosts} 篇并删掉这个版块`
+                : "确认删除这个版块"}
+            </AdminButton>
           </div>
         )}
       </details>
     </div>
   );
 }
-
-const inputClass =
-  "t-subhead w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -325,7 +330,7 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as Visibility)}
-      className={inputClass}
+      className={adminFieldClass}
     >
       {VISIBILITY_OPTIONS.map((option) => (
         <option key={option.key} value={option.key}>

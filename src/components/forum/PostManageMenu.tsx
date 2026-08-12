@@ -192,7 +192,7 @@ export function PostManageMenu({
         aria-expanded={open}
         aria-haspopup="true"
         onClick={() => (open ? close() : setOpen(true))}
-        className={`tap-target rounded-[0.5rem] p-2 transition active:scale-90 ${
+        className={`tap-target rounded-[var(--radius-chip)] p-2 transition active:scale-90 ${
           open
             ? "bg-[var(--fill)] text-[var(--ink)]"
             : "text-[var(--ink-tertiary)] hover:bg-[var(--fill)] hover:text-[var(--ink-secondary)]"
@@ -349,7 +349,7 @@ export function PostManageMenu({
                   onClick={submitReason}
                   className={`t-footnote flex-1 rounded-[var(--radius-control)] px-3 py-2 font-medium transition active:scale-[0.98] disabled:opacity-40 ${
                     step.action === "delete"
-                      ? "bg-[var(--danger)] text-white"
+                      ? "bg-[var(--danger)] text-[var(--danger-ink)]"
                       : "bg-[var(--accent)] text-[var(--accent-ink)]"
                   }`}
                 >

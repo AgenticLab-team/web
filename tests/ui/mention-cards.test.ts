@@ -47,6 +47,7 @@ const card = (over: Partial<MentionCard> = {}): MentionCard => ({
   url: "https://github.com/vercel/next.js",
   title: "vercel/next.js",
   summary: "JavaScript · ★ 128k — The React Framework",
+  body: null,
   ...over,
 });
 
@@ -109,6 +110,33 @@ describe("渲染出来长什么样", () => {
       card({ key: "repo:a/b", url: "https://github.com/a/b", title: "a/b" }),
     ]);
     assert.equal((out.match(/<a /g) ?? []).length, 2);
+  });
+
+  it("**提交和代码的图标与文字也各不相同**", async () => {
+    const commit = await html([card({ kind: "commit", title: "a/b@abc1234" })]);
+    assert.match(commit, /lucide-git-commit-horizontal/);
+    assert.match(commit, />提交</);
+  });
+
+  it("**代码那一段整块不是链接** —— 想复制两行的人不该一选中就跳走", async () => {
+    const out = await html([
+      card({ kind: "code", title: "src/x.ts", summary: "a/b · 第 1 行", body: "<pre>x</pre>" }),
+    ]);
+    // 只有顶上那行标题是 <a>
+    assert.equal((out.match(/<a /g) ?? []).length, 1);
+    assert.match(out, /<pre>x<\/pre>/);
+  });
+
+  it("**代码块自己横向滚，不让整页横滚** —— 页面能横拉的话手机上每次划动都会歪", async () => {
+    const out = await html([card({ kind: "code", body: "<pre>x</pre>" })]);
+    assert.match(out, /overflow-x-auto/);
+  });
+
+  it("**没有代码时不走代码那条渲染** —— 一个空 pre 是半张卡片", async () => {
+    const out = await html([card({ kind: "code", title: "src/x.ts", body: null })]);
+    assert.equal(/<pre/.test(out), false);
+    // 退回成普通那一行，整块仍然是链接
+    assert.match(out, /href=/);
   });
 
   it("**标题过长时截在样式层，不截字符串** —— 截了就搜不到了", async () => {

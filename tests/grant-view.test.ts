@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import {
   filterPersonGrants,
   mergeGrantsByUser,
-  paginate,
+  slicePage,
   type FlatGrant,
 } from "@/lib/api-tokens/grant-view";
 
@@ -170,39 +170,42 @@ describe("过滤", () => {
   });
 });
 
-describe("分页", () => {
+describe("切页", () => {
   const items = Array.from({ length: 23 }, (_, i) => i);
 
   it("切得对", () => {
-    const p = paginate(items, 2, 10);
+    const p = slicePage(items, 2, 10);
     assert.deepEqual(p.items, [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
-    assert.equal(p.pages, 3);
+    assert.equal(p.slice.totalPages, 3);
     assert.equal(p.total, 23);
   });
 
-  it("**页码越界要夹回来，不是给一页空的**", () => {
+  it("**页码的边界行为不在这里，在 lib/pagination**", () => {
     /*
-     * 停在第 5 页，前面被收回了几条，总数缩到 3 页 ——
-     * 刷新一下得到一张空白页面，而人第一反应是「东西没了」。
-     * 过滤之后更常撞上：停在第 3 页时打两个字。
+     * 我第一版在 grant-view 里又写了一份 paginate，而仓库里已经有一份
+     * 用在十个后台页面上。两份分页迟早在边界上分叉，而分叉出来的那份
+     * 通常是漏了某个情况的（多半是空列表）。
+     *
+     * 这几条是接上去之后仍然成立的证明 —— 越界往两头夹、
+     * 认不出来的回第一页、空列表也算「第 1 页共 1 页」。
      */
-    const p = paginate(items, 99, 10);
-    assert.equal(p.page, 3);
-    assert.equal(p.items.length, 3);
+    assert.equal(slicePage(items, 99, 10).slice.page, 3, "越界夹到最后一页");
+    assert.equal(slicePage(items, "abc", 10).slice.page, 1, "认不出来的回第一页");
+    assert.equal(slicePage(items, -5, 10).slice.page, 1);
+
+    const empty = slicePage([], 1, 10);
+    assert.equal(empty.slice.totalPages, 1, "空列表也要有落脚点");
+    assert.deepEqual(empty.items, []);
   });
 
-  it("小于 1 的页码也夹回来", () => {
-    assert.equal(paginate(items, 0, 10).page, 1);
-    assert.equal(paginate(items, -5, 10).page, 1);
-    // 地址栏里什么都可能有
-    assert.equal(paginate(items, Number.NaN, 10).page, 1);
-  });
-
-  it("一条都没有时仍然是第 1 页共 1 页，不是第 1 页共 0 页", () => {
-    const p = paginate([], 1, 10);
-    assert.equal(p.pages, 1);
-    assert.equal(p.total, 0);
-    assert.deepEqual(p.items, []);
+  it("**没有第二份 paginate** —— 分页只能有一套边界行为", () => {
+    const code = readCode("lib/api-tokens/grant-view.ts");
+    assert.equal(
+      /export function paginate/.test(code),
+      false,
+      "分页的边界行为应当只在 lib/pagination.ts 里有一份",
+    );
+    assert.match(code, /from "@\/lib\/pagination"/);
   });
 });
 
@@ -231,7 +234,17 @@ describe("日志的过滤走的是 SQL", () => {
      * 而代发日志里存的是完整正文。
      */
     const page = readCode("app/(app)/me/api/page.tsx");
-    const call = page.slice(page.indexOf("const log = sendLog("), page.indexOf("logPages"));
+
+    /*
+     * 切到那次调用**自己的收尾括号**，不是切到后面某个标识符。
+     *
+     * 界标写成一个后来被删掉的名字时，indexOf 返回 -1，slice 就切出了
+     * 整个文件 —— 断言照样绿，但它在检查的是全文，不是那次调用。
+     * 这个坑这次已经踩到第二回了。
+     */
+    const from = page.indexOf("const log = sendLog(");
+    assert.ok(from >= 0, "找不到那次调用，界标失效了");
+    const call = page.slice(from, page.indexOf("});", from));
     assert.match(call, /userId:\s*user\.id/);
     assert.equal(/userId:\s*(one|sp)\(/.test(call), false);
   });

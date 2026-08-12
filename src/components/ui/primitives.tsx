@@ -419,3 +419,74 @@ export function SearchField({
     </div>
   );
 }
+
+/* ── 按钮 ──────────────────────────────────────────────
+ *
+ * ═════════════════════════════════════════
+ * 这是全站**唯一**一处定义按钮长什么样的地方
+ * ═════════════════════════════════════════
+ *
+ * 加它之前量过一次，结果不体面：光是「内边距」这一项，
+ * 全站就有十派以上，前五派各自都有二十处以上 ——
+ *
+ *   px-3 py-2 (83) / px-4 py-3 (66) / px-3 py-2.5 (26)
+ *   px-4 py-2.5 (21) / px-4 py-2 (21) …
+ *
+ * 圆角同样：`rounded-full` 75 处、`rounded-[var(--radius-pill)]` 61 处，
+ * 而 `--radius-pill` 就是 999px —— **同一件事的两种写法**，
+ * 另有十九处硬编码数值绕过了 token。
+ *
+ * 没有人是故意的：没有共享组件时，每个人都得当场决定一次内边距，
+ * 而每次决定都有理由。攒到一百次之后，页面上就没有两个按钮是一样高的，
+ * 站长的原话是「好乱」。
+ *
+ * ─────────────────────────────────────────
+ * 为什么先有 class 函数，再有组件
+ * ─────────────────────────────────────────
+ *
+ * 站里有一批「长得是按钮、其实是链接」的东西（`<Link>`、
+ * `<a download>`）。只给组件的话，那些地方只能照抄一遍 class ——
+ * 于是分叉从第一天就开始了。
+ */
+
+export type ButtonTone = "primary" | "neutral" | "danger" | "dangerSoft" | "quiet";
+export type ButtonSize = "md" | "sm";
+
+const BUTTON_TONE: Record<ButtonTone, string> = {
+  primary: "bg-[var(--accent)] font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-hover)]",
+  neutral: "bg-[var(--fill)] font-medium text-[var(--ink)] hover:bg-[var(--fill-strong)]",
+  /*
+   * 实心红只留给**不可逆**的操作。
+   *
+   * 前景走 `--danger-ink` 而不是 `text-white`：暗色下 `--danger`
+   * 是浅珊瑚 (#ff7a6b)，白字压上去实测 2.55:1，远低于 4.5 ——
+   * 封禁键上的字基本看不见，而没有人会来报这个。
+   */
+  danger: "bg-[var(--danger)] font-medium text-[var(--danger-ink)] hover:opacity-90",
+  /* 可撤销的危险操作（收权限、撤邀请码）—— 提醒，但不吓人 */
+  dangerSoft:
+    "bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] font-medium text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_20%,transparent)]",
+  quiet: "text-[var(--ink-tertiary)] hover:bg-[var(--fill)] hover:text-[var(--ink-secondary)]",
+};
+
+const BUTTON_SIZE: Record<ButtonSize, string> = {
+  md: "min-h-11 px-4 t-subhead",
+  // 视觉 28px、可点 44px。tap-target 那层伪元素在指针设备上自动失效
+  sm: "tap-target min-h-7 px-2.5 t-caption",
+};
+
+export function buttonClass(
+  tone: ButtonTone = "neutral",
+  size: ButtonSize = "md",
+  extra = "",
+): string {
+  return [
+    "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[var(--radius-control)]",
+    "transition active:scale-[0.97] disabled:pointer-events-none disabled:opacity-45",
+    BUTTON_SIZE[size],
+    BUTTON_TONE[tone],
+    extra,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}

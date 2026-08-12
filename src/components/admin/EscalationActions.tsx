@@ -3,6 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import {
+  AdminActions,
+  AdminBlocked,
+  AdminButton,
+  AdminNote,
+  adminFieldClass,
+} from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import { approveEscalation, rejectEscalation } from "@/lib/admin/escalation-actions";
 
@@ -31,13 +38,7 @@ export function EscalationActions({
   const [pending, startTransition] = useTransition();
   const [note, setNote] = useState("");
 
-  if (blocked) {
-    return (
-      <p className="t-caption rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 text-[var(--ink-tertiary)]">
-        {blocked}
-      </p>
-    );
-  }
+  if (blocked) return <AdminBlocked>{blocked}</AdminBlocked>;
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>, success: string) => {
     startTransition(async () => {
@@ -59,12 +60,15 @@ export function EscalationActions({
         onChange={(e) => setNote(e.target.value)}
         rows={2}
         placeholder="理由（必填，申请人会看到）"
-        className="t-subhead w-full resize-none rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]"
+        className={`resize-none ${adminFieldClass}`}
       />
 
-      <div className="flex gap-2">
-        <button
-          type="button"
+      {/* 两个都用 neutral：通过之后扩散不可逆，把它做成醒目的主按钮
+          等于在界面上鼓励点它。这一条是刻意的 —— 见文件头 */}
+      <AdminActions>
+        <AdminButton
+          tone="neutral"
+          className="flex-1"
           disabled={pending || !note.trim() || consentMissing > 0}
           title={
             consentMissing > 0
@@ -72,24 +76,23 @@ export function EscalationActions({
               : "通过后内容立刻对更多人可见，不可撤回"
           }
           onClick={() => run(() => approveEscalation({ id, note }), "已通过，内容已提升可见性")}
-          className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 font-medium text-[var(--ink)] disabled:opacity-35"
         >
           {consentMissing > 0 ? `还差 ${consentMissing} 位同意` : "通过"}
-        </button>
-        <button
-          type="button"
+        </AdminButton>
+        <AdminButton
+          tone="neutral"
+          className="flex-1"
           disabled={pending || !note.trim()}
           onClick={() => run(() => rejectEscalation({ id, note }), "已驳回并答复申请人")}
-          className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 font-medium text-[var(--ink)] disabled:opacity-40"
         >
           维持现状
-        </button>
-      </div>
+        </AdminButton>
+      </AdminActions>
 
-      <p className="t-caption text-[var(--ink-tertiary)]">
+      <AdminNote className="px-0">
         通过之后内容会立刻对更多人可见，<strong>扩散不可逆</strong> ——
         事后撤回撤不掉别人已经看到的东西。拿不准就先驳回，让申请人补充说明。
-      </p>
+      </AdminNote>
     </div>
   );
 }

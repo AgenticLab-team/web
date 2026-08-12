@@ -61,6 +61,13 @@ export interface PostSummary {
   viewCount: number;
   createdAt: number;
   lastReplyAt: number | null;
+  /**
+   * 关联的项目（`owner/repo`，小写）。没关联就是 null。
+   *
+   * 带在摘要里而不是让列表页自己再查一次：一页十五条就是十五次查询，
+   * 而这个值和帖子在同一行上。
+   */
+  repoRef: string | null;
 }
 
 /** SQL 粗筛：能用索引排除的先排除掉 */
@@ -101,6 +108,14 @@ export interface ListPostsOptions {
    * 存在的理由见 longform.ts —— 一句话是：这个站现在会把长文冲走。
    */
   longformOnly?: boolean;
+  /**
+   * 只要关联了这个项目的（`owner/repo`，小写）。
+   *
+   * 做成 listPosts 的一个选项、而不是项目页自己写一条 SQL ——
+   * 那样可见性判定就有了第二份，而这个仓库最贵的几次错误
+   * 都是同一条规则在两个地方各写了一遍。
+   */
+  repoRef?: string;
 }
 
 export function listPosts(viewer: ViewerContext, options: ListPostsOptions = {}) {
@@ -114,6 +129,7 @@ export function listPosts(viewer: ViewerContext, options: ListPostsOptions = {})
     coarseVisibilityFilter(viewer),
   ];
   if (options.boardId) conditions.push(eq(posts.boardId, options.boardId));
+  if (options.repoRef) conditions.push(eq(posts.repoRef, options.repoRef));
   if (options.authorId) {
     conditions.push(eq(posts.authorId, options.authorId));
     /*
@@ -278,6 +294,7 @@ function hydrateAuthors(rows: { post: typeof posts.$inferSelect; board: typeof b
       viewCount: post.viewCount,
       createdAt: post.createdAt,
       lastReplyAt: post.lastReplyAt,
+      repoRef: post.repoRef,
     };
   });
 }

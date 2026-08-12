@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 
+import { AdminActions, AdminButton, adminFieldClass } from "@/components/admin/ui";
 import { handleJoinRequest } from "@/lib/join/actions";
 import type { ApplicantStanding } from "@/lib/join/rules";
 
@@ -108,46 +109,41 @@ export function JoinQueue({ rows, canHandle }: { rows: JoinRow[]; canHandle: boo
                         onChange={(e) => setNote(e.target.value)}
                         aria-label="处理说明"
                         placeholder="处理说明（申请人看不到）"
-                        className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none"
+                        className={adminFieldClass}
                       />
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <button
-                          type="button"
+                      <AdminActions className="mt-2">
+                        <AdminButton
+                          tone="primary"
                           onClick={() => run(row.id, "handled")}
                           disabled={pending}
-                          className="t-caption rounded-lg bg-[var(--accent)] px-3 py-1.5 font-medium text-[var(--accent-ink)] transition active:scale-[0.98] disabled:opacity-50"
                         >
                           已处理（人已拉进群）
-                        </button>
-                        <button
-                          type="button"
+                        </AdminButton>
+                        {/* 拒绝也是一个答复，不是破坏性动作 —— neutral，不染红 */}
+                        <AdminButton
+                          tone="neutral"
                           onClick={() => run(row.id, "rejected")}
                           disabled={pending}
-                          className="t-caption rounded-lg border border-[var(--separator)] px-3 py-1.5 transition active:scale-[0.98] disabled:opacity-50"
                         >
                           拒绝
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setOpenId(null)}
-                          className="t-caption rounded-lg px-2 py-1.5 text-[var(--ink-tertiary)]"
-                        >
+                        </AdminButton>
+                        <AdminButton tone="quiet" onClick={() => setOpenId(null)}>
                           取消
-                        </button>
-                      </div>
+                        </AdminButton>
+                      </AdminActions>
                     </>
                   ) : (
-                    <button
-                      type="button"
+                    <AdminButton
+                      tone="neutral"
+                      size="sm"
                       onClick={() => {
                         setOpenId(row.id);
                         setNote("");
                         setMessage(null);
                       }}
-                      className="t-caption rounded-md border border-[var(--separator)] px-2 py-1 transition-colors hover:bg-[var(--fill)]"
                     >
-                      处理
-                    </button>
+                      处理这份申请
+                    </AdminButton>
                   )}
                 </div>
               )}

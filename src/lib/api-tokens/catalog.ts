@@ -136,6 +136,18 @@ export const ENDPOINTS: readonly Endpoint[] = [
   },
   {
     method: "GET",
+    path: "/api/v1/groups/{conv_id}/stats",
+    summary: "这个群的发言榜和活跃度",
+    scopes: ["groups:read"],
+    example:
+      `curl -H "Authorization: Bearer $TOKEN" \\\n` +
+      `  "https://agenticlab.sh/api/v1/groups/<conv_id>/stats?days=30&limit=20"`,
+    note:
+      "关掉了「出现在榜单上」的成员不会出现在结果里 —— 和站内榜单同一套口径。" +
+      "活跃度是整个群按天汇总的，不分人",
+  },
+  {
+    method: "GET",
     path: "/api/v1/groups/{conv_id}/messages",
     summary: "读这个群的聊天记录",
     scopes: ["groups:read"],

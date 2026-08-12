@@ -157,7 +157,7 @@ function ActionButton({
       title={label}
       aria-label={label}
       aria-pressed={active}
-      className={`rounded-[0.5rem] p-2 transition active:scale-90 ${
+      className={`rounded-[var(--radius-chip)] p-2 transition active:scale-90 ${
         active
           ? "bg-[var(--accent-soft)] text-[var(--accent)]"
           : "text-[var(--ink-tertiary)] hover:bg-[var(--fill)] hover:text-[var(--ink-secondary)]"

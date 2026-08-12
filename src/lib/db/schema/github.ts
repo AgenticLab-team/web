@@ -184,13 +184,30 @@ export const githubSharePrompts = sqliteTable(
  * 因为在 GitHub 那边它们本来就是同一个编号空间。
  */
 export const githubFacts = sqliteTable("github_facts", {
-  /** refKey：`repo:owner/name` / `issue:owner/name#12` */
+  /** refKey：`repo:owner/name` / `issue:owner/name#12` / `code:owner/name@sha/path#L1-L9` */
   key: text("key").primaryKey(),
-  kind: text("kind", { enum: ["repo", "issue", "pr"] }).notNull(),
+  kind: text("kind", { enum: ["repo", "issue", "pr", "commit", "code"] }).notNull(),
   /** 点过去的地址。**以我们解析出来的为准**，不用接口回的 —— 仓库改名后两者会不一致 */
   url: text("url").notNull(),
   title: text("title").notNull(),
   summary: text("summary"),
+  /**
+   * 代码永久链接展开出来的那一段 —— **已经高亮好、消过毒的 HTML**。
+   * 别的种类为空。
+   *
+   * ─────────────────────────────────────────
+   * 这一列是「烤进去」的，而上面那条注释说不能烤 —— 两者不冲突
+   * ─────────────────────────────────────────
+   *
+   * 不能烤的是会变的东西：`★ 1.2k` 写死在正文里，那个数字会永远
+   * 停在发帖那天，而且看不出它是旧的。
+   *
+   * 这一段不会变：解析层**只认带 40 位 sha 的**代码链接，
+   * 一个 sha 指向的内容是不可能改的。所以高亮放在取回来的那一刻做，
+   * 而不是每一次有人打开帖子时重做一遍 —— 后者是把一件
+   * 结果永远相同的 CPU 活儿，摊到每一个读者身上。
+   */
+  body: text("body"),
   /**
    * 问到的时间。
    *

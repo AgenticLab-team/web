@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 
+import { AdminActions, AdminButton, AdminChip } from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import {
   commitBulkFulfill,
@@ -63,27 +64,13 @@ export function RegistrarExport({ pending, all }: { pending: string; all: string
             ["all", "全部"],
           ] as const
         ).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setScope(value)}
-            className={`t-caption rounded-[var(--radius-pill)] px-2.5 py-1 ${
-              scope === value
-                ? "bg-[var(--accent)] font-medium text-white"
-                : "bg-[var(--fill)] text-[var(--ink-secondary)]"
-            }`}
-          >
+          <AdminChip key={value} active={scope === value} onClick={() => setScope(value)}>
             {label}
-          </button>
+          </AdminChip>
         ))}
-        <button
-          type="button"
-          disabled={count === 0}
-          onClick={copy}
-          className="t-caption ml-auto rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-1 font-medium text-[var(--accent)] disabled:opacity-40"
-        >
+        <AdminButton tone="neutral" size="sm" className="ml-auto" disabled={count === 0} onClick={copy}>
           复制（{count} 个）
-        </button>
+        </AdminButton>
       </div>
 
       {/* 一行一个域名，能直接粘进注册商的批量注册框 */}
@@ -158,28 +145,31 @@ export function BulkFulfillPanel({ activityId }: { activityId: string }) {
         className="t-caption2 w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 font-mono outline-none placeholder:text-[var(--ink-quaternary)]"
       />
 
-      <div className="flex gap-2">
-        <button
-          type="button"
+      <AdminActions>
+        <AdminButton
+          tone="neutral"
+          className="flex-1"
           disabled={pending || !text.trim()}
           onClick={preview}
-          className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 font-medium text-[var(--ink)] disabled:opacity-40"
         >
           预览
-        </button>
+        </AdminButton>
         {/* 必须先预览：没看过「将发生什么」就写库，等于把确认步骤做成摆设 */}
-        <button
-          type="button"
+        <AdminButton
+          tone="primary"
+          className="flex-1"
           disabled={pending || !plan || stale || writable === 0}
+          title={plan ? undefined : "先预览一遍"}
           onClick={commit}
-          className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-white disabled:opacity-40"
         >
           确认写入{plan && !stale ? `（${writable} 条）` : ""}
-        </button>
-      </div>
+        </AdminButton>
+      </AdminActions>
 
       {stale && (
-        <p className="t-caption2 text-[var(--warning)]">内容改过了 —— 重新预览一遍再提交</p>
+        <p role="status" className="t-caption2 text-[var(--warning)]">
+          内容改过了 —— 重新预览一遍再提交
+        </p>
       )}
 
       {plan && !stale && <PlanView plan={plan} />}

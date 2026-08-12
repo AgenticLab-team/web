@@ -6,7 +6,15 @@ import { db } from "@/lib/db";
 import { githubFacts, posts, replies } from "@/lib/db/schema";
 
 import { githubJson } from "./api";
-import { apiPathFor, issueFacts, repoFacts, shouldFetch } from "./link-facts";
+import { highlightSnippet } from "./code-render";
+import {
+  apiPathFor,
+  codeSnippet,
+  pathLabel,
+  shouldFetch,
+  summaryFactsOf,
+  type CodeSnippet,
+} from "./link-facts";
 import { canonicalUrl, refKey, refsInHtml, type GithubRef } from "./link-refs";
 
 /**
@@ -38,11 +46,24 @@ import { canonicalUrl, refKey, refsInHtml, type GithubRef } from "./link-refs";
 
 export interface MentionCard {
   key: string;
-  kind: "repo" | "issue" | "pr";
+  kind: "repo" | "issue" | "pr" | "commit" | "code";
   url: string;
   title: string;
   summary: string | null;
+  /** 代码片段那一块的 HTML（已高亮、已消毒）。别的种类为 null */
+  body: string | null;
 }
+
+/**
+ * 一篇帖子底下最多展开几段代码。
+ *
+ * 和 `MAX_MENTIONS` 是两件事：那个管的是「一共几张卡片」，
+ * 而代码块的**高度**是别的卡片的十倍。四段代码摞在帖子底下，
+ * 帖子本身会被挤到看不见 —— 这一块是正文的注脚，不是第二篇正文。
+ *
+ * 超出的那几条不显示卡片，正文里那条链接原样还在。
+ */
+export const MAX_CODE_CARDS = 2;
 
 /**
  * 这篇帖子该显示哪几张卡片。**只读缓存，不联网。**
@@ -60,10 +81,17 @@ export function mentionsFor(html: string): MentionCard[] {
   const byKey = new Map(rows.map((r) => [r.key, r]));
 
   const cards: MentionCard[] = [];
+  let codeCards = 0;
   for (const ref of refs) {
     const row = byKey.get(refKey(ref));
     // 没问过、或者问了发现东西没了 —— 都不显示卡片，正文里那条链接还在
     if (!row || row.gone || !row.title) continue;
+    if (row.kind === "code") {
+      // 取回来了但没有代码 = 半张卡片，比没有更让人以为页面坏了
+      if (!row.body) continue;
+      if (codeCards >= MAX_CODE_CARDS) continue;
+      codeCards++;
+    }
     cards.push({
       key: row.key,
       kind: row.kind,
@@ -71,6 +99,7 @@ export function mentionsFor(html: string): MentionCard[] {
       url: row.url,
       title: row.title,
       summary: row.summary,
+      body: row.kind === "code" ? row.body : null,
     });
   }
   return cards;
@@ -143,7 +172,7 @@ export async function fillMentionFacts(
         db.insert(githubFacts)
           .values({
             key: refKey(ref),
-            kind: ref.kind === "code" || ref.kind === "commit" ? "repo" : ref.kind,
+            kind: ref.kind,
             url: canonicalUrl(ref),
             title: "",
             summary: null,
@@ -168,7 +197,7 @@ export async function fillMentionFacts(
       continue;
     }
 
-    const facts = ref.kind === "repo" ? repoFacts(ref, payload) : issueFacts(ref, payload);
+    const facts = factsOf(ref, payload);
     if (!facts) {
       // 回来了但字段读不出来 —— 是故障不是结论，什么都不写，下次再试
       report.failed++;
@@ -176,13 +205,24 @@ export async function fillMentionFacts(
       continue;
     }
 
+    /*
+     * 代码那一段在**写库之前**高亮好。
+     *
+     * 放在读的时候做的话，每一个打开这篇帖子的人都要重跑一遍 shiki，
+     * 而 sha 固定的内容每次跑出来一模一样（理由写在 code-render.ts）。
+     */
+    const body = facts.snippet
+      ? await highlightSnippet(facts.snippet.code, facts.snippet.lang)
+      : null;
+
     db.insert(githubFacts)
       .values({
         key: refKey(ref),
-        kind: ref.kind === "code" || ref.kind === "commit" ? "repo" : ref.kind,
+        kind: ref.kind,
         url: canonicalUrl(ref),
         title: facts.title,
         summary: facts.summary,
+        body,
         checkedAt: Date.now(),
         gone: false,
       })
@@ -191,6 +231,7 @@ export async function fillMentionFacts(
         set: {
           title: facts.title,
           summary: facts.summary,
+          body,
           checkedAt: Date.now(),
           gone: false,
         },
@@ -200,6 +241,44 @@ export async function fillMentionFacts(
   }
 
   return report;
+}
+
+/**
+ * 一条 ref + 一份回答 → 卡片上要显示的东西。
+ *
+ * 分派收在这一个函数里，而不是在上面那段循环里摊开写 —— 循环里
+ * 那一段管的是「失败怎么记」，那件事对五种 ref 完全一样，
+ * 混在一起的话下一个人加第六种时会漏掉其中一条错误处理。
+ */
+function factsOf(
+  ref: GithubRef,
+  payload: Record<string, unknown>,
+): { title: string; summary: string | null; snippet?: CodeSnippet } | null {
+  if (ref.kind !== "code") return summaryFactsOf(ref, payload);
+
+  const snippet = codeSnippet(ref, payload);
+  if (!snippet) return null;
+
+  /*
+   * 标题是**路径**，不是仓库名。
+   *
+   * 贴一条代码永久链接的人想说的是「看这个文件的这几行」——
+   * 把 owner/repo 摆在最显眼的位置，等于把他说的话换成了另一句。
+   * 仓库名退到下面那行小字里，它是背景不是主语。
+   */
+  const range = snippet.from === snippet.to ? `第 ${snippet.from} 行` : `第 ${snippet.from}–${snippet.to} 行`;
+  /*
+   * 少给了就要说出来。
+   *
+   * 作者写的是 `#L10-L200`，我们只显示 20 行 —— 不说的话，
+   * 读者会以为他指的就是这 20 行，然后照着一段被截断的代码讨论。
+   */
+  const omitted = snippet.omitted > 0 ? `，还有 ${snippet.omitted} 行没展开` : "";
+  return {
+    title: pathLabel(ref.path),
+    summary: `${ref.owner}/${ref.repo} · ${range}${omitted}`,
+    snippet,
+  };
 }
 
 /**

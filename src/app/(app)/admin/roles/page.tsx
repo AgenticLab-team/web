@@ -1,6 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import {
+  AdminButton,
+  AdminNote,
+  AdminRow,
+  AdminTag,
+  adminFieldClass,
+} from "@/components/admin/ui";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Empty, Section } from "@/components/ui/primitives";
@@ -181,24 +188,22 @@ export default async function AdminRolesPage({
 
           {canPreview ? (
             <>
+              {/* 搜索框和后台其它二十来个框走同一套长相 ——
+                  原来这里是「1px 边框 + surface 底」的第二套写法 */}
               <form method="get" className="mb-3 flex gap-2" action="/admin/roles">
                 {params.category && <input type="hidden" name="category" value={params.category} />}
-                {/* --hairline / --surface-hover 是不存在的变量：边框会退回文字色，
-                    在一片 0.5px 发丝线里显得又粗又黑 —— 用真实的 token */}
                 <input
                   type="search"
                   name="as"
                   defaultValue={params.as ?? ""}
                   placeholder="搜微信号或昵称"
                   aria-label="搜索要预览的人"
-                  className="t-subhead min-w-0 flex-1 rounded-[var(--radius-control)] border border-[var(--separator)] bg-[var(--surface)] px-3 py-1.5 outline-none focus-visible:border-[var(--accent)]"
+                  enterKeyHint="search"
+                  className={`min-w-0 flex-1 ${adminFieldClass}`}
                 />
-                <button
-                  type="submit"
-                  className="t-footnote shrink-0 rounded-[var(--radius-control)] border border-[var(--separator)] px-3 py-1.5 transition-colors hover:bg-[var(--fill)]"
-                >
+                <AdminButton tone="neutral" type="submit">
                   搜索
-                </button>
+                </AdminButton>
               </form>
 
               {params.as && candidates.length === 0 && (
@@ -207,7 +212,7 @@ export default async function AdminRolesPage({
 
               <ul className="divide-y divide-[var(--separator)]">
                 {candidates.map((c) => (
-                  <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+                  <li key={c.id} className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 py-2">
                     <span className="t-body min-w-0 flex-1 truncate">
                       {c.name}
                       {c.wxId && (
@@ -215,24 +220,22 @@ export default async function AdminRolesPage({
                       )}
                     </span>
                     {c.roleNames.map((r) => (
-                      <span
-                        key={r}
-                        className="t-caption shrink-0 rounded-full border border-[var(--separator)] px-1.5 py-px text-[var(--ink-secondary)]"
-                      >
-                        {r}
-                      </span>
+                      <AdminTag key={r}>{r}</AdminTag>
                     ))}
-                    <span className="t-caption tabular-nums text-[var(--ink-tertiary)]">
+                    <span className="tabular t-caption text-[var(--ink-tertiary)]">
                       {c.permissionCount} 项权限
                     </span>
                     {c.status === "active" ? (
                       <form action={startPreviewAction.bind(null, c.id)} className="shrink-0">
-                        <button
-                          type="submit"
-                          className="t-footnote rounded-[var(--radius-control)] border border-[var(--danger)] px-2.5 py-1 text-[var(--danger)] transition-colors hover:bg-[var(--danger)] hover:text-white"
-                        >
+                        {/*
+                          * 原来是红描边 + hover 反白，而 hover 那一档写死了 white ——
+                          * 暗色下 danger 是浅珊瑚，白字压上去看不见。
+                          * 归 dangerSoft：预览是只读的，撤得回来（30 分钟自动过期），
+                          * 不该和封禁长得一样重。
+                          */}
+                        <AdminButton tone="dangerSoft" size="sm" type="submit">
                           以他的身份预览
-                        </button>
+                        </AdminButton>
                       </form>
                     ) : (
                       <span className="t-caption shrink-0 text-[var(--ink-tertiary)]">
@@ -252,52 +255,58 @@ export default async function AdminRolesPage({
         </div>
       </Section>
 
+      {/*
+        * 预览记录。
+        *
+        * 原来这里是整个后台唯一一张真正的 `<table>`，靠
+        * `min-w-[30rem]` + 横向滚动在手机上活着 —— 也就是说
+        * 手机上要左右拖才看得全「谁看了谁」，而这正是这张表
+        * 唯一想说的事。四列里有两列（时间、结束方式）本来就
+        * 只有几个字，做成表格纯粹是浪费。
+        *
+        * 换成和后台其它二十处一样的行式列表：一行一次预览，
+        * 主语在左、时间在右，窄屏自动折行，一个横向滚动条都不需要。
+        */}
       <Section title="预览记录">
-        <div className="inset-group overflow-x-auto">
-          {history.length === 0 ? (
-            <Empty title="还没有人用过预览" />
-          ) : (
-            <table className="w-full min-w-[30rem] text-left">
-              <thead>
-                <tr className="t-caption text-[var(--ink-tertiary)]">
-                  <th className="px-4 py-2 font-normal">谁</th>
-                  <th className="px-4 py-2 font-normal">看了谁</th>
-                  <th className="px-4 py-2 font-normal">什么时候</th>
-                  <th className="px-4 py-2 font-normal">结束</th>
-                </tr>
-              </thead>
-              <tbody className="t-subhead">
-                {history.map((row) => (
-                  <tr key={row.id} className="border-t border-[var(--separator)]">
-                    <td className="px-4 py-2">{row.viewerName}</td>
-                    <td className="px-4 py-2">
-                      {row.subjectName}
-                      {row.withheldCount > 0 && (
-                        <span className="t-caption ml-1.5 text-[var(--ink-tertiary)]">
-                          少 {row.withheldCount} 项
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-[var(--ink-tertiary)]">
-                      {relativeTime(row.createdAt)}
-                    </td>
-                    <td className="px-4 py-2 text-[var(--ink-tertiary)]">
-                      {row.endedAt
-                        ? { exit: "已退出", expired: "已过期", revoked: "被掐断" }[
-                            row.endReason ?? "exit"
-                          ]
-                        : "进行中"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          <p className="t-caption px-4 py-2 leading-relaxed text-[var(--ink-tertiary)]">
-            一个只读的功能，唯一的制衡就是事后看得见 —— 所以这张表不能省。
-            每一次进出也都在审计日志里，记的是<strong>真人</strong>，不是被预览的那个人。
-          </p>
-        </div>
+        {history.length === 0 ? (
+          <Empty
+            title="还没有人用过预览"
+            hint="它是只读的，但每一次进出都会记在这里和审计日志里"
+          />
+        ) : (
+          <div className="inset-group">
+            {history.map((row) => (
+              <AdminRow key={row.id} className="flex-wrap">
+                <span className="t-subhead min-w-0 flex-1">
+                  <span className="font-medium">{row.viewerName}</span>
+                  <span className="text-[var(--ink-tertiary)]"> 看了 </span>
+                  {row.subjectName}
+                  {row.withheldCount > 0 && (
+                    <span className="t-caption ml-1.5 text-[var(--ink-tertiary)]">
+                      少 {row.withheldCount} 项
+                    </span>
+                  )}
+                </span>
+                <AdminTag
+                  color={row.endedAt ? undefined : "var(--warning)"}
+                >
+                  {row.endedAt
+                    ? { exit: "已退出", expired: "已过期", revoked: "被掐断" }[
+                        row.endReason ?? "exit"
+                      ]
+                    : "进行中"}
+                </AdminTag>
+                <span className="tabular t-caption shrink-0 text-[var(--ink-quaternary)]">
+                  {relativeTime(row.createdAt)}
+                </span>
+              </AdminRow>
+            ))}
+          </div>
+        )}
+        <AdminNote>
+          一个只读的功能，唯一的制衡就是事后看得见 —— 所以这张表不能省。
+          每一次进出也都在审计日志里，记的是<strong>真人</strong>，不是被预览的那个人。
+        </AdminNote>
       </Section>
 
     </>

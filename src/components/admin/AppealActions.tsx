@@ -3,6 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import {
+  AdminActions,
+  AdminBlocked,
+  AdminButton,
+  AdminNote,
+  adminFieldClass,
+} from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import { handleAppeal } from "@/lib/forum/appeals";
 
@@ -28,13 +35,7 @@ export function AppealActions({ appealId, blocked }: Props) {
   const [pending, startTransition] = useTransition();
   const [response, setResponse] = useState("");
 
-  if (blocked) {
-    return (
-      <p className="t-caption rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 text-[var(--ink-tertiary)]">
-        {blocked}
-      </p>
-    );
-  }
+  if (blocked) return <AdminBlocked>{blocked}</AdminBlocked>;
 
   const submit = (accept: boolean) => {
     startTransition(async () => {
@@ -55,29 +56,31 @@ export function AppealActions({ appealId, blocked }: Props) {
         onChange={(e) => setResponse(e.target.value)}
         rows={2}
         placeholder="答复（必填，会原样发给申诉人）"
-        className="t-subhead w-full resize-none rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]"
+        className={`resize-none ${adminFieldClass}`}
       />
-      <div className="flex gap-2">
-        <button
-          type="button"
+      {/* 两个都用 neutral：把其中一个做成主色，等于在界面上暗示该选它。
+          这一条是刻意的，不是漏了上色 —— 见文件头 */}
+      <AdminActions>
+        <AdminButton
+          tone="neutral"
+          className="flex-1"
           disabled={pending || !response.trim()}
           onClick={() => submit(true)}
-          className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 font-medium text-[var(--ink)] disabled:opacity-40"
         >
           采纳，撤销处罚
-        </button>
-        <button
-          type="button"
+        </AdminButton>
+        <AdminButton
+          tone="neutral"
+          className="flex-1"
           disabled={pending || !response.trim()}
           onClick={() => submit(false)}
-          className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 font-medium text-[var(--ink)] disabled:opacity-40"
         >
           维持原判
-        </button>
-      </div>
-      <p className="t-caption text-[var(--ink-tertiary)]">
+        </AdminButton>
+      </AdminActions>
+      <AdminNote className="px-0">
         采纳会把这条处罚标记为已撤销，用户档案上看得出这次是误判。
-      </p>
+      </AdminNote>
     </div>
   );
 }

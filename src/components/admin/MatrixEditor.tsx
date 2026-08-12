@@ -3,6 +3,12 @@
 import { Check, Minus, X, type LucideIcon } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 
+import {
+  AdminButton,
+  AdminChip,
+  AdminStickyBar,
+  adminFieldClass,
+} from "@/components/admin/ui";
 import type { MatrixState } from "@/lib/admin/matrix-types";
 import { previewMatrixEdit, saveMatrixEdit } from "@/lib/rbac/matrix-actions";
 import { stateLabel, type MatrixDiff } from "@/lib/rbac/matrix-edit";
@@ -180,31 +186,34 @@ export function MatrixEditor({ roles, categories, initial, canEdit, lookupBase }
           const pending = editsByCategory.get(c.category) ?? 0;
           const isActive = c.category === active;
           return (
-            <button
+            <AdminChip
               key={c.category}
-              type="button"
+              active={isActive}
               onClick={() => setActive(c.category)}
               aria-current={isActive ? "true" : undefined}
-              className={[
-                "t-caption shrink-0 rounded-full border px-2.5 py-1 transition-colors",
-                isActive
-                  ? "border-[var(--accent)] bg-[var(--accent)] text-white"
-                  : "border-[var(--separator)] text-[var(--ink-secondary)] hover:bg-[var(--fill)]",
-              ].join(" ")}
             >
               {c.label} {c.permissions.length}
               {pending > 0 && (
+                /*
+                 * 未保存改动数的角标。
+                 *
+                 * 原来选中态是 `bg-white/25`、未选中态是 `bg-accent text-white` ——
+                 * 暗色下 accent 是浅薄荷，白字压上去几乎看不见。
+                 * 现在跟着药丸自己的前景色走：选中时是 canvas 上的半透，
+                 * 未选中时是 accent 底配它自己的 ink，两边都不用猜。
+                 */
                 <span
-                  className={[
-                    "ml-1.5 rounded-full px-1.5 py-px text-[11px] font-semibold tabular-nums",
-                    isActive ? "bg-white/25" : "bg-[var(--accent)] text-white",
-                  ].join(" ")}
+                  className={`tabular ml-0.5 rounded-[var(--radius-pill)] px-1.5 py-px text-[11px] font-semibold ${
+                    isActive
+                      ? "bg-[var(--canvas)]/25"
+                      : "bg-[var(--accent)] text-[var(--accent-ink)]"
+                  }`}
                   aria-label={`这一类有 ${pending} 处改动还没保存`}
                 >
                   {pending}
                 </span>
               )}
-            </button>
+            </AdminChip>
           );
         })}
       </div>
@@ -301,7 +310,15 @@ export function MatrixEditor({ roles, categories, initial, canEdit, lookupBase }
                           }`}
                           title={canEdit ? "点一下换一个状态" : "你没有编辑权限"}
                           className={[
-                            "mx-auto flex h-7 w-7 items-center justify-center rounded-md transition-colors",
+                            /*
+                             * 手机上 36px、桌面上 28px。
+                             *
+                             * 这里**不能**用 tap-target：它给每个格子铺一层
+                             * 44px 的伪元素，而格子之间只隔 4px —— 相邻两格的
+                             * 命中区会重叠，点下去命中哪一个取决于 DOM 顺序。
+                             * 一张点错就改掉四十个人权限的表，宁可让格子本身长大。
+                             */
+                            "mx-auto flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] transition-colors sm:h-7 sm:w-7",
                             color,
                             canEdit ? "hover:bg-[var(--fill)]" : "cursor-default",
                             // 动过的格子要一眼看得出来 —— 否则改了三十格之后没人记得改了哪些
@@ -346,10 +363,13 @@ export function MatrixEditor({ roles, categories, initial, canEdit, lookupBase }
         {canEdit && " 点格子换状态，改完先预览再保存。"}
       </p>
 
+      {/* 圆角走 token（原来是 rounded-[var(--radius-chip)]，和旁边一片 radius-control 差 2px，
+          两块提示条并排时看得出来） */}
       {saved && (
         <p
           role="status"
-          className="t-subhead mt-3 rounded-lg border border-[var(--success)]/40 bg-[var(--success)]/8 px-3 py-2 text-[var(--success)]"
+          className="t-subhead mt-3 rounded-[var(--radius-control)] px-3 py-2 text-[var(--success)]"
+          style={{ background: "color-mix(in srgb, var(--success) 10%, transparent)" }}
         >
           已保存。这次改动进了审计日志，含改前改后的值和理由。
         </p>
@@ -358,7 +378,8 @@ export function MatrixEditor({ roles, categories, initial, canEdit, lookupBase }
       {errors.length > 0 && (
         <ul
           role="alert"
-          className="mt-3 space-y-1 rounded-lg border border-[var(--danger)]/40 bg-[var(--danger)]/8 px-3 py-2"
+          className="mt-3 space-y-1 rounded-[var(--radius-control)] px-3 py-2"
+          style={{ background: "color-mix(in srgb, var(--danger) 10%, transparent)" }}
         >
           {errors.map((e) => (
             <li key={e} className="t-subhead text-[var(--danger)]">
@@ -411,37 +432,23 @@ function MatrixReview({
   pending: boolean;
 }) {
   return (
-    <div className="sticky bottom-0 z-20 mt-3 rounded-xl border border-[var(--separator)] bg-[var(--surface)]/95 p-3 shadow-lg backdrop-blur">
+    <AdminStickyBar>
       <div className="flex flex-wrap items-center gap-2">
         <span className="t-subhead font-medium">{count} 处改动还没保存</span>
-        <button
-          type="button"
-          onClick={onReset}
-          className="t-caption rounded-md px-2 py-1 text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--fill)]"
-        >
+        <AdminButton tone="quiet" size="sm" onClick={onReset}>
           全部撤销
-        </button>
+        </AdminButton>
 
         <span className="flex-1" />
 
         {!diff ? (
-          <button
-            type="button"
-            onClick={onPreview}
-            disabled={pending}
-            className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-[13px] font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-50"
-          >
+          <AdminButton tone="primary" onClick={onPreview} disabled={pending}>
             {pending ? "算着…" : "预览影响"}
-          </button>
+          </AdminButton>
         ) : (
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={pending}
-            className="rounded-lg bg-[var(--danger)] px-3 py-1.5 text-[13px] font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-50"
-          >
+          <AdminButton tone="danger" onClick={onSave} disabled={pending}>
             {pending ? "保存中…" : "确认保存"}
-          </button>
+          </AdminButton>
         )}
       </div>
 
@@ -499,11 +506,11 @@ function MatrixReview({
               value={reason}
               onChange={(e) => onReason(e.target.value)}
               rows={2}
-              className="mt-1 w-full rounded-lg border border-[var(--separator)] bg-[var(--surface)] px-2 py-1.5 text-[14px] outline-none focus-visible:border-[var(--accent)]"
+              className={`mt-1 resize-none ${adminFieldClass}`}
             />
           </label>
         </div>
       )}
-    </div>
+    </AdminStickyBar>
   );
 }

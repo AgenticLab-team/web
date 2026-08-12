@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
+import { AdminButton } from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import { retryAllFailed, retrySyncJob, triggerSync } from "@/lib/admin/group-actions";
 
@@ -39,40 +40,40 @@ export function SyncControls({
     });
   };
 
+  /*
+   * 三个入口都用 neutral —— 它们只是**排队**，不真的动数据，
+   * 所以一点危险色都不该有。sm 那两个在列表行里，
+   * 靠 tap-target 把可点范围撑回 44px。
+   */
   if (retryableId) {
     return (
-      <button
-        type="button"
+      <AdminButton
+        tone="neutral"
+        size="sm"
         disabled={pending}
         onClick={() => run(() => retrySyncJob({ id: retryableId }))}
-        className="t-caption shrink-0 rounded-[var(--radius-pill)] bg-[var(--fill)] px-2.5 py-1 text-[var(--ink-secondary)] disabled:opacity-40"
       >
         重试
-      </button>
+      </AdminButton>
     );
   }
 
   if (kind) {
     return (
-      <button
-        type="button"
+      <AdminButton
+        tone="neutral"
+        size="sm"
         disabled={pending}
         onClick={() => run(() => triggerSync({ kind }))}
-        className="t-caption shrink-0 rounded-[var(--radius-pill)] bg-[var(--fill)] px-2.5 py-1 text-[var(--ink-secondary)] disabled:opacity-40"
       >
         立即同步{label ? ` ${label}` : ""}
-      </button>
+      </AdminButton>
     );
   }
 
   return (
-    <button
-      type="button"
-      disabled={pending}
-      onClick={() => run(retryAllFailed)}
-      className="t-subhead rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 font-medium disabled:opacity-40"
-    >
+    <AdminButton tone="neutral" size="sm" disabled={pending} onClick={() => run(retryAllFailed)}>
       重试全部失败
-    </button>
+    </AdminButton>
   );
 }

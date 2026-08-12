@@ -4,6 +4,7 @@ import DOMPurify from "isomorphic-dompurify";
 import { Marked } from "marked";
 import { codeToHtml } from "shiki";
 
+import { linkifyGithubShorthand } from "@/lib/github/shorthand";
 import { isAllowedImageSource } from "@/lib/image-sources";
 
 import {
@@ -59,8 +60,30 @@ const ALLOWED_ATTR = [
  * style 属性只放行 shiki 生成的配色。
  * 全放开的话可以用 position:fixed 覆盖整页做钓鱼，
  * 用 background:url() 探测访问者。
+ *
+ * ─────────────────────────────────────────
+ * `--shiki-*` 也得放行，否则这条规则把高亮整个删干净
+ * ─────────────────────────────────────────
+ *
+ * 这里原来只列了 `color` / `background-color` 那几个属性名，
+ * 而 shiki 在双主题模式（`defaultColor: false`）下**一个都不写** ——
+ * 它写的是 `--shiki-light:#D73A49;--shiki-dark:#F97583`
+ * 这样的自定义属性，再由 globals.css 里 `.prose-forum .shiki`
+ * 那几条规则 `var()` 出来。
+ *
+ * 于是每一条声明都不匹配、整个 style 属性被删掉，
+ * **全站每一个代码块都是没有颜色的** —— 而 `.shiki` 那个类名
+ * 还在，CSS 也还在，看源码完全看不出哪里断了。
+ * 这正是这个仓库最常见的那种失败：看起来在工作、其实什么都没发生。
+ *
+ * 放行它们是安全的，理由不是「它长得像 shiki」：
+ * 自定义属性本身不影响任何渲染，只有 CSS 里显式 `var()` 它的地方
+ * 才会取到值 —— 而站里 `var(--shiki-*)` 只出现在 color 和
+ * background-color 上。值的字符集照旧受下面那段限制
+ * （没有 `:`、`;`、引号、斜杠，拼不出 url("//…")）。
  */
-const SAFE_STYLE_PATTERN = /^(color|background-color|font-style|font-weight|text-decoration)\s*:\s*[#a-zA-Z0-9(),.\s%-]+;?\s*$/;
+const SAFE_STYLE_PATTERN =
+  /^(color|background-color|font-style|font-weight|text-decoration|--shiki-(?:light|dark)(?:-bg)?)\s*:\s*[#a-zA-Z0-9(),.\s%-]+;?\s*$/;
 
 let purifyConfigured = false;
 
@@ -210,7 +233,16 @@ export async function renderMarkdown(
   const mathToken = `${MATH_TOKEN_PREFIX}${Math.random().toString(36).slice(2, 10).toUpperCase()}X`;
   const { text: withoutMath, pieces: mathPieces } = extractMath(withoutCode, mathToken);
 
-  const withMentions = withoutMath.replace(MENTION_PATTERN, (match, prefix, name) => {
+  /*
+   * `owner/repo#123` 的简写在这里变成普通的 markdown 链接。
+   *
+   * 位置很要紧：**代码块和公式已经被换成占位符了**，所以代码里的
+   * 路径和注解不会被误伤；而它又在 marked 解析之前，产出的链接
+   * 走的是和别的链接完全一样的消毒与 rel 处理 —— 不额外开口子。
+   */
+  const withShorthand = linkifyGithubShorthand(withoutMath);
+
+  const withMentions = withShorthand.replace(MENTION_PATTERN, (match, prefix, name) => {
     const resolved = options.resolveMention?.(name);
     if (!resolved) return match;
     mentions.push(resolved);

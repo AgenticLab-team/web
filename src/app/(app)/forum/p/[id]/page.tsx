@@ -9,6 +9,7 @@ import { AcceptButton } from "@/components/forum/AcceptButton";
 import { BountyBadge } from "@/components/forum/BountyBadge";
 import { ConsentPanel } from "@/components/forum/ConsentPanel";
 import { MentionCards } from "@/components/github/MentionCards";
+import { ProjectTag } from "@/components/github/ProjectTag";
 import { PollWidget } from "@/components/forum/PollWidget";
 import { TipButton } from "@/components/forum/TipButton";
 import { PostActions } from "@/components/forum/PostActions";
@@ -263,6 +264,20 @@ export default async function PostPage({
           * 前者更常是人扫一眼就走的那个决定。
           * 点进去是这个标签下的其它帖子（可见性照样过一遍）。
           */}
+        {/*
+          * 关联的项目排在标签**前面**。
+          *
+          * 两者都在回答「这篇讲什么」，但项目是更硬的那一个：
+          * 标签是作者随手打的词，项目是一个真实存在、点过去看得到
+          * 其它讨论的东西。做成一个带图标的药丸，和标签明显不同 ——
+          * 混在一排里的话，它会被当成又一个标签，而它的去处完全不同。
+          */}
+        {post.repoRef && (
+          <div className="mb-3">
+            <ProjectTag repoRef={post.repoRef} />
+          </div>
+        )}
+
         {postTags.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-1.5">
             {postTags.map((t) => (

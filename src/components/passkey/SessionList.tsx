@@ -84,7 +84,7 @@ export function SessionList({
                 type="button"
                 disabled={busy === session.id}
                 onClick={() => void revoke(session.id)}
-                className="t-footnote shrink-0 rounded-[0.5rem] px-2.5 py-1.5 text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--danger)] disabled:opacity-40"
+                className="t-footnote shrink-0 rounded-[var(--radius-chip)] px-2.5 py-1.5 text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--danger)] disabled:opacity-40"
               >
                 下线
               </button>

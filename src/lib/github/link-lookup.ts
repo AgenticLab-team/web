@@ -6,7 +6,13 @@ import { db } from "@/lib/db";
 import { links } from "@/lib/db/schema";
 
 import { githubJson } from "./api";
-import { apiPathFor, issueFacts, repoFacts, shouldFetch, type LinkFacts } from "./link-facts";
+import {
+  apiPathFor,
+  shouldFetch,
+  summaryFactsOf,
+  wantsSummary,
+  type LinkFacts,
+} from "./link-facts";
 import { parseGithubUrl, type GithubRef } from "./link-refs";
 
 /**
@@ -117,7 +123,7 @@ export async function lookupGithubLinks(
     .map((link) => ({ link, ref: parseGithubUrl(link.url) }))
     .filter(
       (row): row is { link: (typeof links.$inferSelect); ref: GithubRef } =>
-        row.ref !== null && shouldFetch(row.ref),
+        row.ref !== null && shouldFetch(row.ref) && wantsSummary(row.ref),
     );
 
   for (const { link, ref } of candidates) {
@@ -153,8 +159,7 @@ export async function lookupGithubLinks(
       continue;
     }
 
-    const facts: LinkFacts | null =
-      ref.kind === "repo" ? repoFacts(ref, payload) : issueFacts(ref, payload);
+    const facts: LinkFacts | null = summaryFactsOf(ref, payload);
 
     if (!facts) {
       // 回来了但读不出想要的字段 —— 是故障不是结论，下次还该再试

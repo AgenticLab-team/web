@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { AdminNote, AdminRow, AdminTag } from "@/components/admin/ui";
 import { GroupConfig } from "@/components/admin/GroupConfig";
 import { SyncControls } from "@/components/admin/SyncControls";
 import { relativeTime } from "@/components/forum/PostList";
@@ -124,15 +125,9 @@ export default async function AdminGroupsPage() {
                 aria-hidden
               />
               <span className="t-body">{s.label}</span>
-              <span
-                className="t-caption2 rounded-[var(--radius-pill)] px-1.5 py-0.5 font-medium"
-                style={{
-                  background: `color-mix(in srgb, ${VERDICT_COLORS[s.health.verdict]} 15%, transparent)`,
-                  color: VERDICT_COLORS[s.health.verdict],
-                }}
-              >
+              <AdminTag color={VERDICT_COLORS[s.health.verdict]}>
                 {VERDICT_LABELS[s.health.verdict]}
-              </span>
+              </AdminTag>
               <span className="t-caption min-w-0 flex-1 truncate text-[var(--ink-tertiary)]">
                 {s.health.message}
               </span>
@@ -149,7 +144,7 @@ export default async function AdminGroupsPage() {
         >
           <div className="inset-group">
             {failed.map((job) => (
-              <div key={job.id} className="inset-row flex items-center gap-2 px-4 py-2.5">
+              <AdminRow key={job.id}>
                 <span className="t-subhead shrink-0">{job.kind}</span>
                 {job.scope && (
                   <span className="t-caption2 shrink-0 font-mono text-[var(--ink-quaternary)]">
@@ -168,7 +163,7 @@ export default async function AdminGroupsPage() {
                   {relativeTime(job.createdAt)}
                 </span>
                 {canTrigger && <SyncControls retryableId={job.id} />}
-              </div>
+              </AdminRow>
             ))}
           </div>
           <TruncationNote shown={failed.length} total={failedTotal} noun="个失败任务" />
@@ -259,7 +254,7 @@ export default async function AdminGroupsPage() {
         <Section title="增量游标">
           <div className="inset-group">
             {cursorRows.map((c) => (
-              <div key={`${c.kind}:${c.scope}`} className="inset-row flex items-center gap-2 px-4 py-2.5">
+              <AdminRow key={`${c.kind}:${c.scope}`}>
                 <span className="t-subhead shrink-0">{c.kind}</span>
                 {c.scope && (
                   <span className="t-caption2 min-w-0 flex-1 truncate font-mono text-[var(--ink-quaternary)]">
@@ -269,13 +264,13 @@ export default async function AdminGroupsPage() {
                 <span className="tabular t-caption ml-auto text-[var(--ink-tertiary)]">
                   {c.lastTs > 0 ? relativeTime(c.lastTs) : "未开始"}
                 </span>
-              </div>
+              </AdminRow>
             ))}
           </div>
-          <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+          <AdminNote>
             游标记录每类同步拉到哪儿了。它明显落后于当前时间，说明某一轮没跑完 ——
             而<strong>游标一旦前移，跳过的那段消息不会自己补回来</strong>，只能 resync 重建。
-          </p>
+          </AdminNote>
         </Section>
       )}
 

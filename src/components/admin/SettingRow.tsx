@@ -3,6 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import {
+  AdminActions,
+  AdminButton,
+  AdminRow,
+  AdminTag,
+  adminFieldClass,
+} from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import { changeSetting, resetSetting } from "@/lib/admin/setting-actions";
 import type { SettingRow as Row } from "@/lib/admin/settings";
@@ -45,21 +52,13 @@ export function SettingItem({ row }: { row: Row }) {
   };
 
   return (
-    <div className="inset-row px-4 py-3">
-      <div className="flex items-start gap-2">
+    <AdminRow align="start" className="flex-col">
+      <div className="flex w-full items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className="t-body flex flex-wrap items-center gap-1.5">
             <span className="truncate">{row.label ?? row.key}</span>
-            {row.modified && (
-              <span className="t-caption2 rounded-[var(--radius-pill)] bg-[var(--fill)] px-1.5 py-0.5 text-[var(--ink-tertiary)]">
-                已改
-              </span>
-            )}
-            {row.dangerous && (
-              <span className="t-caption2 font-medium" style={{ color: "var(--danger)" }}>
-                危险项
-              </span>
-            )}
+            {row.modified && <AdminTag>已改</AdminTag>}
+            {row.dangerous && <AdminTag color="var(--danger)">危险项</AdminTag>}
           </p>
           {row.description && (
             <p className="t-caption mt-0.5 leading-relaxed text-[var(--ink-tertiary)]">
@@ -71,18 +70,19 @@ export function SettingItem({ row }: { row: Row }) {
 
         <div className="flex shrink-0 items-center gap-2">
           <span className="tabular t-subhead">{row.value}</span>
-          <button
-            type="button"
+          <AdminButton
+            tone="neutral"
+            size="sm"
+            aria-expanded={open}
             onClick={() => setOpen(!open)}
-            className="t-caption rounded-[var(--radius-pill)] bg-[var(--fill)] px-2.5 py-1 text-[var(--ink-secondary)]"
           >
             {open ? "收起" : "修改"}
-          </button>
+          </AdminButton>
         </div>
       </div>
 
       {open && (
-        <div className="animate-rise mt-2.5 space-y-2">
+        <div className="animate-rise w-full space-y-2">
           {/*
             危险项不再锁输入框（2026-08 站长指令：不强制复核）。
             警告改为常驻在输入框上方 —— 出现在打字之前，而不是保存之后：
@@ -103,7 +103,8 @@ export function SettingItem({ row }: { row: Row }) {
           <input
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            className={`${row.type === "int" ? "tabular " : ""}${inputClass}`}
+            aria-label={`${row.label ?? row.key} 的新值`}
+            className={`${row.type === "int" ? "tabular " : ""}${adminFieldClass}`}
             placeholder={row.defaultValue ?? ""}
           />
 
@@ -134,34 +135,31 @@ export function SettingItem({ row }: { row: Row }) {
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="理由（必填，会记入变更历史）"
-            className={inputClass}
+            className={adminFieldClass}
           />
 
-          <div className="flex gap-2">
-            <button
-              type="button"
+          <AdminActions>
+            <AdminButton
+              tone="primary"
+              className="flex-1"
               disabled={pending || !changed || !reason.trim()}
+              title={changed ? undefined : "值还没改动"}
               onClick={() => run(() => changeSetting({ key: row.key, value, reason }))}
-              className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
             >
               保存
-            </button>
+            </AdminButton>
             {row.modified && (
-              <button
-                type="button"
+              <AdminButton
+                tone="neutral"
                 disabled={pending || !reason.trim()}
                 onClick={() => run(() => resetSetting({ key: row.key, reason }))}
-                className="t-subhead rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 text-[var(--ink-secondary)] disabled:opacity-40"
               >
-                恢复默认
-              </button>
+                恢复默认（{row.defaultValue ?? "—"}）
+              </AdminButton>
             )}
-          </div>
+          </AdminActions>
         </div>
       )}
-    </div>
+    </AdminRow>
   );
 }
-
-const inputClass =
-  "t-subhead w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]";

@@ -1,7 +1,10 @@
 "use client";
 
+import { Plus, X } from "lucide-react";
+
 import { useState, useTransition } from "react";
 
+import { AdminButton, adminFieldClass } from "@/components/admin/ui";
 import { previewEligibility } from "@/lib/activities/preview-action";
 import { METRIC_LABELS, type Rule } from "@/lib/activities/eligibility";
 
@@ -82,7 +85,7 @@ export function EligibilityEditor({
           <select
             value={c.metric}
             onChange={(e) => push(conditions.map((x, j) => (j === i ? { ...x, metric: e.target.value } : x)))}
-            className={`t-subhead flex-1 ${inputClass}`}
+            className={`flex-1 ${adminFieldClass}`}
           >
             {COMMON_METRICS.map((m) => (
               <option key={m} value={m}>
@@ -96,7 +99,7 @@ export function EligibilityEditor({
             onChange={(e) =>
               push(conditions.map((x, j) => (j === i ? { ...x, op: e.target.value as ">=" } : x)))
             }
-            className={`t-subhead w-20 ${inputClass}`}
+            className={`w-20 ${adminFieldClass}`}
           >
             <option value=">=">至少</option>
             <option value="<=">至多</option>
@@ -107,27 +110,30 @@ export function EligibilityEditor({
             aria-label="门槛数值"
             value={c.value}
             onChange={(e) => push(conditions.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))}
-            className={`tabular w-24 ${inputClass}`}
+            className={`tabular w-24 ${adminFieldClass}`}
           />
 
-          <button
-            type="button"
+          {/* 用 SVG 的 × 而不是字符「×」—— 字符的粗细和基线跟着字体走，
+              一列排下来会歪，而它旁边全是 lucide 的线条 */}
+          <AdminButton
+            tone="quiet"
+            size="sm"
             onClick={() => push(conditions.filter((_, j) => j !== i))}
-            aria-label="删掉这条"
-            className="t-subhead shrink-0 rounded-[var(--radius-control)] px-2.5 text-[var(--ink-quaternary)]"
+            aria-label={`删掉第 ${i + 1} 条资格条件`}
           >
-            ×
-          </button>
+            <X className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
+          </AdminButton>
         </div>
       ))}
 
-      <button
-        type="button"
+      <AdminButton
+        tone="neutral"
+        size="sm"
         onClick={() => push([...conditions, { metric: "quality_messages", op: ">=", value: "50" }])}
-        className="t-caption rounded-[var(--radius-pill)] bg-[var(--surface)] px-2.5 py-1 text-[var(--ink-secondary)]"
       >
+        <Plus className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
         加一条
-      </button>
+      </AdminButton>
 
       {/* 「差一点点」的人 —— 门槛降一格能多放进来几个，这比任何讨论都有说服力 */}
       {preview && preview.nearMiss.length > 0 && (
@@ -172,6 +178,3 @@ function toRule(conditions: Condition[]): Rule | null {
 
   return rules.length === 1 ? rules[0] : { all: rules };
 }
-
-const inputClass =
-  "rounded-[var(--radius-control)] bg-[var(--surface)] px-2.5 py-1.5 outline-none";

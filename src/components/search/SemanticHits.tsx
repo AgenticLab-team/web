@@ -137,7 +137,7 @@ export function SemanticNotice({ error, pending }: { error: string | null; pendi
   return (
     <div
       role={error ? "alert" : "status"}
-      className={`mb-3 flex items-start gap-1.5 rounded-lg border px-3 py-2 ${
+      className={`mb-3 flex items-start gap-1.5 rounded-[var(--radius-chip)] border px-3 py-2 ${
         error
           ? "border-[var(--danger)]/40 bg-[var(--danger)]/8 text-[var(--danger)]"
           : "border-[var(--separator)] text-[var(--ink-tertiary)]"

@@ -4,6 +4,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
+import {
+  AdminActions,
+  AdminButton,
+  AdminChip,
+  AdminRow,
+  AdminStickyBar,
+  AdminTag,
+  adminFieldClass,
+} from "@/components/admin/ui";
 import { relativeTime } from "@/components/forum/PostList";
 import { useToast } from "@/components/ui/Toast";
 import { bulkModeratePosts } from "@/lib/admin/post-actions";
@@ -101,12 +110,14 @@ export function PostBulkTable({ rows }: { rows: AdminPostRow[] }) {
 
   return (
     <div className="space-y-3">
-      <label className="flex items-center gap-2 px-1">
+      {/* 复选框做到 20px 并给行留出 44px 的落点 —— 原来是 16px 的裸方框，
+          手机上要点中它基本靠运气，而点歪的结果是打开帖子而不是选中 */}
+      <label className="flex min-h-11 items-center gap-2.5 px-1">
         <input
           type="checkbox"
           checked={rows.length > 0 && selected.size === rows.length}
           onChange={toggleAll}
-          className="h-4 w-4"
+          className="h-5 w-5 accent-[var(--accent)]"
         />
         <span className="t-caption text-[var(--ink-tertiary)]">
           全选本页（{rows.length} 条）
@@ -115,12 +126,12 @@ export function PostBulkTable({ rows }: { rows: AdminPostRow[] }) {
 
       <div className="inset-group">
         {rows.map((row) => (
-          <div key={row.id} className="inset-row flex items-start gap-3 px-4 py-3">
+          <AdminRow key={row.id} align="start">
             <input
               type="checkbox"
               checked={selected.has(row.id)}
               onChange={() => toggle(row.id)}
-              className="mt-1 h-4 w-4 shrink-0"
+              className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--accent)]"
               aria-label={`选择「${row.title}」`}
             />
 
@@ -130,15 +141,9 @@ export function PostBulkTable({ rows }: { rows: AdminPostRow[] }) {
                   {row.title}
                 </Link>
                 {STATUS_COLORS[row.status] && (
-                  <span
-                    className="t-caption2 shrink-0 rounded-[var(--radius-pill)] px-1.5 py-0.5 font-medium"
-                    style={{
-                      background: `color-mix(in srgb, ${STATUS_COLORS[row.status]} 15%, transparent)`,
-                      color: STATUS_COLORS[row.status],
-                    }}
-                  >
+                  <AdminTag color={STATUS_COLORS[row.status]}>
                     {STATUS_LABELS[row.status] ?? row.status}
-                  </span>
+                  </AdminTag>
                 )}
                 {row.fromGroupChat && (
                   <span className="t-caption2 shrink-0 text-[var(--ink-quaternary)]">群聊转帖</span>
@@ -160,13 +165,15 @@ export function PostBulkTable({ rows }: { rows: AdminPostRow[] }) {
                 </p>
               )}
             </div>
-          </div>
+          </AdminRow>
         ))}
       </div>
 
-      {/* 操作条只在选了东西之后出现，避免它一直占着屏幕底部 */}
+      {/* 操作条只在选了东西之后出现，避免它一直占着屏幕底部。
+          偏移和权限矩阵那条共用一个组件 —— 那边曾经写成 bottom-0，
+          手机上保存键整个压在 Tab Bar 底下点不到 */}
       {selected.size > 0 && (
-        <div className="animate-rise sticky bottom-[calc(var(--tabbar-height)+1rem)] z-10 space-y-2.5 rounded-[var(--radius-card)] bg-[var(--surface)] p-3.5 shadow-[0_4px_20px_rgb(0_0_0/0.12)] hairline lg:bottom-4">
+        <AdminStickyBar>
           <p className="t-subhead">
             已选 <span className="tabular font-medium">{selected.size}</span> 条 ·{" "}
             {/* 说「影响 9 位作者」而不只是「9 条」—— 后者是数据，前者是人 */}
@@ -181,21 +188,16 @@ export function PostBulkTable({ rows }: { rows: AdminPostRow[] }) {
 
           <div className="flex flex-wrap gap-1.5">
             {(Object.keys(ACTION_LABELS) as BulkAction[]).map((a) => (
-              <button
+              <AdminChip
                 key={a}
-                type="button"
+                active={action === a}
                 onClick={() => {
                   setAction(a);
                   setConfirming(false);
                 }}
-                className={`t-footnote rounded-[var(--radius-pill)] px-3 py-1.5 transition-colors ${
-                  action === a
-                    ? "bg-[var(--ink)] font-medium text-[var(--canvas)]"
-                    : "bg-[var(--fill)] text-[var(--ink-secondary)]"
-                }`}
               >
                 {ACTION_LABELS[a]}
-              </button>
+              </AdminChip>
             ))}
           </div>
 
@@ -207,7 +209,7 @@ export function PostBulkTable({ rows }: { rows: AdminPostRow[] }) {
                 ? "理由（必填，至少四个字，作者会看到）"
                 : "理由（必填，会记入审计日志）"
             }
-            className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]"
+            className={adminFieldClass}
           />
 
           {/* 破坏性操作多一步：把具体是哪几篇列出来 */}
@@ -231,45 +233,31 @@ export function PostBulkTable({ rows }: { rows: AdminPostRow[] }) {
               <p className="t-caption2 text-[var(--ink-tertiary)]">
                 每位作者都会收到通知，每一条都会留下独立的处罚记录。
               </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={run}
-                  className="t-subhead flex-1 rounded-[var(--radius-control)] px-4 py-2 font-medium disabled:opacity-40"
-                  style={{ background: "var(--danger)", color: "var(--canvas)" }}
-                >
+              <AdminActions>
+                <AdminButton tone="danger" className="flex-1" disabled={pending} onClick={run}>
                   确认{ACTION_LABELS[action]}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirming(false)}
-                  className="t-subhead rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2"
-                >
+                </AdminButton>
+                <AdminButton tone="quiet" onClick={() => setConfirming(false)}>
                   再想想
-                </button>
-              </div>
+                </AdminButton>
+              </AdminActions>
             </div>
           ) : (
-            <div className="flex gap-2">
-              <button
-                type="button"
+            <AdminActions>
+              <AdminButton
+                tone="primary"
+                className="flex-1"
                 disabled={pending || !reason.trim() || overLimit}
                 onClick={() => (isDestructive(action) ? setConfirming(true) : run())}
-                className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
               >
                 {ACTION_LABELS[action]}选中的 {selected.size} 条
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelected(new Set())}
-                className="t-subhead rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 text-[var(--ink-secondary)]"
-              >
+              </AdminButton>
+              <AdminButton tone="quiet" onClick={() => setSelected(new Set())}>
                 取消选择
-              </button>
-            </div>
+              </AdminButton>
+            </AdminActions>
           )}
-        </div>
+        </AdminStickyBar>
       )}
     </div>
   );

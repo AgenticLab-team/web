@@ -61,7 +61,9 @@ export default async function AdminDashboard() {
       {/* 待办放最前面：每个数字都要能指向一个动作。
           「累计消息 41,622」看着漂亮但没人会因为它做任何事 */}
       <Section title="待处理">
-        <div className="grid grid-cols-3 gap-2.5">
+        {/* 三个格子在 63rem 的内容区里会被拉成三条大横杠 ——
+            给它们一个上限，剩下的宽度留白比撑满好看 */}
+        <div className="grid grid-cols-3 gap-2.5 lg:max-w-2xl">
           {/* 数字是入口：有待办的染黄，点进去就是队列 */}
           <StatTile
             label="举报"
@@ -191,6 +193,15 @@ export default async function AdminDashboard() {
         </div>
       </Section>
 
+      {/*
+        * 社区规模和最近的操作在桌面上并排。
+        *
+        * 两块都是「一行一个数字」的窄列表，各自单独占满 63rem 的话，
+        * 每一行都是左边三个字、右边一个数字、中间一片空白 ——
+        * 站长说的「空白区太多」最典型的样子。并排之后正好各占一半，
+        * 而且首屏能同时看到规模和最近有人动过什么。
+        */}
+      <div className="lg:grid lg:grid-cols-2 lg:gap-x-6">
       <Section title="社区规模">
         <Group>
           <Row>
@@ -271,6 +282,7 @@ export default async function AdminDashboard() {
           </Group>
         </Section>
       )}
+      </div>
     </>
   );
 }

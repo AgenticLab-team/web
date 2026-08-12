@@ -1,4 +1,7 @@
+import { Send } from "lucide-react";
 import Link from "next/link";
+
+import { parseAttribution } from "@/lib/api-tokens/attribution";
 
 import type { MentionView } from "@/lib/messages/interactions";
 
@@ -22,6 +25,52 @@ export interface MessageTextProps {
 }
 
 export function MessageText({ content, mentions, currentNames }: MessageTextProps) {
+  /*
+   * ═════════════════════════════════════════
+   * 代发消息**单独长一个样**
+   * ═════════════════════════════════════════
+   *
+   * 代发的消息是机器人账号发出去的，同步回来之后正文最后多一行
+   * 「本消息由「张三」使用 AgenticLab.sh 代发」。
+   *
+   * 原样渲染的话，那一行和正文同一个字号同一个颜色 ——
+   * 看起来像发消息的人自己打的一句话，而它是系统加的。
+   * 而这一行恰恰是**唯一**能让群里的人知道「这话是谁让机器人说的」
+   * 的东西，它不该长得像正文。
+   *
+   * 所以拆开：正文照常渲染（提及照样是活的），署名变成一枚标记。
+   *
+   * 拆在这里而不是在数据层：库里存的必须是**群里真正看到的那一条**，
+   * 那是留痕的意义所在（见 schema/api.ts）。显示归显示。
+   */
+  const attributed = parseAttribution(content);
+  if (attributed) {
+    return (
+      <>
+        <MessageText
+          content={attributed.body}
+          mentions={mentions}
+          currentNames={currentNames}
+        />
+        <span
+          className="t-caption2 mt-1 flex w-fit items-center gap-1 rounded-[var(--radius-control)] px-1.5 py-0.5"
+          style={{
+            background: "color-mix(in srgb, var(--accent) 10%, transparent)",
+            color: "var(--accent)",
+          }}
+        >
+          <Send className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden />
+          {/*
+            * 说「由某某代发」而不是照抄那一行。
+            * 「使用 AgenticLab.sh」那半句是给**群里**看的（他们不知道
+            * 这个站），站内的人已经在这个站里了，重复一遍是噪音。
+            */}
+          由 {attributed.senderName} 代发
+        </span>
+      </>
+    );
+  }
+
   if (!mentions || mentions.length === 0) {
     return <>{content}</>;
   }

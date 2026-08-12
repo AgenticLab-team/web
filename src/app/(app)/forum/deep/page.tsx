@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { PostList } from "@/components/forum/PostList";
+import { ArchiveList, DeepList } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { BackLink, PageNote, Section } from "@/components/ui/primitives";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -9,11 +9,11 @@ import { buildViewerContext } from "@/lib/forum/context";
 import { LONGFORM_CHARS } from "@/lib/forum/longform";
 import { listPosts } from "@/lib/forum/queries";
 
-export const metadata: Metadata = { title: "值得读的" };
+export const metadata: Metadata = { title: "坐下来读" };
 export const dynamic = "force-dynamic";
 
 /**
- * 值得读的 —— 长文和精华的落脚点。
+ * 坐下来读 —— 长文和精华的落脚点。
  *
  * ═════════════════════════════════════════
  * 它不是一个版块，是一条横穿所有版块的路
@@ -35,11 +35,13 @@ export default async function DeepPage() {
    * 两条列表，取的是同一批帖子的两种看法。
    *
    * 「近期」按 deep 排（衰减按天，见 queries.ts），
-   * 「一直在这儿」按 created 排 —— 后者是给那些错过了的人准备的：
+   * 「更早的」按 created 排 —— 后者是给那些错过了的人准备的：
    * 一篇三个月前的好文在任何按热度排的列表里都不会再出现，
    * 而它并没有过期。
+   *
+   * 近期取 11 篇：一张通栏的头条 + 五行各两张，最后一行不会剩半张。
    */
-  const featured = listPosts(viewer, { sort: "deep", longformOnly: true, limit: 20 });
+  const featured = listPosts(viewer, { sort: "deep", longformOnly: true, limit: 11 });
   const archive = listPosts(viewer, {
     sort: "created",
     longformOnly: true,
@@ -49,15 +51,25 @@ export default async function DeepPage() {
 
   /* 已经在上面露过面的不再重复一遍 */
   const seen = new Set(featured.map((p) => p.id));
-  const older = archive.filter((p) => !seen.has(p.id));
+  const older = archive
+    .filter((p) => !seen.has(p.id))
+    /*
+     * 再按时间排一次。
+     *
+     * listPosts 的每种排法都把「还置顶着的」提到最前面 —— 对一条流是对的，
+     * 对一份**按月分堆的索引**是错的：一篇置顶的新帖会出现在
+     * 「2025 年 11 月」那个小标题底下，看起来就是分组算错了。
+     * 这里只动顺序，不动取哪些。
+     */
+    .sort((a, b) => b.createdAt - a.createdAt);
 
   return (
     <>
       <BackLink href="/forum">论坛</BackLink>
-      <PageHeader title="值得读的" subtitle="长文与精华，横穿所有版块" />
+      <PageHeader title="坐下来读" subtitle="长文与精华，横穿所有版块" />
 
       <Section title="近期">
-        <PostList posts={featured} showBoard />
+        <DeepList posts={featured} />
       </Section>
 
       {older.length > 0 && (
@@ -67,8 +79,11 @@ export default async function DeepPage() {
             *
             * 一篇三个月前的好文在任何按热度排的列表里都不会再出现，
             * 而它并没有过期 —— 这一栏就是给它留的。
+            *
+            * 长相也换成一行一篇的索引：人到这一栏来是**找**东西，
+            * 不是逛。找的时候摘要和头像都是干扰。
             */}
-          <PostList posts={older} showBoard />
+          <ArchiveList posts={older} />
         </Section>
       )}
 

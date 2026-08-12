@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { AdminNote, AdminRow } from "@/components/admin/ui";
 import { SettingItem } from "@/components/admin/SettingRow";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -42,7 +43,7 @@ export default async function AdminSettingsPage() {
         <Section title="最近的变更">
           <div className="inset-group">
             {history.map((h) => (
-              <div key={h.id} className="inset-row flex flex-wrap items-baseline gap-1.5 px-4 py-2.5">
+              <AdminRow key={h.id} align="start" className="flex-wrap items-baseline">
                 <span className="t-subhead">{h.label ?? h.key}</span>
                 <span className="tabular t-caption text-[var(--ink-tertiary)]">
                   {h.oldValue ?? "—"} → {h.newValue ?? "—"}
@@ -53,15 +54,15 @@ export default async function AdminSettingsPage() {
                 {h.reason && (
                   <p className="t-caption2 w-full text-[var(--ink-tertiary)]">{h.reason}</p>
                 )}
-              </div>
+              </AdminRow>
             ))}
           </div>
           <TruncationNote shown={history.length} total={historyTotal} noun="条变更" />
-          <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+          <AdminNote>
             每次改动都进变更历史，含改前改后的值和理由。
             <strong>回滚本身也是一次变更</strong>，同样进历史 ——
             历史里不能出现空洞，否则事后复盘会看到值凭空变了。
-          </p>
+          </AdminNote>
         </Section>
       )}
 

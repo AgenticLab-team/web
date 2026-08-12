@@ -90,7 +90,7 @@ export function TabBar({
               <Link
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
-                className={`flex h-full flex-col items-center justify-center gap-[0.1875rem] transition-colors ${
+                className={`flex h-full flex-col items-center justify-center gap-[0.1875rem] transition active:opacity-55 ${
                   isActive ? "text-[var(--accent)]" : "text-[var(--ink-tertiary)]"
                 }`}
               >
@@ -100,14 +100,10 @@ export function TabBar({
                     className="h-[1.375rem] w-[1.375rem]"
                     strokeWidth={isActive ? 2.2 : 1.75}
                   />
-                  {badgeOf(item.key) > 0 && (
-                    <span
-                      className="absolute -right-1.5 -top-0.5 h-[0.4375rem] w-[0.4375rem] rounded-full bg-[var(--accent)]"
-                      aria-label={`${badgeOf(item.key)} 条未读`}
-                    />
-                  )}
+                  {badgeOf(item.key) > 0 && <Dot />}
                 </span>
                 <span className="t-caption2 font-medium leading-none">{item.label}</span>
+                {badgeOf(item.key) > 0 && <UnreadText count={badgeOf(item.key)} />}
               </Link>
             </li>
           );
@@ -122,20 +118,16 @@ export function TabBar({
                 onClick={open}
                 aria-haspopup="dialog"
                 aria-expanded={isOpen}
-                className={`flex h-full flex-col items-center justify-center gap-[0.1875rem] transition-colors ${
+                className={`flex h-full flex-col items-center justify-center gap-[0.1875rem] transition active:opacity-55 ${
                   isOpen ? "text-[var(--accent)]" : "text-[var(--ink-tertiary)]"
                 }`}
               >
                 <span className="relative">
                   <NavIcon name="more" className="h-[1.375rem] w-[1.375rem]" strokeWidth={1.75} />
-                  {moreBadge > 0 && (
-                    <span
-                      className="absolute -right-1.5 -top-0.5 h-[0.4375rem] w-[0.4375rem] rounded-full bg-[var(--accent)]"
-                      aria-label={`${moreBadge} 条未读`}
-                    />
-                  )}
+                  {moreBadge > 0 && <Dot />}
                 </span>
                 <span className="t-caption2 font-medium leading-none">更多</span>
+                {moreBadge > 0 && <UnreadText count={moreBadge} />}
               </button>
             )}
           />
@@ -144,4 +136,27 @@ export function TabBar({
       <div style={{ height: "env(safe-area-inset-bottom, 0px)" }} />
     </nav>
   );
+}
+
+/**
+ * 图标右上角那个红点。
+ *
+ * 点本身 aria-hidden，数字交给下面那句 sr-only —— 原来是把 `aria-label`
+ * 挂在一个没有 role 的空 span 上，而那个属性对无语义的元素多半不生效：
+ * 于是「有 3 条未读」这件事在读屏上是完全不存在的。
+ *
+ * 尺寸和侧栏收起时的角标同一个 0.5rem。同一个意思，两端一样大。
+ */
+function Dot() {
+  return (
+    <span
+      className="absolute -right-1.5 -top-0.5 h-2 w-2 rounded-full bg-[var(--accent)]"
+      aria-hidden
+    />
+  );
+}
+
+/** 未读数念在标签后面：先说这是哪一格，再说它上面有几条 */
+function UnreadText({ count }: { count: number }) {
+  return <span className="sr-only">，{count} 条未读</span>;
 }

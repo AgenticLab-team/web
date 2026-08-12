@@ -118,6 +118,33 @@ export const posts = sqliteTable(
     scheduledAt: integer("scheduled_at"),
     shareCode: text("share_code").unique(),
 
+    /**
+     * 这篇帖子聊的是哪个项目 —— `owner/repo`，**归一到小写**。
+     *
+     * ─────────────────────────────────────────
+     * 为什么是一列而不是一张关联表
+     * ─────────────────────────────────────────
+     *
+     * 「一篇帖子关联一个项目」是有意的限制，不是偷懒。
+     * 允许挂三个的话，这一栏会变成第二套标签 —— 而标签已经有了，
+     * 也已经能挂很多个。这一栏要回答的是一个更窄的问题：
+     * **这篇帖子属于哪个项目**，而「属于」只能有一个答案，
+     * 否则项目页上那句「站里聊过它的帖子」就不再成立。
+     *
+     * ─────────────────────────────────────────
+     * 不建外键指向任何 GitHub 表
+     * ─────────────────────────────────────────
+     *
+     * 关联的项目**不必是站内谁绑过的**：有人聊一个跟社区没关系的
+     * 上游仓库，这完全正常。所以这里存的是一个字符串标识，
+     * 由 `lib/github/link-refs.ts` 的 parseRepoRef 清洗过 ——
+     * 那一处同时也是拒绝 `github.com.evil.com` 的地方。
+     *
+     * 小写归一的理由写在 parseRepoRef 上：GitHub 那边大小写不是身份，
+     * 不归一的话同一个项目会因为两个人打字习惯不同裂成两个项目页。
+     */
+    repoRef: text("repo_ref"),
+
     createdAt: now("created_at"),
     updatedAt: now("updated_at"),
     deletedAt: integer("deleted_at"),
@@ -144,6 +171,11 @@ export const posts = sqliteTable(
     index("forum_posts_status_idx").on(t.status),
     index("forum_posts_visibility_idx").on(t.visibility),
     index("forum_posts_created_idx").on(t.createdAt),
+    /*
+     * 项目页要按它反查「站里聊过它的帖子」。
+     * 没有索引的话那一页每次都要全表扫 —— 而它正是这条功能的主入口。
+     */
+    index("forum_posts_repo_idx").on(t.repoRef, t.createdAt),
   ],
 );
 

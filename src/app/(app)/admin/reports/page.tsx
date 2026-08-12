@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AdminTag } from "@/components/admin/ui";
 import { ReportActions } from "@/components/admin/ReportActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -161,16 +162,10 @@ export default async function AdminReportsPage({
               >
                 <header className="flex flex-wrap items-center gap-1.5">
                   {row.severity > 0 && (
-                    <span
-                      className="t-caption2 rounded-[var(--radius-pill)] px-1.5 py-0.5 font-medium"
-                      style={{
-                        background: `color-mix(in srgb, ${SEVERITY_COLOR[row.severity]} 15%, transparent)`,
-                        color: SEVERITY_COLOR[row.severity],
-                      }}
-                    >
+                    <AdminTag color={SEVERITY_COLOR[row.severity]}>
                       {severityLabel(row.severity)}
                       {row.severity > row.baseSeverity && " · 多人举报"}
-                    </span>
+                    </AdminTag>
                   )}
                   {row.overdue && (
                     <span className="t-caption2 font-medium text-[var(--danger)]">已超时</span>

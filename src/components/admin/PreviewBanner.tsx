@@ -87,7 +87,7 @@ export async function PreviewBanner() {
           <form action={exitPreviewAction} className="shrink-0">
             <button
               type="submit"
-              className="rounded-md bg-white px-2.5 py-1 text-[13px] font-medium text-[#b91c1c] transition-opacity hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+              className="rounded-[var(--radius-chip)] bg-white px-2.5 py-1 text-[13px] font-medium text-[#b91c1c] transition-opacity hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             >
               退出预览
             </button>

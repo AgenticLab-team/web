@@ -65,7 +65,12 @@ export function SidebarToggle() {
        */
       aria-label={rail ? "展开侧栏" : "收起侧栏"}
       title={rail ? "展开侧栏" : "收起侧栏"}
-      className="sidebar-row flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--ink)]"
+      /*
+       * 44×44。收起之后它和导航图标在同一条竖线上，尺寸不一致的话
+       * 那一列看起来是歪的；而且这是整个侧栏上**唯一一个按了会变形**的东西，
+       * 手感必须跟得上手 —— 按压给一点缩放，比只换底色说得清楚。
+       */
+      className="sidebar-row flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--ink-tertiary)] transition hover:bg-[var(--fill)] hover:text-[var(--ink)] active:scale-[0.92]"
     >
       <Icon className="h-[1.125rem] w-[1.125rem]" strokeWidth={1.75} aria-hidden />
     </button>

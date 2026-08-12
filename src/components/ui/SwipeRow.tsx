@@ -95,8 +95,17 @@ export function SwipeRow({
             }}
             aria-label={action.label}
             style={{ width: ACTION_WIDTH }}
-            className={`flex flex-col items-center justify-center gap-1 text-white ${
-              action.danger ? "bg-[var(--danger)]" : "bg-[var(--ink-tertiary)]"
+            /*
+             * 前景色跟着底色走，不是一律白字。
+             *
+             * 暗色下 `--danger` 是浅珊瑚 (#ff7a6b)，白字压上去实测 2.55:1 ——
+             * 远低于 4.5:1，那个「删除」两个字基本看不见。
+             * `--danger-ink` 在两套配色里各自和它反着来（亮 5.42、暗 7.18）。
+             */
+            className={`flex flex-col items-center justify-center gap-1 ${
+              action.danger
+                ? "bg-[var(--danger)] text-[var(--danger-ink)]"
+                : "bg-[var(--ink-tertiary)] text-[var(--canvas)]"
             }`}
           >
             {action.icon}

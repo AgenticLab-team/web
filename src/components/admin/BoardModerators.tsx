@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { AdminButton, AdminChip, adminFieldClass } from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import { grantRole, revokeRole } from "@/lib/admin/user-actions";
 import type { BoardModerator } from "@/lib/admin/moderators";
@@ -61,16 +62,18 @@ export function BoardModerators({
   return (
     <div className="mt-3 border-t border-[var(--separator)] pt-3">
       <div className="flex items-center gap-2">
-        <span className="t-caption2 font-medium uppercase tracking-[0.06em] text-[var(--ink-quaternary)]">
+        <span className="t-group-label">
           版主 {moderators.filter((m) => !m.expired).length}
         </span>
-        <button
-          type="button"
+        <AdminButton
+          tone="neutral"
+          size="sm"
+          className="ml-auto"
+          aria-expanded={open}
           onClick={() => setOpen(!open)}
-          className="t-caption ml-auto rounded-[var(--radius-pill)] bg-[var(--fill)] px-2.5 py-1 text-[var(--ink-secondary)]"
         >
           {open ? "收起" : "任免"}
-        </button>
+        </AdminButton>
       </div>
 
       {moderators.length > 0 && (
@@ -96,19 +99,19 @@ export function BoardModerators({
                   </span>
                 )}
               </span>
+              {/* 解除版主是收权限 —— dangerSoft，和用户页的「移除身份组」同一档 */}
               {open && (
-                <button
-                  type="button"
+                <AdminButton
+                  tone="dangerSoft"
+                  size="sm"
                   disabled={pending || !reason.trim()}
-                  title={reason.trim() ? "解除" : "先在下面填个理由"}
+                  title={reason.trim() ? "解除他的版主身份" : "先在下面填个理由"}
                   onClick={() =>
                     run(() => revokeRole({ userRoleId: m.userRoleId, reason }), "已解除")
                   }
-                  className="t-caption2 shrink-0 rounded-[var(--radius-pill)] px-2 py-0.5 disabled:opacity-30"
-                  style={{ color: "var(--danger)" }}
                 >
                   解除
-                </button>
+                </AdminButton>
               )}
             </li>
           ))}
@@ -127,7 +130,7 @@ export function BoardModerators({
               <select
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
-                className={inputClass}
+                className={adminFieldClass}
               >
                 {candidates.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -138,18 +141,9 @@ export function BoardModerators({
 
               <div className="flex flex-wrap gap-1.5">
                 {PRESETS.map((p) => (
-                  <button
-                    key={p.days}
-                    type="button"
-                    onClick={() => setDays(p.days)}
-                    className={`t-caption rounded-[var(--radius-pill)] px-2.5 py-1 transition-colors ${
-                      days === p.days
-                        ? "bg-[var(--ink)] text-[var(--canvas)]"
-                        : "bg-[var(--fill)] text-[var(--ink-secondary)]"
-                    }`}
-                  >
+                  <AdminChip key={p.days} active={days === p.days} onClick={() => setDays(p.days)}>
                     {p.label}
-                  </button>
+                  </AdminChip>
                 ))}
               </div>
 
@@ -157,11 +151,12 @@ export function BoardModerators({
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="理由（必填）"
-                className={inputClass}
+                className={adminFieldClass}
               />
 
-              <button
-                type="button"
+              <AdminButton
+                tone="primary"
+                block
                 disabled={pending || !userId || !reason.trim()}
                 onClick={() =>
                   run(
@@ -177,10 +172,9 @@ export function BoardModerators({
                     `已任命为「${boardName}」版主`,
                   )
                 }
-                className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
               >
-                任命为版主
-              </button>
+                任命为「{boardName}」版主
+              </AdminButton>
 
               <p className="t-caption2 text-[var(--ink-quaternary)]">
                 权限只在「{boardName}」这一个版块内生效。
@@ -193,6 +187,3 @@ export function BoardModerators({
     </div>
   );
 }
-
-const inputClass =
-  "t-subhead w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]";

@@ -1,3 +1,5 @@
+import { paginate, type PageSlice } from "@/lib/pagination";
+
 /**
  * 把逐群的授权行合并成「一个人一张卡」。
  *
@@ -123,31 +125,22 @@ export function filterPersonGrants(people: PersonGrants[], query: string): Perso
   );
 }
 
-export interface Page<T> {
-  items: T[];
-  page: number;
-  pages: number;
-  total: number;
-}
-
 /**
- * 分页。
+ * 切一页出来。
  *
- * ─────────────────────────────────────────
- * 页码越界要**夹回来**，不是给一页空的
- * ─────────────────────────────────────────
+ * 页码的边界行为（越界往两头夹、`?page=abc` 回第一页、空列表也算
+ * 「第 1 页共 1 页」）**不在这里**，在 `lib/pagination.ts` ——
+ * 后台十几个列表共用那一套。这里只负责按算好的 offset 切数组。
  *
- * 第 5 页看着看着，前面的记录被收回了几条，总数缩到只剩 3 页 ——
- * 这时候刷新一下会得到一张空白页面，而人第一反应是「东西没了」。
- * 夹到最后一页至少还能看见内容。
- *
- * 同理，过滤之后剩下的条数变少也会撞上这件事，而那更常见：
- * 停在第 3 页时打了两个字。
+ * 第一版我在这个文件里另写了一份 `paginate`，而仓库里已经有一份
+ * 用在十个后台页面上了。两份分页迟早在边界上分叉，
+ * 而分叉出来的那一份通常是漏了某个情况的（多半是空列表）。
  */
-export function paginate<T>(items: T[], page: number, perPage: number): Page<T> {
-  const total = items.length;
-  const pages = Math.max(1, Math.ceil(total / perPage));
-  const current = Math.min(Math.max(1, Math.floor(page) || 1), pages);
-  const start = (current - 1) * perPage;
-  return { items: items.slice(start, start + perPage), page: current, pages, total };
+export function slicePage<T>(
+  items: T[],
+  rawPage: unknown,
+  perPage: number,
+): { items: T[]; slice: PageSlice; total: number } {
+  const slice = paginate(rawPage, items.length, perPage);
+  return { items: items.slice(slice.offset, slice.offset + slice.perPage), slice, total: items.length };
 }

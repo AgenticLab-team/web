@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { AdminButton, AdminChip, adminFieldClass } from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import { queueSend, saveDraft, submitForReview } from "@/lib/broadcast/actions";
 import { DISPLAYS } from "@/lib/broadcast/announce-rules";
@@ -98,10 +99,11 @@ export function BroadcastComposer({
     <div className="space-y-3 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
       <div className="flex gap-1.5">
         {(["site", "wechat"] as const).map((c) => (
-          <button
+          <AdminChip
             key={c}
-            type="button"
+            active={channel === c}
             disabled={c === "wechat" && !canWechat}
+            title={c === "wechat" && !canWechat ? "你没有微信群发的权限" : undefined}
             onClick={() => {
               /*
                * 换渠道就清掉已选的群。
@@ -113,14 +115,9 @@ export function BroadcastComposer({
               setTargets(new Set());
               setChannel(c);
             }}
-            className={`t-footnote rounded-[var(--radius-pill)] px-3 py-1.5 font-medium transition-colors disabled:opacity-35 ${
-              channel === c
-                ? "bg-[var(--ink)] text-[var(--canvas)]"
-                : "bg-[var(--fill)] text-[var(--ink-secondary)]"
-            }`}
           >
             {c === "site" ? "站内公告" : "微信群发"}
-          </button>
+          </AdminChip>
         ))}
       </div>
 
@@ -142,7 +139,7 @@ export function BroadcastComposer({
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder={channel === "site" ? "标题" : "标题（仅后台可见，不会发出去）"}
-        className={inputClass}
+        className={adminFieldClass}
       />
 
       <div>
@@ -151,7 +148,7 @@ export function BroadcastComposer({
           onChange={(e) => setContent(e.target.value)}
           rows={5}
           placeholder="正文"
-          className={`${inputClass} resize-none`}
+          className={`${adminFieldClass} resize-none`}
         />
         <p className="tabular t-caption2 mt-1 text-right text-[var(--ink-quaternary)]">
           {content.trim().length}
@@ -168,18 +165,9 @@ export function BroadcastComposer({
         <div className="space-y-2">
         <div className="flex flex-wrap gap-1.5">
           {DISPLAYS.map(({ key, label }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setDisplay(key)}
-              className={`t-caption rounded-[var(--radius-pill)] px-2.5 py-1 transition-colors ${
-                display === key
-                  ? "bg-[var(--accent)] font-medium text-[var(--accent-ink)]"
-                  : "bg-[var(--fill)] text-[var(--ink-secondary)]"
-              }`}
-            >
+            <AdminChip key={key} active={display === key} onClick={() => setDisplay(key)}>
               {label}
-            </button>
+            </AdminChip>
           ))}
         </div>
 
@@ -191,30 +179,13 @@ export function BroadcastComposer({
 
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="t-caption2 text-[var(--ink-quaternary)]">发给</span>
-          <button
-            type="button"
-            onClick={() => setTargetRole(null)}
-            className={`t-caption rounded-[var(--radius-pill)] px-2.5 py-1 transition-colors ${
-              targetRole === null
-                ? "bg-[var(--accent)] font-medium text-[var(--accent-ink)]"
-                : "bg-[var(--fill)] text-[var(--ink-secondary)]"
-            }`}
-          >
+          <AdminChip active={targetRole === null} onClick={() => setTargetRole(null)}>
             全体
-          </button>
+          </AdminChip>
           {roles.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => setTargetRole(r.id)}
-              className={`t-caption rounded-[var(--radius-pill)] px-2.5 py-1 transition-colors ${
-                targetRole === r.id
-                  ? "bg-[var(--accent)] font-medium text-[var(--accent-ink)]"
-                  : "bg-[var(--fill)] text-[var(--ink-secondary)]"
-              }`}
-            >
+            <AdminChip key={r.id} active={targetRole === r.id} onClick={() => setTargetRole(r.id)}>
               {r.name}
-            </button>
+            </AdminChip>
           ))}
         </div>
         {/* 「版主请注意」这种话发给所有人，只会让所有人下次都跳过公告 */}
@@ -235,21 +206,13 @@ export function BroadcastComposer({
           <div className="space-y-1.5 pt-1">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="t-caption2 text-[var(--ink-quaternary)]">限定到群</span>
-              <button
-                type="button"
-                onClick={() => setTargets(new Set())}
-                className={`t-caption rounded-[var(--radius-pill)] px-2.5 py-1 transition-colors ${
-                  targets.size === 0
-                    ? "bg-[var(--accent)] font-medium text-[var(--accent-ink)]"
-                    : "bg-[var(--fill)] text-[var(--ink-secondary)]"
-                }`}
-              >
+              <AdminChip active={targets.size === 0} onClick={() => setTargets(new Set())}>
                 不限
-              </button>
+              </AdminChip>
               {siteGroups.map((g) => (
-                <button
+                <AdminChip
                   key={g.convId}
-                  type="button"
+                  active={targets.has(g.convId)}
                   onClick={() =>
                     setTargets((prev) => {
                       const next = new Set(prev);
@@ -258,15 +221,10 @@ export function BroadcastComposer({
                       return next;
                     })
                   }
-                  className={`t-caption rounded-[var(--radius-pill)] px-2.5 py-1 transition-colors ${
-                    targets.has(g.convId)
-                      ? "bg-[var(--accent)] font-medium text-[var(--accent-ink)]"
-                      : "bg-[var(--fill)] text-[var(--ink-secondary)]"
-                  }`}
                 >
                   {g.name}
                   <span className="ml-1 opacity-60">{g.memberCount}</span>
-                </button>
+                </AdminChip>
               ))}
             </div>
 
@@ -327,8 +285,9 @@ export function BroadcastComposer({
         </p>
       )}
 
-      <button
-        type="button"
+      <AdminButton
+        tone="primary"
+        block
         disabled={
           pending ||
           content.trim().length < 5 ||
@@ -336,10 +295,9 @@ export function BroadcastComposer({
           (channel === "wechat" && targets.size === 0)
         }
         onClick={submit}
-        className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
       >
         提交复核
-      </button>
+      </AdminButton>
 
       <p className="t-caption text-[var(--ink-tertiary)]">
         提交后<strong>内容会被冻结</strong>：复核的人看到什么，发出去的就是什么。
@@ -402,7 +360,7 @@ export function BroadcastReview({
           onChange={(e) => setNote(e.target.value)}
           rows={2}
           placeholder="复核意见（必填）"
-          className={`${inputClass} resize-none`}
+          className={`${adminFieldClass} resize-none`}
         />
         <div className="flex gap-2">
           <ActionButton
@@ -435,15 +393,9 @@ export function BroadcastReview({
   if (status === "approved") {
     return (
       <div className="space-y-2">
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => run(() => queueSend({ id }))}
-          className="t-subhead w-full rounded-[var(--radius-control)] px-4 py-2 font-medium disabled:opacity-40"
-          style={{ background: "color-mix(in srgb, var(--danger) 12%, transparent)", color: "var(--danger)" }}
-        >
+        <AdminButton tone="danger" block disabled={pending} onClick={() => run(() => queueSend({ id }))}>
           确认发送
-        </button>
+        </AdminButton>
         <p className="t-caption2 text-[var(--ink-tertiary)]">
           发送会逐个群进行并留出间隔，整体需要一两分钟。发出去之后只有两分钟的撤回窗口。
         </p>
@@ -465,16 +417,8 @@ function ActionButton({
 }) {
   // 通过与驳回长得一样重 —— 把通过做成主色等于在界面上鼓励点它
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 font-medium text-[var(--ink)] disabled:opacity-40"
-    >
+    <AdminButton tone="neutral" className="flex-1" disabled={disabled} onClick={onClick}>
       {children}
-    </button>
+    </AdminButton>
   );
 }
-
-const inputClass =
-  "t-subhead w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]";

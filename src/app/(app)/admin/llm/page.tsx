@@ -1,6 +1,7 @@
 import { Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 
+import { AdminNote, AdminRow } from "@/components/admin/ui";
 import { EnrichRunner } from "@/components/admin/EnrichRunner";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { PageNote, Section } from "@/components/ui/primitives";
@@ -33,8 +34,8 @@ function ProbeRow({ label, probe, hint }: { label: string; probe: LlmProbe; hint
       : "text-[var(--danger)]";
 
   return (
-    <div className="inset-row px-4 py-3">
-      <div className="flex flex-wrap items-baseline gap-x-2">
+    <AdminRow align="start" className="flex-col">
+      <div className="flex w-full flex-wrap items-baseline gap-x-2">
         <span className="t-subhead font-medium">{label}</span>
         <span className={`t-caption ${tone}`}>
           {!probe.configured ? "未配置" : probe.ok ? "可用" : "不可用"}
@@ -48,8 +49,8 @@ function ProbeRow({ label, probe, hint }: { label: string; probe: LlmProbe; hint
       <p className={`t-caption mt-0.5 leading-relaxed ${probe.ok ? "text-[var(--ink-secondary)]" : tone}`}>
         {probe.detail}
       </p>
-      <p className="t-caption2 mt-1 text-[var(--ink-quaternary)]">{hint}</p>
-    </div>
+      <p className="t-caption2 text-[var(--ink-quaternary)]">{hint}</p>
+    </AdminRow>
   );
 }
 
@@ -80,12 +81,12 @@ export default async function AdminLlmPage() {
             hint="EMBEDDING_BASE_URL · EMBEDDING_API_KEY · EMBEDDING_MODEL — 用于语义检索"
           />
         </div>
-        <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+        <AdminNote>
           两套分开配是因为它们经常不是同一家 —— 实测 DeepSeek 只有对话、没有嵌入接口。
           嵌入的探测会发两句<strong>毫不相干</strong>的话过去比对：
           一个对任何输入都返回同一个向量的端点，只发一句是验不出来的，
           而它会让整个语义检索静默失效。
-        </p>
+        </AdminNote>
         <p className="t-caption mt-1.5 px-1 leading-relaxed text-[var(--ink-tertiary)]">
           「可用」这两个字只保证：连得上、认这个 key、向量不是全零、
           对不同语义给出不同向量、维度和 <code className="font-mono">EMBEDDING_DIMENSIONS</code> 对得上。
@@ -97,18 +98,18 @@ export default async function AdminLlmPage() {
 
       <Section title="资源库整理">
         <div className="inset-group">
-          <div className="inset-row px-4 py-3">
+          <AdminRow align="start" className="flex-col">
             <p className="t-subhead">
               {progress.total} 条链接 · 已整理{" "}
               <strong className="text-[var(--success)]">{progress.enriched}</strong> · 问过但说不清{" "}
               {progress.checkedButUnknown} · 还没问 {progress.untouched}
             </p>
-            <p className="t-caption mt-1 leading-relaxed text-[var(--ink-tertiary)]">
+            <p className="t-caption leading-relaxed text-[var(--ink-tertiary)]">
               「说不清」不是失败 —— 那些链接分享时群里没说它是什么，
               而<strong>编一个通顺的简介比留空危险得多</strong>：
               读的人默认它是可靠的。这类条目不会被反复重问。
             </p>
-          </div>
+          </AdminRow>
           <EnrichRunner disabled={!chat.ok} />
         </div>
       </Section>

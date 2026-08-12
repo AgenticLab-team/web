@@ -41,6 +41,7 @@ import { getSettingInt } from "@/lib/settings/store";
 
 import { buildViewerContext } from "@/lib/forum/context";
 import { cleanTags } from "@/lib/forum/tag-rules";
+import { parseRepoRef, repoRefKey } from "@/lib/github/link-refs";
 import {
   countExternalLinks,
   isNewbie,
@@ -174,6 +175,15 @@ export async function createPostAs(
    * `scheduled_at` 这一列在 schema 里躺了很久，全站零引用。
    */
   scheduledAt?: number;
+  /**
+   * 这篇聊的是哪个项目 —— `owner/repo` 或者一整条 GitHub 地址。
+   *
+   * **认不出来就当没填，不报错。** 这是一个可选的补充信息，
+   * 不是内容的一部分：为了它把一篇写好的帖子挡回去，
+   * 是让一个次要字段决定主要动作能不能完成。
+   * 界面上在输入的时候就已经把认没认出来显示给人看了。
+   */
+  repoRef?: string;
   },
 ): Promise<ActionResult> {
 
@@ -270,6 +280,9 @@ export async function createPostAs(
     pollDraft = { options: check.options, question: check.question };
   }
 
+  // 认不出来就是 null —— 见上面 repoRef 那段：不为一个可选字段拦下整篇帖子
+  const repoLink = input.repoRef ? parseRepoRef(input.repoRef) : null;
+
   const created = db.transaction((tx) => {
     const row = tx
       .insert(posts)
@@ -298,6 +311,15 @@ export async function createPostAs(
         visibilityLocked: normalized.locked,
         anonymous: Boolean(input.anonymous),
         shareCode: newShareCode(),
+        /*
+         * 关联项目要**清洗过再落库**。
+         *
+         * 直接存前端传来的字符串的话，这一列就是一个任意字符串
+         * 写入口 —— 而它会被原样拼进项目页的地址、显示在帖子上。
+         * `parseRepoRef` 同时也是拒绝 `github.com.evil.com` 的那一处
+         * （安全边界只有 link-refs.ts 一个文件，这里不另判）。
+         */
+        repoRef: repoLink ? repoRefKey(repoLink) : null,
       })
       .returning({ id: posts.id })
       .get();

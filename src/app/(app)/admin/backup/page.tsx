@@ -2,6 +2,7 @@ import { Archive, CloudOff, HardDrive, ShieldCheck, TriangleAlert } from "lucide
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { AdminNote, AdminRow } from "@/components/admin/ui";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { TruncationNote } from "@/components/ui/Pagination";
@@ -226,14 +227,14 @@ export default async function AdminBackupPage() {
               .slice()
               .sort((a, b) => b.modifiedAt - a.modifiedAt)
               .map((f) => (
-                <div key={f.name} className="inset-row flex items-center gap-2 px-4 py-2.5">
+                <AdminRow key={f.name}>
                   <span className="t-body min-w-0 flex-1 truncate font-mono text-[13px]">
                     {f.name}
                   </span>
                   <span className="tabular t-caption shrink-0 text-[var(--ink-tertiary)]">
                     {formatBytes(f.bytes)} · {relativeTime(f.modifiedAt)}
                   </span>
-                </div>
+                </AdminRow>
               ))}
           </div>
         )}
@@ -245,7 +246,7 @@ export default async function AdminBackupPage() {
         ) : (
           <div className="inset-group">
             {s.recent.map((r) => (
-              <div key={r.id} className="inset-row px-4 py-2.5">
+              <AdminRow key={r.id} align="start" className="flex-col">
                 <p className="t-body flex items-center gap-1.5">
                   <span
                     className="h-1.5 w-1.5 shrink-0 rounded-full"
@@ -267,15 +268,15 @@ export default async function AdminBackupPage() {
                     {relativeTime(r.createdAt)}
                   </span>
                 </p>
-              </div>
+              </AdminRow>
             ))}
           </div>
         )}
         <TruncationNote shown={s.recent.length} total={s.runsTotal} noun="次动作" />
-        <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+        <AdminNote>
           失败的也留着 —— 备份最常见的失败方式是<strong>「一直在成功」</strong>，
           而分辨「没跑」和「跑了但失败」的唯一办法是两种都留痕。
-        </p>
+        </AdminNote>
       </Section>
     </>
   );

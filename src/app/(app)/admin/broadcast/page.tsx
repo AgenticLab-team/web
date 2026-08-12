@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { AdminNote, AdminRow } from "@/components/admin/ui";
 import { BroadcastComposer, BroadcastReview } from "@/components/admin/BroadcastComposer";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -102,7 +103,7 @@ export default async function AdminBroadcastPage({
         <Section title="每周精选">
           <div className="inset-group">
             {digests.map((run) => (
-              <div key={run.id} className="inset-row px-4 py-2.5">
+              <AdminRow key={run.id} align="start" className="flex-col">
                 <p className="t-body flex flex-wrap items-center gap-1.5">
                   <span className="tabular">{run.weekStart} 那周</span>
                   {run.broadcastId ? (
@@ -118,15 +119,15 @@ export default async function AdminBroadcastPage({
                     {run.skipReason}
                   </p>
                 )}
-              </div>
+              </AdminRow>
             ))}
           </div>
-          <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+          <AdminNote>
             定时任务每周只<strong>生成草稿</strong>，不发送 ——
             一个每周自动向一千六百人广播的机器人，被风控只是时间问题，
             而且没有人会为一条没人看过的自动消息负责。
             草稿走下面同一套复核与发送流程。
-          </p>
+          </AdminNote>
         </Section>
       )}
 
@@ -154,7 +155,7 @@ export default async function AdminBroadcastPage({
 
       <Section title="记录">
         {rows.length === 0 ? (
-          <Empty title="还没有任何公告" />
+          <Empty title="还没有发过公告" hint="上面新建一条 —— 起草之后要另一个人复核才发得出去" />
         ) : (
           <div className="space-y-3">
             {rows.map((row) => {

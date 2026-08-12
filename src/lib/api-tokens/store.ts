@@ -5,6 +5,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, gte, isNull, sql, type SQL } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import { resolveDisplayName } from "@/lib/users/display-name";
 import { apiSends, apiTokens, groupSendGrants, groups, users } from "@/lib/db/schema";
 
 import {
@@ -359,6 +360,8 @@ export function senderNameOf(userId: string): string {
 }
 
 export interface SendLogRow {
+  /** 谁发的（已经解析成人名）—— 显示 id 等于没显示 */
+  userName: string;
   id: string;
   /** 网页上发的是 null */
   tokenId: string | null;
@@ -443,6 +446,19 @@ export function sendLog(input: SendLogQuery): { rows: SendLogRow[]; total: numbe
       tokenId: apiSends.tokenId,
       tokenName: apiTokens.name,
       userId: apiSends.userId,
+      /*
+       * 名字也一起取回来。
+       *
+       * 全站那一页原来显示的是 `01JABC…` 这种账号 id —— 没有人认得出
+       * 那是谁，而这一页存在的**全部意义**就是「谁借机器人的嘴说了什么」。
+       * 授权表单已经因为同一个理由改成了从人名里选，日志这边漏了。
+       *
+       * 两列都取：站内昵称优先，没有就退回微信昵称 —— 和代发署名用的
+       * 是同一条口径（senderNameOf），所以日志里的名字和群里看到的一致。
+       */
+      userName: users.siteNickname,
+      userWxName: users.wxNickname,
+      userWxId: users.wxId,
       convId: apiSends.convId,
       convName: groups.name,
       text: apiSends.text,
@@ -453,13 +469,24 @@ export function sendLog(input: SendLogQuery): { rows: SendLogRow[]; total: numbe
     .from(apiSends)
     .leftJoin(apiTokens, eq(apiTokens.id, apiSends.tokenId))
     .leftJoin(groups, eq(groups.convId, apiSends.convId))
+    .leftJoin(users, eq(users.id, apiSends.userId))
     .where(where)
     .orderBy(desc(apiSends.at))
     .limit(input.limit ?? 50)
     .offset(input.offset ?? 0)
     .all();
 
-  return { rows, total };
+  return {
+    rows: rows.map(({ userName, userWxName, userWxId, ...rest }) => ({
+      ...rest,
+      // 走统一解析：people.display_name 的存量数据里混着 wx_id
+      userName: resolveDisplayName([userName, userWxName], {
+        wxId: userWxId,
+        fallback: "成员",
+      }),
+    })),
+    total,
+  };
 }
 
 /** LIKE 里的通配符要转义 —— 不转的话搜 `_` 等于匹配任意一个字符 */

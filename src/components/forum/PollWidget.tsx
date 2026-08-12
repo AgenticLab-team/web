@@ -80,7 +80,7 @@ export function PollWidget({ poll, canVote }: { poll: PollView; canVote: boolean
               <span className="relative flex items-center gap-2">
                 <span
                   className={`flex h-4 w-4 shrink-0 items-center justify-center border transition-colors ${
-                    poll.multi ? "rounded-[0.25rem]" : "rounded-full"
+                    poll.multi ? "rounded-[var(--radius-chip)]" : "rounded-full"
                   } ${
                     checked
                       ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"

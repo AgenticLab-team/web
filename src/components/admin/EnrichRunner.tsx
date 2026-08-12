@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 
+import { AdminButton, AdminRow } from "@/components/admin/ui";
 import { runEnrichAction } from "@/lib/links/enrich-actions";
 
 /**
@@ -28,24 +29,23 @@ export function EnrichRunner({ disabled }: { disabled: boolean }) {
     });
 
   return (
-    <div className="inset-row px-4 py-3">
-      <button
-        type="button"
+    <AdminRow align="start" className="flex-col">
+      <AdminButton
+        tone="primary"
         onClick={run}
         disabled={pending || disabled}
         title={disabled ? "对话模型现在不可用，先把上面那一项修好" : undefined}
-        className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-[13px] font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-40"
       >
         {pending ? "整理中…（一次 30 条，要等一会儿）" : "整理下一批（30 条）"}
-      </button>
+      </AdminButton>
 
       {result && (
-        <p role="status" className="t-caption mt-2 text-[var(--ink-secondary)]">
+        <p role="status" className="t-caption text-[var(--ink-secondary)]">
           {result}
         </p>
       )}
       {notes.length > 0 && (
-        <ul className="mt-1 space-y-0.5">
+        <ul className="space-y-0.5">
           {notes.slice(0, 6).map((n) => (
             <li key={n} className="t-caption2 text-[var(--danger)]">
               {n}
@@ -53,6 +53,6 @@ export function EnrichRunner({ disabled }: { disabled: boolean }) {
           ))}
         </ul>
       )}
-    </div>
+    </AdminRow>
   );
 }

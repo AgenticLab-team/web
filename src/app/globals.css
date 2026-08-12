@@ -24,6 +24,23 @@
 
   --spacing: 0.25rem;
 
+  /*
+   * 比控件更小的一档：标签、徽章、方法名那种小色块。
+   *
+   * ─────────────────────────────────────────
+   * 它是数出来才发现要加的
+   * ─────────────────────────────────────────
+   *
+   * 原来这套尺度只有 control(10px) / card(14px) / pill(999px)，
+   * **中间到小尺寸是空的**。于是每个需要 6~8px 的人都当场编一个：
+   * 全站数出 `rounded-[0.375rem]` 8 处、`rounded-[0.5rem]` 7 处、
+   * `rounded-lg` 4 处、还有 0.4rem / 0.4375rem / 0.3rem / 0.3125rem
+   * 各一处 —— 七种写法，肉眼分不出来，但它们永远不会一起变。
+   *
+   * 所以这不是「大家不小心」，是**尺度上有个洞**。补上它，
+   * 那些硬编码才有地方可去。
+   */
+  --radius-chip: 0.375rem;
   --radius-control: 0.625rem;
   --radius-card: 0.875rem;
   --radius-sheet: 1.25rem;
@@ -129,6 +146,23 @@
   /* 深松绿。避开所有人都在用的蓝，也不至于像消费品那样跳 */
   --accent: #0d5c47;
   --accent-ink: #ffffff;
+  /*
+   * 压在 `--danger` 上的前景色。
+   *
+   * ─────────────────────────────────────────
+   * 它存在的理由是一次实测
+   * ─────────────────────────────────────────
+   *
+   * `--accent` 一直有配套的 `--accent-ink`，`--danger` 没有 ——
+   * 于是全站二十一处危险按钮只能手写 `text-white`。
+   * 亮色下那是对的（#bf3b2c 是深砖红），**暗色下就成了灾难**：
+   * 暗色的 --danger 是 #ff7a6b 这种浅珊瑚，白字压上去实测约 2.4:1，
+   * 远低于 4.5:1，封禁按钮基本看不见。
+   *
+   * 而这不会有人来报 —— 它只在暗色模式下、只在几个后台页面上出现，
+   * 而会点那几个按钮的人本来就知道那儿有个按钮。
+   */
+  --danger-ink: #ffffff;
   --accent-soft: rgb(13 92 71 / 0.09);
   --accent-hover: #0a4a39;
 
@@ -164,6 +198,8 @@
 
     --accent: #4fd1a5;
     --accent-ink: #04231a;
+    /* 暗色下 --danger 是浅珊瑚，前景必须转深 —— 白字在它上面约 2.4:1 */
+    --danger-ink: #2a0b06;
     --accent-soft: rgb(79 209 165 / 0.13);
     --accent-hover: #6ee0b8;
 
@@ -199,6 +235,8 @@
 
   --accent: #4fd1a5;
   --accent-ink: #04231a;
+  /* 和上面那个媒体查询块保持一致 —— 少一处，手动切暗色时白字就回来了 */
+  --danger-ink: #2a0b06;
   --accent-soft: rgb(79 209 165 / 0.13);
   --accent-hover: #6ee0b8;
 
@@ -226,6 +264,8 @@
   --color-separator: var(--separator);
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
+  --color-danger-ink: var(--danger-ink);
+  --radius-chip-token: var(--radius-chip);
   --color-accent-soft: var(--accent-soft);
   --color-danger: var(--danger);
   --color-warning: var(--warning);
@@ -319,12 +359,14 @@ body {
   to   { background: var(--accent-soft); }
 }
 
-@media (min-width: 64rem) {
-  :root {
-    /* 桌面端没有 Tab Bar，贴着窗口底边就行 */
-    --floating-back-bottom: 1.5rem;
-  }
-}
+/*
+ * 桌面端那条 `--floating-back-bottom: 1.5rem` 的覆盖删掉了。
+ *
+ * 那个浮出来的返回按钮现在在桌面上整个不出现（`lg:hidden`，
+ * 理由见 components/ui/FloatingBack.tsx）—— 一个不渲染的东西
+ * 不需要有人替它算位置。留着的话，下一个人会以为桌面上还有它，
+ * 然后花时间调一个看不见的数。
+ */
 
 /*
  * 顶栏 / 底栏那层毛玻璃。
@@ -714,136 +756,162 @@ body {
  *   段落间距大于行距 —— 否则段落分不出来
  *   中文行高比英文大 —— 汉字方块字密度高，1.4 会挤
  */
-.prose-forum {
-  font-size: 1.0625rem;
-  line-height: 1.75;
-  color: var(--ink);
-  overflow-wrap: break-word;
-}
+/*
+ * ═════════════════════════════════════════
+ * 这一块**必须待在 @layer components 里**
+ * ═════════════════════════════════════════
+ *
+ * 不放进层里的话，它会压过 Tailwind 的工具类 —— CSS 的层叠规则是
+ * **无层的样式一律赢过有层的**，而 Tailwind 的工具类都在 `utilities` 层。
+ *
+ * 后果不是「样式冲突」这种看得见的东西，而是：
+ *
+ *   className="prose-forum t-caption2"
+ *
+ * 里那个 `t-caption2` **什么也不做**。写的人以为自己把字号调小了，
+ * 屏幕上还是 17px，而且没有任何地方报错 —— 公告横幅的正文
+ * 就这么用 17px 显示了很久，GitHub 提及卡片里那段也是。
+ *
+ * 放进 components 层之后，工具类照常能覆盖它，这也正是所有人
+ * 写 `className="prose-forum 某个工具类"` 时期待的行为。
+ *
+ * ⚠ 这个文件里另外那七十来个设计类**目前都还在层外**。
+ * 它们身上是同一个坑，只是还没有人踩到。一起搬会一次性改动
+ * 太多视觉，所以先搬这一个（它有确凿的受害者），
+ * 由 tests/css-layers.test.ts 盯着别再退回去。
+ */
+@layer components {
+  .prose-forum {
+    font-size: 1.0625rem;
+    line-height: 1.75;
+    color: var(--ink);
+    overflow-wrap: break-word;
+  }
 
-.prose-forum > * + * { margin-top: 1.1em; }
-.prose-forum > *:first-child { margin-top: 0; }
+  .prose-forum > * + * { margin-top: 1.1em; }
+  .prose-forum > *:first-child { margin-top: 0; }
 
-.prose-forum h1, .prose-forum h2, .prose-forum h3,
-.prose-forum h4, .prose-forum h5, .prose-forum h6 {
-  font-weight: 600;
-  letter-spacing: -0.012em;
-  line-height: 1.35;
-  margin-top: 1.8em;
-}
-.prose-forum h1 { font-size: 1.5rem; }
-.prose-forum h2 { font-size: 1.3125rem; }
-.prose-forum h3 { font-size: 1.1875rem; }
-.prose-forum h4, .prose-forum h5, .prose-forum h6 { font-size: 1.0625rem; }
+  .prose-forum h1, .prose-forum h2, .prose-forum h3,
+  .prose-forum h4, .prose-forum h5, .prose-forum h6 {
+    font-weight: 600;
+    letter-spacing: -0.012em;
+    line-height: 1.35;
+    margin-top: 1.8em;
+  }
+  .prose-forum h1 { font-size: 1.5rem; }
+  .prose-forum h2 { font-size: 1.3125rem; }
+  .prose-forum h3 { font-size: 1.1875rem; }
+  .prose-forum h4, .prose-forum h5, .prose-forum h6 { font-size: 1.0625rem; }
 
-.prose-forum a {
-  color: var(--accent);
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  /* 下划线避开字母下伸部，读起来干净很多 */
-  text-underline-offset: 0.2em;
-  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
-  transition: text-decoration-color var(--motion-feedback);
-}
-.prose-forum a:hover { text-decoration-color: var(--accent); }
+  .prose-forum a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    /* 下划线避开字母下伸部，读起来干净很多 */
+    text-underline-offset: 0.2em;
+    text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+    transition: text-decoration-color var(--motion-feedback);
+  }
+  .prose-forum a:hover { text-decoration-color: var(--accent); }
 
-.prose-forum strong { font-weight: 600; }
-.prose-forum em { font-style: italic; }
-.prose-forum del { color: var(--ink-tertiary); }
+  .prose-forum strong { font-weight: 600; }
+  .prose-forum em { font-style: italic; }
+  .prose-forum del { color: var(--ink-tertiary); }
 
-.prose-forum ul, .prose-forum ol { padding-left: 1.4em; }
-.prose-forum ul { list-style: disc; }
-.prose-forum ol { list-style: decimal; }
-.prose-forum li + li { margin-top: 0.35em; }
-.prose-forum li::marker { color: var(--ink-tertiary); }
+  .prose-forum ul, .prose-forum ol { padding-left: 1.4em; }
+  .prose-forum ul { list-style: disc; }
+  .prose-forum ol { list-style: decimal; }
+  .prose-forum li + li { margin-top: 0.35em; }
+  .prose-forum li::marker { color: var(--ink-tertiary); }
 
-.prose-forum blockquote {
-  border-left: 2px solid var(--separator);
-  padding-left: 1em;
-  color: var(--ink-secondary);
-}
+  .prose-forum blockquote {
+    border-left: 2px solid var(--separator);
+    padding-left: 1em;
+    color: var(--ink-secondary);
+  }
 
-.prose-forum hr {
-  border: 0;
-  border-top: 0.5px solid var(--separator);
-  margin: 2em 0;
-}
+  .prose-forum hr {
+    border: 0;
+    border-top: 0.5px solid var(--separator);
+    margin: 2em 0;
+  }
 
-/* 行内代码：不用边框，靠底色区分，读起来不割裂 */
-.prose-forum code {
-  font-family: var(--font-mono);
-  font-size: 0.875em;
-  background: var(--fill);
-  padding: 0.15em 0.36em;
-  border-radius: 0.3125rem;
-}
+  /* 行内代码：不用边框，靠底色区分，读起来不割裂 */
+  .prose-forum code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    background: var(--fill);
+    padding: 0.15em 0.36em;
+    border-radius: 0.3125rem;
+  }
 
-.prose-forum pre {
-  background: var(--surface-sunken);
-  border-radius: var(--radius-control);
-  padding: 0.9rem 1rem;
-  overflow-x: auto;
-  font-size: 0.8125rem;
-  line-height: 1.6;
-  /* 长代码横向滚动，绝不让整个页面跟着横向滚 */
-  max-width: 100%;
-}
-.prose-forum pre code {
-  background: none;
-  padding: 0;
-  font-size: inherit;
-}
+  .prose-forum pre {
+    background: var(--surface-sunken);
+    border-radius: var(--radius-control);
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    /* 长代码横向滚动，绝不让整个页面跟着横向滚 */
+    max-width: 100%;
+  }
+  .prose-forum pre code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+  }
 
-/* shiki 的双主题：跟随当前配色切换，不闪 */
-.prose-forum .shiki,
-.prose-forum .shiki span {
-  color: var(--shiki-light);
-  background-color: var(--shiki-light-bg);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .prose-forum .shiki,
-  :root:not([data-theme="light"]) .prose-forum .shiki span {
+  /* shiki 的双主题：跟随当前配色切换，不闪 */
+  .prose-forum .shiki,
+  .prose-forum .shiki span {
+    color: var(--shiki-light);
+    background-color: var(--shiki-light-bg);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .prose-forum .shiki,
+    :root:not([data-theme="light"]) .prose-forum .shiki span {
+      color: var(--shiki-dark);
+      background-color: var(--shiki-dark-bg);
+    }
+  }
+  :root[data-theme="dark"] .prose-forum .shiki,
+  :root[data-theme="dark"] .prose-forum .shiki span {
     color: var(--shiki-dark);
     background-color: var(--shiki-dark-bg);
   }
-}
-:root[data-theme="dark"] .prose-forum .shiki,
-:root[data-theme="dark"] .prose-forum .shiki span {
-  color: var(--shiki-dark);
-  background-color: var(--shiki-dark-bg);
-}
 
-.prose-forum img {
-  max-width: 100%;
-  height: auto;
-  border-radius: var(--radius-control);
-}
+  .prose-forum img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius-control);
+  }
 
-.prose-forum table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9375rem;
-  display: block;
-  overflow-x: auto;
-}
-.prose-forum th, .prose-forum td {
-  border: 0.5px solid var(--separator);
-  padding: 0.5em 0.75em;
-  text-align: left;
-}
-.prose-forum th { background: var(--fill); font-weight: 600; }
+  .prose-forum table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+    display: block;
+    overflow-x: auto;
+  }
+  .prose-forum th, .prose-forum td {
+    border: 0.5px solid var(--separator);
+    padding: 0.5em 0.75em;
+    text-align: left;
+  }
+  .prose-forum th { background: var(--fill); font-weight: 600; }
 
-.prose-forum details {
-  background: var(--fill);
-  border-radius: var(--radius-control);
-  padding: 0.6em 0.9em;
-}
-.prose-forum summary { cursor: pointer; font-weight: 500; }
+  .prose-forum details {
+    background: var(--fill);
+    border-radius: var(--radius-control);
+    padding: 0.6em 0.9em;
+  }
+  .prose-forum summary { cursor: pointer; font-weight: 500; }
 
-/* 回复区的正文更紧凑：楼层多的时候松散排版会让页面长得离谱 */
-.prose-forum-compact { font-size: 1rem; line-height: 1.65; }
-.prose-forum-compact > * + * { margin-top: 0.75em; }
-.prose-forum-compact h1, .prose-forum-compact h2, .prose-forum-compact h3 { margin-top: 1.1em; }
+  /* 回复区的正文更紧凑：楼层多的时候松散排版会让页面长得离谱 */
+  .prose-forum-compact { font-size: 1rem; line-height: 1.65; }
+  .prose-forum-compact > * + * { margin-top: 0.75em; }
+  .prose-forum-compact h1, .prose-forum-compact h2, .prose-forum-compact h3 { margin-top: 1.1em; }
+}
 
 /* 检索片段里的高亮。不用背景块 —— 一行里几处高亮会显得很花，
    下划线更克制，也不影响行高 */

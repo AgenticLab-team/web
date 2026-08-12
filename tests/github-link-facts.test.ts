@@ -4,8 +4,11 @@ import { describe, it } from "node:test";
 import {
   apiPathFor,
   clamp,
+  commitLabel,
   issueFacts,
   issueLabel,
+  langOf,
+  pathLabel,
   repoFacts,
   repoLabel,
   shouldFetch,
@@ -270,19 +273,74 @@ describe("该问哪个接口", () => {
     assert.equal(apiPathFor(REPO), "/repos/vercel/next.js");
   });
 
-  it("**commit 和代码不问** —— 问一趟拿不回更多，白花配额", () => {
+  it("**不带行号的代码链接不问** —— 替作者选一段他没选的代码，比不展开糟", () => {
     const sha = "0".repeat(40);
-    for (const u of [
-      `https://github.com/a/b/commit/${sha}`,
-      `https://github.com/a/b/blob/${sha}/x.ts`,
-    ]) {
-      assert.equal(shouldFetch(ref(u)), false, `${u} 还在问`);
-      assert.equal(apiPathFor(ref(u)), null);
-    }
+    const u = `https://github.com/a/b/blob/${sha}/x.ts`;
+    assert.equal(shouldFetch(ref(u)), false);
+    assert.equal(apiPathFor(ref(u)), null);
+  });
+
+  it("带行号的走 contents 接口，且**按 sha 取而不是按分支**", () => {
+    const sha = "0".repeat(40);
+    const path = apiPathFor(ref(`https://github.com/a/b/blob/${sha}/src/x.ts#L1-L2`));
+    assert.equal(path, `/repos/a/b/contents/src/x.ts?ref=${sha}`);
+  });
+
+  it("**路径逐段编码，斜杠留着** —— 整条编掉就是在请求一个名字里带斜杠的文件", () => {
+    const sha = "0".repeat(40);
+    const path = apiPathFor(ref(`https://github.com/a/b/blob/${sha}/a b/c%23d.ts#L1`));
+    assert.match(path!, /contents\/a%20b\/c%23d\.ts\?ref=/);
+  });
+
+  it("commit 走 commits 接口", () => {
+    const sha = "0".repeat(40);
+    assert.equal(
+      apiPathFor(ref(`https://github.com/a/b/commit/${sha}`)),
+      `/repos/a/b/commits/${sha}`,
+    );
+    assert.equal(shouldFetch(ref(`https://github.com/a/b/commit/${sha}`)), true);
   });
 
   it("仓库和 issue 要问", () => {
     assert.equal(shouldFetch(REPO), true);
     assert.equal(shouldFetch(ISSUE), true);
+  });
+});
+
+describe("commit 和代码的标题：被截掉的必须是无关紧要的那半个", () => {
+  const sha = "abcdef1234567890abcdef1234567890abcdef12";
+
+  it("**短 sha 一个字都不能少** —— 截半截还像个合法 sha，但它指向别处", () => {
+    const label = commitLabel("some-really-long-owner", "some-really-long-repo", sha, 24);
+    assert.ok(label.endsWith(`@${sha.slice(0, 7)}`), label);
+    assert.ok([...label].length <= 24, label);
+  });
+
+  it("装得下时一个字不改", () => {
+    assert.equal(commitLabel("a", "b", sha), `a/b@${sha.slice(0, 7)}`);
+  });
+
+  it("**路径从左边截，留住文件名** —— 被切掉的不能是识别它的那半个", () => {
+    const out = pathLabel("src/lib/github/very/deep/path/link-refs.ts", 20);
+    assert.ok(out.endsWith("link-refs.ts"), out);
+    assert.ok(out.startsWith("…"), out);
+    assert.ok([...out].length <= 20, out);
+  });
+
+  it("装得下的路径原样", () => {
+    assert.equal(pathLabel("x.ts"), "x.ts");
+  });
+});
+
+describe("语言靠扩展名猜，猜不出退回纯文本", () => {
+  it("常见的几种", () => {
+    assert.equal(langOf("a/b/x.ts"), "ts");
+    assert.equal(langOf("x.PY"), "python");
+    assert.equal(langOf("Dockerfile"), "docker");
+  });
+
+  it("**认不出来不是错误** —— 没有颜色和整块不出现差着一个量级", () => {
+    assert.equal(langOf("x.wat"), "text");
+    assert.equal(langOf("LICENSE"), "text");
   });
 });

@@ -1,6 +1,7 @@
 import { AlertTriangle, BellOff, CheckCircle2, XCircle } from "lucide-react";
 import type { Metadata } from "next";
 
+import { AdminNote, AdminRow } from "@/components/admin/ui";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { TruncationNote } from "@/components/ui/Pagination";
@@ -176,11 +177,11 @@ export default async function AdminHealthPage() {
           })}
         </Group>
         )}
-        <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+        <AdminNote>
           <strong>frp 隧道</strong>和<strong>上游接口</strong>在告警上算同一件事 ——
           它们是同一次探测的两种失败归因。隧道一断，上游接口那一行就不再更新，
           单看它会一直显示「正常」。
-        </p>
+        </AdminNote>
       </Section>
 
       <UpstreamUsage usage={usage} hours={USAGE_HOURS} />
@@ -188,20 +189,20 @@ export default async function AdminHealthPage() {
       <Section title="告警怎么发出去">
         <div className="inset-group">
           {Object.keys(DEFAULT_RULES).map((key) => (
-            <div key={key} className="inset-row flex items-center gap-2 px-4 py-2.5">
+            <AdminRow key={key}>
               <span className="t-body min-w-0 flex-1 truncate">{componentLabel(key)}</span>
               <span className="t-caption shrink-0 text-[var(--ink-tertiary)]">
                 {canDeliverViaWechat(key) ? "微信私聊站长" : "发不出去 · 靠外部监控"}
               </span>
-            </div>
+            </AdminRow>
           ))}
         </div>
-        <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+        <AdminNote>
           微信通道本身走上游 —— 上游断了的时候，「上游断了」这条告警也发不出去。
           这不是可以绕过的缺陷，是结构性的：报信的人和出事的人是同一个。
           唯一不依赖上游的通道是 <code className="font-mono">/api/health</code>：
           关键组件挂掉时它返回 503，需要有一个<strong>站外</strong>的监控去打它。
-        </p>
+        </AdminNote>
       </Section>
 
       <Section title="历史">
@@ -210,7 +211,7 @@ export default async function AdminHealthPage() {
         ) : (
           <div className="inset-group">
             {alerts.map((a) => (
-              <div key={a.id} className="inset-row flex items-center gap-2 px-4 py-2.5">
+              <AdminRow key={a.id}>
                 <span
                   className="h-1.5 w-1.5 shrink-0 rounded-full"
                   style={{
@@ -229,7 +230,7 @@ export default async function AdminHealthPage() {
                     ? `${formatDuration(a.resolvedAt - a.firstSeenAt)} · ${relativeTime(a.resolvedAt)}恢复`
                     : relativeTime(a.firstSeenAt)}
                 </span>
-              </div>
+              </AdminRow>
             ))}
           </div>
         )}

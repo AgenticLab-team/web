@@ -8,6 +8,7 @@ import {
   LayoutGrid,
   Calendar,
   Gift,
+  FolderGit2,
   Home,
   Link as LinkIcon,
   MessageCircle,
@@ -29,6 +30,7 @@ import {
  */
 const ICONS: Record<string, LucideIcon> = {
   home: Home,
+  "folder-git-2": FolderGit2,
   more: LayoutGrid,
   bell: Bell,
   trophy: Trophy,

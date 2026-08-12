@@ -4,6 +4,16 @@ import { useRouter } from "next/navigation";
 import { PRESETS } from "@/lib/moderation/duration-rules";
 import { useState, useTransition } from "react";
 
+import {
+  AdminActions,
+  AdminButton,
+  AdminChip,
+  AdminConfirm,
+  AdminNote,
+  AdminPanel,
+  adminFieldClass,
+  adminNumberFieldClass,
+} from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import { grantTitle, revokeTitle } from "@/lib/titles/actions";
 import {
@@ -62,18 +72,14 @@ export function UserActions(props: Props) {
     <div className="space-y-3">
       <div className="flex flex-wrap gap-1.5">
         {panels.map((panel) => (
-          <button
+          <AdminChip
             key={panel.key}
-            type="button"
+            active={open === panel.key}
+            aria-expanded={open === panel.key}
             onClick={() => setOpen(open === panel.key ? null : panel.key)}
-            className={`t-footnote rounded-[var(--radius-pill)] px-3 py-1.5 font-medium transition-colors ${
-              open === panel.key
-                ? "bg-[var(--ink)] text-[var(--canvas)]"
-                : "bg-[var(--fill)] text-[var(--ink-secondary)]"
-            }`}
           >
             {panel.label}
-          </button>
+          </AdminChip>
         ))}
       </div>
 
@@ -100,11 +106,7 @@ export function UserActions(props: Props) {
 }
 
 function Panel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="animate-rise space-y-2.5 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
-      {children}
-    </div>
-  );
+  return <AdminPanel className="animate-rise space-y-2.5">{children}</AdminPanel>;
 }
 
 function ReasonInput({
@@ -121,7 +123,7 @@ function ReasonInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]"
+      className={adminFieldClass}
     />
   );
 }
@@ -152,29 +154,31 @@ function PointsPanel({ userId }: { userId: string }) {
 
   return (
     <Panel>
-      <div className="flex gap-2">
+      {/* 手机上竖着排 —— 375px 里横着放「数字框 + 理由框」的结果是
+          理由框只剩五个字的宽度，而理由是必填的 */}
+      <div className="flex flex-col gap-2 sm:flex-row">
         <input
           type="number"
           value={delta || ""}
           onChange={(e) => setDelta(Number(e.target.value))}
           placeholder="正数加分，负数扣分"
-          className="tabular t-subhead w-40 rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none"
+          className={`sm:w-40 ${adminNumberFieldClass}`}
         />
         <div className="flex-1">
           <ReasonInput value={reason} onChange={setReason} />
         </div>
       </div>
-      <button
-        type="button"
+      <AdminButton
+        tone="primary"
+        block
         disabled={pending || !delta || !reason.trim()}
         onClick={() => run(() => adjustPoints({ userId, delta, reason }), "积分已调整")}
-        className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
       >
-        确认调整
-      </button>
-      <p className="t-caption text-[var(--ink-tertiary)]">
-        调整会写一条积分流水，原有记录不会被修改。
-      </p>
+        {/* 按钮上写清楚是加还是扣：数字框里一个负号很容易看漏，
+            而「扣 200 分」和「加 200 分」是不同的两件事 */}
+        {delta ? `确认${delta > 0 ? "发放" : "扣除"} ${Math.abs(delta)} 分` : "确认调整"}
+      </AdminButton>
+      <AdminNote className="px-0">调整会写一条积分流水，原有记录不会被修改。</AdminNote>
     </Panel>
   );
 }
@@ -184,12 +188,29 @@ function StatusPanel({ userId, status }: { userId: string; status: string }) {
   const [duration, setDuration] = useState<number | null>(7 * 86_400);
   const { pending, run } = useAction();
   const [reason, setReason] = useState("");
+  /*
+   * 确认那一步。
+   *
+   * 封禁以前是**点一下就生效**的 —— 而它比这个后台里任何一个
+   * 带二次确认的动作（关模块、批量删帖、冲正）影响都大：
+   * 对方立刻被下线、收到通知、进处罚记录。
+   *
+   * 现在和它们走同一条路：先看到「会发生什么」，再点第二下。
+   * 「恢复正常」不走这一步 —— 那是在**撤销**处罚，
+   * 给撤销加摩擦只会让人懒得撤。
+   */
+  const [confirming, setConfirming] = useState<"suspended" | "banned" | null>(null);
 
   const options = [
     { value: "active" as const, label: "恢复正常", danger: false },
     { value: "suspended" as const, label: "暂停", danger: true },
     { value: "banned" as const, label: "封禁", danger: true },
   ].filter((o) => o.value !== status);
+
+  const durationLabel =
+    duration === null
+      ? "永久，只能由人手动解除"
+      : (PRESETS.find((p) => p.seconds === duration)?.label ?? `${duration / 86_400} 天`);
 
   return (
     <Panel>
@@ -209,56 +230,77 @@ function StatusPanel({ userId, status }: { userId: string; status: string }) {
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="t-caption shrink-0 text-[var(--ink-tertiary)]">期限</span>
         {PRESETS.map((preset) => (
-          <button
+          <AdminChip
             key={preset.label}
-            type="button"
+            active={duration === preset.seconds}
             onClick={() => setDuration(preset.seconds)}
-            className={`t-caption rounded-[var(--radius-pill)] px-2.5 py-1 font-medium transition ${
-              duration === preset.seconds
-                ? "bg-[var(--ink)] text-[var(--canvas)]"
-                : "bg-[var(--fill)] text-[var(--ink-secondary)]"
-            }`}
           >
             {preset.label}
-          </button>
+          </AdminChip>
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            disabled={pending || !reason.trim()}
-            onClick={() =>
-              run(
-                () =>
-                  setUserStatus({
-                    userId,
-                    status: option.value,
-                    reason,
-                    // 「恢复正常」没有期限可言
-                    durationSeconds: option.value === "active" ? null : duration,
-                  }),
-                "状态已更新",
-              )
-            }
-            className={`t-subhead flex-1 rounded-[var(--radius-control)] px-4 py-2 font-medium disabled:opacity-40 ${
-              option.danger
-                ? "bg-[var(--danger)] text-white"
-                : "bg-[var(--fill)] text-[var(--ink)]"
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-      <p className="t-caption leading-relaxed text-[var(--ink-tertiary)]">
+      {confirming ? (
+        <AdminConfirm
+          title={`确认${confirming === "banned" ? "封禁" : "暂停"}这个账号？`}
+          confirmLabel={`确认${confirming === "banned" ? "封禁" : "暂停"}`}
+          disabled={pending}
+          onCancel={() => setConfirming(null)}
+          onConfirm={() =>
+            run(
+              () =>
+                setUserStatus({
+                  userId,
+                  status: confirming,
+                  reason,
+                  durationSeconds: duration,
+                }),
+              "状态已更新",
+            )
+          }
+        >
+          {/* 确认块里必须是**具体的后果**，不是「你确定吗」——
+              一个没有内容的确认框，第二下和第一下点得一样快 */}
+          <ul className="space-y-0.5">
+            <li className="t-caption text-[var(--ink-secondary)]">· 期限：{durationLabel}</li>
+            <li className="t-caption text-[var(--ink-secondary)]">
+              · 立即下线他的全部设备，并给本人发通知
+            </li>
+            <li className="t-caption text-[var(--ink-secondary)]">
+              · 进他的处罚记录，理由原样可见：「{reason.trim()}」
+            </li>
+          </ul>
+        </AdminConfirm>
+      ) : (
+        <AdminActions>
+          {options.map((option) => (
+            <AdminButton
+              key={option.value}
+              tone={option.danger ? "danger" : "neutral"}
+              className="flex-1"
+              disabled={pending || !reason.trim()}
+              title={reason.trim() ? undefined : "先写一句理由 —— 它会原样进他的处罚记录"}
+              onClick={() =>
+                option.danger
+                  ? setConfirming(option.value as "suspended" | "banned")
+                  : run(
+                      // 「恢复正常」没有期限可言，也不需要再确认一次
+                      () => setUserStatus({ userId, status: "active", reason, durationSeconds: null }),
+                      "状态已更新",
+                    )
+              }
+            >
+              {option.label}
+            </AdminButton>
+          ))}
+        </AdminActions>
+      )}
+      <AdminNote className="px-0">
         封禁会立即下线该用户的全部设备，并通知本人。他可以在「处罚与申诉」里申诉。
         {duration === null
           ? "选了永久的话，只能由人手动解除。"
           : "到期会自动解除，并通知本人 —— 他在「处罚与申诉」里看得到还剩多久。"}
-      </p>
+      </AdminNote>
     </Panel>
   );
 }
@@ -284,14 +326,17 @@ function RolePanel({
           {held.map((role) => (
             <div key={role.id} className="flex items-center gap-2">
               <span className="t-subhead flex-1">{role.name}</span>
-              <button
-                type="button"
+              {/* 收权限用 dangerSoft：它是破坏性的，但再授一次就回来了 ——
+                  和封禁那种收不回来的事不该长得一样重 */}
+              <AdminButton
+                tone="dangerSoft"
+                size="sm"
                 disabled={pending || !reason.trim()}
+                title={reason.trim() ? "移除这个身份组" : "先写一句理由"}
                 onClick={() => run(() => revokeRole({ userRoleId: role.id, reason }), "已移除")}
-                className="t-caption rounded-[var(--radius-pill)] bg-[var(--fill)] px-2.5 py-1 text-[var(--danger)] disabled:opacity-40"
               >
                 移除
-              </button>
+              </AdminButton>
             </div>
           ))}
         </div>
@@ -303,7 +348,8 @@ function RolePanel({
         <select
           value={roleKey}
           onChange={(e) => setRoleKey(e.target.value)}
-          className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none"
+          aria-label="要授予的身份组"
+          className={`flex-1 ${adminFieldClass}`}
         >
           {assignable.map((role) => (
             <option key={role.key} value={role.key}>
@@ -311,14 +357,13 @@ function RolePanel({
             </option>
           ))}
         </select>
-        <button
-          type="button"
+        <AdminButton
+          tone="primary"
           disabled={pending || !roleKey || !reason.trim()}
           onClick={() => run(() => grantRole({ userId, roleKey, reason }), "已授予")}
-          className="t-subhead rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
         >
           授予
-        </button>
+        </AdminButton>
       </div>
     </Panel>
   );
@@ -327,20 +372,37 @@ function RolePanel({
 function SessionPanel({ userId }: { userId: string }) {
   const { pending, run } = useAction();
   const [reason, setReason] = useState("");
+  const [confirming, setConfirming] = useState(false);
   return (
     <Panel>
       <ReasonInput value={reason} onChange={setReason} />
-      <button
-        type="button"
-        disabled={pending || !reason.trim()}
-        onClick={() => run(() => revokeUserSessions({ userId, reason }), "已下线全部设备")}
-        className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--danger)] px-4 py-2 font-medium text-white disabled:opacity-40"
-      >
-        下线全部设备
-      </button>
-      <p className="t-caption text-[var(--ink-tertiary)]">
+      {confirming ? (
+        <AdminConfirm
+          title="确认把他的全部设备下线？"
+          confirmLabel="确认下线"
+          disabled={pending}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => run(() => revokeUserSessions({ userId, reason }), "已下线全部设备")}
+        >
+          <p className="t-caption leading-relaxed text-[var(--ink-secondary)]">
+            他手上每一台正在用的设备都会立刻退出登录，包括手机上那台 ——
+            如果他此刻正在打字，那段草稿多半就没了。
+          </p>
+        </AdminConfirm>
+      ) : (
+        <AdminButton
+          tone="danger"
+          block
+          disabled={pending || !reason.trim()}
+          title={reason.trim() ? undefined : "先写一句理由"}
+          onClick={() => setConfirming(true)}
+        >
+          下线全部设备
+        </AdminButton>
+      )}
+      <AdminNote className="px-0">
         用户需要重新登录。Passkey 不受影响，仍然可以一步进来。
-      </p>
+      </AdminNote>
     </Panel>
   );
 }
@@ -355,16 +417,16 @@ function NotePanel({ userId }: { userId: string }) {
         onChange={(e) => setContent(e.target.value)}
         rows={3}
         placeholder="给其他管理员看的备注，用户本人看不到"
-        className="t-subhead w-full resize-none rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]"
+        className={`resize-none ${adminFieldClass}`}
       />
-      <button
-        type="button"
+      <AdminButton
+        tone="primary"
+        block
         disabled={pending || !content.trim()}
         onClick={() => run(() => addUserNote({ userId, content }), "备注已保存")}
-        className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
       >
         保存备注
-      </button>
+      </AdminButton>
     </Panel>
   );
 }
@@ -398,51 +460,57 @@ function TitlePanel({
               <span className="t-subhead flex-1">
                 {t.icon} {t.name}
               </span>
-              <button
-                type="button"
+              {/*
+                * 收回称号原来是一个中性灰按钮 —— 它是这一页上唯一
+                * 「在拿走东西却没有任何危险色」的动作。而收回称号
+                * 比授予更伤人（下面那句注释里自己写着这句话）。
+                * 归到 dangerSoft：有红色，但不是实心红。
+                */}
+              <AdminButton
+                tone="dangerSoft"
+                size="sm"
                 disabled={pending || !reason.trim()}
+                title={reason.trim() ? "收回这个称号" : "先写一句理由"}
                 onClick={() =>
                   run(() => revokeTitle({ userTitleId: t.userTitleId, reason }), "已收回")
                 }
-                className="t-caption rounded-[var(--radius-control)] bg-[var(--fill)] px-2.5 py-1 text-[var(--ink-secondary)] disabled:opacity-40"
               >
                 收回
-              </button>
+              </AdminButton>
             </div>
           ))}
         </div>
       )}
 
       {grantable.length > 0 && (
-        <div className="flex gap-2">
-          <select
-            value={titleKey}
-            onChange={(e) => setTitleKey(e.target.value)}
-            className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none"
-          >
-            {grantable.map((t) => (
-              <option key={t.key} value={t.key}>
-                {t.icon} {t.name}
-                {t.remaining !== null && `（剩 ${t.remaining} 个名额）`}
-              </option>
-            ))}
-          </select>
-        </div>
+        <select
+          value={titleKey}
+          onChange={(e) => setTitleKey(e.target.value)}
+          aria-label="要授予的称号"
+          className={adminFieldClass}
+        >
+          {grantable.map((t) => (
+            <option key={t.key} value={t.key}>
+              {t.icon} {t.name}
+              {t.remaining !== null && `（剩 ${t.remaining} 个名额）`}
+            </option>
+          ))}
+        </select>
       )}
 
       <ReasonInput value={reason} onChange={setReason} placeholder="理由（必填，会通知本人）" />
 
-      <button
-        type="button"
+      <AdminButton
+        tone="primary"
+        block
         disabled={pending || !titleKey || !reason.trim()}
         onClick={() => run(() => grantTitle({ userId, titleKey, reason }), "已授予并通知本人")}
-        className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
       >
         授予称号
-      </button>
-      <p className="t-caption text-[var(--ink-tertiary)]">
+      </AdminButton>
+      <AdminNote className="px-0">
         授予会通知本人 —— 悄悄发一个称号等于没发，没人会主动去个人页翻有没有新东西。
-      </p>
+      </AdminNote>
     </Panel>
   );
 }

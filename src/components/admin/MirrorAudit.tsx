@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 
+import { AdminButton } from "@/components/admin/ui";
 import { runMirrorAudit } from "@/lib/admin/mirror-actions";
 import type { MirrorAudit as Audit } from "@/lib/admin/mirror-audit";
 
@@ -43,18 +44,13 @@ export function MirrorAudit() {
             归档缺一段时，这里能分清是同步漏了（能补）还是上游本来就没有（补不了）。
           </p>
         </div>
-        <button
-          type="button"
-          onClick={run}
-          disabled={pending}
-          className="t-caption shrink-0 rounded-[var(--radius-pill)] bg-[var(--fill)] px-3 py-1.5 font-medium text-[var(--ink)] transition disabled:opacity-40"
-        >
+        <AdminButton tone="neutral" size="sm" onClick={run} disabled={pending}>
           {pending ? "问上游中…" : "现在对账"}
-        </button>
+        </AdminButton>
       </div>
 
       {error && (
-        <p className="t-caption mt-2.5 text-[var(--danger)]">
+        <p role="alert" className="t-caption mt-2.5 text-[var(--danger)]">
           {/* 失败就说失败 —— 不能显示一份「全部正常」的空对账 */}
           对账没跑成：{error}
         </p>

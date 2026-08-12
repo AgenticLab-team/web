@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { AdminButton, adminFieldClass } from "@/components/admin/ui";
 import { EligibilityEditor } from "@/components/admin/EligibilityEditor";
 import { useToast } from "@/components/ui/Toast";
 import { saveActivity, setActivityStatus } from "@/lib/activities/actions";
@@ -39,13 +40,9 @@ export function ActivityComposer({
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)]"
-      >
+      <AdminButton tone="primary" block aria-expanded={false} onClick={() => setOpen(true)}>
         新建活动
-      </button>
+      </AdminButton>
     );
   }
 
@@ -78,7 +75,7 @@ export function ActivityComposer({
 
   return (
     <div className="animate-rise space-y-3 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
-      <select value={moduleKey} onChange={(e) => setModuleKey(e.target.value)} className={inputClass}>
+      <select value={moduleKey} onChange={(e) => setModuleKey(e.target.value)} className={adminFieldClass}>
         {modules.map((m) => (
           <option key={m.key} value={m.key}>
             {m.label} —— {m.description}
@@ -90,14 +87,14 @@ export function ActivityComposer({
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="活动标题"
-        className={inputClass}
+        className={adminFieldClass}
       />
       <textarea
         value={description}
         onChange={(e) => setDescription(e.target.value)}
         rows={2}
         placeholder="说明（用户会看到）"
-        className={`${inputClass} resize-none`}
+        className={`${adminFieldClass} resize-none`}
       />
 
       <div className="grid gap-2 sm:grid-cols-3">
@@ -107,7 +104,7 @@ export function ActivityComposer({
             type="number"
             value={quota}
             onChange={(e) => setQuota(e.target.value)}
-            className={`tabular ${inputClass}`}
+            className={`tabular ${adminFieldClass}`}
           />
         </label>
         <label className="block">
@@ -116,7 +113,7 @@ export function ActivityComposer({
             type="number"
             value={perUserLimit}
             onChange={(e) => setPerUserLimit(e.target.value)}
-            className={`tabular ${inputClass}`}
+            className={`tabular ${adminFieldClass}`}
           />
         </label>
         <label className="block">
@@ -125,7 +122,7 @@ export function ActivityComposer({
             type="number"
             value={hours}
             onChange={(e) => setHours(e.target.value)}
-            className={`tabular ${inputClass}`}
+            className={`tabular ${adminFieldClass}`}
           />
         </label>
       </div>
@@ -135,7 +132,7 @@ export function ActivityComposer({
           <span className="t-caption2 mb-1 block text-[var(--ink-quaternary)]">
             允许的后缀（逗号分隔）
           </span>
-          <input value={tlds} onChange={(e) => setTlds(e.target.value)} className={inputClass} />
+          <input value={tlds} onChange={(e) => setTlds(e.target.value)} className={adminFieldClass} />
         </label>
       )}
 
@@ -151,14 +148,9 @@ export function ActivityComposer({
 
       <EligibilityEditor value={eligibility} onChange={setEligibility} />
 
-      <button
-        type="button"
-        disabled={pending || !title.trim()}
-        onClick={submit}
-        className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
-      >
+      <AdminButton tone="primary" block disabled={pending || !title.trim()} onClick={submit}>
         创建为草稿
-      </button>
+      </AdminButton>
 
       <p className="t-caption leading-relaxed text-[var(--ink-tertiary)]">
         创建后是草稿，开放是单独的一步 ——
@@ -214,15 +206,9 @@ export function ActivityStatusActions({
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {next.map((n) => (
-        <button
-          key={n.to}
-          type="button"
-          disabled={pending}
-          onClick={() => run(n.to)}
-          className="t-caption rounded-[var(--radius-pill)] bg-[var(--fill)] px-2.5 py-1 font-medium text-[var(--ink-secondary)] disabled:opacity-40"
-        >
+        <AdminButton key={n.to} tone="neutral" size="sm" disabled={pending} onClick={() => run(n.to)}>
           {n.label}
-        </button>
+        </AdminButton>
       ))}
 
       {canCancel && (
@@ -231,22 +217,21 @@ export function ActivityStatusActions({
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="取消原因"
-            className="t-caption flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-2.5 py-1 outline-none"
+            aria-label="取消这个活动的原因"
+            className={`flex-1 ${adminFieldClass}`}
           />
-          <button
-            type="button"
+          {/* 取消活动会把名额全退回去，报名的人都收到通知 —— 撤不回来，实心红 */}
+          <AdminButton
+            tone="danger"
+            size="sm"
             disabled={pending || !reason.trim()}
+            title={reason.trim() ? undefined : "先写一句取消原因"}
             onClick={() => run("cancelled")}
-            className="t-caption shrink-0 rounded-[var(--radius-pill)] px-2.5 py-1 disabled:opacity-30"
-            style={{ color: "var(--danger)" }}
           >
             取消活动
-          </button>
+          </AdminButton>
         </>
       )}
     </div>
   );
 }
-
-const inputClass =
-  "t-subhead w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]";

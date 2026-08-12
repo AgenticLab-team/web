@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AdminNote, AdminTag } from "@/components/admin/ui";
 import { Avatar } from "@/components/Avatar";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -102,15 +103,7 @@ export default async function AdminUsersPage({
                 <p className="t-body flex items-center gap-1.5 leading-tight">
                   <span className="truncate">{row.name}</span>
                   {STATUS_COLOR[row.status] && row.status !== "active" && (
-                    <span
-                      className="t-caption2 shrink-0 rounded-[var(--radius-pill)] px-1.5 py-0.5 font-medium"
-                      style={{
-                        background: `color-mix(in srgb, ${STATUS_COLOR[row.status]} 15%, transparent)`,
-                        color: STATUS_COLOR[row.status],
-                      }}
-                    >
-                      {STATUS_LABEL[row.status]}
-                    </span>
+                    <AdminTag color={STATUS_COLOR[row.status]}>{STATUS_LABEL[row.status]}</AdminTag>
                   )}
                 </p>
                 <p className="tabular t-caption mt-0.5 truncate text-[var(--ink-tertiary)]">
@@ -167,14 +160,14 @@ export default async function AdminUsersPage({
               </Row>
             ))}
           </Group>
-          <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+          <AdminNote>
             这里不显示是谁 —— 注销的意义就在于不再被认出来。
             确有必要（合规、纠纷）时去
             <Link href="/admin/audit?action=user.delete" className="text-[var(--accent)]">
               审计日志
             </Link>
             ，那里留着删除前的昵称，而查这件事本身也会被记下来。
-          </p>
+          </AdminNote>
         </Section>
       )}
     </>

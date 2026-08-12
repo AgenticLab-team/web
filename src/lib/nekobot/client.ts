@@ -190,6 +190,14 @@ export const nekobot = {
 
   overview: () => request<Overview>("/stats/overview"),
 
+  /**
+   * 机器人自己的身份 + 绑定了哪些会话。
+   *
+   * 统计要用 `bot.wx_id` 把机器人从榜单里摘出去 —— 见 lib/stats/bot-identity.ts。
+   */
+  binding: () =>
+    request<{ bot: { wx_id: string; name: string; avatar?: string } }>("/binding"),
+
   conversations: (params: {
     groups_only?: boolean;
     bound_only?: boolean;

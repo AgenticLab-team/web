@@ -132,6 +132,199 @@ export function issueLabel(
   return `${clamp(repo, Math.max(1, max - [...tail].length))}${tail}`;
 }
 
+/**
+ * 提交显示成什么。**sha 那一截一个字都不能少。**
+ *
+ * 和 issueLabel 是同一条理由：`owner/repo@a1b2c3d` 被从右边截掉的话，
+ * 剩下的那一串仍然像一个合法的短 sha —— 而它指向的是另一次提交，
+ * 或者根本不存在。所以先丢 owner，再截仓库名，sha 始终留在最后。
+ *
+ * 用 7 位短 sha：GitHub 自己就是这么显示的，而 40 位一行放不下。
+ */
+export function commitLabel(
+  owner: string,
+  repo: string,
+  sha: string,
+  max = MAX_TITLE_CHARS,
+): string {
+  const tail = `@${sha.slice(0, 7)}`;
+  const full = `${owner}/${repo}${tail}`;
+  if ([...full].length <= max) return full;
+  return `${clamp(repo, Math.max(1, max - [...tail].length))}${tail}`;
+}
+
+/**
+ * 路径显示成什么 —— **从左边截，留住文件名**。
+ *
+ * `src/lib/github/link-refs.ts` 装不下时截成
+ * `src/lib/github/link-re…` 的话，被切掉的正好是文件名，
+ * 而那才是识别它的那半个。和 repoLabel 先丢 owner 是同一条道理，
+ * 只是方向相反：仓库名在后面，路径的信息量也在后面。
+ */
+export function pathLabel(path: string, max = MAX_TITLE_CHARS): string {
+  const chars = [...path];
+  if (chars.length <= max) return path;
+  return `…${chars.slice(chars.length - (max - 1)).join("")}`;
+}
+
+/** commit 接口里我们真的会用的那几个字段 */
+export interface CommitPayload {
+  commit?: unknown;
+}
+
+export function commitFacts(ref: GithubRef, payload: CommitPayload): LinkFacts | null {
+  if (ref.kind !== "commit") return null;
+  const commit = payload.commit;
+  const message =
+    commit && typeof commit === "object" ? str((commit as { message?: unknown }).message) : null;
+  /*
+   * 拿不到 message 就整条不算数（返回 null → 调用方按「故障」处理，
+   * 下次还会再问）。只剩一个 `owner/repo@sha` 的卡片没有任何价值 ——
+   * 那几个字正文里那条链接上就写着，我们等于抄了一遍还占了一块地方。
+   */
+  if (!message) return null;
+
+  /*
+   * 只取第一行。
+   *
+   * commit message 的正文部分动辄十几行（还常常带着 Co-authored-by、
+   * Signed-off-by、issue 链接）。整段贴进帖子底下，一张本来是
+   * 「一句话说清这是什么」的卡片会变成比正文还长的一块。
+   */
+  const subject = message.split("\n")[0].trim();
+  if (!subject) return null;
+
+  return {
+    title: commitLabel(ref.owner, ref.repo, ref.sha),
+    summary: clamp(subject, MAX_SUMMARY_CHARS),
+  };
+}
+
+/**
+ * ═════════════════════════════════════════
+ * 代码永久链接展开成代码块
+ * ═════════════════════════════════════════
+ *
+ * 三道上限，各挡一件事。它们不是「性能考虑」，每一条都对应
+ * 一种能把帖子页面毁掉的真实内容：
+ */
+
+/** 一段最多显示多少行。再多就不是「看一眼他在说哪几行」，是把文件搬过来了 */
+export const MAX_SNIPPET_LINES = 20;
+
+/**
+ * 单行最多多少字符。
+ *
+ * 一个 minify 过的文件可以只有一行、几十万字符 —— 不截的话
+ * 这一行会把整块横向撑到天边，或者（更糟）被存进库里再读出来。
+ */
+export const MAX_SNIPPET_LINE_CHARS = 200;
+
+/**
+ * 整个文件超过这么大就不展开。
+ *
+ * contents 接口对 1MB 以上的文件本来就不返回内容，但**不能靠它**：
+ * 一个 900KB 的文件它会老老实实返回，而我们只要中间那 20 行，
+ * 却得先把 900KB 解码进内存、再切一遍。
+ */
+export const MAX_FILE_BYTES = 512 * 1024;
+
+/** contents 接口 */
+export interface ContentsPayload {
+  type?: unknown;
+  encoding?: unknown;
+  content?: unknown;
+  size?: unknown;
+}
+
+export interface CodeSnippet {
+  /** 纯文本，还没高亮 */
+  code: string;
+  /** 猜出来的语言，喂给高亮器。认不出是 "text" */
+  lang: string;
+  /** 真正取到的区间 —— 可能比作者写的短（见 MAX_SNIPPET_LINES） */
+  from: number;
+  to: number;
+  /** 作者写的区间还剩多少行没显示。大于 0 时界面要说出来，不能悄悄少给 */
+  omitted: number;
+}
+
+/**
+ * 扩展名 → 高亮器认的语言名。
+ *
+ * 认不出来不是错误，退回 `text` ——「没有颜色」和「整块不出现」
+ * 差着一个量级，而这个社区贴的文件类型没有边界。
+ */
+const LANGS: Record<string, string> = {
+  ts: "ts", tsx: "tsx", js: "js", jsx: "jsx", mjs: "js", cjs: "js",
+  py: "python", rb: "ruby", go: "go", rs: "rust", java: "java", kt: "kotlin",
+  c: "c", h: "c", cc: "cpp", cpp: "cpp", hpp: "cpp", cs: "csharp",
+  php: "php", swift: "swift", lua: "lua", sh: "bash", bash: "bash", zsh: "bash",
+  sql: "sql", json: "json", yml: "yaml", yaml: "yaml", toml: "toml",
+  md: "markdown", css: "css", scss: "scss", html: "html", vue: "vue", svelte: "svelte",
+  dockerfile: "docker", tf: "terraform", proto: "proto",
+};
+
+export function langOf(path: string): string {
+  const base = path.split("/").pop() ?? "";
+  if (base.toLowerCase() === "dockerfile") return "docker";
+  const ext = base.includes(".") ? base.split(".").pop()!.toLowerCase() : "";
+  return LANGS[ext] ?? "text";
+}
+
+/**
+ * 把 contents 接口的回答切成要显示的那几行。
+ *
+ * 认不出来一律返回 null —— 和整条解析层同一个缺省：
+ * **不展开永远是安全的**，正文里那条链接原样还在，读者点得动。
+ */
+export function codeSnippet(ref: GithubRef, payload: ContentsPayload): CodeSnippet | null {
+  if (ref.kind !== "code" || !ref.lines) return null;
+
+  /*
+   * 目录也会走同一个接口，返回的是一个数组。
+   * 不判 type 的话下面 `content` 取到 undefined，表现成一次「故障」，
+   * 于是每一轮都会去重问同一个目录。
+   */
+  if (payload.type !== "file") return null;
+  if (payload.encoding !== "base64") return null;
+  const size = int(payload.size);
+  if (size === null || size > MAX_FILE_BYTES) return null;
+
+  const raw = str(payload.content);
+  if (!raw) return null;
+
+  let text: string;
+  try {
+    text = Buffer.from(raw, "base64").toString("utf8");
+  } catch {
+    return null;
+  }
+
+  /*
+   * 二进制文件不展开。
+   *
+   * 一张 png 解成 utf8 是一大团替换字符和控制字符 —— 贴进帖子底下
+   * 既没意义又可能把版面弄乱。NUL 字节是最可靠的那条判据。
+   */
+  if (text.includes("\u0000")) return null;
+
+  const all = text.split("\n");
+  const from = ref.lines.from;
+  // 作者写的行号超出文件了 —— 多半是文件后来变了，而 sha 固定的链接不该这样。不展开
+  if (from > all.length) return null;
+
+  const wanted = Math.min(ref.lines.to, all.length);
+  const to = Math.min(wanted, from + MAX_SNIPPET_LINES - 1);
+  const code = all
+    .slice(from - 1, to)
+    // 行尾的 \r 会在 <pre> 里留下一个看不见的字符
+    .map((line) => clamp(line.replace(/\r$/, ""), MAX_SNIPPET_LINE_CHARS))
+    .join("\n");
+
+  return { code, lang: langOf(ref.path), from, to, omitted: wanted - to };
+}
+
 export function repoFacts(ref: GithubRef, payload: RepoPayload): LinkFacts | null {
   if (ref.kind !== "repo") return null;
   /*
@@ -189,14 +382,62 @@ export function issueFacts(ref: GithubRef, payload: IssuePayload): LinkFacts | n
 }
 
 /**
+ * 一条 ref + 一份回答 → 「标题 + 一句话」。
+ *
+ * 代码片段**不在这里** —— 它的产物是一个代码块，塞不进
+ * `fact_title` / `fact_summary` 那两栏（资源库那一页是一行一条，
+ * 不是一块一块）。所以那边用 `wantsSummary` 把 code 挡在外面，
+ * 而不是让这个函数返回一个空壳。
+ */
+export function summaryFactsOf(
+  ref: GithubRef,
+  payload: Record<string, unknown>,
+): LinkFacts | null {
+  switch (ref.kind) {
+    case "repo":
+      return repoFacts(ref, payload);
+    case "issue":
+    case "pr":
+      return issueFacts(ref, payload);
+    case "commit":
+      return commitFacts(ref, payload);
+    case "code":
+      return null;
+  }
+}
+
+/**
+ * 资源库那条路只要能变成「标题 + 一句话」的。
+ *
+ * 和 `shouldFetch` 分开写，是因为两条路要的东西不一样：
+ * 帖子底下的卡片能摆一个代码块，资源库的一行摆不下。
+ * 共用一个判定的话，资源库会去取代码、然后发现没地方放 ——
+ * 表现是每一轮都重问同一条链接，而报告里看起来一切正常
+ * （见 link-lookup.ts 里那段「问没问过只看 factCheckedAt」）。
+ */
+export function wantsSummary(ref: GithubRef): boolean {
+  return ref.kind !== "code";
+}
+
+/**
  * 这条 ref 值不值得去问 GitHub。
  *
- * commit 和 code 现在不问：它们的「标题」就是那条链接本身写着的东西
- * （哪个仓库、哪个文件、哪几行），去问一趟拿不回更多，
- * 白花一次配额。等真做代码块展开时再说。
+ * ─────────────────────────────────────────
+ * 不带行号的代码链接**不问**
+ * ─────────────────────────────────────────
+ *
+ * `/blob/<sha>/some/file.ts` 没写行号时，作者指的是「这个文件」，
+ * 而一个文件可能有一万行。取回来也没有一个说得过去的显示方式：
+ * 截前 20 行是**替作者选了一段他没选的代码**，而读者会以为
+ * 那就是他要说的地方。这一条和整个解析层同一个缺省 ——
+ * 拿不准就什么都不做，正文里那条链接原样还在。
+ *
+ * commit 从「不问」改成「问」了：它的 message 是链接上没有的东西，
+ * 而那正是别人贴一次提交时想说的那句话。
  */
 export function shouldFetch(ref: GithubRef): boolean {
-  return ref.kind === "repo" || ref.kind === "issue" || ref.kind === "pr";
+  if (ref.kind === "code") return ref.lines !== null;
+  return true;
 }
 
 /** 该请求哪个接口 */
@@ -214,7 +455,20 @@ export function apiPathFor(ref: GithubRef): string | null {
        * 返回 404。用前者，`/issues/12` 写法的 PR 链接才不会整条失败。
        */
       return `/repos/${ref.owner}/${ref.repo}/issues/${ref.number}`;
-    default:
-      return null;
+    case "commit":
+      return `/repos/${ref.owner}/${ref.repo}/commits/${ref.sha}`;
+    case "code": {
+      if (!ref.lines) return null;
+      /*
+       * `?ref=<sha>` 而不是分支名 —— 解析层只认带 sha 的链接，
+       * 这里跟着它走：同一条链接过一年再取回来必须是同一段代码，
+       * 否则帖子底下那段会悄悄变，而讨论还停在旧代码上。
+       *
+       * 路径逐段编码。整条 encodeURIComponent 会把 `/` 也编掉，
+       * 于是请求的是一个名字里带斜杠的文件 —— 404，而且看不出为什么。
+       */
+      const path = ref.path.split("/").map(encodeURIComponent).join("/");
+      return `/repos/${ref.owner}/${ref.repo}/contents/${path}?ref=${ref.sha}`;
+    }
   }
 }

@@ -20,6 +20,9 @@ import { scanMessages } from "@/lib/radar/engine";
 import { isModuleEnabled } from "@/lib/modules/state";
 import { getSettingInt } from "@/lib/settings/store";
 import { dateKey } from "@/lib/time";
+import { creditedWxId } from "@/lib/stats/authorship";
+import { resolveBotWxId } from "@/lib/stats/bot-identity";
+import { onBehalfAuthors } from "@/lib/stats/on-behalf";
 
 import { runSyncJob, type SyncOptions, type SyncResult } from "./job";
 
@@ -70,6 +73,15 @@ export async function syncGroupMessages(
       throw new Error("消息同步模块已关闭 —— 在 /admin/modules 打开");
     }
 
+    /*
+     * 机器人自己是谁。整轮同步问一次上游 ——
+     * 统计要在事务里跑，那里不能打外网。
+     *
+     * 取不到就是 null，那时候什么都不排除：宁可榜上多一个机器人，
+     * 也不能因为猜错把一个真人抹掉。
+     */
+    const botWxId = await resolveBotWxId();
+
     const qualityMin = getSettingInt("sync.quality_min", 15);
     const OVERLAP_MS = 5 * 60 * 1000;
 
@@ -95,6 +107,14 @@ export async function syncGroupMessages(
      * 所以「碰过」就够了，多记几天只是多算一次，不会算错。
      */
     const touched = new Set<string>();
+
+    /*
+     * 这一轮里哪些消息是代发的：msg_svr_id → 那个成员的 wx_id。
+     *
+     * 整轮查一次而不是逐条查 —— 代发是很少的（一天几十条封顶），
+     * 而消息是几千条，逐条查等于给每条消息加一次 join。
+     */
+    const onBehalf = onBehalfAuthors(convId);
 
     /*
      * 名册整轮同步取一次。@昵称 必须在**落库这一刻**解析成 wx_id ——
@@ -157,8 +177,22 @@ export async function syncGroupMessages(
            * 一条上一轮写进去、没来得及统计的消息，
            * 这一轮会被跳过，那个缺口就永远补不上了。
            */
-          if (!msg.is_send) {
-            touched.add(bucketKey(msg.sender_wx_id, dateKey(msg.create_time)));
+          /*
+           * 记的是**算谁头上**，不是谁发的。
+           *
+           * 代发消息的 sender 是机器人，而它该算给那个被授权的成员 ——
+           * 按 sender 记的话，那个成员的桶永远不会被重算，
+           * 于是他替群里发的三十条通知一条都不算在他头上。
+           *
+           * 机器人自己说的话返回 null，直接不记 —— 它不是成员。
+           */
+          const credited = creditedWxId({
+            senderWxId: msg.sender_wx_id,
+            onBehalfOfWxId: onBehalf.get(msg.msg_svr_id) ?? null,
+            botWxId,
+          });
+          if (!msg.is_send && credited) {
+            touched.add(bucketKey(credited, dateKey(msg.create_time)));
           }
           if (msg.create_time > maxTs) maxTs = msg.create_time;
 
@@ -245,7 +279,7 @@ export async function syncGroupMessages(
       }
     }
 
-    flushDailyStats(convId, touched);
+    flushDailyStats(convId, touched, botWxId);
 
     db.insert(syncCursors)
       .values({ kind: "messages", scope: convId, lastTs: maxTs })
@@ -286,7 +320,42 @@ export async function syncGroupMessages(
  * 重算是**幂等**的 —— 同一轮跑两遍、失败之后重跑，结果都一样。
  * 累加做不到这一点，而做不到的代价是一个没人看得出来的慢性偏差。
  */
-export function flushDailyStats(convId: string, touched: Set<string>) {
+/**
+ * 「算谁头上」在 SQL 这一侧的实现。
+ *
+ * ═════════════════════════════════════════
+ * 它必须和 `creditedWxId()` 说同一句话
+ * ═════════════════════════════════════════
+ *
+ * 采集那一步用 TS 那个纯函数决定「重算哪些人 × 天」，
+ * 这里用 SQL 决定「重算时哪些消息算数」。两边一旦分叉，
+ * 表现是**榜单数字对不上而没有任何地方报错** ——
+ * 这个仓库已经因为 daily_stats 和 messages 对不上吃过一次亏。
+ *
+ * 所以两处的口径写在一起，并且有测试拿同一批输入对照两边的结论。
+ *
+ * `ok = 1`：只有真的发出去了才算。失败的代发在 api_sends 里也留了痕
+ * （限流要数它），但群里根本没出现过那条消息。
+ */
+const CREDITED_JOIN = sql`
+  LEFT JOIN api_sends s ON s.msg_svr_id = m.id AND s.ok = 1
+  LEFT JOIN users u ON u.id = s.user_id`;
+
+/**
+ * 这条消息算在 `wxId` 头上吗。
+ *
+ * `COALESCE(u.wx_id, m.sender_wx_id)` 就是纯函数里那句「代发优先」。
+ * 机器人那一条排除写在外面而不是塞进 COALESCE ——
+ * 塞进去的话，代发消息会先被机器人这一条判掉，
+ * 而那正是要救回来的那些（顺序在纯函数里也是同一个理由）。
+ */
+function creditedIs(wxId: string, botWxId: string | null) {
+  const credited = sql`COALESCE(u.wx_id, m.sender_wx_id)`;
+  if (!botWxId) return sql`${credited} = ${wxId}`;
+  return sql`${credited} = ${wxId} AND NOT (s.id IS NULL AND m.sender_wx_id = ${botWxId})`;
+}
+
+export function flushDailyStats(convId: string, touched: Set<string>, botWxId: string | null = null) {
   if (touched.size === 0) return;
 
   db.transaction((tx) => {
@@ -308,14 +377,16 @@ export function flushDailyStats(convId: string, touched: Set<string>) {
           lastAt: number;
         }>(
           sql`SELECT count(*) AS messages,
-                     sum(is_quality) AS quality,
-                     sum(length) AS chars,
-                     min(ts) AS firstAt,
-                     max(ts) AS lastAt
-              FROM messages
-              WHERE conv_id = ${convId} AND sender_wx_id = ${wxId}
-                AND is_send = 0
-                AND date(ts / 1000, 'unixepoch', '+8 hours') = ${date}`,
+                     sum(m.is_quality) AS quality,
+                     sum(m.length) AS chars,
+                     min(m.ts) AS firstAt,
+                     max(m.ts) AS lastAt
+              FROM messages m
+              ${CREDITED_JOIN}
+              WHERE m.conv_id = ${convId}
+                AND ${creditedIs(wxId, botWxId)}
+                AND m.is_send = 0
+                AND date(m.ts / 1000, 'unixepoch', '+8 hours') = ${date}`,
         )[0];
 
       if (!row || !row.messages) continue;
@@ -328,12 +399,14 @@ export function flushDailyStats(convId: string, touched: Set<string>) {
        * 而那种错要等到有人盯着热力图才看得出来。
        */
       const hourRows = tx.all<{ h: number; n: number }>(
-        sql`SELECT CAST(strftime('%H', ts / 1000, 'unixepoch', '+8 hours') AS INTEGER) AS h,
+        sql`SELECT CAST(strftime('%H', m.ts / 1000, 'unixepoch', '+8 hours') AS INTEGER) AS h,
                    count(*) AS n
-            FROM messages
-            WHERE conv_id = ${convId} AND sender_wx_id = ${wxId}
-              AND is_send = 0
-              AND date(ts / 1000, 'unixepoch', '+8 hours') = ${date}
+            FROM messages m
+            ${CREDITED_JOIN}
+            WHERE m.conv_id = ${convId}
+              AND ${creditedIs(wxId, botWxId)}
+              AND m.is_send = 0
+              AND date(m.ts / 1000, 'unixepoch', '+8 hours') = ${date}
             GROUP BY h`,
       );
       const hours = new Array(24).fill(0);

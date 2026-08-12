@@ -3,6 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import {
+  AdminButton,
+  AdminNote,
+  AdminPanel,
+  AdminPanelLabel,
+  AdminRow,
+  adminFieldClass,
+} from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import { addWord, removeWord, updateWord } from "@/lib/admin/word-actions";
 import { KIND_HINTS, KIND_LABELS, type WordKind } from "@/lib/moderation/words";
@@ -53,32 +61,31 @@ export function WordList({ words }: { words: WordItem[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2.5 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
-        <p className="t-caption2 font-medium uppercase tracking-[0.06em] text-[var(--ink-quaternary)]">
-          新增词条
-        </p>
+      <AdminPanel className="space-y-2.5">
+        <AdminPanelLabel>新增词条</AdminPanelLabel>
 
         <input
           value={word}
           onChange={(e) => setWord(e.target.value)}
           placeholder="词条（至少两个字，空格和标点会被忽略）"
-          className={inputClass}
+          className={adminFieldClass}
         />
 
         <div className="space-y-1.5">
           {(Object.keys(KIND_LABELS) as WordKind[]).map((k) => (
             <label
               key={k}
-              className={`flex cursor-pointer items-start gap-2.5 rounded-[var(--radius-control)] px-3 py-2 transition-colors ${
-                kind === k ? "bg-[var(--fill)]" : ""
+              className={`flex min-h-11 cursor-pointer items-start gap-2.5 rounded-[var(--radius-control)] px-3 py-2 transition-colors ${
+                kind === k ? "bg-[var(--fill)]" : "hover:bg-[var(--fill)]"
               }`}
             >
+              {/* 单选钮从 14px 提到 18px —— 它是这个表单里唯一要用手指点的圆点 */}
               <input
                 type="radio"
                 name="kind"
                 checked={kind === k}
                 onChange={() => setKind(k)}
-                className="mt-1 h-3.5 w-3.5"
+                className="mt-0.5 h-[18px] w-[18px] shrink-0 accent-[var(--accent)]"
               />
               <span className="min-w-0">
                 <span className="t-subhead block">{KIND_LABELS[k]}</span>
@@ -94,7 +101,7 @@ export function WordList({ words }: { words: WordItem[] }) {
             value={replacement}
             onChange={(e) => setReplacement(e.target.value)}
             placeholder="替换成什么"
-            className={inputClass}
+            className={adminFieldClass}
           />
         )}
 
@@ -102,29 +109,35 @@ export function WordList({ words }: { words: WordItem[] }) {
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder="理由（必填，会记入审计日志）"
-          className={inputClass}
+          className={adminFieldClass}
         />
 
-        <button
-          type="button"
+        <AdminButton
+          tone="primary"
+          block
           disabled={pending || !word.trim() || !reason.trim()}
           onClick={() => run(() => addWord({ word, kind, replacement, reason }), "已加入词库")}
-          className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
         >
           加入词库
-        </button>
-      </div>
+        </AdminButton>
+      </AdminPanel>
 
       {words.length === 0 ? (
-        <p className="t-caption px-1 leading-relaxed text-[var(--ink-tertiary)]">
+        <AdminNote>
           词库是空的。这不一定是坏事 —— 子串匹配必然误伤，
           在真的出现问题之前，空词库比一份抄来的词库安全得多。
-        </p>
+        </AdminNote>
       ) : (
         <div className="inset-group">
           {words.map((item) => (
-            <div key={item.id} className="inset-row flex items-center gap-2 px-4 py-2.5">
-              <span className={`t-body min-w-0 flex-1 truncate ${item.enabled ? "" : "opacity-45"}`}>
+            /* 手机上换行：一行里塞词条 + 档位下拉 + 命中数 + 两个按钮，
+               375px 下词条本身会被压到只剩两个字 */
+            <AdminRow key={item.id} className="flex-wrap">
+              <span
+                className={`t-body min-w-0 flex-1 basis-full truncate sm:basis-auto ${
+                  item.enabled ? "" : "opacity-45"
+                }`}
+              >
                 {item.word}
                 {item.replacement && (
                   <span className="t-caption2 ml-1.5 text-[var(--ink-quaternary)]">
@@ -135,6 +148,7 @@ export function WordList({ words }: { words: WordItem[] }) {
 
               <select
                 value={item.kind}
+                aria-label={`「${item.word}」的处置档位`}
                 onChange={(e) =>
                   run(
                     () =>
@@ -147,7 +161,7 @@ export function WordList({ words }: { words: WordItem[] }) {
                     "已修改",
                   )
                 }
-                className="t-caption shrink-0 rounded-[var(--radius-control)] bg-[var(--fill)] px-2 py-1 outline-none"
+                className="t-caption min-h-9 shrink-0 rounded-[var(--radius-control)] bg-[var(--fill)] px-2 outline-none"
               >
                 {(Object.keys(KIND_LABELS) as WordKind[]).map((k) => (
                   <option key={k} value={k}>
@@ -168,8 +182,9 @@ export function WordList({ words }: { words: WordItem[] }) {
                 {item.hitCount}
               </span>
 
-              <button
-                type="button"
+              <AdminButton
+                tone="neutral"
+                size="sm"
                 disabled={pending}
                 onClick={() =>
                   run(
@@ -183,28 +198,26 @@ export function WordList({ words }: { words: WordItem[] }) {
                     item.enabled ? "已停用" : "已启用",
                   )
                 }
-                className="t-caption shrink-0 rounded-[var(--radius-pill)] bg-[var(--fill)] px-2.5 py-1 text-[var(--ink-secondary)]"
               >
                 {item.enabled ? "停用" : "启用"}
-              </button>
+              </AdminButton>
 
-              <button
-                type="button"
+              {/* 删词是可逆的（再加回来就是了），所以 dangerSoft 而不是实心红。
+                  它原来是一个没有底色的裸红字，在一排灰按钮里看起来
+                  像是坏掉的文本而不是可点的东西 */}
+              <AdminButton
+                tone="dangerSoft"
+                size="sm"
                 disabled={pending || !reason.trim()}
-                title={reason.trim() ? "删除" : "先在上面填个理由"}
+                title={reason.trim() ? "从词库里删掉" : "先在上面填个理由"}
                 onClick={() => run(() => removeWord({ id: item.id, reason }), "已删除")}
-                className="t-caption shrink-0 rounded-[var(--radius-pill)] px-2.5 py-1 disabled:opacity-30"
-                style={{ color: "var(--danger)" }}
               >
                 删除
-              </button>
-            </div>
+              </AdminButton>
+            </AdminRow>
           ))}
         </div>
       )}
     </div>
   );
 }
-
-const inputClass =
-  "t-subhead w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]";

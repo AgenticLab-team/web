@@ -3,6 +3,16 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import {
+  AdminButton,
+  AdminField,
+  AdminNote,
+  AdminPanel,
+  AdminPanelLabel,
+  AdminRow,
+  adminFieldClass,
+  adminNumberFieldClass,
+} from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import { createInvite, revokeInvite, settleInvites } from "@/lib/invites/actions";
 import { MAX_EXPIRY_DAYS, MAX_USES_LIMIT } from "@/lib/invites/rules";
@@ -61,49 +71,42 @@ export function InviteManager({ invites }: { invites: InviteRow[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2.5 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
-        <p className="t-caption2 font-medium uppercase tracking-[0.06em] text-[var(--ink-quaternary)]">
-          生成新码
-        </p>
+      <AdminPanel className="space-y-2.5">
+        <AdminPanelLabel>生成新码</AdminPanelLabel>
 
         <div className="grid gap-2 sm:grid-cols-2">
-          <label className="block">
-            <span className="t-caption2 mb-1 block text-[var(--ink-quaternary)]">
-              可用次数（留空不限，最多 {MAX_USES_LIMIT}）
-            </span>
+          <AdminField label={`可用次数（留空不限，最多 ${MAX_USES_LIMIT}）`}>
             <input
               type="number"
               min={1}
               max={MAX_USES_LIMIT}
               value={maxUses}
               onChange={(e) => setMaxUses(e.target.value)}
-              className={`tabular ${inputClass}`}
+              className={adminNumberFieldClass}
             />
-          </label>
-          <label className="block">
-            <span className="t-caption2 mb-1 block text-[var(--ink-quaternary)]">
-              有效期天数（留空不限，最多 {MAX_EXPIRY_DAYS}）
-            </span>
+          </AdminField>
+          <AdminField label={`有效期天数（留空不限，最多 ${MAX_EXPIRY_DAYS}）`}>
             <input
               type="number"
               min={1}
               max={MAX_EXPIRY_DAYS}
               value={expiresInDays}
               onChange={(e) => setExpiresInDays(e.target.value)}
-              className={`tabular ${inputClass}`}
+              className={adminNumberFieldClass}
             />
-          </label>
+          </AdminField>
         </div>
 
         <input
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="备注（给谁的、什么场合用）"
-          className={inputClass}
+          className={adminFieldClass}
         />
 
-        <button
-          type="button"
+        <AdminButton
+          tone="primary"
+          block
           disabled={pending}
           onClick={() =>
             run(async () => {
@@ -116,16 +119,15 @@ export function InviteManager({ invites }: { invites: InviteRow[] }) {
               return { ...result, note: result.code ? `已生成 ${result.code}` : result.note };
             })
           }
-          className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
         >
           生成邀请码
-        </button>
+        </AdminButton>
 
-        <p className="t-caption leading-relaxed text-[var(--ink-tertiary)]">
+        <AdminNote className="px-0">
           码里不含 0/O、1/I/L 这类形近字符 —— 它们会被人念出来、抄下来、
           在微信里转发，少一个歧义字符就少一批「码是对的但输错了」的求助。
-        </p>
-      </div>
+        </AdminNote>
+      </AdminPanel>
 
       {invites.length > 0 && (
         <>
@@ -133,16 +135,18 @@ export function InviteManager({ invites }: { invites: InviteRow[] }) {
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="撤销理由（撤销前先填这里）"
-            className={inputClass}
+            className={adminFieldClass}
           />
 
           <div className="inset-group">
             {invites.map((invite) => (
-              <div key={invite.id} className="inset-row flex items-center gap-2 px-4 py-2.5">
+              <AdminRow key={invite.id} className="flex-wrap">
+                {/* 码本身是这一行里唯一要点的东西，给它 44px 的落点 ——
+                    它存在的意义就是被复制走 */}
                 <button
                   type="button"
                   onClick={() => copy(invite.code)}
-                  className="tabular t-body shrink-0 font-mono transition active:opacity-60"
+                  className="tabular t-body -mx-2 inline-flex min-h-11 shrink-0 items-center rounded-[var(--radius-control)] px-2 font-mono transition-colors hover:bg-[var(--fill)] active:opacity-60"
                   title="点一下复制"
                 >
                   {invite.code}
@@ -162,39 +166,31 @@ export function InviteManager({ invites }: { invites: InviteRow[] }) {
                   )}
                 </span>
 
+                {/* 撤销只挡住后面的人，已经进来的不受影响 —— 可逆，所以 dangerSoft */}
                 {invite.revokedAt === null && (
-                  <button
-                    type="button"
+                  <AdminButton
+                    tone="dangerSoft"
+                    size="sm"
                     disabled={pending || !reason.trim()}
-                    title={reason.trim() ? "撤销" : "先在上面填个理由"}
+                    title={reason.trim() ? "撤销这个码（已经进来的人不受影响）" : "先在上面填个理由"}
                     onClick={() => run(() => revokeInvite({ id: invite.id, reason }))}
-                    className="t-caption shrink-0 rounded-[var(--radius-pill)] px-2.5 py-1 disabled:opacity-30"
-                    style={{ color: "var(--danger)" }}
                   >
                     撤销
-                  </button>
+                  </AdminButton>
                 )}
-              </div>
+              </AdminRow>
             ))}
           </div>
         </>
       )}
 
-      <button
-        type="button"
-        disabled={pending}
-        onClick={() => run(settleInvites)}
-        className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 font-medium disabled:opacity-40"
-      >
+      <AdminButton tone="neutral" block disabled={pending} onClick={() => run(settleInvites)}>
         补跑一次奖励结算
-      </button>
-      <p className="t-caption px-1 leading-relaxed text-[var(--ink-tertiary)]">
+      </AdminButton>
+      <AdminNote>
         结算平时挂在打卡流程上，这里是兜底入口 ——
         流程可能因为改代码或异常漏掉，有个能重跑的地方比祈祷流程永不出错可靠。
-      </p>
+      </AdminNote>
     </div>
   );
 }
-
-const inputClass =
-  "t-subhead w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]";

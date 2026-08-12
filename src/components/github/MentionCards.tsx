@@ -1,4 +1,4 @@
-import { GitPullRequest, CircleDot, Package } from "lucide-react";
+import { GitPullRequest, CircleDot, Package, GitCommitHorizontal, FileCode2 } from "lucide-react";
 
 import type { MentionCard } from "@/lib/github/mentions";
 
@@ -33,13 +33,85 @@ const ICONS = {
   repo: Package,
   issue: CircleDot,
   pr: GitPullRequest,
+  commit: GitCommitHorizontal,
+  code: FileCode2,
 } as const;
 
 const LABELS = {
   repo: "仓库",
   issue: "issue",
   pr: "PR",
+  commit: "提交",
+  code: "代码",
 } as const;
+
+/**
+ * 代码那一段单独长一个样子。
+ *
+ * ─────────────────────────────────────────
+ * 它不是一整块可点的链接
+ * ─────────────────────────────────────────
+ *
+ * 别的卡片整块是 `<a>`，因为它们要说的话一行就说完了，
+ * 人看完唯一想做的事就是点过去。代码这一段反过来 ——
+ * **它把答案直接摆出来了**，多数人看完就不必去 GitHub 了。
+ * 整块做成链接的话，想复制其中两行的人一选中就会跳走。
+ *
+ * 所以只有顶上那行标题是链接，代码本身是纯内容，选得动、复制得走。
+ *
+ * ─────────────────────────────────────────
+ * 横向滚动要收在这一块里
+ * ─────────────────────────────────────────
+ *
+ * 代码有长行，而页面本身**绝不能**横向滚动 —— 一旦整页能横拉，
+ * 手机上每一次划动都会歪。`overflow-x-auto` 挂在这一层，
+ * 长行在这块里自己滚。
+ */
+function CodeCard({ card, Icon }: { card: MentionCard; Icon: (typeof ICONS)[keyof typeof ICONS] }) {
+  return (
+    <div className="inset-group overflow-hidden">
+      <a
+        href={card.url}
+        target="_blank"
+        rel="noopener noreferrer nofollow"
+        className="flex min-h-11 items-center gap-2.5 px-3 py-2.5 transition active:opacity-60"
+      >
+        <span
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--ink-tertiary)]"
+          style={{ background: "var(--fill)" }}
+          aria-hidden
+        >
+          <Icon className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="t-footnote flex items-baseline gap-1.5 font-medium">
+            <span className="min-w-0 truncate">{card.title}</span>
+            <span className="t-caption2 shrink-0 font-normal text-[var(--ink-quaternary)]">
+              {LABELS[card.kind]}
+            </span>
+          </span>
+          {card.summary && (
+            <span className="t-caption2 mt-0.5 block leading-relaxed text-[var(--ink-secondary)]">
+              {card.summary}
+            </span>
+          )}
+        </span>
+      </a>
+
+      {/*
+        * 这段 HTML 是我们自己在取回来的时候高亮好并**消过毒**的
+        * （见 lib/github/code-render.ts —— 走的是帖子正文那同一个
+        * sanitizeHtml，不是另写一份白名单）。
+        */}
+      <div
+        /* hairline-t 而不是 border-t —— 手拼的边框是 1px，
+           和旁边所有 0.5px 的分隔线粗细不一样，高分屏上一眼看得出来 */
+        className="hairline-t prose-forum t-caption2 overflow-x-auto px-3 py-2 leading-relaxed"
+        dangerouslySetInnerHTML={{ __html: card.body! }}
+      />
+    </div>
+  );
+}
 
 export function MentionCards({ cards }: { cards: MentionCard[] }) {
   if (cards.length === 0) return null;
@@ -56,6 +128,9 @@ export function MentionCards({ cards }: { cards: MentionCard[] }) {
       <div className="space-y-1.5">
         {cards.map((card) => {
           const Icon = ICONS[card.kind];
+          if (card.kind === "code" && card.body) {
+            return <CodeCard key={card.key} card={card} Icon={Icon} />;
+          }
           return (
             <a
               key={card.key}

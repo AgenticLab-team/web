@@ -48,7 +48,7 @@ export function QuoteButton({
       aria-label={`回复 ${authorName} 的 #${floor} 楼`}
       title={`回复 #${floor}`}
       onClick={() => ctx.setQuote({ replyId, floor, authorName })}
-      className="tap-target inline-flex items-center gap-1 rounded-[0.4rem] px-1.5 py-1 text-[var(--ink-tertiary)] transition hover:bg-[var(--fill)] hover:text-[var(--accent)] active:scale-95"
+      className="tap-target inline-flex items-center gap-1 rounded-[var(--radius-chip)] px-1.5 py-1 text-[var(--ink-tertiary)] transition hover:bg-[var(--fill)] hover:text-[var(--accent)] active:scale-95"
     >
       <Reply className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
       <span className="t-caption font-medium">回复</span>

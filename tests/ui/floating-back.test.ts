@@ -85,14 +85,34 @@ describe("**位置：不能压在底部 Tab Bar 上**", () => {
     assert.match(m[1], /safe-area-inset-bottom/);
   });
 
-  it("**桌面端单独覆盖过** —— `--tabbar-height` 不会因为 Tab Bar 藏了就变 0", () => {
+  it("**桌面端整个不出现** —— 它在那儿本来就没有理由", () => {
     /*
-     * 不覆盖的话桌面上那个按钮会莫名其妙地悬空三行 ——
-     * 没有人会报告这个，只会觉得这个站做得糙。
+     * 这一条以前测的是反面：「桌面端要单独覆盖那个位置变量」。
+     * 那时候的想法是把它挪到不碍事的地方，而站长问的是更根子的问题 ——
+     * 「为啥电脑端要返回按钮呢」。
+     *
+     * 它整段存在理由（装成 App 之后浏览器 chrome 没了、
+     * iOS 没有系统返回手势）**都是手机独有的**。桌面上有浏览器返回键、
+     * 有一直在的侧栏、还有页首那条行内返回，三个出口都在。
+     *
+     * 而它的代价是实打实的：`left-4` 正落在侧栏底部头像那一格上，
+     * 盖在人脸上。侧栏那一列从上到下都是内容，桌面上没有空地给它 ——
+     * 所以这不是「调位置」能解决的。
      */
+    const src = readFileSync(
+      new URL("../../src/components/ui/FloatingBack.tsx", import.meta.url),
+      "utf8",
+    );
+    assert.match(src, /lg:hidden/);
+
+    // 不渲染的东西不需要有人替它算位置，留着会让下一个人去调一个看不见的数
     const css = readFileSync(new URL("../../src/app/globals.css", import.meta.url), "utf8");
     const desktop = css.slice(css.indexOf("@media (min-width: 64rem)"));
-    assert.match(desktop.slice(0, 300), /--floating-back-bottom:\s*[^c]/, "桌面端没有覆盖");
+    assert.equal(
+      /--floating-back-bottom:/.test(desktop.slice(0, 400)),
+      false,
+      "桌面端那条覆盖该删了",
+    );
   });
 });
 

@@ -1,6 +1,7 @@
 import { Folder } from "lucide-react";
 import type { Metadata } from "next";
 
+import { AdminNote } from "@/components/admin/ui";
 import { BoardEditor } from "@/components/admin/BoardEditor";
 import { BoardModerators } from "@/components/admin/BoardModerators";
 import { TagManager } from "@/components/admin/TagManager";
@@ -55,7 +56,7 @@ export default async function AdminBoardsPage() {
 
       <Section title="版块">
         {boards.length === 0 ? (
-          <Empty title="还没有版块" />
+          <Empty title="还没有版块" hint="一个版块都没有的话，论坛发不出帖 —— 跑 npm run seed-boards 建一批" />
         ) : (
           <div className="space-y-2.5">
             {boards.map((board) => (
@@ -115,11 +116,11 @@ export default async function AdminBoardsPage() {
             ))}
           </div>
         )}
-        <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+        <AdminNote>
           版块标识（key）建好之后不能改 —— 它在 URL 里，改了等于把所有旧链接作废。
           可见性上限是<strong>封顶</strong>：帖子想公开但版块只允许到「
           {VISIBILITY_OPTIONS.find((o) => o.key === "member")?.label}」时，结果就是后者。
-        </p>
+        </AdminNote>
       </Section>
 
       <Section title="标签">

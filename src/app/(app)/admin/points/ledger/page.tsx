@@ -2,6 +2,7 @@ import { AlertTriangle, ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AdminRow } from "@/components/admin/ui";
 import { LedgerTable } from "@/components/admin/LedgerTable";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { BackLink, PageNote, Pill, PillRow, Section, StatTile } from "@/components/ui/primitives";
@@ -108,7 +109,7 @@ export default async function AdminLedgerPage({
         ) : (
           <div className="inset-group">
             {risks.map((risk, i) => (
-              <div key={`${risk.kind}:${risk.userId}:${i}`} className="inset-row px-4 py-3">
+              <AdminRow key={`${risk.kind}:${risk.userId}:${i}`} align="start" className="flex-col">
                 <div className="flex items-start gap-2.5">
                   <AlertTriangle
                     className="mt-0.5 h-4 w-4 shrink-0"
@@ -130,7 +131,7 @@ export default async function AdminLedgerPage({
                     {relativeTime(risk.at)}
                   </span>
                 </div>
-              </div>
+              </AdminRow>
             ))}
           </div>
         )}

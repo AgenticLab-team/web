@@ -40,18 +40,31 @@ import { SidebarToggle } from "./SidebarToggle";
 /**
  * 一行的长相。链接和「更多」那个按钮共用 —— 两处各写一遍的话，
  * 那个按钮迟早会和它上下的行长得不一样，而那正是「乱」的来源。
+ *
+ * `min-h-11` 是 44px。收起之后这一行只剩一个图标，而窄栏的宽度
+ * 正是按「容得下 44px 的点击区」定的 —— 高度不跟上的话，
+ * 那个目标是 68×36，横竖不一样大，鼠标划过去的手感就是歪的。
+ *
+ * 第三档 `contains` 是给「更多」那一行的：当前页在它里面时，
+ * 它自己也要认领一下。收起之后展开层整个 display:none，
+ * 没有这一档的话侧栏上一行亮着的都没有 —— 那种状态下人的第一反应
+ * 是自己迷路了。但它只染字色、不铺底色，免得和真正选中的那一行抢。
  */
-const rowClass = (isActive: boolean) =>
-  `sidebar-row group relative flex w-full items-center gap-3 rounded-[var(--radius-control)] px-3 py-2 transition-colors ${
-    isActive
+const rowClass = (state: "idle" | "active" | "contains") =>
+  `sidebar-row group relative flex min-h-11 w-full items-center gap-3 rounded-[var(--radius-control)] px-3 py-2 transition-colors ${
+    state === "active"
       ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-      : "text-[var(--ink-secondary)] hover:bg-[var(--fill)] hover:text-[var(--ink)]"
+      : state === "contains"
+        ? "text-[var(--accent)] hover:bg-[var(--fill)]"
+        : "text-[var(--ink-secondary)] hover:bg-[var(--fill)] hover:text-[var(--ink)]"
   }`;
 
 function Badge({ count }: { count: number }) {
   return (
     <span className="sidebar-badge tabular flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[0.6875rem] font-semibold text-[var(--accent-ink)]">
       {count > 99 ? "99+" : count}
+      {/* 收起之后这里只剩一个没有数字的点，读屏得靠这句话知道它是什么 */}
+      <span className="sr-only"> 条未读</span>
     </span>
   );
 }
@@ -64,7 +77,7 @@ function NavRow({ item, isActive, count }: { item: NavItem; isActive: boolean; c
         aria-current={isActive ? "page" : undefined}
         /* 收起后图标是唯一线索 —— 悬停总得说得出这是哪一页 */
         title={item.label}
-        className={rowClass(isActive)}
+        className={rowClass(isActive ? "active" : "idle")}
       >
         <NavIcon
           name={item.icon}
@@ -130,9 +143,16 @@ export function Sidebar({
   const moreOpen = toggled ?? activeIsInMore;
 
   /*
-   * 「更多」收起来时，把里面所有条目的未读数加起来显示在它自己那一行上。
-   * 不加的话，一条未读会因为它所在的入口被收起来而彻底消失 ——
-   * 而红点正是让人回到站里的那个东西。手机端的「更多」是同一个做法。
+   * 「更多」那一行上挂着里面所有条目的未读数之和。
+   *
+   * **不看展开状态**，一直挂着。原来写的是「收起时才显示」，
+   * 那在窄栏下是错的：窄栏把整个展开层 display:none 了，而 React 这边
+   * 的 `moreOpen` 仍然可能是 true —— 于是那条未读两边都不显示，
+   * 彻底消失。而红点正是让人回到站里的那个东西。
+   *
+   * 代价是展开状态下父子两行可能各带一个数字，那读起来是
+   * 「这里面有 3 条，在通知那一项」—— 重复，但不会错。
+   * 手机端的「更多」是同一个做法。
    */
   const moreBadge = moreSections.reduce(
     (sum, s) => sum + s.items.reduce((n, i) => n + (badgeOf(i.key) ?? 0), 0),
@@ -151,7 +171,7 @@ export function Sidebar({
           title="Agentic Lab"
           className="sidebar-row flex min-w-0 items-center gap-2.5 transition active:scale-[0.98]"
         >
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[0.5rem] bg-[var(--accent)] text-[0.8125rem] font-bold text-[var(--accent-ink)]">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-chip)] bg-[var(--accent)] text-[0.8125rem] font-bold text-[var(--accent-ink)]">
             AL
           </span>
           <span className="sidebar-label t-headline truncate">Agentic Lab</span>
@@ -159,7 +179,9 @@ export function Sidebar({
         <SidebarToggle />
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 pb-4">
+      {/* 和手机端 Tab Bar 同一个名字：两端只有一个会在场（另一个是 display:none），
+          读屏里永远只听得到一个「主导航」 */}
+      <nav aria-label="主导航" className="flex-1 overflow-y-auto px-3 pb-4">
         {/* 一级：平铺，不分组 —— 五行不需要目录 */}
         <ul className="space-y-0.5">
           {primary.map((item) => (
@@ -178,11 +200,12 @@ export function Sidebar({
               type="button"
               onClick={() => setToggled(!moreOpen)}
               aria-expanded={moreOpen}
-              className={rowClass(false)}
+              title="更多"
+              className={rowClass(activeIsInMore ? "contains" : "idle")}
             >
               <NavIcon name="more" className="h-[1.125rem] w-[1.125rem] shrink-0" strokeWidth={1.75} />
               <span className="sidebar-label t-subhead flex-1 text-left font-medium">更多</span>
-              {!moreOpen && moreBadge > 0 && <Badge count={moreBadge} />}
+              {moreBadge > 0 && <Badge count={moreBadge} />}
               <ChevronDown
                 className={`sidebar-chevron h-4 w-4 shrink-0 transition-transform ${moreOpen ? "rotate-180" : ""}`}
                 strokeWidth={2}
@@ -210,7 +233,12 @@ export function Sidebar({
         )}
       </nav>
 
-      <div className="sidebar-foot shrink-0 space-y-2 p-3">
+      {/*
+        * 底下这一块钉住不滚。加一条发丝线是因为导航是可滚的 ——
+        * 没有线的话，滚到一半的最后一行会和头像那块糊在一起，
+        * 看起来像列表还能往下滚，其实下面是另一块东西。
+        */}
+      <div className="sidebar-foot hairline-t shrink-0 space-y-2 p-3">
         <div className="sidebar-theme">
           <ThemeToggle />
         </div>

@@ -1,13 +1,15 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Check, Search, X } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Search, ShieldPlus, X } from "lucide-react";
 
+import { ActionButton, CONTROL, Field, Panel, StatusNote } from "@/components/api/fields";
+import { Empty } from "@/components/ui/primitives";
 import { grantSendManyAction, revokeSendAction } from "@/lib/api-tokens/actions";
 import {
   filterPersonGrants,
   mergeGrantsByUser,
-  paginate,
+  slicePage,
   type PersonGrants,
 } from "@/lib/api-tokens/grant-view";
 import type { GrantRow } from "@/lib/api-tokens/store";
@@ -21,6 +23,17 @@ import type { GrantRow } from "@/lib/api-tokens/store";
  *
  * 这是一次把「以机器人身份说话」的能力交出去的操作，
  * 而半年后回头看的时候，「为什么给了他」是唯一要问的问题。
+ *
+ * ═════════════════════════════════════════
+ * 表单排成「给谁 → 哪些群 → 为什么 → 多少」
+ * ═════════════════════════════════════════
+ *
+ * 原来第一步是「发到哪些群」，人选完一串群之后才被问到给谁 ——
+ * 而站长脑子里的顺序永远是先想到一个人。顺序对不上的表单
+ * 会让人来回跳着填，中途还要滚回去确认自己选的是谁。
+ *
+ * 桌面端表单钉在左边、名单在右边：判断「这条授权还该不该留着」
+ * 要同时看见两边，而原来它们是上下两屏。
  */
 /** 一页显示几个人。手机上再多就要划很久 */
 const PER_PAGE = 8;
@@ -109,7 +122,7 @@ export function GrantManager({
    */
   const merged = useMemo(() => mergeGrantsByUser(grants), [grants]);
   const shown = useMemo(
-    () => paginate(filterPersonGrants(merged, listQuery), page, PER_PAGE),
+    () => slicePage(filterPersonGrants(merged, listQuery), page, PER_PAGE),
     [merged, listQuery, page],
   );
 
@@ -143,307 +156,375 @@ export function GrantManager({
       setNote(`收回了「${person.userName}」的 ${person.groups.length} 个群`);
     });
 
+  const ready = Boolean(effectiveId) && picked.size > 0 && reason.trim().length > 0;
+
   return (
-    <>
-      <div className="inset-group mb-3 px-3.5 py-3">
-        <p className="t-subhead font-medium">给一个人发送权限</p>
-
-        <div className="mt-3 flex items-baseline justify-between">
-          <label className="t-caption2 text-[var(--ink-quaternary)]">
-            发到哪些群（已选 {picked.size}/{groups.length}）
-          </label>
-          <button
-            type="button"
-            onClick={() => setPicked(allPicked ? new Set() : new Set(groups.map((g) => g.convId)))}
-            className="t-caption2 text-[var(--accent)] transition active:opacity-60"
-          >
-            {allPicked ? "全不选" : "全选"}
-          </button>
-        </div>
-        <div className="mt-1 space-y-0.5 rounded-[var(--radius-control)] bg-[var(--surface-sunken)] p-1.5">
-          {groups.map((g) => {
-            const on = picked.has(g.convId);
-            return (
-              <button
-                key={g.convId}
-                type="button"
-                onClick={() => toggle(g.convId)}
-                aria-pressed={on}
-                className="flex min-h-9 w-full items-center gap-2 rounded-[var(--radius-control)] px-2 text-left transition active:opacity-60"
-              >
-                <span
-                  aria-hidden
-                  className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[0.25rem]"
-                  style={{
-                    background: on ? "var(--accent)" : "var(--fill)",
-                    color: "var(--accent-ink)",
-                  }}
-                >
-                  {on && <Check className="h-3 w-3" strokeWidth={3} aria-hidden />}
-                </span>
-                <span className="t-footnote min-w-0 flex-1 truncate">{g.name}</span>
-              </button>
-            );
-          })}
-        </div>
-        {/*
-          * 「全选」= 展开成当时这几个，不是一条通配授权。
-          *
-          * 通配会让授权自己长大：三个月后多一个群，它会被一起给出去，
-          * 而那件事没有人做过决定。这句话必须写在界面上 ——
-          * 不写的话，站长会合理地以为「全选」包含以后的群。
-          */}
-        {allPicked && (
-          <p className="t-caption2 mt-1 px-1 text-[var(--ink-quaternary)]">
-            全选是「现在这 {groups.length} 个」。以后新加的群<strong>不会</strong>自动包含 ——
-            授权不该自己长大。
-          </p>
-        )}
-
-        <label className="t-caption2 mt-3 block text-[var(--ink-quaternary)]">授权给谁</label>
-        {/*
-          * 从人名里选，不是手打账号 id。
-          *
-          * 原来这里是一个填 `01JABC…` 的输入框 —— 而没有人知道另一个人的
-          * 内部 id 长什么样：得先开用户管理页、找到他、复制、再切回来。
-          * 于是这个功能虽然做出来了，实际上很难用。
-          */}
-        <div className="mt-1 flex items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-2.5">
-          <Search className="h-3.5 w-3.5 shrink-0 text-[var(--ink-quaternary)]" strokeWidth={2} aria-hidden />
-          <input
-            value={personQuery}
-            onChange={(e) => setPersonQuery(e.target.value)}
-            placeholder={`搜一下（共 ${people.length} 人）`}
-            aria-label="搜索成员"
-            className="t-body min-w-0 flex-1 bg-transparent py-2 outline-none"
-          />
-        </div>
-        {matched.length === 0 ? (
-          <p className="t-caption2 mt-1 px-1" style={{ color: "var(--danger)" }}>
-            没有叫这个名字的
-          </p>
-        ) : (
-          <select
-            value={effectiveId}
-            onChange={(e) => setUserId(e.target.value)}
-            size={Math.min(6, matched.length)}
-            className="t-body mt-1 w-full rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-3 py-2 outline-none"
-          >
-            {matched.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        )}
-        {/*
-          * 把最终选中的人再念一遍。
-          *
-          * 搜索框会改变列表内容，而「屏幕上高亮的那一行」和
-          * 「真正会被授权的那个 id」在筛选之后可能不是同一个人 ——
-          * 这一行是最后一道防线，它念的是真的要提交的那个。
-          */}
-        {effectiveId && (
-          <p className="t-caption2 mt-1 px-1 text-[var(--ink-tertiary)]">
-            将授权给：
-            <strong>
-              {matched.find((p) => p.id === effectiveId)?.name ?? selected?.name ?? effectiveId}
-            </strong>
-          </p>
-        )}
-
-        <label className="t-caption2 mt-3 block text-[var(--ink-quaternary)]">
-          为什么给他（必填 —— 半年后这是唯一要问的问题）
-        </label>
-        <input
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          placeholder="比如：他在维护打卡机器人"
-          className="t-body mt-1 w-full rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-3 py-2 outline-none"
-        />
-
-        <label className="t-caption2 mt-3 block text-[var(--ink-quaternary)]">
-          每天最多几条（留空 = 跟全局的 {limits.perDay} 条走；填了只会更严）
-        </label>
-        <input
-          value={perDay}
-          onChange={(e) => setPerDay(e.target.value.replace(/\D/g, ""))}
-          inputMode="numeric"
-          placeholder={String(limits.perDay)}
-          className="t-body mt-1 w-full rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-3 py-2 outline-none"
-        />
-
-        <button
-          type="button"
-          disabled={pending || !effectiveId || picked.size === 0 || !reason.trim()}
-          onClick={submit}
-          className="t-footnote mt-3 inline-flex min-h-11 items-center rounded-[var(--radius-pill)] px-3.5 font-medium text-[var(--accent)] transition active:opacity-60 disabled:opacity-45"
-          style={{ background: "color-mix(in srgb, var(--accent) 12%, transparent)" }}
-        >
-          {pending
-            ? "处理中…"
-            : picked.size > 1
-              ? `授权 ${picked.size} 个群`
-              : "授权"}
-        </button>
-
-        {error && (
-          <p className="t-caption mt-2" style={{ color: "var(--danger)" }}>
-            {error}
-          </p>
-        )}
-        {note && <p className="t-caption mt-2 text-[var(--accent)]">{note}</p>}
-      </div>
-
-      {/* ── 已经给出去的 ─────────────────────────────── */}
-
-      {merged.length === 0 ? (
-        <p className="t-caption px-1 text-[var(--ink-tertiary)]">还没有授权过任何人。</p>
-      ) : (
-        <>
-          {/*
-            * 人多了才给搜索框。三个人的时候一个搜索框只是噪音，
-            * 而它占的那一行在手机上是实打实的一屏的十分之一。
-            */}
-          {merged.length > 5 && (
-            <div className="mb-2 flex items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-2.5">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,23rem)_minmax(0,1fr)] lg:items-start lg:gap-6">
+      {/* ── 左：发一条新授权 ─────────────────────────── */}
+      <div className="lg:sticky lg:top-16">
+        <Panel title="给一个人发送权限">
+          {/* ① 给谁 */}
+          <Field label="授权给谁">
+            {/*
+              * 从人名里选，不是手打账号 id。
+              *
+              * 原来这里是一个填 `01JABC…` 的输入框 —— 而没有人知道另一个人的
+              * 内部 id 长什么样：得先开用户管理页、找到他、复制、再切回来。
+              * 于是这个功能虽然做出来了，实际上很难用。
+              */}
+            <div className="flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-3">
               <Search
-                className="h-3.5 w-3.5 shrink-0 text-[var(--ink-quaternary)]"
+                className="h-4 w-4 shrink-0 text-[var(--ink-quaternary)]"
                 strokeWidth={2}
                 aria-hidden
               />
               <input
-                value={listQuery}
-                onChange={(e) => {
-                  setListQuery(e.target.value);
-                  // 筛完可能只剩一页，停在第 3 页会看到空白
-                  setPage(1);
-                }}
-                placeholder="搜人名、群名或理由"
-                aria-label="筛选授权"
-                className="t-body min-w-0 flex-1 bg-transparent py-2 outline-none"
+                value={personQuery}
+                onChange={(e) => setPersonQuery(e.target.value)}
+                placeholder={`搜一下（共 ${people.length} 人）`}
+                aria-label="搜索成员"
+                className="t-body min-w-0 flex-1 bg-transparent py-2 outline-none placeholder:text-[var(--ink-quaternary)]"
               />
             </div>
-          )}
+          </Field>
 
-          {shown.items.length === 0 ? (
-            <p className="t-caption px-1 text-[var(--ink-tertiary)]">没有匹配的。</p>
+          {matched.length === 0 ? (
+            <p className="t-caption mt-1.5" style={{ color: "var(--danger)" }}>
+              没有叫这个名字的
+            </p>
           ) : (
-            <div className="space-y-1.5">
-              {shown.items.map((person) => (
-                <div key={person.userId} className="inset-group px-3.5 py-3">
-                  <div className="flex items-start gap-2.5">
-                    <div className="min-w-0 flex-1">
-                      <p className="t-subhead font-medium">
-                        {person.userName}
-                        <span className="t-caption2 ml-1.5 font-normal text-[var(--ink-quaternary)]">
-                          {person.groups.length} 个群
-                        </span>
-                      </p>
-                      {/*
-                        * 理由和额度一致时合成一句；不一致就交给下面逐群显示。
-                        * 合成一句是**在界面上说假话**的地方 —— 见 grant-view.ts。
-                        */}
-                      {!person.mixed && (
-                        <p className="t-caption2 mt-0.5 text-[var(--ink-quaternary)]">
-                          {person.uniformReason ?? "（没写理由）"}
-                          {person.uniformPerDay !== null && ` · 每天 ${person.uniformPerDay} 条`}
-                        </p>
-                      )}
-                    </div>
-                    {person.groups.length > 1 && (
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() => revokeAll(person)}
-                        className="t-caption2 shrink-0 rounded-[var(--radius-pill)] px-2.5 py-1 transition active:opacity-60 disabled:opacity-45"
-                        style={{
-                          background: "color-mix(in srgb, var(--danger) 10%, transparent)",
-                          color: "var(--danger)",
-                        }}
-                      >
-                        全部收回
-                      </button>
-                    )}
-                  </div>
-
-                  {/*
-                    * 群做成一排可点的标签，点一下收回那一个。
-                    *
-                    * 每个群单独一行的话，十二个群就是十二行 ——
-                    * 而合并显示的全部意义就是不要那十二行。
-                    */}
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {person.groups.map((g) => (
-                      <button
-                        key={g.convId}
-                        type="button"
-                        disabled={pending}
-                        onClick={() => revoke(g.convId, person.userId)}
-                        title={`收回「${g.convName}」的发送权限`}
-                        className="t-caption2 inline-flex min-h-8 items-center gap-1 rounded-[var(--radius-pill)] px-2.5 transition active:opacity-60 disabled:opacity-45"
-                        style={{ background: "var(--fill)" }}
-                      >
-                        <span className="max-w-[11rem] truncate">{g.convName}</span>
-                        {/*
-                          * 额度和理由不一致时，把这个群自己的额度标在它身上 ——
-                          * 上面那句合并的话已经没了，不标的话这条信息就消失了。
-                          */}
-                        {person.mixed && g.perDay !== null && (
-                          <span className="text-[var(--warning)]">{g.perDay}/天</span>
-                        )}
-                        <X className="h-3 w-3 shrink-0 text-[var(--ink-quaternary)]" strokeWidth={2.4} aria-hidden />
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* 理由不一致时逐条列出来 —— 合成一句会把差异抹掉 */}
-                  {person.mixed && (
-                    <ul className="mt-2 space-y-0.5">
-                      {person.groups.map((g) => (
-                        <li key={g.convId} className="t-caption2 text-[var(--ink-quaternary)]">
-                          {g.convName}：{g.reason ?? "（没写理由）"}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+            <select
+              value={effectiveId}
+              onChange={(e) => setUserId(e.target.value)}
+              size={Math.min(6, matched.length)}
+              aria-label="从搜索结果里选人"
+              className="t-body mt-1.5 w-full rounded-[var(--radius-control)] bg-[var(--surface-sunken)] p-1.5 outline-none"
+            >
+              {matched.map((p) => (
+                <option key={p.id} value={p.id} className="rounded-[var(--radius-chip)] px-2 py-1">
+                  {p.name}
+                </option>
               ))}
-            </div>
+            </select>
           )}
-
-          {shown.pages > 1 && (
-            <div className="mt-2 flex items-center justify-between gap-2 px-1">
-              <button
-                type="button"
-                disabled={shown.page <= 1}
-                onClick={() => setPage(shown.page - 1)}
-                className="t-footnote min-h-9 rounded-[var(--radius-control)] px-3 transition active:opacity-60 disabled:opacity-35"
-                style={{ background: "var(--fill)" }}
-              >
-                上一页
-              </button>
-              <span className="tabular t-caption2 text-[var(--ink-quaternary)]">
-                第 {shown.page} / {shown.pages} 页 · 共 {shown.total} 人
-              </span>
-              <button
-                type="button"
-                disabled={shown.page >= shown.pages}
-                onClick={() => setPage(shown.page + 1)}
-                className="t-footnote min-h-9 rounded-[var(--radius-control)] px-3 transition active:opacity-60 disabled:opacity-35"
-                style={{ background: "var(--fill)" }}
-              >
-                下一页
-              </button>
-            </div>
-          )}
-          {shown.pages <= 1 && (
-            <p className="t-caption2 mt-2 px-1 text-[var(--ink-quaternary)]">
-              一共 {shown.total} 人拿到过授权
+          {/*
+            * 把最终选中的人再念一遍。
+            *
+            * 搜索框会改变列表内容，而「屏幕上高亮的那一行」和
+            * 「真正会被授权的那个 id」在筛选之后可能不是同一个人 ——
+            * 这一行是最后一道防线，它念的是真的要提交的那个。
+            */}
+          {effectiveId && (
+            <p className="t-caption mt-1.5 text-[var(--ink-secondary)]">
+              将授权给{" "}
+              <strong className="text-[var(--ink)]">
+                {matched.find((p) => p.id === effectiveId)?.name ?? selected?.name ?? effectiveId}
+              </strong>
             </p>
           )}
-        </>
-      )}
-    </>
+
+          {/* ② 哪些群 */}
+          <fieldset className="mt-4">
+            <div className="flex items-baseline justify-between gap-2">
+              <legend className="t-footnote font-medium text-[var(--ink-secondary)]">
+                发到哪些群
+              </legend>
+              <button
+                type="button"
+                onClick={() =>
+                  setPicked(allPicked ? new Set() : new Set(groups.map((g) => g.convId)))
+                }
+                className="t-caption font-medium text-[var(--accent)] transition active:opacity-60"
+              >
+                {allPicked ? "全不选" : "全选"}
+              </button>
+            </div>
+            <p className="t-caption mt-0.5 text-[var(--ink-tertiary)]">
+              已选 {picked.size} / {groups.length}
+            </p>
+
+            {/*
+              * 限高再滚。群多的时候（现在十几个，以后只会更多）
+              * 这一块会把下面的「为什么」和提交按钮整个推出屏幕，
+              * 而那两样是必填的。
+              */}
+            <div className="mt-1.5 max-h-64 overflow-y-auto rounded-[var(--radius-control)] bg-[var(--surface-sunken)] p-1.5">
+              {groups.map((g) => {
+                const on = picked.has(g.convId);
+                return (
+                  <button
+                    key={g.convId}
+                    type="button"
+                    onClick={() => toggle(g.convId)}
+                    aria-pressed={on}
+                    className="flex min-h-11 w-full items-center gap-2.5 rounded-[var(--radius-control)] px-2.5 text-left transition-colors hover:bg-[var(--fill)]"
+                  >
+                    <span
+                      aria-hidden
+                      className="flex h-[1.125rem] w-[1.125rem] shrink-0 items-center justify-center rounded-[var(--radius-chip)]"
+                      style={{
+                        background: on ? "var(--accent)" : "var(--fill-strong)",
+                        color: "var(--accent-ink)",
+                      }}
+                    >
+                      {on && <Check className="h-3 w-3" strokeWidth={3} aria-hidden />}
+                    </span>
+                    <span className="t-subhead min-w-0 flex-1 truncate">{g.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          {/*
+            * 「全选」= 展开成当时这几个，不是一条通配授权。
+            *
+            * 通配会让授权自己长大：三个月后多一个群，它会被一起给出去，
+            * 而那件事没有人做过决定。这句话必须写在界面上 ——
+            * 不写的话，站长会合理地以为「全选」包含以后的群。
+            */}
+          {allPicked && (
+            <p className="t-caption mt-1.5 text-[var(--ink-tertiary)]">
+              全选是「现在这 {groups.length} 个」。以后新加的群<strong>不会</strong>自动包含 ——
+              授权不该自己长大。
+            </p>
+          )}
+
+          {/* ③ 为什么 */}
+          <Field
+            label="为什么给他"
+            hint="必填。半年后回头看，这是唯一要问的问题。"
+            className="mt-4"
+          >
+            <input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="比如：他在维护打卡机器人"
+              className={CONTROL}
+            />
+          </Field>
+
+          {/* ④ 额度 */}
+          <Field
+            label="每天最多几条"
+            hint={`留空就跟全局的 ${limits.perDay} 条走。填了只会更严，不会更宽。`}
+            className="mt-4"
+          >
+            <input
+              value={perDay}
+              onChange={(e) => setPerDay(e.target.value.replace(/\D/g, ""))}
+              inputMode="numeric"
+              placeholder={String(limits.perDay)}
+              className={CONTROL}
+            />
+          </Field>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <ActionButton
+              busy={pending}
+              disabled={!ready}
+              onClick={submit}
+              icon={<ShieldPlus className="h-4 w-4" strokeWidth={2.2} aria-hidden />}
+            >
+              {pending ? "处理中…" : picked.size > 1 ? `授权 ${picked.size} 个群` : "授权"}
+            </ActionButton>
+            {/* 按钮为什么是灰的，直说 —— 三个必填项少哪个都会卡在这里 */}
+            {!ready && !pending && (
+              <span className="t-caption text-[var(--ink-tertiary)]">
+                {picked.size === 0 ? "先选至少一个群" : !reason.trim() ? "理由必填" : "先选一个人"}
+              </span>
+            )}
+          </div>
+
+          {error && (
+            <StatusNote
+              tone="error"
+              className="mt-3"
+              icon={<AlertTriangle className="h-4 w-4" strokeWidth={2.2} aria-hidden />}
+            >
+              {error}
+            </StatusNote>
+          )}
+          {note && (
+            <StatusNote
+              tone="ok"
+              className="mt-3"
+              icon={<CheckCircle2 className="h-4 w-4" strokeWidth={2.2} aria-hidden />}
+            >
+              {note}
+            </StatusNote>
+          )}
+        </Panel>
+      </div>
+
+      {/* ── 右：已经给出去的 ─────────────────────────── */}
+      <div className="min-w-0">
+        {merged.length === 0 ? (
+          <Empty
+            title="还没有授权过任何人"
+            hint="在左边选人、选群、写清楚理由。给出去的每一条都会出现在这里。"
+          />
+        ) : (
+          <>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
+              <h3 className="t-group-label">已经给出去的（{merged.length} 人）</h3>
+            </div>
+
+            {/*
+              * 人多了才给搜索框。三个人的时候一个搜索框只是噪音，
+              * 而它占的那一行在手机上是实打实的一屏的十分之一。
+              */}
+            {merged.length > 5 && (
+              <div className="mb-2 flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-3">
+                <Search
+                  className="h-4 w-4 shrink-0 text-[var(--ink-quaternary)]"
+                  strokeWidth={2}
+                  aria-hidden
+                />
+                <input
+                  value={listQuery}
+                  onChange={(e) => {
+                    setListQuery(e.target.value);
+                    // 筛完可能只剩一页，停在第 3 页会看到空白
+                    setPage(1);
+                  }}
+                  placeholder="搜人名、群名或理由"
+                  aria-label="筛选授权"
+                  className="t-body min-w-0 flex-1 bg-transparent py-2 outline-none placeholder:text-[var(--ink-quaternary)]"
+                />
+              </div>
+            )}
+
+            {shown.items.length === 0 ? (
+              <p className="t-footnote px-1 text-[var(--ink-tertiary)]">
+                没有匹配的。换个词，或者清空搜索框。
+              </p>
+            ) : (
+              <div className="inset-group">
+                {shown.items.map((person) => (
+                  <div key={person.userId} className="inset-row p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="t-subhead font-medium">
+                          {person.userName}
+                          <span className="t-caption ml-1.5 font-normal text-[var(--ink-tertiary)]">
+                            {person.groups.length} 个群
+                          </span>
+                        </p>
+                        {/*
+                          * 理由和额度一致时合成一句；不一致就交给下面逐群显示。
+                          * 合成一句是**在界面上说假话**的地方 —— 见 grant-view.ts。
+                          */}
+                        {!person.mixed && (
+                          <p className="t-caption mt-0.5 text-[var(--ink-tertiary)]">
+                            {person.uniformReason ?? "（没写理由）"}
+                            {person.uniformPerDay !== null && ` · 每天 ${person.uniformPerDay} 条`}
+                          </p>
+                        )}
+                      </div>
+                      {person.groups.length > 1 && (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => revokeAll(person)}
+                          className="t-caption min-h-9 shrink-0 rounded-[var(--radius-pill)] px-2.5 transition active:opacity-60 disabled:opacity-45"
+                          style={{
+                            background: "color-mix(in srgb, var(--danger) 10%, transparent)",
+                            color: "var(--danger)",
+                          }}
+                        >
+                          全部收回
+                        </button>
+                      )}
+                    </div>
+
+                    {/*
+                      * 群做成一排可点的标签，点一下收回那一个。
+                      *
+                      * 每个群单独一行的话，十二个群就是十二行 ——
+                      * 而合并显示的全部意义就是不要那十二行。
+                      *
+                      * 标签上必须有个 × ：不画的话，它看起来是个状态标签，
+                      * 没有人会想到点它 —— 于是「收回一个群」这件事
+                      * 在界面上等于不存在。
+                      */}
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {person.groups.map((g) => (
+                        <button
+                          key={g.convId}
+                          type="button"
+                          disabled={pending}
+                          onClick={() => revoke(g.convId, person.userId)}
+                          title={`收回「${g.convName}」的发送权限`}
+                          className="t-caption inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius-pill)] px-2.5 transition-colors hover:bg-[var(--fill-strong)] disabled:opacity-45"
+                          style={{ background: "var(--fill)" }}
+                        >
+                          <span className="max-w-[11rem] truncate">{g.convName}</span>
+                          {/*
+                            * 额度和理由不一致时，把这个群自己的额度标在它身上 ——
+                            * 上面那句合并的话已经没了，不标的话这条信息就消失了。
+                            */}
+                          {person.mixed && g.perDay !== null && (
+                            <span className="tabular" style={{ color: "var(--warning)" }}>
+                              {g.perDay}/天
+                            </span>
+                          )}
+                          <X
+                            className="h-3.5 w-3.5 shrink-0 text-[var(--ink-quaternary)]"
+                            strokeWidth={2.4}
+                            aria-hidden
+                          />
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* 理由不一致时逐条列出来 —— 合成一句会把差异抹掉 */}
+                    {person.mixed && (
+                      <ul className="mt-2 space-y-0.5">
+                        {person.groups.map((g) => (
+                          <li key={g.convId} className="t-caption text-[var(--ink-tertiary)]">
+                            {g.convName}：{g.reason ?? "（没写理由）"}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {shown.slice.totalPages > 1 ? (
+              <div className="mt-3 flex items-center justify-between gap-2 px-1">
+                <button
+                  type="button"
+                  disabled={shown.slice.page <= 1}
+                  onClick={() => setPage(shown.slice.page - 1)}
+                  className="t-footnote min-h-11 rounded-[var(--radius-control)] px-3.5 transition-colors hover:bg-[var(--fill-strong)] disabled:opacity-35"
+                  style={{ background: "var(--fill)" }}
+                >
+                  上一页
+                </button>
+                <span className="tabular t-caption text-[var(--ink-tertiary)]">
+                  第 {shown.slice.page} / {shown.slice.totalPages} 页 · 共 {shown.total} 人
+                </span>
+                <button
+                  type="button"
+                  disabled={shown.slice.page >= shown.slice.totalPages}
+                  onClick={() => setPage(shown.slice.page + 1)}
+                  className="t-footnote min-h-11 rounded-[var(--radius-control)] px-3.5 transition-colors hover:bg-[var(--fill-strong)] disabled:opacity-35"
+                  style={{ background: "var(--fill)" }}
+                >
+                  下一页
+                </button>
+              </div>
+            ) : (
+              <p className="t-caption mt-3 px-1 text-[var(--ink-tertiary)]">
+                一共 {shown.total} 人拿到过授权
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   );
 }

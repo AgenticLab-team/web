@@ -95,7 +95,7 @@ export function PasskeySetup({ items }: { items: PasskeyItem[] }) {
                 aria-label={`移除 ${item.name}`}
                 disabled={removing === item.id}
                 onClick={() => void remove(item.id, item.name)}
-                className="tap-target shrink-0 rounded-[0.5rem] p-2 text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--danger)] disabled:opacity-40"
+                className="tap-target shrink-0 rounded-[var(--radius-chip)] p-2 text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--danger)] disabled:opacity-40"
               >
                 <Trash2 className="h-4 w-4" strokeWidth={1.9} aria-hidden />
               </button>

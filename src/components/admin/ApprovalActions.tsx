@@ -3,6 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import {
+  AdminActions,
+  AdminBlocked,
+  AdminButton,
+  AdminNote,
+  AdminPanel,
+  AdminPanelLabel,
+  adminFieldClass,
+} from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import {
   approveAndExecute,
@@ -54,9 +63,7 @@ export function ApprovalDecision({
 
   if (expired) {
     return (
-      <p className="t-caption rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 text-[var(--ink-tertiary)]">
-        已过期。当时的判断依据可能已经变了 —— 如果还需要，请重新发起。
-      </p>
+      <AdminBlocked>已过期。当时的判断依据可能已经变了 —— 如果还需要，请重新发起。</AdminBlocked>
     );
   }
 
@@ -67,42 +74,38 @@ export function ApprovalDecision({
         onChange={(e) => setNote(e.target.value)}
         rows={2}
         placeholder="批准/驳回意见（必填，会记入历史）"
-        className="t-subhead w-full resize-none rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]"
+        className={`resize-none ${adminFieldClass}`}
       />
-      <div className="flex gap-2">
-        <button
-          type="button"
+      {/* 批准和驳回一样重（不做主次色差），撤回比两者都轻 */}
+      <AdminActions>
+        <AdminButton
+          tone="neutral"
+          className="flex-1"
           disabled={pending || !note.trim()}
           onClick={() => run(() => approveAndExecute({ id, note }))}
-          className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 font-medium text-[var(--ink)] disabled:opacity-40"
         >
           {/* 按钮上写会发生什么。批准之后立刻执行，没有第二次确认 */}
           批准并执行
-        </button>
-        <button
-          type="button"
+        </AdminButton>
+        <AdminButton
+          tone="neutral"
+          className="flex-1"
           disabled={pending || !note.trim()}
           onClick={() => run(() => rejectApproval({ id, note }))}
-          className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 font-medium text-[var(--ink)] disabled:opacity-40"
         >
           驳回
-        </button>
+        </AdminButton>
         {isRequester && (
           // 撤回不用写意见 —— 让「算了」这条路比「随便批了」更省事
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => run(() => withdrawApproval({ id }))}
-            className="t-caption rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 text-[var(--ink-secondary)] disabled:opacity-40"
-          >
+          <AdminButton tone="quiet" disabled={pending} onClick={() => run(() => withdrawApproval({ id }))}>
             撤回
-          </button>
+          </AdminButton>
         )}
-      </div>
-      <p className="t-caption2 text-[var(--ink-tertiary)]">
+      </AdminActions>
+      <AdminNote className="px-0">
         批准即执行：{describe}
         {isRequester && " —— 这是你自己发起的，批之前当自己是那个复核的人再读一遍"}
-      </p>
+      </AdminNote>
     </div>
   );
 }
@@ -125,12 +128,15 @@ export function DangerousSettingRequest({
   if (options.length === 0) return null;
 
   return (
-    <div className="space-y-2.5 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
-      <p className="t-caption2 font-medium uppercase tracking-[0.06em] text-[var(--ink-quaternary)]">
-        发起危险配置修改
-      </p>
+    <AdminPanel className="space-y-2.5">
+      <AdminPanelLabel>发起危险配置修改</AdminPanelLabel>
 
-      <select value={key} onChange={(e) => setKey(e.target.value)} className={inputClass}>
+      <select
+        value={key}
+        onChange={(e) => setKey(e.target.value)}
+        aria-label="要修改哪一项"
+        className={adminFieldClass}
+      >
         {options.map((o) => (
           <option key={o.key} value={o.key}>
             {o.label}（当前 {o.value}）
@@ -142,19 +148,20 @@ export function DangerousSettingRequest({
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder={current ? `新值（当前 ${current.value}）` : "新值"}
-        className={`tabular ${inputClass}`}
+        className={`tabular ${adminFieldClass}`}
       />
 
       <textarea
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         rows={2}
-        placeholder="为什么要改（必填，事后翻记录靠这句话）"
-        className={`${inputClass} resize-none`}
+        placeholder="为什么要改（必填，至少六个字 —— 事后翻记录靠这句话）"
+        className={`resize-none ${adminFieldClass}`}
       />
 
-      <button
-        type="button"
+      <AdminButton
+        tone="primary"
+        block
         disabled={pending || !key || !value.trim() || reason.trim().length < 6}
         onClick={() =>
           startTransition(async () => {
@@ -173,13 +180,9 @@ export function DangerousSettingRequest({
             router.refresh();
           })
         }
-        className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
       >
         提交复核
-      </button>
-    </div>
+      </AdminButton>
+    </AdminPanel>
   );
 }
-
-const inputClass =
-  "t-subhead w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]";

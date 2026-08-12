@@ -150,7 +150,7 @@ export function Shortcuts() {
 
 function Key({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="tabular flex h-6 min-w-6 items-center justify-center rounded-[0.375rem] bg-[var(--fill)] px-1.5 font-mono text-[0.75rem] font-medium">
+    <kbd className="tabular flex h-6 min-w-6 items-center justify-center rounded-[var(--radius-chip)] bg-[var(--fill)] px-1.5 font-mono text-[0.75rem] font-medium">
       {children}
     </kbd>
   );

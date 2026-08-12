@@ -4,6 +4,7 @@ import Link from "next/link";
 import { HealthSparkline } from "@/components/admin/HealthSparkline";
 import { MirrorAudit } from "@/components/admin/MirrorAudit";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { AdminMeter } from "@/components/admin/ui";
 import { Callout, Card, Empty, PageNote } from "@/components/ui/primitives";
 import {
   archiveGaps,
@@ -64,7 +65,7 @@ export default async function CommunityHealthPage() {
     return (
       <>
         <PageHeader title="社群健康度" subtitle="群还活着吗 —— 和「数据有没有进来」是两件事" />
-        <Empty title="还没有接入的群" hint="在「群与数据源」里接入之后，这里会开始出现每个群的节奏与分布。" />
+        <Empty title="还没有接入的群" hint="在「群与数据源」里接入之后，这里会开始出现每个群的节奏与分布" />
       </>
     );
   }
@@ -183,7 +184,7 @@ function GroupCard({ g }: { g: GroupHealth }) {
         而这一页的用处正是让人扫一眼就知道哪个群不对劲。
       */}
       <div className="mt-3 space-y-2">
-        <Meter
+        <AdminMeter
           label="从没说过话"
           value={g.silentRatio}
           hint={`${g.members - g.everSpoke} / ${g.members} 人`}
@@ -194,13 +195,13 @@ function GroupCard({ g }: { g: GroupHealth }) {
            */
           tone="var(--ink-tertiary)"
         />
-        <Meter
+        <AdminMeter
           label="前三人发言占比"
           value={g.top3Share}
           hint={`基尼 ${g.gini.toFixed(2)}`}
           tone={g.gini >= 0.6 ? "var(--warning)" : "var(--ink-tertiary)"}
         />
-        <Meter
+        <AdminMeter
           label="高质量占比"
           value={g.qualityRatio}
           hint="近 30 天"
@@ -242,34 +243,6 @@ function GroupCard({ g }: { g: GroupHealth }) {
         <Jump href="/admin/groups">同步状态</Jump>
       </div>
     </Card>
-  );
-}
-
-function Meter({
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  label: string;
-  value: number;
-  hint: string;
-  tone: string;
-}) {
-  const pct = Math.round(Math.min(1, Math.max(0, value)) * 100);
-  return (
-    <div>
-      <div className="mb-1 flex items-baseline justify-between gap-2">
-        <span className="t-caption text-[var(--ink-secondary)]">{label}</span>
-        <span className="t-caption tabular-nums" style={{ color: tone }}>
-          {pct}%
-          <span className="ml-1.5 text-[var(--ink-tertiary)]">{hint}</span>
-        </span>
-      </div>
-      <div className="h-1 overflow-hidden rounded-[var(--radius-pill)] bg-[var(--fill)]">
-        <div className="h-full rounded-[var(--radius-pill)]" style={{ width: `${pct}%`, background: tone }} />
-      </div>
-    </div>
   );
 }
 

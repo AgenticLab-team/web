@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AdminRow } from "@/components/admin/ui";
 import { InviteManager } from "@/components/admin/InviteManager";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -92,11 +93,11 @@ export default async function AdminInvitesPage({
 
       <Section title="使用记录">
         {uses.length === 0 ? (
-          <Empty title="还没有人用过邀请码" />
+          <Empty title="还没有人用过邀请码" hint="现阶段只有群成员能登录，这条通道要靠功能开关打开" />
         ) : (
           <div className="inset-group">
             {uses.map((use) => (
-              <div key={use.id} className="inset-row flex flex-wrap items-center gap-1.5 px-4 py-2.5">
+              <AdminRow key={use.id} className="flex-wrap gap-1.5">
                 <Link href={`/admin/users/${use.inviterId}`} className="t-subhead">
                   {use.inviterName}
                 </Link>
@@ -126,7 +127,7 @@ export default async function AdminInvitesPage({
                 <span className="t-caption ml-auto text-[var(--ink-quaternary)]">
                   {relativeTime(use.createdAt)}
                 </span>
-              </div>
+              </AdminRow>
             ))}
           </div>
         )}

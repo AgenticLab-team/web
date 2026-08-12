@@ -296,7 +296,7 @@ export function Editor({
             title={tool.label}
             aria-label={tool.label}
             onClick={() => runTool(tool.action)}
-            className="tap-target rounded-[0.375rem] p-1.5 text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--ink)]"
+            className="tap-target rounded-[var(--radius-chip)] p-1.5 text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--ink)]"
           >
             <tool.icon className="h-4 w-4" strokeWidth={1.9} aria-hidden />
           </button>
@@ -312,7 +312,7 @@ export function Editor({
           aria-label="插入图片或视频"
           disabled={uploader.busy}
           onClick={pickFile}
-          className="tap-target rounded-[0.375rem] p-1.5 text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--ink)] disabled:opacity-40"
+          className="tap-target rounded-[var(--radius-chip)] p-1.5 text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--ink)] disabled:opacity-40"
         >
           <ImagePlus className="h-4 w-4" strokeWidth={1.9} aria-hidden />
         </button>
@@ -333,7 +333,7 @@ export function Editor({
         <button
           type="button"
           onClick={() => setMode(mode === "write" ? "preview" : "write")}
-          className="t-caption flex items-center gap-1 rounded-[0.375rem] px-2 py-1.5 font-medium text-[var(--ink-secondary)] transition-colors hover:bg-[var(--fill)]"
+          className="t-caption flex items-center gap-1 rounded-[var(--radius-chip)] px-2 py-1.5 font-medium text-[var(--ink-secondary)] transition-colors hover:bg-[var(--fill)]"
         >
           {mode === "write" ? (
             <>

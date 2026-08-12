@@ -15,7 +15,7 @@ export function Skeleton({
 }) {
   return (
     <span
-      className={`block animate-pulse rounded-[0.375rem] bg-[var(--fill)] ${className}`}
+      className={`block animate-pulse rounded-[var(--radius-chip)] bg-[var(--fill)] ${className}`}
       style={style}
       aria-hidden
     />

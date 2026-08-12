@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 
+import { AdminActions, AdminButton, AdminTag, adminFieldClass } from "@/components/admin/ui";
 import {
   acceptFriendRequestAction,
   dismissBindAction,
@@ -131,7 +132,12 @@ export function FriendRequestQueue({
       )}
 
       {rows.length === 0 ? (
-        <p className="t-subhead px-4 py-4 text-[var(--ink-tertiary)]">没有待处理的好友申请。</p>
+        <div className="px-4 py-6 text-center">
+          <p className="t-callout text-[var(--ink-secondary)]">没有待处理的好友申请</p>
+          <p className="t-footnote mt-1.5 text-[var(--ink-tertiary)]">
+            这是常态 —— 绑定的主通道是在群里发验证码，走到这里的是极少数
+          </p>
+        </div>
       ) : (
         <ul>
           {rows.map((row) => (
@@ -139,11 +145,7 @@ export function FriendRequestQueue({
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <span className="t-body font-medium">{row.nickname ?? row.wxId}</span>
                 <code className="t-caption2 font-mono text-[var(--ink-quaternary)]">{row.wxId}</code>
-                {row.boundUserId && (
-                  <span className="t-caption2 rounded-full border border-[var(--separator)] px-1.5 text-[var(--ink-tertiary)]">
-                    已有账号
-                  </span>
-                )}
+                {row.boundUserId && <AdminTag>已有账号</AdminTag>}
                 {row.requestedAt && (
                   <span className="t-caption ml-auto tabular-nums text-[var(--ink-quaternary)]">
                     {time(row.requestedAt)}
@@ -172,39 +174,35 @@ export function FriendRequestQueue({
                         <input
                           value={reason}
                           onChange={(e) => setReason(e.target.value)}
-                          className="mt-1 w-full rounded-lg border border-[var(--separator)] bg-[var(--surface)] px-2 py-1.5 text-[14px] outline-none focus-visible:border-[var(--accent)]"
+                          className={`mt-1 ${adminFieldClass}`}
                         />
                       </label>
-                      <div className="mt-2 flex gap-2">
-                        <button
-                          type="button"
+                      <AdminActions className="mt-2">
+                        <AdminButton
+                          tone="primary"
                           onClick={() => submit(row.wxId)}
-                          disabled={pending}
-                          className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-[13px] font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-50"
+                          disabled={pending || !reason.trim()}
+                          title={reason.trim() ? undefined : "先写一句理由"}
                         >
                           {pending ? "通过中…" : "确认通过"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setOpenId(null)}
-                          className="t-caption rounded-lg px-2 py-1 text-[var(--ink-tertiary)]"
-                        >
+                        </AdminButton>
+                        <AdminButton tone="quiet" onClick={() => setOpenId(null)}>
                           取消
-                        </button>
-                      </div>
+                        </AdminButton>
+                      </AdminActions>
                     </>
                   ) : (
-                    <button
-                      type="button"
+                    <AdminButton
+                      tone="neutral"
+                      size="sm"
                       onClick={() => {
                         setOpenId(row.wxId);
                         setReason("");
                         setMessage(null);
                       }}
-                      className="t-caption rounded-md border border-[var(--separator)] px-2 py-1 transition-colors hover:bg-[var(--fill)]"
                     >
                       通过好友申请
-                    </button>
+                    </AdminButton>
                   )}
                 </div>
               )}
@@ -271,9 +269,12 @@ export function StalledBindQueue({ rows, canBind }: { rows: StalledRow[]; canBin
       )}
 
       {rows.length === 0 ? (
-        <p className="t-subhead px-4 py-4 text-[var(--ink-tertiary)]">
-          最近一天没有卡住的绑定。
-        </p>
+        <div className="px-4 py-6 text-center">
+          <p className="t-callout text-[var(--ink-secondary)]">最近一天没人卡在登录上</p>
+          <p className="t-footnote mt-1.5 text-[var(--ink-tertiary)]">
+            反复取码却一直没成功的人才会出现在这里
+          </p>
+        </div>
       ) : (
         <ul>
           {rows.map((row) => (
@@ -283,15 +284,9 @@ export function StalledBindQueue({ rows, canBind }: { rows: StalledRow[]; canBin
                 <code className="t-caption font-mono tracking-wider text-[var(--ink-secondary)]">
                   最近 {row.latestCode}
                 </code>
-                <span
-                  className={`t-caption2 rounded-full border px-1.5 ${
-                    row.expired
-                      ? "border-[var(--separator)] text-[var(--ink-tertiary)]"
-                      : "border-[var(--accent)] text-[var(--accent)]"
-                  }`}
-                >
+                <AdminTag color={row.expired ? undefined : "var(--accent)"}>
                   {row.expired ? "已过期" : "还在等"}
-                </span>
+                </AdminTag>
                 <span className="t-caption ml-auto tabular-nums text-[var(--ink-quaternary)]">
                   {time(row.firstAt)} 起 · {row.ip}
                 </span>
@@ -307,7 +302,7 @@ export function StalledBindQueue({ rows, canBind }: { rows: StalledRow[]; canBin
                           value={wxId}
                           onChange={(e) => setWxId(e.target.value)}
                           placeholder="wxid_..."
-                          className="mt-1 w-full rounded-lg border border-[var(--separator)] bg-[var(--surface)] px-2 py-1.5 font-mono text-[14px] outline-none focus-visible:border-[var(--accent)]"
+                          className={`mt-1 font-mono ${adminFieldClass}`}
                         />
                       </label>
                       <label className="t-caption mt-2 block text-[var(--ink-tertiary)]">
@@ -315,38 +310,38 @@ export function StalledBindQueue({ rows, canBind }: { rows: StalledRow[]; canBin
                         <input
                           value={reason}
                           onChange={(e) => setReason(e.target.value)}
-                          className="mt-1 w-full rounded-lg border border-[var(--separator)] bg-[var(--surface)] px-2 py-1.5 text-[14px] outline-none focus-visible:border-[var(--accent)]"
+                          className={`mt-1 ${adminFieldClass}`}
                         />
                       </label>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <button
-                          type="button"
+                      <AdminActions className="mt-2">
+                        {/* 手动绑定绕过了验证码，而验证码就是「这个人在群里」的证明 ——
+                            实心红：绑错了等于把一个陌生人放进站里 */}
+                        <AdminButton
+                          tone="danger"
                           onClick={() => run(() => manualBindAction({ bindCodeId: row.latestCodeId, wxId, reason }))}
-                          disabled={pending}
-                          className="rounded-lg bg-[var(--danger)] px-3 py-1.5 text-[13px] font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-50"
+                          disabled={pending || !wxId.trim() || !reason.trim()}
+                          title={
+                            wxId.trim() && reason.trim() ? undefined : "微信号和理由都要填"
+                          }
                         >
                           {pending ? "绑定中…" : "确认手动绑定"}
-                        </button>
-                        <button
-                          type="button"
+                        </AdminButton>
+                        <AdminButton
+                          tone="neutral"
                           onClick={() => run(() => dismissBindAction({ bindCodeId: row.latestCodeId, reason }))}
                           disabled={pending}
-                          className="t-caption rounded-lg border border-[var(--separator)] px-2.5 py-1 transition-colors hover:bg-[var(--fill)]"
                         >
                           作废这条
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setOpenId(null)}
-                          className="t-caption rounded-lg px-2 py-1 text-[var(--ink-tertiary)]"
-                        >
+                        </AdminButton>
+                        <AdminButton tone="quiet" onClick={() => setOpenId(null)}>
                           取消
-                        </button>
-                      </div>
+                        </AdminButton>
+                      </AdminActions>
                     </>
                   ) : (
-                    <button
-                      type="button"
+                    <AdminButton
+                      tone="neutral"
+                      size="sm"
                       onClick={() => {
                         setOpenId(row.latestCodeId);
                         setWxId("");
@@ -355,10 +350,9 @@ export function StalledBindQueue({ rows, canBind }: { rows: StalledRow[]; canBin
                       }}
                       disabled={row.expired}
                       title={row.expired ? "过期的码不能手动放行 —— 让他重新取一次" : undefined}
-                      className="t-caption rounded-md border border-[var(--separator)] px-2 py-1 transition-colors hover:bg-[var(--fill)] disabled:opacity-40"
                     >
                       {row.expired ? "已过期，让他重新取码" : "处理"}
-                    </button>
+                    </AdminButton>
                   )}
                 </div>
               )}

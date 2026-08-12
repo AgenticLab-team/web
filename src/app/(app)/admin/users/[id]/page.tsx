@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
+import { AdminTag } from "@/components/admin/ui";
 import { UserActions } from "@/components/admin/UserActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -75,19 +76,15 @@ export default async function AdminUserDetail({ params }: { params: Promise<{ id
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex flex-wrap gap-1.5">
               {detail.roles.map((role) => (
-                <span
+                <AdminTag
                   key={role.id}
-                  className="t-caption rounded-[var(--radius-pill)] px-2 py-0.5 font-medium"
-                  style={{
-                    background: `color-mix(in srgb, ${role.color ?? "var(--ink)"} 14%, transparent)`,
-                    color: role.color ?? "var(--ink-secondary)",
-                  }}
+                  color={role.color ?? undefined}
                   title={role.scopeId ? `范围：${role.scopeId}` : "全站"}
                 >
                   {role.name}
                   {role.scopeId && " ·限定"}
                   {role.expiresAt && " ·临时"}
-                </span>
+                </AdminTag>
               ))}
             </div>
             <p className="t-caption font-mono text-[var(--ink-tertiary)]">
@@ -134,6 +131,16 @@ export default async function AdminUserDetail({ params }: { params: Promise<{ id
         </div>
       </Section>
 
+      {/*
+        * 从这里往下全是「一行一条」的窄列表（群、处罚、流水、设备、备注）。
+        * 一个人的档案在 63rem 宽的栏里逐块竖着排，要滚四五屏，
+        * 而每一行右边都空着半屏 —— 桌面上两列排，一屏就看得完。
+        *
+        * columns 而不是 grid：这几块高度差得很远（有人零条处罚、
+        * 几十笔流水），grid 会按最高的那块对齐行高，
+        * 于是矮的那块下面留一大段空。
+        */}
+      <div className="lg:columns-2 lg:gap-x-6 [&>*]:break-inside-avoid">
       {detail.groups.length > 0 && (
         <Section title={`所在群（${detail.groups.filter((g) => !g.left).length}）`}>
           <Group>
@@ -183,7 +190,7 @@ export default async function AdminUserDetail({ params }: { params: Promise<{ id
 
       <Section title="积分流水">
         {detail.ledger.length === 0 ? (
-          <Empty title="还没有积分变动" />
+          <Empty title="还没有积分变动" hint="打卡、发帖、群里发言都会在这里留下一笔" />
         ) : (
         <Group>
           {detail.ledger.slice(0, 10).map((entry) => (
@@ -213,7 +220,7 @@ export default async function AdminUserDetail({ params }: { params: Promise<{ id
 
       <Section title={`登录设备（${detail.sessions.length}）`}>
         {detail.sessions.length === 0 ? (
-          <Empty title="没有活跃会话" />
+          <Empty title="没有登录中的设备" hint="他没登录过，或者会话都已经过期" />
         ) : (
         <Group>
           {detail.sessions.map((session) => (
@@ -254,13 +261,17 @@ export default async function AdminUserDetail({ params }: { params: Promise<{ id
         </Section>
       )}
 
+      </div>
+
+      {/* 权限清单是宽内容（一行 key + 来源），留在通栏里，
+          桌面上直接铺成三列 —— 折进两栏会让每个 key 都被截断 */}
       <Section title={`有效权限（${detail.permissions.length}）`}>
         <details className="inset-group">
-          <summary className="t-subhead cursor-pointer list-none px-4 py-3">
+          <summary className="t-subhead flex min-h-11 cursor-pointer list-none items-center px-4">
             展开查看每一项的来源
           </summary>
           <div className="border-t border-[var(--separator)] px-4 py-3">
-            <ul className="grid gap-1 sm:grid-cols-2">
+            <ul className="grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
               {detail.permissions.map((permission) => (
                 <li key={permission.key} className="t-caption flex justify-between gap-2">
                   <span className="truncate font-mono text-[var(--ink-secondary)]">

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 
+import { AdminActions, AdminButton, adminFieldClass } from "@/components/admin/ui";
 import { setModuleEnabled } from "@/lib/modules/actions";
 
 /**
@@ -76,8 +77,9 @@ export function ModuleToggle({
         style={{ background: on ? "var(--success)" : "var(--fill-strong, var(--fill))" }}
       >
         {/* 位移走 translateX 不走 left —— 理由见 globals.css 的 .switch-knob */}
+        {/* 滑块用 --surface 而不是纯白 —— 暗色下白滑块亮得像颗灯泡 */}
         <span
-          className="switch-knob absolute left-[2px] top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-sm"
+          className="switch-knob absolute left-[2px] top-[2px] h-[27px] w-[27px] rounded-full bg-[var(--surface)] shadow-sm"
           style={{ transform: on ? "translateX(20px)" : "translateX(0)" }}
         />
       </button>
@@ -103,35 +105,32 @@ export function ModuleToggle({
             autoFocus
             placeholder="为什么要关？（半年后翻日志的人需要知道）"
             onChange={(e) => setReason(e.target.value)}
-            className="t-body mt-2.5 w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none transition focus:ring-2 focus:ring-[var(--accent)]"
+            className={`mt-2.5 ${adminFieldClass}`}
           />
 
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
+          <AdminActions className="mt-2">
+            <AdminButton
+              tone="danger"
               disabled={!reason.trim() || pending}
               onClick={() => commit(false, reason)}
-              className="t-subhead rounded-[var(--radius-control)] px-3.5 py-2 font-medium text-white transition active:opacity-70 disabled:opacity-40"
-              style={{ background: "var(--danger)" }}
             >
               {pending ? "关闭中…" : "确认关闭"}
-            </button>
-            <button
-              type="button"
+            </AdminButton>
+            <AdminButton
+              tone="quiet"
               disabled={pending}
               onClick={() => {
                 setConfirming(false);
                 setReason("");
                 setError(null);
               }}
-              className="t-subhead px-2 py-2 text-[var(--ink-tertiary)] transition active:opacity-60"
             >
-              取消
-            </button>
-          </div>
+              再想想
+            </AdminButton>
+          </AdminActions>
 
           {error && (
-            <p className="t-caption mt-2" style={{ color: "var(--danger)" }}>
+            <p role="alert" className="t-caption mt-2" style={{ color: "var(--danger)" }}>
               {error}
             </p>
           )}

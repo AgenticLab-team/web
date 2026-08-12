@@ -90,6 +90,27 @@ describe("HTML 消毒", () => {
     assert.ok(out.includes("color"), out);
   });
 
+  it("**shiki 真正写出来的那种 style 也要保留** —— 它写的不是 color", () => {
+    /*
+     * 上面那条测的是 `color:#ff0000`，而 shiki 在双主题模式下
+     * **一个 color 都不写**：它写 `--shiki-light` / `--shiki-dark`
+     * 这样的自定义属性，再由 globals.css 里 `var()` 出来。
+     *
+     * 也就是说上面那条测试测的是一段 shiki 从来不产出的东西 ——
+     * 它一直是绿的，而全站每一个代码块都在无声地掉色。
+     */
+    const out = md.sanitizeHtml(
+      '<span style="--shiki-light:#D73A49;--shiki-dark:#F97583">const</span>',
+    );
+    assert.ok(out.includes("--shiki-light"), out);
+    assert.ok(out.includes("--shiki-dark"), out);
+  });
+
+  it("**放行的只有 --shiki- 那四个** —— 不是所有自定义属性", () => {
+    const out = md.sanitizeHtml('<span style="--anything:red">x</span>');
+    assert.ok(!out.includes("--anything"), out);
+  });
+
   it("style 里的 url() 被拒绝", () => {
     // background:url() 可以用来探测访问者是否加载了资源
     const out = md.sanitizeHtml('<span style="background-image:url(https://evil.com/t.png)">x</span>');

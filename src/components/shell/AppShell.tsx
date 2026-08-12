@@ -131,7 +131,14 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       <div className="lg:pl-[var(--sidebar-width)]">
         <main
           id="main"
-          className="mx-auto w-full px-4 sm:px-6"
+          /*
+           * 底部留白分两种情况，所以只能写在类名里 ——
+           * 内联样式没有断点。手机上要给底部 Tab Bar 和 Home Indicator
+           * 让出位置；而桌面上那条 Tab Bar 是 `lg:hidden`，
+           * 变量却不会跟着变 0 —— 于是每一页的末尾都白白空出 3.25rem，
+           * 页脚说明看起来像是漏在了半空中。
+           */
+          className="mx-auto w-full px-4 pb-[calc(var(--tabbar-height)+env(safe-area-inset-bottom,0px)+1.5rem)] sm:px-6 lg:pb-10"
           style={{
             /*
              * 栏宽由内容类型决定，不写死在这里 ——
@@ -139,8 +146,6 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
              * globals.css 里那条 :has() 会把它放到 78rem。
              */
             maxWidth: "var(--content-max)",
-            // 给底部 Tab Bar 让出空间，含 Home Indicator 的安全区
-            paddingBottom: "calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px) + 1.5rem)",
           }}
         >
           {/*

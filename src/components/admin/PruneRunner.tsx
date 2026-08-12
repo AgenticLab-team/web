@@ -3,6 +3,7 @@
 import { AlertTriangle, Check, Loader2, ShieldQuestion } from "lucide-react";
 import { useState, useTransition } from "react";
 
+import { AdminActions, AdminButton, AdminNote } from "@/components/admin/ui";
 import {
   cancelPruneTask,
   createPruneTask,
@@ -53,9 +54,9 @@ export function PruneRunner({ initialTaskId }: { initialTaskId?: string }) {
           裁剪完成
         </p>
         <p className="t-caption mt-1 leading-relaxed text-[var(--ink-secondary)]">{done}</p>
-        <button
-          type="button"
-          className="t-subhead mt-3 text-[var(--accent)] transition active:opacity-60"
+        <AdminButton
+          tone="neutral"
+          className="mt-3"
           onClick={() => {
             setDone(null);
             setState(null);
@@ -63,7 +64,7 @@ export function PruneRunner({ initialTaskId }: { initialTaskId?: string }) {
           }}
         >
           再算一次
-        </button>
+        </AdminButton>
       </div>
     );
   }
@@ -71,26 +72,19 @@ export function PruneRunner({ initialTaskId }: { initialTaskId?: string }) {
   if (!preview) {
     return (
       <div>
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => run(createPruneTask)}
-          className="t-subhead rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2.5 font-medium text-white transition active:opacity-70 disabled:opacity-45"
-        >
+        <AdminButton tone="primary" disabled={pending} onClick={() => run(createPruneTask)}>
           {pending ? (
-            <span className="flex items-center gap-1.5">
+            <>
               <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.2} aria-hidden />
               正在计算
-            </span>
+            </>
           ) : (
             "计算这次会裁掉什么"
           )}
-        </button>
-        <p className="t-caption mt-2 leading-relaxed text-[var(--ink-tertiary)]">
-          只算不改。看清楚之后才有第二步。
-        </p>
+        </AdminButton>
+        <AdminNote className="px-0">只算不改。看清楚之后才有第二步。</AdminNote>
         {state?.error && (
-          <p className="t-caption mt-2" style={{ color: "var(--danger)" }}>
+          <p role="alert" className="t-caption mt-2" style={{ color: "var(--danger)" }}>
             {state.error}
           </p>
         )}
@@ -120,12 +114,16 @@ export function PruneRunner({ initialTaskId }: { initialTaskId?: string }) {
       )}
 
       {dangerous && (
-        <label className="flex cursor-pointer items-start gap-2 rounded-[var(--radius-card)] bg-[var(--surface)] p-3.5 hairline">
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-[var(--radius-card)] p-3.5 hairline"
+          style={{ background: "color-mix(in srgb, var(--danger) 8%, var(--surface))" }}
+        >
+          {/* 这个勾是「永久丢正文」前的最后一道闸 —— 它必须点得中。
+              16px 的方框在手机上是每三次点中两次 */}
           <input
             type="checkbox"
             checked={confirmed}
             onChange={(e) => setConfirmed(e.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--danger)]"
+            className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--danger)]"
           />
           <span className="t-caption leading-relaxed text-[var(--ink-secondary)]">
             我知道这会<strong style={{ color: "var(--danger)" }}>永久丢掉 {preview.drop} 条消息的正文</strong>
@@ -134,9 +132,11 @@ export function PruneRunner({ initialTaskId }: { initialTaskId?: string }) {
         </label>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
+      <AdminActions>
+        {/* 只有真会丢正文时才是实心红。不丢正文的那次裁剪全都撤得回来，
+            染成红的话，红色在这一页上就不再意味着「回不去了」 */}
+        <AdminButton
+          tone={dangerous ? "danger" : "primary"}
           disabled={pending || noop || (dangerous && !confirmed)}
           onClick={() =>
             run(
@@ -144,15 +144,13 @@ export function PruneRunner({ initialTaskId }: { initialTaskId?: string }) {
               (r) => r.ok && setDone(r.note ?? "已执行"),
             )
           }
-          className="t-subhead rounded-[var(--radius-control)] px-4 py-2.5 font-medium text-white transition active:opacity-70 disabled:opacity-40"
-          style={{ background: dangerous ? "var(--danger)" : "var(--accent)" }}
         >
-          {pending ? "执行中…" : dangerous ? "归档并裁剪" : "执行裁剪"}
-        </button>
+          {pending ? "执行中…" : dangerous ? `归档并丢掉 ${preview.drop} 条正文` : "执行裁剪"}
+        </AdminButton>
 
         {/* 大多数时候这才是想要的那个按钮 */}
-        <button
-          type="button"
+        <AdminButton
+          tone="neutral"
           disabled={pending || (preview.retier === 0 && preview.unindex === 0)}
           onClick={() =>
             run(
@@ -160,13 +158,12 @@ export function PruneRunner({ initialTaskId }: { initialTaskId?: string }) {
               (r) => r.ok && setDone(r.note ?? "已执行"),
             )
           }
-          className="t-subhead rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2.5 font-medium transition active:opacity-70 disabled:opacity-40"
         >
           只做可逆的部分
-        </button>
+        </AdminButton>
 
-        <button
-          type="button"
+        <AdminButton
+          tone="quiet"
           disabled={pending}
           onClick={() =>
             run(
@@ -177,19 +174,16 @@ export function PruneRunner({ initialTaskId }: { initialTaskId?: string }) {
               },
             )
           }
-          className="t-subhead px-2 py-2.5 text-[var(--ink-tertiary)] transition active:opacity-60"
         >
           取消
-        </button>
-      </div>
+        </AdminButton>
+      </AdminActions>
 
       {noop && (
-        <p className="t-caption px-1 text-[var(--ink-tertiary)]">
-          当前没有任何消息需要处理 —— 最老的一条还没跨过热层边界。
-        </p>
+        <AdminNote>当前没有任何消息需要处理 —— 最老的一条还没跨过热层边界。</AdminNote>
       )}
       {state?.error && (
-        <p className="t-caption px-1" style={{ color: "var(--danger)" }}>
+        <p role="alert" className="t-caption px-1" style={{ color: "var(--danger)" }}>
           {state.error}
         </p>
       )}

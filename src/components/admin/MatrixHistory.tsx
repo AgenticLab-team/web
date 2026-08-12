@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 
+import { AdminButton, AdminNote, AdminTag, adminFieldClass } from "@/components/admin/ui";
 import { previewRollback, rollbackMatrix } from "@/lib/rbac/matrix-actions";
 import { stateLabel, type MatrixDiff } from "@/lib/rbac/matrix-edit";
 
@@ -100,11 +101,7 @@ export function MatrixHistory({
               <span className="t-caption text-[var(--ink-tertiary)]">
                 改了 {row.changeCount} 格 · {row.changeSummary}
               </span>
-              {row.isRollback && (
-                <span className="t-caption2 rounded-full border border-[var(--separator)] px-1.5 text-[var(--ink-tertiary)]">
-                  回滚
-                </span>
-              )}
+              {row.isRollback && <AdminTag>回滚</AdminTag>}
               <span className="t-caption ml-auto tabular-nums text-[var(--ink-quaternary)]">
                 {new Date(row.createdAt).toLocaleString("zh-CN", {
                   timeZone: "Asia/Shanghai",
@@ -116,14 +113,14 @@ export function MatrixHistory({
               </span>
 
               {canRollback && (
-                <button
-                  type="button"
+                <AdminButton
+                  tone="neutral"
+                  size="sm"
                   onClick={() => (openId === row.id ? setOpenId(null) : open(row.id))}
-                  className="t-caption shrink-0 rounded-md border border-[var(--separator)] px-2 py-0.5 transition-colors hover:bg-[var(--fill)]"
                   aria-expanded={openId === row.id}
                 >
                   {openId === row.id ? "收起" : "回到这次之前"}
-                </button>
+                </AdminButton>
               )}
             </div>
 
@@ -194,18 +191,21 @@ export function MatrixHistory({
                         value={reason}
                         onChange={(e) => setReason(e.target.value)}
                         rows={2}
-                        className="mt-1 w-full rounded-lg border border-[var(--separator)] bg-[var(--surface)] px-2 py-1.5 text-[14px] outline-none focus-visible:border-[var(--accent)]"
+                        className={`mt-1 resize-none ${adminFieldClass}`}
                       />
                     </label>
 
-                    <button
-                      type="button"
+                    {/* 理由必填这件事要由按钮的禁用态表达出来 ——
+                        原来点下去才会被服务端挡回来，而错误提示在半屏之外 */}
+                    <AdminButton
+                      tone="danger"
+                      className="mt-2"
                       onClick={() => confirm(row.id)}
-                      disabled={pending}
-                      className="mt-2 rounded-lg bg-[var(--danger)] px-3 py-1.5 text-[13px] font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-50"
+                      disabled={pending || !reason.trim()}
+                      title={reason.trim() ? undefined : "先写一句理由"}
                     >
                       {pending ? "回滚中…" : "确认回滚"}
-                    </button>
+                    </AdminButton>
                   </>
                 )}
               </div>
@@ -214,11 +214,11 @@ export function MatrixHistory({
         ))}
       </ul>
 
-      <p className="t-caption px-4 py-2 leading-relaxed text-[var(--ink-tertiary)]">
+      <AdminNote className="px-4 pb-3">
         快照拍的是<strong>那次改动发生之前</strong>的整张表，所以恢复不依赖中间发生过什么。
         回滚走的是和普通编辑一模一样的护栏 —— 快照里可能有一项你现在没有的权限，
         那样的回滚会被挡下来。
-      </p>
+      </AdminNote>
     </div>
   );
 }

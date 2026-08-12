@@ -3,6 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import {
+  AdminBlocked,
+  AdminButton,
+  AdminChip,
+  AdminNote,
+  AdminPanel,
+  adminFieldClass,
+} from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import { claimReports, resolveReports } from "@/lib/admin/report-actions";
 
@@ -42,13 +50,7 @@ export function ReportActions(props: Props) {
   const [outcome, setOutcome] = useState<(typeof OUTCOMES)[number]["key"]>("resolved");
   const [resolution, setResolution] = useState("");
 
-  if (props.conflict) {
-    return (
-      <p className="t-caption rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 text-[var(--ink-tertiary)]">
-        {props.conflict}
-      </p>
-    );
-  }
+  if (props.conflict) return <AdminBlocked>{props.conflict}</AdminBlocked>;
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>, success: string) => {
     startTransition(async () => {
@@ -67,8 +69,7 @@ export function ReportActions(props: Props) {
     <div className="space-y-2">
       <div className="flex flex-wrap gap-1.5">
         {!props.assigned && (
-          <button
-            type="button"
+          <AdminChip
             disabled={pending}
             onClick={() =>
               run(
@@ -76,54 +77,47 @@ export function ReportActions(props: Props) {
                 "已认领，其他人会看到你在处理",
               )
             }
-            className="t-footnote rounded-[var(--radius-pill)] bg-[var(--fill)] px-3 py-1.5 font-medium text-[var(--ink-secondary)] disabled:opacity-40"
           >
             我来处理
-          </button>
+          </AdminChip>
         )}
-        <button
-          type="button"
-          onClick={() => setOpen(!open)}
-          className={`t-footnote rounded-[var(--radius-pill)] px-3 py-1.5 font-medium transition-colors ${
-            open
-              ? "bg-[var(--ink)] text-[var(--canvas)]"
-              : "bg-[var(--fill)] text-[var(--ink-secondary)]"
-          }`}
-        >
+        <AdminChip active={open} aria-expanded={open} onClick={() => setOpen(!open)}>
           结案
-        </button>
+        </AdminChip>
       </div>
 
       {open && (
-        <div className="animate-rise space-y-2.5 rounded-[var(--radius-card)] bg-[var(--surface)] p-3 hairline">
+        <AdminPanel className="animate-rise space-y-2.5">
           <div className="flex flex-wrap gap-1.5">
             {OUTCOMES.map((o) => (
-              <button
+              <AdminChip
                 key={o.key}
-                type="button"
+                active={outcome === o.key}
                 onClick={() => setOutcome(o.key)}
                 title={o.hint}
-                className={`t-footnote rounded-[var(--radius-pill)] px-3 py-1.5 transition-colors ${
-                  outcome === o.key
-                    ? "bg-[var(--accent)] font-medium text-[var(--accent-ink)]"
-                    : "bg-[var(--fill)] text-[var(--ink-secondary)]"
-                }`}
               >
                 {o.label}
-              </button>
+              </AdminChip>
             ))}
           </div>
+
+          {/* 选中那一档的代价写在框下面而不是只挂 title —— 触屏上没有悬停，
+              title 里那句话在手机上等于不存在 */}
+          <p className="t-caption2 text-[var(--ink-quaternary)]">
+            {OUTCOMES.find((o) => o.key === outcome)?.hint}
+          </p>
 
           <textarea
             value={resolution}
             onChange={(e) => setResolution(e.target.value)}
             rows={2}
             placeholder="怎么处理的（会原样发给每一位举报人）"
-            className="t-subhead w-full resize-none rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]"
+            className={`resize-none ${adminFieldClass}`}
           />
 
-          <button
-            type="button"
+          <AdminButton
+            tone="primary"
+            block
             disabled={pending || !resolution.trim()}
             onClick={() =>
               run(
@@ -137,15 +131,14 @@ export function ReportActions(props: Props) {
                 "已结案并通知举报人",
               )
             }
-            className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
           >
             确认结案
-          </button>
+          </AdminButton>
 
-          <p className="t-caption text-[var(--ink-tertiary)]">
+          <AdminNote className="px-0">
             这只是对举报的结论。删帖、禁言请在对应内容或用户页面单独执行，各自留处罚记录。
-          </p>
-        </div>
+          </AdminNote>
+        </AdminPanel>
       )}
     </div>
   );

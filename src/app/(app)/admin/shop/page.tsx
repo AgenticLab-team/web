@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AdminNote, AdminRow } from "@/components/admin/ui";
 import { OrderActions } from "@/components/admin/OrderActions";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -67,7 +68,7 @@ export default async function AdminShopPage({
         ) : (
           <div className="inset-group">
             {items.map((item) => (
-              <div key={item.id} className="inset-row flex items-center gap-2 px-4 py-2.5">
+              <AdminRow key={item.id}>
                 {item.icon && <span className="shrink-0">{item.icon}</span>}
                 <span className={`t-body min-w-0 flex-1 truncate ${item.enabled ? "" : "opacity-45"}`}>
                   {item.name}
@@ -81,20 +82,20 @@ export default async function AdminShopPage({
                   {item.remaining !== null && ` · 剩 ${item.remaining}`}
                   {item.sold > 0 && ` · 卖出 ${item.sold}`}
                 </span>
-              </div>
+              </AdminRow>
             ))}
           </div>
         )}
-        <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+        <AdminNote>
           商品目前通过 <code className="font-mono">npm run seed-shop</code> 初始化。
           价格调整会影响后续兑换，但<strong>已有订单按下单时的价格记账</strong> ——
           事后调价不影响对账。
-        </p>
+        </AdminNote>
       </Section>
 
       <Section title="订单">
         {orders.length === 0 ? (
-          <Empty title="还没有订单" />
+          <Empty title="还没有人下过单" hint="上架的东西没人换，多半是价格相对大家的余额太高" />
         ) : (
           <div className="space-y-2">
             {orders.map((order) => (

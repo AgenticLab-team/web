@@ -4,6 +4,14 @@ import { Lock, LockOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import {
+  AdminButton,
+  AdminNote,
+  AdminPanel,
+  AdminPanelLabel,
+  AdminRow,
+  adminFieldClass,
+} from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import { cleanupTags, mergeTags, renameTag, setTagLocked } from "@/lib/admin/board-actions";
 
@@ -59,14 +67,14 @@ export function TagManager({ tags, orphanCount }: { tags: TagItem[]; orphanCount
   const to = tags.find((t) => t.id === toId);
 
   if (tags.length === 0) {
-    return <p className="t-caption px-1 text-[var(--ink-tertiary)]">还没有任何标签。</p>;
+    return <AdminNote>还没有任何标签。发帖时打上就会出现在这里。</AdminNote>;
   }
 
   return (
     <div className="space-y-4">
       <div className="inset-group">
         {tags.map((tag) => (
-          <div key={tag.id} className="inset-row flex items-center gap-2 px-4 py-2.5">
+          <AdminRow key={tag.id}>
             <span className="t-body min-w-0 flex-1 truncate">
               {tag.name}
               <span className="t-caption2 ml-1.5 font-mono text-[var(--ink-quaternary)]">
@@ -91,9 +99,10 @@ export function TagManager({ tags, orphanCount }: { tags: TagItem[]; orphanCount
                   tag.locked ? "已解锁" : "已锁定，不会被清理或合并掉",
                 )
               }
-              aria-label={tag.locked ? "解锁" : "锁定"}
+              aria-label={tag.locked ? `解锁「${tag.name}」` : `锁定「${tag.name}」`}
               title={tag.locked ? "解锁" : "锁定：不会被清理或合并掉"}
-              className="shrink-0 rounded-[0.375rem] p-1.5 text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--fill)]"
+              // tap-target：视觉还是 28px，可点范围撑到 44px
+              className="tap-target shrink-0 rounded-[var(--radius-control)] p-1.5 text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--fill)]"
             >
               {tag.locked ? (
                 <Lock className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
@@ -102,55 +111,59 @@ export function TagManager({ tags, orphanCount }: { tags: TagItem[]; orphanCount
               )}
             </button>
 
-            <button
-              type="button"
+            <AdminButton
+              tone="neutral"
+              size="sm"
+              aria-expanded={renaming === tag.id}
               onClick={() => {
                 setRenaming(renaming === tag.id ? null : tag.id);
                 setNewName(tag.name);
               }}
-              className="t-caption shrink-0 rounded-[var(--radius-pill)] bg-[var(--fill)] px-2.5 py-1 text-[var(--ink-secondary)]"
             >
               改名
-            </button>
-          </div>
+            </AdminButton>
+          </AdminRow>
         ))}
       </div>
 
       {renaming && (
-        <div className="animate-rise space-y-2 rounded-[var(--radius-card)] bg-[var(--surface)] p-3.5 hairline">
+        <AdminPanel className="animate-rise space-y-2">
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="新名字"
-            className={inputClass}
+            className={adminFieldClass}
           />
           <input
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="理由（必填）"
-            className={inputClass}
+            className={adminFieldClass}
           />
-          <button
-            type="button"
+          <AdminButton
+            tone="primary"
+            block
             disabled={pending || !newName.trim() || !reason.trim()}
             onClick={() => run(() => renameTag({ id: renaming, name: newName, reason }), "已改名")}
-            className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
           >
             保存
-          </button>
-          <p className="t-caption text-[var(--ink-tertiary)]">
+          </AdminButton>
+          <AdminNote className="px-0">
             改名会同时改归一化后的 slug。如果新名字归一化后撞上了已有标签，
             这里会让你改用合并 —— 那才是正确的做法。
-          </p>
-        </div>
+          </AdminNote>
+        </AdminPanel>
       )}
 
-      <div className="space-y-2 rounded-[var(--radius-card)] bg-[var(--surface)] p-3.5 hairline">
-        <p className="t-caption2 font-medium uppercase tracking-[0.06em] text-[var(--ink-quaternary)]">
-          合并同义标签
-        </p>
+      <AdminPanel className="space-y-2">
+        <AdminPanelLabel>合并同义标签</AdminPanelLabel>
         <div className="grid gap-2 sm:grid-cols-2">
-          <select value={fromId} onChange={(e) => setFromId(e.target.value)} className={inputClass}>
+          <select
+            value={fromId}
+            onChange={(e) => setFromId(e.target.value)}
+            aria-label="把哪个标签合并掉"
+            className={adminFieldClass}
+          >
             <option value="">把哪个标签…</option>
             {tags
               .filter((t) => !t.locked)
@@ -160,7 +173,12 @@ export function TagManager({ tags, orphanCount }: { tags: TagItem[]; orphanCount
                 </option>
               ))}
           </select>
-          <select value={toId} onChange={(e) => setToId(e.target.value)} className={inputClass}>
+          <select
+            value={toId}
+            onChange={(e) => setToId(e.target.value)}
+            aria-label="并入哪个标签"
+            className={adminFieldClass}
+          >
             <option value="">…并入哪个</option>
             {tags
               .filter((t) => t.id !== fromId)
@@ -183,23 +201,25 @@ export function TagManager({ tags, orphanCount }: { tags: TagItem[]; orphanCount
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder="理由（必填）"
-          className={inputClass}
+          className={adminFieldClass}
         />
 
-        <button
-          type="button"
+        {/* 合并不可撤销 —— 归 danger，和这个后台里其它「回不去了」的动作同一档。
+            原来它是 accent 主色，看起来和「保存」一样安全 */}
+        <AdminButton
+          tone={from && to ? "danger" : "neutral"}
+          block
           disabled={pending || !from || !to || !reason.trim()}
           onClick={() => run(() => mergeTags({ fromId, toId, reason }), "已合并")}
-          className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
         >
-          {from && to ? `把「${from.name}」并入「${to.name}」` : "选择两个标签"}
-        </button>
-      </div>
+          {from && to ? `把「${from.name}」并入「${to.name}」` : "先选两个标签"}
+        </AdminButton>
+      </AdminPanel>
 
       {orphanCount > 0 && (
-        <div className="space-y-2 rounded-[var(--radius-card)] bg-[var(--surface)] p-3.5 hairline">
+        <AdminPanel className="space-y-2">
           <p className="t-subhead">有 {orphanCount} 个标签没有任何帖子在用</p>
-          <p className="t-caption text-[var(--ink-tertiary)]">
+          <p className="t-caption leading-relaxed text-[var(--ink-tertiary)]">
             清理它们是安全的，标签本身不承载内容。<strong>锁定的不会被清掉</strong> ——
             锁定往往正是为了预留一个还没开始用的官方标签。
           </p>
@@ -207,21 +227,18 @@ export function TagManager({ tags, orphanCount }: { tags: TagItem[]; orphanCount
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="理由（必填）"
-            className={inputClass}
+            className={adminFieldClass}
           />
-          <button
-            type="button"
+          <AdminButton
+            tone="neutral"
+            block
             disabled={pending || !reason.trim()}
             onClick={() => run(() => cleanupTags({ reason }), `已清理 ${orphanCount} 个标签`)}
-            className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 font-medium disabled:opacity-40"
           >
-            清理无用标签
-          </button>
-        </div>
+            清理这 {orphanCount} 个无用标签
+          </AdminButton>
+        </AdminPanel>
       )}
     </div>
   );
 }
-
-const inputClass =
-  "t-subhead w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]";

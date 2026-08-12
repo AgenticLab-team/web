@@ -5,6 +5,7 @@ import { useEffect, useState, useTransition } from "react";
 
 import { Editor } from "@/components/forum/Editor";
 import { useToast } from "@/components/ui/Toast";
+import { RepoField } from "@/components/github/RepoField";
 import { createPost } from "@/lib/forum/actions";
 import { markGithubPromptSharedAction } from "@/lib/github/actions";
 import { pickDraft, type DraftSnapshot } from "@/lib/forum/draft-rules";
@@ -70,6 +71,8 @@ export function ComposeForm({
   const [error, setError] = useState<string | null>(null);
   const [boardKey, setBoardKey] = useState(defaultBoard ?? boards[0]?.key ?? "");
   const [tags, setTags] = useState<string[]>([]);
+  /** 关联的项目，原样存人打的字 —— 清洗和归一在服务端那一处做 */
+  const [repoRef, setRepoRef] = useState("");
   const [anonymous, setAnonymous] = useState(false);
   const [type, setType] = useState<(typeof TYPES)[number]["key"]>("discussion");
   const [title, setTitle] = useState(prefill?.title ?? "");
@@ -152,6 +155,8 @@ export function ComposeForm({
         title,
         content,
         tags,
+        // 认不出来的写法服务端会当没填 —— 输入框那儿已经当场说过了
+        repoRef: repoRef.trim() || undefined,
         // 版块不允许时永远传 false —— 界面藏起来了不代表值不会被带上
         anonymous: anonymousBoards.includes(boardKey) ? anonymous : false,
         // datetime-local 给的是本地时间字符串，转成毫秒再传
@@ -362,6 +367,10 @@ export function ComposeForm({
         required={requireTagBoards.includes(boardKey)}
         onChange={setTags}
       />
+
+      {/* 和标签紧挨着，理由一样：写完正文才知道这篇到底在聊哪个项目。
+          它比标签更窄 —— 标签是「关于什么」，这一栏是「属于哪个项目」 */}
+      <RepoField onChange={setRepoRef} />
 
       {/*
         * 匿名只在允许的版块出现。

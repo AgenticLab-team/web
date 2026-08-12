@@ -263,11 +263,84 @@ export function refsInHtml(html: string, limit = MAX_MENTIONS): GithubRef[] {
   return out;
 }
 
-/*
- * `owner/repo#123` 那种简写**故意还没写**。
+/**
+ * `owner/repo#123` 这种简写认不认。**只认写全了 owner/repo 的**。
  *
- * 它在 ROADMAP 上是单独一条，而这一版没有任何地方会调用它 ——
- * 先写好放着的辅助函数，读起来像有人在守着，实际什么都没守
- * （见 LESSONS「一边清死开关，一边造死开关」）。真要用的时候
- * 它也就十几行，而且那时候才知道它该返回什么形状。
+ * ─────────────────────────────────────────
+ * 裸 `#123` 一律不认，而且这不是「以后再说」
+ * ─────────────────────────────────────────
+ *
+ * 帖子里的 `#123` 更可能是标签、楼层、型号、日期。要把它变成链接，
+ * 我们就得替作者猜一个仓库出来 —— 而猜错一次的结果是
+ * **在别人的正文里插进一条指向陌生仓库的链接**，
+ * 落款还是这个站。写全了 owner/repo 的那种没有这个问题：
+ * 链接指到哪，正文上就白纸黑字写着哪。
+ *
+ * ─────────────────────────────────────────
+ * 编号不许有前导零
+ * ─────────────────────────────────────────
+ *
+ * `owner/repo#0123` 里那串数字是**作者自己写在正文上的**，
+ * 而我们只能把它链到 123 号 —— 于是屏幕上写着 #0123、
+ * 点过去是 #123。和 `/issues/1e3` 被认成 1000 号是同一类错：
+ * 显示的和指向的不是一件东西。URL 那条路上没有这个问题
+ * （地址栏和卡片都归一到 `#123`），所以那边不必跟着收紧。
+ *
+ * 归到 `issue` 而不是 `pr`：GitHub 那边两者同一个编号空间，
+ * `/issues/N` 打开一个 PR 会自动跳过去，反过来不行（见 apiPathFor）。
  */
+const SHORTHAND_NUMBER = /^[1-9]\d*$/;
+
+export function parseShorthand(owner: string, repo: string, rawNumber: string): GithubRef | null {
+  if (RESERVED.has(owner.toLowerCase())) return null;
+  if (!NAME.test(owner) || !NAME.test(repo)) return null;
+  if (!SHORTHAND_NUMBER.test(rawNumber)) return null;
+  const number = issueNumber(rawNumber);
+  if (number === null) return null;
+  return { kind: "issue", owner, repo, number };
+}
+
+/**
+ * 一个「项目标识」—— `owner/repo`，归一到小写。
+ *
+ * 给「这篇帖子关联哪个项目」用。既收 `owner/repo`，也收一整条
+ * GitHub 地址（人更习惯直接粘地址）。认不出来返回 null。
+ *
+ * ─────────────────────────────────────────
+ * 为什么归一到小写
+ * ─────────────────────────────────────────
+ *
+ * GitHub 那边仓库名**不区分大小写**：`/Facebook/React` 和
+ * `/facebook/react` 是同一个仓库，也注册不出两个只差大小写的名字。
+ * 不归一的话，同一个项目会因为两个人打字习惯不同裂成两个项目页，
+ * 而两边各聊各的 —— 那正是这一条功能要解决的问题本身。
+ *
+ * 代价是显示成 `textualize/rich` 而不是 `Textualize/rich`。
+ * 拿一份「正确大小写」回来要多问 GitHub 一次，而那一次要发生在
+ * **发帖的路径上** —— GitHub 慢一秒，发帖就慢一秒。不值。
+ */
+export function parseRepoRef(raw: string): { owner: string; repo: string } | null {
+  const text = raw.trim();
+  if (!text) return null;
+
+  if (/^https?:\/\//i.test(text)) {
+    const ref = parseGithubUrl(text);
+    if (!ref) return null;
+    return { owner: ref.owner.toLowerCase(), repo: ref.repo.toLowerCase() };
+  }
+
+  // 容忍开头的 `github.com/` 和 `@`：粘贴出来经常带着
+  const bare = text.replace(/^@/, "").replace(/^github\.com\//i, "").replace(/\/+$/, "");
+  const parts = bare.split("/");
+  if (parts.length !== 2) return null;
+  const [owner, repoRaw] = parts;
+  const repo = repoRaw.replace(/\.git$/, "");
+  if (RESERVED.has(owner.toLowerCase())) return null;
+  if (!NAME.test(owner) || !NAME.test(repo)) return null;
+  return { owner: owner.toLowerCase(), repo: repo.toLowerCase() };
+}
+
+/** `owner/repo` —— 存库、做键、拼地址都用这一个形状 */
+export function repoRefKey(ref: { owner: string; repo: string }): string {
+  return `${ref.owner}/${ref.repo}`;
+}

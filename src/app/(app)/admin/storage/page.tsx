@@ -1,6 +1,7 @@
 import { AlertTriangle, Archive, Database } from "lucide-react";
 import type { Metadata } from "next";
 
+import { AdminNote, AdminRow } from "@/components/admin/ui";
 import { PruneRunner } from "@/components/admin/PruneRunner";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -120,7 +121,7 @@ export default async function AdminStoragePage() {
         </div>
 
         {s.disk && level && (
-          <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+          <AdminNote>
             {/*
               * 百分比后面跟上绝对值。
               *
@@ -134,7 +135,7 @@ export default async function AdminStoragePage() {
             {DISK_LEVEL_LABELS[level]}
             （{s.thresholds.warnPct}% 提醒 / {s.thresholds.prunePct}% 该裁 /{" "}
             {s.thresholds.stopCachePct}% 停缓存）· 采样于 {relativeTime(s.disk.takenAt)}
-          </p>
+          </AdminNote>
         )}
       </Section>
 
@@ -142,13 +143,13 @@ export default async function AdminStoragePage() {
         <Section title="占地最多的表">
           <div className="inset-group">
             {s.byTable.map((t) => (
-              <div key={t.name} className="inset-row flex items-center gap-2 px-4 py-2.5">
+              <AdminRow key={t.name}>
                 <Database className="h-3.5 w-3.5 shrink-0 text-[var(--ink-quaternary)]" strokeWidth={2} aria-hidden />
                 <span className="t-body min-w-0 flex-1 truncate font-mono text-[13px]">{t.name}</span>
                 <span className="tabular t-caption shrink-0 text-[var(--ink-tertiary)]">
                   {formatBytes(t.bytes)}
                 </span>
-              </div>
+              </AdminRow>
             ))}
           </div>
         </Section>
@@ -182,17 +183,17 @@ export default async function AdminStoragePage() {
         ) : (
           <div className="inset-group">
             {s.archives.map((f) => (
-              <div key={f.name} className="inset-row flex items-center gap-2 px-4 py-2.5">
+              <AdminRow key={f.name}>
                 <Archive className="h-3.5 w-3.5 shrink-0 text-[var(--ink-quaternary)]" strokeWidth={2} aria-hidden />
                 <span className="t-body min-w-0 flex-1 truncate font-mono text-[13px]">{f.name}</span>
                 <span className="tabular t-caption shrink-0 text-[var(--ink-tertiary)]">
                   {formatBytes(f.bytes)} · {relativeTime(f.modifiedAt)}
                 </span>
-              </div>
+              </AdminRow>
             ))}
           </div>
         )}
-        <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+        <AdminNote>
           一行一条的 gzip NDJSON，<code className="font-mono">zcat 文件 | grep 关键词</code>
           就能查 —— 出事的时候能用最土的工具打开，比格式漂亮重要。
           {s.fullSince !== null && (
@@ -202,7 +203,7 @@ export default async function AdminStoragePage() {
               只在这些文件里。
             </>
           )}
-        </p>
+        </AdminNote>
       </Section>
 
       {tasks.length > 0 && (
@@ -211,7 +212,7 @@ export default async function AdminStoragePage() {
             {tasks.map((t) => {
               const result = t.result as { retiered?: number; unindexed?: number; dropped?: number; skipped?: string } | null;
               return (
-                <div key={t.id} className="inset-row px-4 py-2.5">
+                <AdminRow key={t.id} align="start" className="flex-col">
                   <p className="t-body flex items-center gap-1.5">
                     <span className="t-caption2 text-[var(--ink-quaternary)]">{t.status}</span>
                     <span className="t-caption min-w-0 flex-1 truncate text-[var(--ink-secondary)]">
@@ -226,7 +227,7 @@ export default async function AdminStoragePage() {
                   {result?.skipped && (
                     <p className="t-caption2 mt-0.5 text-[var(--ink-tertiary)]">{result.skipped}</p>
                   )}
-                </div>
+                </AdminRow>
               );
             })}
           </div>

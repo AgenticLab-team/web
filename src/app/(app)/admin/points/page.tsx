@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Callout, Card, Empty, PageNote, Section, StatTile } from "@/components/ui/primitives";
+import { AdminMeter, adminButtonClass } from "@/components/admin/ui";
+import { Callout, Card, PageNote, Section, StatTile } from "@/components/ui/primitives";
 import { dailyCapPressure, economySnapshot, topEarners } from "@/lib/admin/economy";
 import { requireAdmin } from "@/lib/admin/guard";
 import { resolveDisplayName } from "@/lib/users/display-name";
@@ -53,10 +54,7 @@ export default async function AdminPointsPage() {
         subtitle={`近 ${snap.windowDays} 天`}
         action={
           /* 这一页是体检，流水页才是逐笔查账 —— 两件事，给一条明路过去 */
-          <Link
-            href="/admin/points/ledger"
-            className="inline-flex items-center t-footnote shrink-0 rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 font-medium transition active:scale-[0.97]"
-          >
+          <Link href="/admin/points/ledger" className={adminButtonClass({ tone: "neutral" })}>
             看流水
           </Link>
         }
@@ -143,8 +141,17 @@ export default async function AdminPointsPage() {
 
       <Section title={`每日发行与回收（近 ${snap.windowDays} 天）`}>
         <Card>
+          {/*
+            * 卡片里面用的是「一行灰字」，不是 Empty。
+            *
+            * Empty 自带 inset-group（也就是 surface 底）—— 套在同样是
+            * surface 的 Card 里，出来的是白底叠白底加一圈内边距，
+            * 看着像一个渲染坏掉的方块。这一页上原来有三处这种嵌套。
+            */}
           {snap.daily.length === 0 ? (
-            <Empty title="还没有流水" />
+            <p className="t-subhead py-6 text-center text-[var(--ink-tertiary)]">
+              这段时间一笔流水都没有
+            </p>
           ) : (
             <div className="flex h-24 items-end gap-0.5" role="img" aria-label="每日发行与回收趋势">
               {snap.daily.map((d) => (
@@ -167,7 +174,9 @@ export default async function AdminPointsPage() {
       <Section title="发行最多的人">
         <Card>
           {earners.length === 0 ? (
-            <Empty title="还没有数据" />
+            <p className="t-subhead py-6 text-center text-[var(--ink-tertiary)]">
+              近 30 天还没有人拿到过积分
+            </p>
           ) : (
             <ul className="space-y-1.5">
               {earners.map((e) => (
@@ -204,24 +213,20 @@ function Bars({
   tone: string;
   empty: string;
 }) {
-  if (rows.length === 0) return <Empty title={empty} />;
+  // 同样在 Card 里，所以不能用自带 surface 底的 Empty
+  if (rows.length === 0)
+    return <p className="t-subhead py-4 text-center text-[var(--ink-tertiary)]">{empty}</p>;
 
   return (
     <ul className="space-y-2">
       {rows.map((row) => (
         <li key={row.key}>
-          <div className="mb-1 flex items-baseline justify-between">
-            <span className="t-caption text-[var(--ink-secondary)]">{row.label}</span>
-            <span className="tabular t-caption text-[var(--ink-tertiary)]">
-              {row.amount.toLocaleString("zh-CN")} · {Math.round(row.share * 100)}%
-            </span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-[var(--fill)]">
-            <div
-              className="h-full rounded-full"
-              style={{ width: `${row.share * 100}%`, background: tone }}
-            />
-          </div>
+          <AdminMeter
+            label={row.label}
+            value={row.share}
+            hint={row.amount.toLocaleString("zh-CN")}
+            tone={tone}
+          />
         </li>
       ))}
     </ul>

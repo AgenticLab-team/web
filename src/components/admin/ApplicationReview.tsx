@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { AdminButton } from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fulfillApplication, reviewApplication } from "@/lib/activities/actions";
 import type { ApplicationRow } from "@/lib/activities/queries";
@@ -43,13 +44,15 @@ export function ApplicationReview({ app }: { app: ApplicationRow }) {
     <div className="mt-2 space-y-2">
       {app.eligibilitySnapshot && (
         <>
-          <button
-            type="button"
+          <AdminButton
+            tone="quiet"
+            size="sm"
+            aria-expanded={showSnapshot}
             onClick={() => setShowSnapshot(!showSnapshot)}
-            className="t-caption2 text-[var(--accent)]"
+            className="-ml-2.5 text-[var(--accent)]"
           >
             {showSnapshot ? "收起" : "查看申请时的资格快照"}
-          </button>
+          </AdminButton>
           {showSnapshot && (
             <div className="rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2">
               <p className="t-caption2 mb-1 text-[var(--ink-quaternary)]">
@@ -128,13 +131,8 @@ function ActionButton({
 }) {
   // 通过与驳回同样重 —— 把通过做成主色等于在界面上鼓励点它
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 font-medium text-[var(--ink)] disabled:opacity-40"
-    >
+    <AdminButton tone="neutral" className="flex-1" disabled={disabled} onClick={onClick}>
       {children}
-    </button>
+    </AdminButton>
   );
 }

@@ -27,6 +27,15 @@ export const PROTECTED_PREFIXES = [
   "/members",
   "/links",
   "/radar",
+  /*
+   * 项目目录。
+   *
+   * 它跟着 `/members` 走，而不是跟着论坛走：那一页把「站内某个人」
+   * 和「某个 GitHub 账号」摆在同一行上 —— 仓库本来就在 GitHub 上
+   * 公开着，但**这条对应关系是这个站拼出来的**，
+   * 它不该出现在访客和搜索引擎面前。
+   */
+  "/projects",
   "/shop",
   "/search",
   /*

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { AdminActions, AdminButton, AdminChip, adminFieldClass } from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import { updateGroupConfig } from "@/lib/admin/group-actions";
 import type { GroupRow } from "@/lib/admin/groups";
@@ -62,13 +63,9 @@ export function GroupConfig({ group }: { group: GroupRow }) {
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="t-footnote shrink-0 rounded-[var(--radius-pill)] bg-[var(--fill)] px-3 py-1.5 font-medium text-[var(--ink-secondary)]"
-      >
+      <AdminChip aria-expanded={false} onClick={() => setOpen(true)}>
         配置
-      </button>
+      </AdminChip>
     );
   }
 
@@ -85,7 +82,7 @@ export function GroupConfig({ group }: { group: GroupRow }) {
             value={qualityMin}
             onChange={(e) => setQualityMin(e.target.value)}
             placeholder={String(group.effectiveQualityMin)}
-            className={`tabular ${inputClass}`}
+            className={`tabular ${adminFieldClass}`}
           />
         </label>
 
@@ -99,7 +96,7 @@ export function GroupConfig({ group }: { group: GroupRow }) {
             value={retentionDays}
             onChange={(e) => setRetentionDays(e.target.value)}
             placeholder="不限"
-            className={`tabular ${inputClass}`}
+            className={`tabular ${adminFieldClass}`}
           />
         </label>
       </div>
@@ -148,26 +145,23 @@ export function GroupConfig({ group }: { group: GroupRow }) {
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         placeholder="理由（必填，会记入审计日志）"
-        className={inputClass}
+        className={adminFieldClass}
       />
 
-      <div className="flex gap-2">
-        <button
-          type="button"
+      <AdminActions>
+        <AdminButton
+          tone="primary"
+          className="flex-1"
           disabled={pending || !reason.trim()}
+          title={reason.trim() ? undefined : "先写一句理由"}
           onClick={save}
-          className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
         >
           保存
-        </button>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="t-subhead rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 text-[var(--ink-secondary)]"
-        >
+        </AdminButton>
+        <AdminButton tone="quiet" onClick={() => setOpen(false)}>
           取消
-        </button>
-      </div>
+        </AdminButton>
+      </AdminActions>
     </div>
   );
 }
@@ -198,6 +192,3 @@ function Toggle({
     </label>
   );
 }
-
-const inputClass =
-  "t-subhead w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]";

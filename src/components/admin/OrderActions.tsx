@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { AdminActions, AdminButton, AdminChip, adminFieldClass } from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import { refund, updateOrderStatus } from "@/lib/shop/actions";
 import type { OrderStatus } from "@/lib/shop/types";
@@ -52,13 +53,9 @@ export function OrderActions({ id, status }: { id: string; status: OrderStatus }
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="t-caption mt-2 rounded-[var(--radius-pill)] bg-[var(--fill)] px-2.5 py-1 text-[var(--ink-secondary)]"
-      >
-        处理
-      </button>
+      <AdminChip className="mt-2" aria-expanded={false} onClick={() => setOpen(true)}>
+        处理这笔订单
+      </AdminChip>
     );
   }
 
@@ -68,7 +65,7 @@ export function OrderActions({ id, status }: { id: string; status: OrderStatus }
         value={note}
         onChange={(e) => setNote(e.target.value)}
         placeholder="处理说明（会原样发给用户）"
-        className={inputClass}
+        className={adminFieldClass}
       />
 
       {status === "pending" && (
@@ -76,42 +73,43 @@ export function OrderActions({ id, status }: { id: string; status: OrderStatus }
           value={tracking}
           onChange={(e) => setTracking(e.target.value)}
           placeholder="运单号（发货时填）"
-          className={`font-mono ${inputClass}`}
+          className={`font-mono ${adminFieldClass}`}
         />
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <AdminActions>
         {next.map((n) => (
-          <button
+          <AdminButton
             key={n.to}
-            type="button"
+            tone="neutral"
+            className="flex-1"
             disabled={pending || !note.trim()}
+            title={note.trim() ? undefined : "先写一句说明 —— 它会原样发给用户"}
             onClick={() =>
               run(() =>
                 updateOrderStatus({ id, status: n.to, note, trackingNo: tracking || undefined }),
               )
             }
-            className="t-subhead flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-4 py-2 font-medium disabled:opacity-40"
           >
             {n.label}
-          </button>
+          </AdminButton>
         ))}
 
+        {/* 退款是可撤销的（会冲正回去），所以是 dangerSoft 不是实心红 */}
         {canRefund && (
-          <button
-            type="button"
+          <AdminButton
+            tone="dangerSoft"
             disabled={pending || !note.trim()}
             onClick={() => run(() => refund({ id, reason: note }))}
-            className="t-subhead rounded-[var(--radius-control)] px-4 py-2 font-medium disabled:opacity-40"
-            style={{ background: "color-mix(in srgb, var(--danger) 12%, transparent)", color: "var(--danger)" }}
           >
             退款
-          </button>
+          </AdminButton>
         )}
-      </div>
+
+        <AdminButton tone="quiet" onClick={() => setOpen(false)}>
+          收起
+        </AdminButton>
+      </AdminActions>
     </div>
   );
 }
-
-const inputClass =
-  "t-subhead w-full rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]";

@@ -146,8 +146,19 @@ describe("前台导航的图标", () => {
       new URL("../src/components/shell/icons.tsx", import.meta.url),
       "utf8",
     );
+    /*
+     * 字符类里**必须带数字**。
+     *
+     * 原来写的是 `[a-z-]+`，于是 `folder-git-2` 这种带数字的名字
+     * 整个匹配不上 —— 它明明已经注册了，守卫却报「没注册」。
+     *
+     * 这和部署脚本那次 chunk 正则漏掉连字符是同一个病：
+     * **正则漏掉一类命名，守卫照常在跑，只是看不见那一类**。
+     * 那次是漏报（守卫变绿），这次是误报（守卫变红）——
+     * 误报还算走运，漏报才是真的会让人赔进去。
+     */
     const registered = new Set(
-      [...source.matchAll(/^\s+"?([a-z-]+)"?:\s+[A-Z]\w+,$/gm)].map((m) => m[1]),
+      [...source.matchAll(/^\s+"?([a-z0-9-]+)"?:\s+[A-Z]\w+,$/gm)].map((m) => m[1]),
     );
 
     for (const item of ALL_NAV_ITEMS) {

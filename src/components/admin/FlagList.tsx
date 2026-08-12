@@ -4,6 +4,14 @@ import { AlertTriangle, Percent, ShieldCheck, Users, Wrench } from "lucide-react
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import {
+  AdminButton,
+  AdminChip,
+  AdminNote,
+  AdminRow,
+  AdminTag,
+  adminFieldClass,
+} from "@/components/admin/ui";
 import { setFlagEnabled, setFlagRollout } from "@/lib/flags/actions";
 import type { Rollout } from "@/lib/flags/registry";
 
@@ -62,11 +70,11 @@ export function FlagList({ flags }: { flags: FlagView[] }) {
               <Row key={flag.key} flag={flag} />
             ))}
           </div>
-          <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+          <AdminNote>
             这几个开关现在<b className="font-medium text-[var(--ink-secondary)]">不管任何事</b>
             —— 对应的功能还没写。留着是为了做的时候有个现成的位置，
             而不是让人以为按一下会有变化。
-          </p>
+          </AdminNote>
         </section>
       )}
     </div>
@@ -92,17 +100,17 @@ function Row({ flag }: { flag: FlagView }) {
   const planned = flag.status === "planned";
 
   return (
-    <div className="inset-row px-4 py-3.5">
-      <div className="flex items-start gap-3">
+    <AdminRow align="start" className="flex-col">
+      <div className="flex w-full items-start gap-3">
         <div className="min-w-0 flex-1">
           <p className="t-body flex flex-wrap items-center gap-1.5 font-medium">
             {flag.label}
             <span className="t-caption2 font-mono text-[var(--ink-quaternary)]">{flag.key}</span>
             {planned && (
-              <span className="t-caption2 inline-flex items-center gap-1 rounded-[var(--radius-pill)] bg-[var(--fill)] px-1.5 py-0.5 text-[var(--ink-tertiary)]">
+              <AdminTag className="inline-flex items-center gap-1">
                 <Wrench className="h-3 w-3" strokeWidth={2} aria-hidden />
                 还没做
-              </span>
+              </AdminTag>
             )}
             {flag.missing && (
               /*
@@ -124,6 +132,19 @@ function Row({ flag }: { flag: FlagView }) {
           * 关的时候是灰的、开的时候是品牌绿 —— 一列扫下来
           * 「现在有什么是关着的」应该一眼看得到，那是这一页最常被问的问题。
           */}
+        {/*
+          * 开关本体和 ModuleToggle 用同一套尺寸与动效。
+          *
+          * 原来这里是 `transition-[left]` + 换 left 值 —— 动 left 每帧
+          * 触发布局，正是 globals.css 里 `.switch-knob` 那段注释在说的
+          * 那个病（当时收敛了五处，漏了这一处）。改走 translateX。
+          *
+          * 滑块也从 `bg-white` 换成 `--surface`：暗色下一个纯白的滑块
+          * 亮得像颗灯泡，而它旁边所有东西都是暗的。
+          *
+          * 尺寸从 24×40 提到 31×51 —— 和站里其它开关一致，
+          * 也正好过 44px 那条线（宽度够，高度靠行高兜）。
+          */}
         <button
           type="button"
           role="switch"
@@ -131,36 +152,40 @@ function Row({ flag }: { flag: FlagView }) {
           aria-label={`${flag.label}：${flag.enabled ? "已开启" : "已关闭"}`}
           disabled={pending}
           onClick={() => run(() => setFlagEnabled(flag.key, !flag.enabled))}
-          className={`relative h-6 w-10 shrink-0 rounded-full transition disabled:opacity-50 ${
+          className={`relative h-[31px] w-[51px] shrink-0 rounded-full transition-colors disabled:opacity-50 ${
             flag.enabled ? "bg-[var(--accent)]" : "bg-[var(--fill-strong)]"
           }`}
         >
           <span
-            className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-[left] ${
-              flag.enabled ? "left-[1.125rem]" : "left-0.5"
-            }`}
+            className="switch-knob absolute left-[2px] top-[2px] h-[27px] w-[27px] rounded-full bg-[var(--surface)] shadow-sm"
+            style={{ transform: flag.enabled ? "translateX(20px)" : "translateX(0)" }}
           />
         </button>
       </div>
 
       {flag.enabled && !planned && (
-        <div className="mt-2">
-          <button
-            type="button"
+        <div className="w-full">
+          <AdminButton
+            tone="quiet"
+            size="sm"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
-            className="t-caption inline-flex items-center gap-1 text-[var(--ink-tertiary)] transition hover:text-[var(--ink-secondary)]"
+            className="-ml-2.5"
           >
             {ROLLOUT_ICON[flag.rollout]}
             {describeRollout(flag.rollout, flag.rolloutValue)}
-          </button>
+          </AdminButton>
 
           {open && <RolloutEditor flag={flag} onSave={run} pending={pending} />}
         </div>
       )}
 
-      {error && <p className="t-caption mt-1.5 text-[var(--danger)]">{error}</p>}
-    </div>
+      {error && (
+        <p role="alert" className="t-caption w-full text-[var(--danger)]">
+          {error}
+        </p>
+      )}
+    </AdminRow>
   );
 }
 
@@ -210,27 +235,20 @@ function RolloutEditor({
     <div className="mt-2 rounded-[var(--radius-control)] bg-[var(--fill)] p-3">
       <div className="flex flex-wrap gap-1.5">
         {(["all", "role", "percent", "user"] as const).map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            onClick={() => setRollout(mode)}
-            className={`t-caption rounded-[var(--radius-pill)] px-2.5 py-1 font-medium transition ${
-              rollout === mode
-                ? "bg-[var(--ink)] text-[var(--canvas)]"
-                : "bg-[var(--surface)] text-[var(--ink-secondary)]"
-            }`}
-          >
+          <AdminChip key={mode} active={rollout === mode} onClick={() => setRollout(mode)}>
             {{ all: "所有人", role: "按身份", percent: "按比例", user: "指定的人" }[mode]}
-          </button>
+          </AdminChip>
         ))}
       </div>
 
+      {/* 输入框走全站同一套长相 —— 这两个原来是「1px 边框 + canvas 底」的
+          第二套写法，和后台其它二十来个 fill 底的框不是一个东西 */}
       {rollout === "role" && (
         <input
           value={roles}
           onChange={(e) => setRoles(e.target.value)}
           placeholder="身份组 key，用逗号分隔，例如 owner,admin"
-          className="t-caption mt-2 w-full rounded-[var(--radius-control)] border border-[var(--separator)] bg-[var(--canvas)] px-2.5 py-2 outline-none focus:border-[var(--accent)]"
+          className={`mt-2 ${adminFieldClass}`}
         />
       )}
       {rollout === "user" && (
@@ -238,7 +256,7 @@ function RolloutEditor({
           value={users}
           onChange={(e) => setUsers(e.target.value)}
           placeholder="账号 id，用逗号分隔"
-          className="t-caption mt-2 w-full rounded-[var(--radius-control)] border border-[var(--separator)] bg-[var(--canvas)] px-2.5 py-2 outline-none focus:border-[var(--accent)]"
+          className={`mt-2 ${adminFieldClass}`}
         />
       )}
       {rollout === "percent" && (
@@ -265,9 +283,10 @@ function RolloutEditor({
             : "没登录的人一律不在范围里。"}
       </p>
 
-      <button
-        type="button"
+      <AdminButton
+        tone="primary"
         disabled={pending}
+        className="mt-2.5"
         onClick={() =>
           onSave(() =>
             setFlagRollout(
@@ -283,10 +302,9 @@ function RolloutEditor({
             ),
           )
         }
-        className="t-caption mt-2.5 rounded-[var(--radius-control)] bg-[var(--accent)] px-3 py-1.5 font-medium text-[var(--accent-ink)] transition active:scale-95 disabled:opacity-50"
       >
-        存下
-      </button>
+        保存放量范围
+      </AdminButton>
     </div>
   );
 }
@@ -296,7 +314,10 @@ export function OrphanFlags({ keys }: { keys: string[] }) {
   if (keys.length === 0) return null;
 
   return (
-    <div className="mt-4 rounded-[var(--radius-card)] border border-[var(--warning)] bg-[color-mix(in_srgb,var(--warning)_8%,transparent)] p-3.5">
+    <div
+      className="mt-4 rounded-[var(--radius-card)] p-4 hairline"
+      style={{ background: "color-mix(in srgb, var(--warning) 9%, var(--surface))" }}
+    >
       <p className="t-subhead flex items-center gap-1.5 font-medium">
         <AlertTriangle className="h-4 w-4 text-[var(--warning)]" strokeWidth={2.2} aria-hidden />
         库里有 {keys.length} 个清单外的开关

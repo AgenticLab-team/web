@@ -4,6 +4,7 @@ import { AlertTriangle, Calculator, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { AdminActions, AdminButton, AdminFigure, AdminPanel } from "@/components/admin/ui";
 import { cancelRecount, executeRecount, previewRecount } from "@/lib/points/recount-actions";
 import type { RecountPlan } from "@/lib/points/recount-rules";
 
@@ -39,7 +40,7 @@ export function RecountPanel({ pending: pendingTask }: { pending: { id: string; 
     });
 
   return (
-    <div className="inset-group p-4">
+    <AdminPanel>
       <p className="t-subhead flex items-center gap-1.5 font-medium">
         <Calculator className="h-4 w-4 text-[var(--ink-tertiary)]" strokeWidth={2} aria-hidden />
         按流水重算余额
@@ -50,8 +51,9 @@ export function RecountPanel({ pending: pendingTask }: { pending: { id: string; 
       </p>
 
       {!taskId && !done && (
-        <button
-          type="button"
+        <AdminButton
+          tone="neutral"
+          className="mt-2.5"
           disabled={busy}
           onClick={() =>
             startTransition(async () => {
@@ -67,10 +69,9 @@ export function RecountPanel({ pending: pendingTask }: { pending: { id: string; 
               setError(null);
             })
           }
-          className="t-caption mt-2.5 rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-1.5 font-medium transition active:scale-95 disabled:opacity-50"
         >
-          先算一遍看看
-        </button>
+          {busy ? "算着…" : "先算一遍看看"}
+        </AdminButton>
       )}
 
       {taskId && !done && (
@@ -79,9 +80,12 @@ export function RecountPanel({ pending: pendingTask }: { pending: { id: string; 
 
           {plan && plan.rows.length > 0 && (
             <div className="mt-2 grid grid-cols-3 gap-2">
-              <Stat label="要改的账号" value={plan.rows.length} />
-              <Stat label="余额净增减" value={`${plan.netDelta > 0 ? "+" : ""}${plan.netDelta}`} />
-              <Stat label="等级会变" value={plan.levelChanges} />
+              <AdminFigure label="要改的账号" value={plan.rows.length} />
+              <AdminFigure
+                label="余额净增减"
+                value={`${plan.netDelta > 0 ? "+" : ""}${plan.netDelta}`}
+              />
+              <AdminFigure label="等级会变" value={plan.levelChanges} />
             </div>
           )}
 
@@ -121,9 +125,14 @@ export function RecountPanel({ pending: pendingTask }: { pending: { id: string; 
             </details>
           )}
 
-          <div className="mt-2.5 flex items-center gap-2">
-            <button
-              type="button"
+          <AdminActions className="mt-2.5">
+            {/*
+              * 重算会改所有人的余额 —— 归 danger，和关模块、批量删帖同一档。
+              * 「动一半以上账号」那种情况上面已经用红字说过了，
+              * 这里的红是给按钮本身的：它按下去就直接落库，没有第三步。
+              */}
+            <AdminButton
+              tone="danger"
               disabled={busy || (plan?.rows.length ?? 0) === 0}
               onClick={() =>
                 startTransition(async () => {
@@ -137,12 +146,11 @@ export function RecountPanel({ pending: pendingTask }: { pending: { id: string; 
                   }
                 })
               }
-              className="t-caption rounded-[var(--radius-control)] bg-[var(--accent)] px-3 py-1.5 font-medium text-[var(--accent-ink)] transition active:scale-95 disabled:opacity-40"
             >
-              执行
-            </button>
-            <button
-              type="button"
+              {plan && plan.rows.length > 0 ? `执行（改 ${plan.rows.length} 个账号）` : "执行"}
+            </AdminButton>
+            <AdminButton
+              tone="quiet"
               disabled={busy}
               onClick={() =>
                 run(async () => {
@@ -154,11 +162,10 @@ export function RecountPanel({ pending: pendingTask }: { pending: { id: string; 
                   return r;
                 })
               }
-              className="t-caption px-2 py-1.5 text-[var(--ink-tertiary)]"
             >
               算了
-            </button>
-          </div>
+            </AdminButton>
+          </AdminActions>
 
           {/*
             * 执行时会**重新算一遍**，不吃预览那份 ——
@@ -172,22 +179,17 @@ export function RecountPanel({ pending: pendingTask }: { pending: { id: string; 
       )}
 
       {done && (
-        <p className="t-caption mt-2.5 flex items-center gap-1.5 text-[var(--success)]">
+        <p role="status" className="t-caption mt-2.5 flex items-center gap-1.5 text-[var(--success)]">
           <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
           {note ?? "重算完成"}
         </p>
       )}
 
-      {error && <p className="t-caption mt-2 text-[var(--danger)]">{error}</p>}
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-[var(--radius-control)] bg-[var(--surface)] px-2.5 py-2">
-      <p className="t-caption2 text-[var(--ink-tertiary)]">{label}</p>
-      <p className="tabular t-headline mt-0.5">{value}</p>
-    </div>
+      {error && (
+        <p role="alert" className="t-caption mt-2 text-[var(--danger)]">
+          {error}
+        </p>
+      )}
+    </AdminPanel>
   );
 }

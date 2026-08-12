@@ -111,6 +111,8 @@ export const config = {
     "/members/:path*",
     "/links/:path*",
     "/radar/:path*",
+    "/projects/:path*",
+    "/projects",
     "/shop/:path*",
     "/search/:path*",
     "/archive/:path*",

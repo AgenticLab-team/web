@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { AdminTag, adminButtonClass } from "@/components/admin/ui";
 import { ActivityComposer, ActivityStatusActions } from "@/components/admin/ActivityComposer";
 import { ApplicationReview } from "@/components/admin/ApplicationReview";
 import { BulkFulfillPanel, RegistrarExport } from "@/components/admin/BulkDomainOps";
@@ -69,15 +70,7 @@ export default async function AdminActivitiesPage() {
             <Section key={activity.id} title={activity.title}>
               <Card className="space-y-3">
                 <header className="flex flex-wrap items-center gap-1.5">
-                  <span
-                    className="t-caption2 rounded-[var(--radius-pill)] px-1.5 py-0.5 font-medium"
-                    style={{
-                      background: `color-mix(in srgb, ${STATUS_COLORS[activity.status]} 15%, transparent)`,
-                      color: STATUS_COLORS[activity.status],
-                    }}
-                  >
-                    {activity.statusLabel}
-                  </span>
+                  <AdminTag color={STATUS_COLORS[activity.status]}>{activity.statusLabel}</AdminTag>
                   <span className="t-caption text-[var(--ink-tertiary)]">
                     {activity.moduleLabel}
                     {activity.quotaTotal !== null &&
@@ -221,11 +214,12 @@ function DomainCsvDownload({ id, counts }: { id: string; counts: Record<ExportSc
             download
             // 空的那一档也留着但点不动：藏起来的话人会以为功能没了
             aria-disabled={counts[scope] === 0}
-            className={`inline-flex items-center t-caption rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-1.5 font-medium ${
-              counts[scope] === 0
-                ? "pointer-events-none text-[var(--ink-quaternary)]"
-                : "text-[var(--accent)]"
-            }`}
+            className={adminButtonClass({
+              tone: "neutral",
+              size: "sm",
+              // 空的那一档留着但点不动：藏起来的话人会以为功能没了
+              className: counts[scope] === 0 ? "pointer-events-none opacity-40" : "",
+            })}
           >
             {label}（{counts[scope]}）
           </a>

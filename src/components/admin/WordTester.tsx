@@ -2,6 +2,13 @@
 
 import { useState, useTransition } from "react";
 
+import {
+  AdminButton,
+  AdminNote,
+  AdminPanel,
+  AdminPanelLabel,
+  adminFieldClass,
+} from "@/components/admin/ui";
 import { previewScan } from "@/lib/admin/word-actions";
 import { kindLabel, type ScanResult } from "@/lib/moderation/words";
 
@@ -36,29 +43,26 @@ export function WordTester() {
   };
 
   return (
-    <div className="space-y-2.5 rounded-[var(--radius-card)] bg-[var(--surface)] p-4 hairline">
-      <p className="t-caption2 font-medium uppercase tracking-[0.06em] text-[var(--ink-quaternary)]">
-        拿真文本试一下
-      </p>
+    <AdminPanel className="space-y-2.5">
+      <AdminPanelLabel>拿真文本试一下</AdminPanelLabel>
 
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={3}
         placeholder="粘一段群聊记录或帖子进来，看看词库会命中什么"
-        className="t-subhead w-full resize-none rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none placeholder:text-[var(--ink-quaternary)]"
+        className={`resize-none ${adminFieldClass}`}
       />
 
-      <button
-        type="button"
-        disabled={pending || !text.trim()}
-        onClick={run}
-        className="t-subhead w-full rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-ink)] disabled:opacity-40"
-      >
-        {pending ? "扫描中…" : "扫描"}
-      </button>
+      <AdminButton tone="primary" block disabled={pending || !text.trim()} onClick={run}>
+        {pending ? "扫描中…" : "扫一遍"}
+      </AdminButton>
 
-      {error && <p className="t-caption text-[var(--danger)]">{error}</p>}
+      {error && (
+        <p role="alert" className="t-caption text-[var(--danger)]">
+          {error}
+        </p>
+      )}
 
       {result && (
         <div className="space-y-2">
@@ -92,11 +96,11 @@ export function WordTester() {
         </div>
       )}
 
-      <p className="t-caption leading-relaxed text-[var(--ink-tertiary)]">
+      <AdminNote className="px-0">
         预览<strong>不计入命中次数</strong> —— 试几下就把统计打脏的话，
         「命中特别多说明是误伤」这个判断就失真了。
-      </p>
-    </div>
+      </AdminNote>
+    </AdminPanel>
   );
 }
 

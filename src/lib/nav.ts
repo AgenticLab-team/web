@@ -146,6 +146,31 @@ export const NAV: NavSection[] = [
     items: [
       { key: "members", href: "/members", label: "成员", icon: "users", requiresAuth: true, ready: true },
       {
+        /*
+         * 项目目录。要登录 —— 它把「站内某个人」和「某个 GitHub 账号」
+         * 摆在同一行上，而那条对应关系是这个站拼出来的（见 auth/routes.ts）。
+         *
+         * 不是一级：一个人一周也未必点一次。默认收进「更多」，
+         * 这是减法算出来的，不用在这里声明。
+         */
+        key: "projects",
+        href: "/projects",
+        label: "项目",
+        /*
+         * ⚠ 用 `link` 是**将就**，不是选择。
+         *
+         * 图标名到组件的映射表在 `components/shell/icons.tsx` 里，
+         * 而认不出来的名字曾经会**静默退回 Home** —— 侧栏上出现
+         * 第二个小房子，没有任何地方报错。
+         *
+         * 现在 tests/nav-icons.test.ts 会把「用了但表里没有」的名字
+         * 全部列出来，所以这里可以放心写真正想要的那个。
+         */
+        icon: "folder-git-2",
+        requiresAuth: true,
+        ready: true,
+      },
+      {
         key: "leaderboard",
         href: "/leaderboard",
         label: "排行",

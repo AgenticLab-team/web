@@ -133,8 +133,21 @@ describe("问到了", () => {
     assert.equal(rowOf(id).factTitle, null);
   });
 
-  it("commit 链接不去问 —— 问一趟拿不回更多", async () => {
-    addLink(`https://github.com/a/b/commit/${"0".repeat(40)}`);
+  it("commit 链接现在要问 —— message 是链接上没有的那句话", async () => {
+    const id = addLink(`https://github.com/a/b/commit/${"0".repeat(40)}`);
+    stub(async () => ({ commit: { message: "修好了那个空指针\n\n详细说明" } }));
+    await run();
+    assert.equal(rowOf(id).factSummary, "修好了那个空指针");
+  });
+
+  it("**代码链接这边不问** —— 它的产物是一个代码块，资源库那一行摆不下", async () => {
+    /*
+     * 两条路要的东西不一样：帖子底下的卡片摆得下一个代码块，
+     * 资源库的一行摆不下。共用一个判定的话，这边会去取一遍代码、
+     * 然后发现没地方放 —— 而「没能用的字段」是按**故障**记的，
+     * 于是每一轮都重问同一条链接，报告里却一切正常。
+     */
+    addLink(`https://github.com/a/b/blob/${"0".repeat(40)}/x.ts#L1-L2`);
     const calls: string[] = [];
     stub(async (p) => {
       calls.push(p);

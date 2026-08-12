@@ -164,7 +164,7 @@ export default async function LinksPage({
                 {result.items.map((item) => (
                   <Card as="article" key={item.id}>
                     <div className="flex gap-2.5">
-                      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--fill)]">
+                      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-chip)] bg-[var(--fill)]">
                         <Link2 className="h-4 w-4 text-[var(--ink-tertiary)]" strokeWidth={2} aria-hidden />
                       </span>
 

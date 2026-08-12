@@ -4,6 +4,14 @@ import { AlertTriangle, Plus, Trash2, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import {
+  AdminActions,
+  AdminButton,
+  AdminNote,
+  AdminRow,
+  AdminTag,
+  adminFieldClass,
+} from "@/components/admin/ui";
 import { createRole, deleteRole, updateRole } from "@/lib/rbac/role-actions";
 import { MAX_ROLE_NAME } from "@/lib/rbac/role-rules";
 
@@ -56,14 +64,15 @@ export function RoleEditor({ roles }: { roles: RoleView[] }) {
       <section>
         <div className="mb-2 flex items-end justify-between px-1">
           <h2 className="t-group-label">自定义身份组（{custom.length}）</h2>
-          <button
-            type="button"
+          <AdminButton
+            tone="neutral"
+            size="sm"
+            aria-expanded={creating}
             onClick={() => setCreating((v) => !v)}
-            className="t-caption inline-flex items-center gap-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-2.5 py-1.5 font-medium transition active:scale-95"
           >
             <Plus className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
             新建
-          </button>
+          </AdminButton>
         </div>
 
         {creating && <CreateForm onDone={() => setCreating(false)} />}
@@ -91,10 +100,10 @@ export function RoleEditor({ roles }: { roles: RoleView[] }) {
             <Row key={role.id} role={role} />
           ))}
         </div>
-        <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+        <AdminNote>
           内置组只能改外观。key 一改，按 key 判「是不是管理员」的地方会全部落空 ——
           一次改名会把所有管理员关在门外，包括改名的那个人。
-        </p>
+        </AdminNote>
       </section>
     </div>
   );
@@ -153,22 +162,17 @@ function Row({ role }: { role: RoleView }) {
   };
 
   return (
-    <div className="inset-row px-4 py-3">
+    <AdminRow align="start" className="flex-col">
+      {/* 整行可点，min-h-11 保证手机上落得下一根手指 */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center gap-2.5 text-left"
+        className="flex min-h-11 w-full flex-wrap items-center gap-x-2.5 gap-y-1 text-left"
       >
-        <span
-          className="t-caption shrink-0 rounded-[var(--radius-pill)] px-2 py-0.5 font-medium"
-          style={{
-            background: `color-mix(in srgb, ${role.color ?? "var(--ink)"} 14%, transparent)`,
-            color: role.color ?? "var(--ink-secondary)",
-          }}
-        >
+        <AdminTag color={role.color ?? undefined} className="px-2 py-0.5">
           {role.name}
-        </span>
+        </AdminTag>
         <span className="t-caption2 font-mono text-[var(--ink-quaternary)]">{role.key}</span>
 
         <span className="t-caption2 inline-flex items-center gap-1 text-[var(--ink-tertiary)]">
@@ -178,32 +182,28 @@ function Row({ role }: { role: RoleView }) {
           {role.autoHolders > 0 && `（${role.autoHolders} 自动）`}
         </span>
 
-        {role.autoGrantRule != null && (
-          <span className="t-caption2 rounded-[var(--radius-pill)] bg-[var(--accent-soft)] px-1.5 py-0.5 text-[var(--accent)]">
-            自动发
-          </span>
-        )}
+        {role.autoGrantRule != null && <AdminTag color="var(--accent)">自动发</AdminTag>}
 
         <span className="flex-1" />
         <span className="tabular t-caption2 text-[var(--ink-quaternary)]">优先级 {role.priority}</span>
       </button>
 
       {open && (
-        <div className="mt-3 space-y-2.5 rounded-[var(--radius-control)] bg-[var(--fill)] p-3">
+        <div className="animate-rise mt-1 w-full space-y-2.5 rounded-[var(--radius-control)] bg-[var(--fill)] p-3">
           <div className="flex flex-wrap items-center gap-2">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={MAX_ROLE_NAME}
               aria-label="名字"
-              className="t-body w-28 rounded-[var(--radius-control)] border border-[var(--separator)] bg-[var(--canvas)] px-2 py-1.5 outline-none focus:border-[var(--accent)]"
+              className={`w-28 ${adminFieldClass}`}
             />
             <input
               type="color"
               value={color}
               onChange={(e) => setColor(e.target.value)}
               aria-label="颜色"
-              className="h-8 w-12 rounded-[var(--radius-control)] border border-[var(--separator)] bg-[var(--canvas)]"
+              className="h-11 w-14 shrink-0 rounded-[var(--radius-control)] bg-[var(--fill)] p-1"
             />
             <label className="t-caption flex items-center gap-1 text-[var(--ink-tertiary)]">
               优先级
@@ -213,7 +213,7 @@ function Row({ role }: { role: RoleView }) {
                 max={1000}
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
-                className="tabular t-body w-20 rounded-[var(--radius-control)] border border-[var(--separator)] bg-[var(--canvas)] px-2 py-1.5 outline-none focus:border-[var(--accent)]"
+                className={`tabular w-20 ${adminFieldClass}`}
               />
             </label>
           </div>
@@ -228,7 +228,7 @@ function Row({ role }: { role: RoleView }) {
                   value={maxHolders}
                   onChange={(e) => setMaxHolders(e.target.value)}
                   placeholder="不限"
-                  className="tabular t-body w-24 rounded-[var(--radius-control)] border border-[var(--separator)] bg-[var(--canvas)] px-2 py-1.5 outline-none focus:border-[var(--accent)]"
+                  className={`tabular w-24 ${adminFieldClass}`}
                 />
                 {role.seatsLeft !== null && (
                   <span className="t-caption2">还剩 {role.seatsLeft} 个</span>
@@ -244,13 +244,14 @@ function Row({ role }: { role: RoleView }) {
                       onChange={(e) => setAutoRule(e.target.value)}
                       rows={4}
                       placeholder={'留空 = 不自动发。例：\n{"metric":"points_total","op":">=","value":1000}'}
-                      className="t-caption2 mt-1 w-full rounded-[var(--radius-control)] border border-[var(--separator)] bg-[var(--canvas)] px-2.5 py-2 font-mono outline-none focus:border-[var(--accent)]"
+                      className={`mt-1 resize-none font-mono ${adminFieldClass}`}
                     />
-                    <label className="t-caption mt-1.5 flex items-center gap-1.5 text-[var(--ink-secondary)]">
+                    <label className="t-caption mt-1.5 flex min-h-11 items-center gap-2 text-[var(--ink-secondary)]">
                       <input
                         type="checkbox"
                         checked={autoRevoke}
                         onChange={(e) => setAutoRevoke(e.target.checked)}
+                        className="h-5 w-5 shrink-0 accent-[var(--accent)]"
                       />
                       不再满足条件时自动收回
                     </label>
@@ -275,32 +276,37 @@ function Row({ role }: { role: RoleView }) {
             </>
           )}
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={save}
-              className="t-caption rounded-[var(--radius-control)] bg-[var(--accent)] px-3 py-1.5 font-medium text-[var(--accent-ink)] transition active:scale-95 disabled:opacity-50"
-            >
+          <AdminActions>
+            <AdminButton tone="primary" disabled={pending} onClick={save}>
               保存
-            </button>
+            </AdminButton>
+            {/* 删身份组会连带收走所有持有者的权限 —— 归 dangerSoft：
+                重建一个同 key 的组能救回来，但持有关系救不回来 */}
             {!role.isSystem && (
-              <button
-                type="button"
+              <AdminButton
+                tone="dangerSoft"
                 disabled={pending}
+                title={
+                  role.holders > 0
+                    ? `还有 ${role.holders} 个人挂着这个组，删掉他们会一起失去它带的权限`
+                    : undefined
+                }
                 onClick={() => run(() => deleteRole(role.id))}
-                className="t-caption inline-flex items-center gap-1 rounded-[var(--radius-control)] px-2.5 py-1.5 text-[var(--ink-tertiary)] transition hover:bg-[var(--surface)] hover:text-[var(--danger)] disabled:opacity-50"
               >
                 <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                删掉
-              </button>
+                {role.holders > 0 ? `删掉（${role.holders} 人受影响）` : "删掉"}
+              </AdminButton>
             )}
-          </div>
+          </AdminActions>
 
-          {error && <p className="t-caption text-[var(--danger)]">{error}</p>}
+          {error && (
+            <p role="alert" className="t-caption text-[var(--danger)]">
+              {error}
+            </p>
+          )}
         </div>
       )}
-    </div>
+    </AdminRow>
   );
 }
 
@@ -319,24 +325,24 @@ function CreateForm({ onDone }: { onDone: () => void }) {
           value={key}
           onChange={(e) => setKey(e.target.value)}
           placeholder="key（小写字母数字下划线）"
-          className="t-body w-52 rounded-[var(--radius-control)] border border-[var(--separator)] bg-[var(--canvas)] px-2.5 py-1.5 font-mono outline-none focus:border-[var(--accent)]"
+          className={`w-52 font-mono ${adminFieldClass}`}
         />
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="显示名"
           maxLength={MAX_ROLE_NAME}
-          className="t-body w-28 rounded-[var(--radius-control)] border border-[var(--separator)] bg-[var(--canvas)] px-2.5 py-1.5 outline-none focus:border-[var(--accent)]"
+          className={`w-28 ${adminFieldClass}`}
         />
         <input
           type="color"
           value={color}
           onChange={(e) => setColor(e.target.value)}
           aria-label="颜色"
-          className="h-8 w-12 rounded-[var(--radius-control)] border border-[var(--separator)] bg-[var(--canvas)]"
+          className="h-11 w-14 shrink-0 rounded-[var(--radius-control)] bg-[var(--fill)] p-1"
         />
-        <button
-          type="button"
+        <AdminButton
+          tone="primary"
           disabled={pending || !key.trim() || !name.trim()}
           onClick={() =>
             startTransition(async () => {
@@ -348,15 +354,18 @@ function CreateForm({ onDone }: { onDone: () => void }) {
               }
             })
           }
-          className="t-caption rounded-[var(--radius-control)] bg-[var(--accent)] px-3 py-1.5 font-medium text-[var(--accent-ink)] transition active:scale-95 disabled:opacity-40"
         >
-          建
-        </button>
+          建这个组
+        </AdminButton>
       </div>
       <p className="t-caption2 text-[var(--ink-tertiary)]">
         新建的组没有任何权限 —— 在下面的权限矩阵里挂上去才生效。
       </p>
-      {error && <p className="t-caption text-[var(--danger)]">{error}</p>}
+      {error && (
+        <p role="alert" className="t-caption text-[var(--danger)]">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

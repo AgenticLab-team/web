@@ -233,13 +233,178 @@ describe("**补缓存：失败怎么记**", () => {
     assert.equal(mentions.unknownRefs(same).length, 1);
   });
 
-  it("commit / 代码链接不问 —— 问一趟拿不回更多", () => {
+  it("commit 要问 —— message 是链接上没有的那句话", () => {
     const sha = "0".repeat(40);
+    assert.equal(mentions.unknownRefs([ref(`https://github.com/a/b/commit/${sha}`)]).length, 1);
+  });
+
+  it("**不带行号的代码链接不问** —— 截前 20 行是替作者选了一段他没选的代码", () => {
+    const sha = "0".repeat(40);
+    assert.deepEqual(mentions.unknownRefs([ref(`https://github.com/a/b/blob/${sha}/x.ts`)]), []);
+    assert.equal(
+      mentions.unknownRefs([ref(`https://github.com/a/b/blob/${sha}/x.ts#L2-L4`)]).length,
+      1,
+    );
+  });
+});
+
+/**
+ * commit 与代码永久链接的展开。
+ *
+ * ═════════════════════════════════════════
+ * 这一块和别的卡片有一个关键不同
+ * ═════════════════════════════════════════
+ *
+ * 它把内容**烤进库里**（高亮好的 HTML）。别的卡片不许这么干，
+ * 因为 `★ 1.2k` 会变；而 sha 指向的代码不可能变 ——
+ * 解析层只认带 40 位 sha 的链接，这一条正是那个限制换来的东西。
+ */
+describe("commit 与代码块展开", () => {
+  const sha = "a".repeat(40);
+  const rows = () => dbm.db.select().from(schema.githubFacts).all();
+  const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64");
+  const file = (text: string) => ({
+    type: "file",
+    encoding: "base64",
+    size: Buffer.byteLength(text),
+    content: b64(text),
+  });
+
+  it("commit 显示的是 message 的第一行", async () => {
+    await mentions.fillMentionFacts([ref(`https://github.com/a/b/commit/${sha}`)], {
+      fetcher: async () => ({ commit: { message: "修好了那个空指针\n\n详细说明……\nSigned-off-by: x" } }),
+    });
+    const [row] = rows();
+    assert.equal(row.kind, "commit");
+    assert.equal(row.title, `a/b@${sha.slice(0, 7)}`);
+    assert.equal(row.summary, "修好了那个空指针");
+    assert.equal(row.body, null);
+  });
+
+  it("**message 读不出来就整条不写** —— 只剩一个 sha 的卡片等于抄了一遍链接", async () => {
+    const r = await mentions.fillMentionFacts([ref(`https://github.com/a/b/commit/${sha}`)], {
+      fetcher: async () => ({ commit: {} }),
+    });
+    assert.equal(r.failed, 1);
+    assert.deepEqual(rows(), []);
+  });
+
+  it("代码链接取到的是**作者圈的那几行**，不是整个文件", async () => {
+    const text = Array.from({ length: 30 }, (_, i) => `line${i + 1}`).join("\n");
+    await mentions.fillMentionFacts([ref(`https://github.com/a/b/blob/${sha}/src/x.ts#L3-L5`)], {
+      fetcher: async () => file(text),
+    });
+    const [row] = rows();
+    assert.equal(row.kind, "code");
+    assert.equal(row.title, "src/x.ts");
+    assert.match(row.summary!, /第 3–5 行/);
+    assert.match(row.body!, /line3/);
+    assert.match(row.body!, /line5/);
+    assert.equal(/line6/.test(row.body!), false, "多给了作者没圈的行");
+    assert.equal(/line2/.test(row.body!), false, "多给了作者没圈的行");
+  });
+
+  it("**超出上限时说出来少给了多少** —— 不说的话读者会照着截断的代码讨论", async () => {
+    const text = Array.from({ length: 300 }, (_, i) => `line${i + 1}`).join("\n");
+    await mentions.fillMentionFacts([ref(`https://github.com/a/b/blob/${sha}/x.ts#L1-L100`)], {
+      fetcher: async () => file(text),
+    });
+    assert.match(rows()[0].summary!, /还有 \d+ 行没展开/);
+  });
+
+  it("**高亮是烤好存进去的** —— 读的时候不再跑一次", async () => {
+    await mentions.fillMentionFacts([ref(`https://github.com/a/b/blob/${sha}/x.ts#L1-L1`)], {
+      fetcher: async () => file("const a = 1;"),
+    });
+    const body = rows()[0].body!;
+    assert.match(body, /<pre/);
+    // 双主题配色真的留下来了 —— 被消毒剥掉的话代码块是没有颜色的
+    assert.match(body, /--shiki-light/);
+  });
+
+  it("代码里的尖括号被转义，不会当成标签", async () => {
+    await mentions.fillMentionFacts([ref(`https://github.com/a/b/blob/${sha}/x.html#L1-L1`)], {
+      fetcher: async () => file("<script>alert(1)</script>"),
+    });
+    const body = rows()[0].body!;
+    assert.equal(/<script/.test(body), false, "脚本标签活着进了库");
+    // 高亮器会把这一行切成好几个 span，所以尖括号和 script 不挨着 ——
+    // 只断言尖括号被转义了，别去对整串
+    assert.match(body, /&lt;/);
+    assert.match(body, /&gt;/);
+  });
+
+  it("**消毒那一步还在** —— 它是纵深防御，行为上看不出来，所以只能钉源码", () => {
+    /*
+     * 上面那条测不到它：高亮器本来就把内容当文本转义，
+     * 所以把 `sanitizeHtml(...)` 整个删掉，那条断言照样是绿的
+     * （试过了）。一条测不出差别的断言比没有断言更糟 ——
+     * 它让人以为这一块有人守着。
+     *
+     * 而这一步该留着：这段 HTML 的原料来自**别人的仓库**，
+     * 比我们自己的输出更没有理由信任；而且「连我们自己生成的 HTML
+     * 也要消毒」是 markdown 那条管线上写着的原则，不给任何东西开口子。
+     *
+     * 还要钉住它走的是**同一个** sanitizeHtml：另写一份白名单的话，
+     * 哪天那边补了一条规则，这边不会跟着补。
+     */
+    const src = readFileSync(new URL("../src/lib/github/code-render.ts", import.meta.url), "utf8");
+    assert.match(src, /import \{ sanitizeHtml \} from "@\/lib\/markdown"/);
+    assert.match(src, /return sanitizeHtml\(/);
+  });
+
+  for (const [what, payload] of [
+    ["目录（回来的是数组不是文件）", { type: "dir", encoding: "base64", size: 1, content: "eA==" }],
+    ["太大的文件", { type: "file", encoding: "base64", size: 900_000, content: "eA==" }],
+    ["GitHub 不给内容（1MB 以上）", { type: "file", encoding: "none", size: 10, content: "" }],
+  ] as const) {
+    it(`${what}：不展开，也不记成结论`, async () => {
+      const r = await mentions.fillMentionFacts(
+        [ref(`https://github.com/a/b/blob/${sha}/x#L1-L2`)],
+        { fetcher: async () => payload as unknown as Record<string, unknown> },
+      );
+      assert.equal(r.failed, 1);
+      assert.deepEqual(rows(), []);
+    });
+  }
+
+  it("**二进制文件不展开** —— 一张 png 解成文本是一团乱码", async () => {
+    const bin = "abc\u0000def";
+    const r = await mentions.fillMentionFacts(
+      [ref(`https://github.com/a/b/blob/${sha}/logo.png#L1-L2`)],
+      { fetcher: async () => file(bin) },
+    );
+    assert.equal(r.failed, 1);
+  });
+
+  it("**一篇帖子里最多展开两段代码** —— 代码块的高度是别的卡片的十倍", async () => {
+    const html = ["one", "two", "three"]
+      .map((n) => link(`https://github.com/a/b/blob/${sha}/${n}.ts#L1-L1`))
+      .join("");
+    for (const n of ["one", "two", "three"]) {
+      await mentions.fillMentionFacts([ref(`https://github.com/a/b/blob/${sha}/${n}.ts#L1-L1`)], {
+        fetcher: async () => file("x"),
+      });
+    }
+    assert.equal(mentions.mentionsFor(html).length, mentions.MAX_CODE_CARDS);
+  });
+
+  it("**取回来了但没有代码的那一行不显示** —— 半张卡片比没有更像坏了", () => {
+    dbm.db
+      .insert(schema.githubFacts)
+      .values({
+        key: `code:a/b@${sha}/x.ts#L1-L1`,
+        kind: "code",
+        url: `https://github.com/a/b/blob/${sha}/x.ts#L1-L1`,
+        title: "x.ts",
+        summary: "a/b · 第 1 行",
+        body: null,
+        checkedAt: 1,
+        gone: false,
+      })
+      .run();
     assert.deepEqual(
-      mentions.unknownRefs([
-        ref(`https://github.com/a/b/commit/${sha}`),
-        ref(`https://github.com/a/b/blob/${sha}/x.ts`),
-      ]),
+      mentions.mentionsFor(link(`https://github.com/a/b/blob/${sha}/x.ts#L1-L1`)),
       [],
     );
   });

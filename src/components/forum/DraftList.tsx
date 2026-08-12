@@ -114,7 +114,7 @@ function DraftRow({
                 else router.refresh();
               })
             }
-            className="t-caption rounded-[var(--radius-control)] bg-[var(--danger)] px-3 py-1.5 font-medium text-white transition active:scale-95 disabled:opacity-50"
+            className="t-caption rounded-[var(--radius-control)] bg-[var(--danger)] px-3 py-1.5 font-medium text-[var(--danger-ink)] transition active:scale-95 disabled:opacity-50"
           >
             删掉
           </button>

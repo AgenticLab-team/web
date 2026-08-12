@@ -5,6 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import {
+  AdminButton,
+  AdminConfirm,
+  AdminRow,
+  AdminTag,
+  adminFieldClass,
+} from "@/components/admin/ui";
 import { revertLedgerEntry } from "@/lib/points/admin-actions";
 import type { LedgerRow } from "@/lib/points/admin";
 
@@ -23,9 +30,15 @@ import type { LedgerRow } from "@/lib/points/admin";
  */
 export function LedgerTable({ rows }: { rows: LedgerRow[] }) {
   if (rows.length === 0) {
+    /* 空态和后台其它二十处一样：一句结论 + 一句下一步。
+       原来只有孤零零的一句「没有符合条件的流水」，
+       人不知道是筛窄了还是真的没有 */
     return (
       <div className="inset-group px-6 py-10 text-center">
         <p className="t-callout text-[var(--ink-secondary)]">没有符合条件的流水</p>
+        <p className="t-footnote mx-auto mt-1.5 max-w-sm text-[var(--ink-tertiary)]">
+          换个关键词，或者把上面的筛选切回「全部」
+        </p>
       </div>
     );
   }
@@ -51,8 +64,8 @@ function Row({ row }: { row: LedgerRow }) {
   const wasReverted = Boolean(row.revertedBy);
 
   return (
-    <div className="inset-row px-4 py-3">
-      <div className="flex items-start gap-3">
+    <AdminRow align="start" className="flex-col">
+      <div className="flex w-full items-start gap-3">
         {/*
           * 金额靠左第一眼。正负用颜色分 ——
           * 一列数字里找负号比找颜色慢得多。
@@ -74,16 +87,12 @@ function Row({ row }: { row: LedgerRow }) {
             >
               {row.name}
             </Link>
-            {manual && (
-              <span className="t-caption2 rounded-[var(--radius-pill)] bg-[var(--warning)]/15 px-1.5 py-0.5 font-medium text-[var(--warning)]">
-                人工 · {row.operatorName}
-              </span>
-            )}
+            {manual && <AdminTag color="var(--warning)">人工 · {row.operatorName}</AdminTag>}
             {isReversal && (
-              <span className="t-caption2 inline-flex items-center gap-0.5 rounded-[var(--radius-pill)] bg-[var(--fill)] px-1.5 py-0.5 text-[var(--ink-tertiary)]">
+              <AdminTag className="inline-flex items-center gap-0.5">
                 <Undo2 className="h-3 w-3" strokeWidth={2} aria-hidden />
                 冲正
-              </span>
+              </AdminTag>
             )}
             {wasReverted && (
               <span className="t-caption2 text-[var(--ink-quaternary)]">已被冲正</span>
@@ -100,60 +109,54 @@ function Row({ row }: { row: LedgerRow }) {
           * 服务端也挡着（revertPoints 判 revertedBy），这里是不让人白点。
           */}
         {!wasReverted && !isReversal && !confirming && (
-          <button
-            type="button"
+          <AdminButton
+            tone="quiet"
+            size="sm"
             onClick={() => setConfirming(true)}
             title="冲正这一笔"
             aria-label={`冲正 ${row.name} 的这笔 ${row.delta > 0 ? "+" : ""}${row.delta}`}
-            className="t-caption shrink-0 rounded-[var(--radius-control)] px-2 py-1 text-[var(--ink-tertiary)] transition hover:bg-[var(--fill)] hover:text-[var(--danger)]"
+            className="hover:text-[var(--danger)]"
           >
             <RotateCcw className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-          </button>
+          </AdminButton>
         )}
       </div>
 
       {confirming && (
-        <div className="mt-2 rounded-[var(--radius-control)] bg-[var(--fill)] p-2.5">
-          <p className="t-caption text-[var(--ink-secondary)]">
-            会写一条 {row.delta > 0 ? "-" : "+"}
+        <AdminConfirm
+          title="冲正这一笔？"
+          confirmLabel="确认冲正"
+          disabled={pending || reason.trim().length < 4}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() =>
+            startTransition(async () => {
+              const r = await revertLedgerEntry(row.id, reason);
+              if (!r.ok) setError(r.error ?? "没成功");
+              else {
+                setConfirming(false);
+                router.refresh();
+              }
+            })
+          }
+        >
+          <p className="t-caption leading-relaxed text-[var(--ink-secondary)]">
+            会给 {row.name} 写一条 {row.delta > 0 ? "−" : "+"}
             {Math.abs(row.delta)} 的反向流水，原记录保持不动。
           </p>
           <input
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="为什么要冲正？这句话会留在当事人的账单里"
-            className="t-caption mt-2 w-full rounded-[var(--radius-control)] border border-[var(--separator)] bg-[var(--canvas)] px-2.5 py-2 outline-none focus:border-[var(--accent)]"
+            placeholder="为什么要冲正？（至少四个字，会留在当事人的账单里）"
+            className={adminFieldClass}
           />
-          <div className="mt-2 flex items-center gap-2">
-            <button
-              type="button"
-              disabled={pending || reason.trim().length < 4}
-              onClick={() =>
-                startTransition(async () => {
-                  const r = await revertLedgerEntry(row.id, reason);
-                  if (!r.ok) setError(r.error ?? "没成功");
-                  else {
-                    setConfirming(false);
-                    router.refresh();
-                  }
-                })
-              }
-              className="t-caption rounded-[var(--radius-control)] bg-[var(--danger)] px-3 py-1.5 font-medium text-white transition active:scale-95 disabled:opacity-40"
-            >
-              冲正
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(false)}
-              className="t-caption px-2 py-1.5 text-[var(--ink-tertiary)]"
-            >
-              算了
-            </button>
-          </div>
-        </div>
+        </AdminConfirm>
       )}
 
-      {error && <p className="t-caption mt-1.5 text-[var(--danger)]">{error}</p>}
-    </div>
+      {error && (
+        <p role="alert" className="t-caption text-[var(--danger)]">
+          {error}
+        </p>
+      )}
+    </AdminRow>
   );
 }

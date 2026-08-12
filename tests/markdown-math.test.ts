@@ -122,12 +122,27 @@ describe("**接线的顺序**", () => {
     assert.match(math, /trust: false/);
     assert.match(math, /throwOnError: false/);
 
-    // 消毒器那条 style 白名单一个字都没动
+    /*
+     * 消毒器那条 style 白名单里**没有为公式放进任何一条摆位置的属性**。
+     *
+     * 这里断言的从「白名单一个字都没动」改成了「白名单里没有这几个」——
+     * 前者盯的是字面量，而那条正则后来确实动过一次（补上了 shiki 的
+     * `--shiki-*`，否则全站代码块都是没有颜色的）。一条钉着字面量的
+     * 断言在那次会红，而它想守的东西**根本没有变化** ——
+     * 于是下一个人只能把它改绿，改的时候连它守什么都看不出来。
+     */
     const md = src("lib/markdown.ts");
-    assert.match(
-      md,
-      /SAFE_STYLE_PATTERN = \/\^\(color\|background-color\|font-style\|font-weight\|text-decoration\)/,
-    );
+    const pattern = /const SAFE_STYLE_PATTERN =([\s\S]*?);/.exec(md)?.[1] ?? "";
+    assert.ok(pattern.length > 0, "找不到 SAFE_STYLE_PATTERN 了");
+    for (const prop of ["position", "top", "left", "transform"]) {
+      assert.equal(
+        pattern.includes(prop),
+        false,
+        `${prop} 进了 style 白名单 —— 那就能用 fixed 覆盖整页做钓鱼`,
+      );
+    }
+    // 配色那几条还在，否则代码块和公式一起掉色
+    assert.match(pattern, /color\|background-color/);
   });
 
   it("MathML 的标签和属性进了允许清单 —— 漏一个的表现是公式少一截", () => {
