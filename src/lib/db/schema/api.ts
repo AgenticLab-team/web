@@ -78,7 +78,11 @@ export const apiSends = sqliteTable(
   "api_sends",
   {
     id: ulidPk(),
-    tokenId: text("token_id").notNull(),
+    /**
+     * 哪把令牌发的。**网页上发的这里是空** —— 网页走的是登录会话，
+     * 本来就没有令牌，硬塞一个假的会让「这条是怎么发出去的」永远查不清。
+     */
+    tokenId: text("token_id"),
     userId: text("user_id").notNull(),
     convId: text("conv_id").notNull(),
     length: integer("length").notNull(),
@@ -104,7 +108,15 @@ export const apiSends = sqliteTable(
     at: integer("at").notNull(),
   },
   (t) => [
-    // 限流按 (token, 时间) 数
+    /*
+     * 限流按**人**数，不按令牌。
+     *
+     * 按令牌数的话，一个人建十把令牌就有十份额度 —— 而上游那份
+     * 20 条/分钟是**全站共用**的，等于一个人就能把整站的额度吃光。
+     * 令牌是「同一个人的另一把钥匙」，不是「另一个人」。
+     */
+    index("api_sends_user_idx").on(t.userId, t.at),
+    index("api_sends_user_conv_idx").on(t.userId, t.convId, t.at),
     index("api_sends_token_idx").on(t.tokenId, t.at),
     index("api_sends_conv_idx").on(t.convId, t.at),
   ],

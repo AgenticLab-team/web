@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
-import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, sql, type SQL } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { apiSends, apiTokens, groupSendGrants, groups, users } from "@/lib/db/schema";
@@ -13,6 +13,7 @@ import {
   formatToken,
   looksLikeToken,
   normalizeScopes,
+  SEND_LIMIT,
   type LimitVerdict,
   type ScopeKey,
 } from "./rules";
@@ -260,33 +261,65 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
 /**
- * 这把令牌还能不能再发。
+ * 这个人还能不能再往这个群发。
+ *
+ * ═════════════════════════════════════════
+ * 按**人**数，不按令牌数
+ * ═════════════════════════════════════════
+ *
+ * 按令牌数是很自然的写法（限流参数就挂在令牌上），但它是错的：
+ * 一个人可以建十把令牌，于是他有十份额度 —— 而上游那份
+ * 20 条/分钟是**全站共用**的，等于一个人就能把整站的额度吃光，
+ * 而且完全不用绕过任何东西，界面上就有「新建令牌」按钮。
+ *
+ * 令牌是「同一个人的另一把钥匙」，不是「另一个人」。
+ * 网页上发的那条路更是连令牌都没有。
+ *
+ * ─────────────────────────────────────────
+ * 两道闸，管的是两件事
+ * ─────────────────────────────────────────
+ *
+ * ① **全局**：这个人一共发了多少，用全站默认额度 —— 护的是上游那份共用配额
+ * ② **这个群**：他往这个群发了多少，用这条授权自己的额度 ——
+ *    护的是「站长说他一天只能往这个群发 5 条」这件事
+ *
+ * 只留 ① 的话，站长在授权上调紧的额度形同虚设。
+ * 只留 ② 的话，他被授权了五个群就有五份额度。
  *
  * 三个窗口各数一次。**失败的也算** —— 否则「试了一百次都失败」
  * 在限流上等于没发生，而那一百次每一次都真的打到了上游。
  */
 export function sendAllowance(
-  tokenId: string,
+  userId: string,
+  convId: string,
   grant?: SendGrant | null,
   now = Date.now(),
 ): LimitVerdict {
-  const count = (since: number) =>
+  const countWhere = (extra: SQL | undefined, since: number) =>
     db
       .select({ n: sql<number>`count(*)` })
       .from(apiSends)
-      .where(and(eq(apiSends.tokenId, tokenId), gte(apiSends.at, since)))
+      .where(and(eq(apiSends.userId, userId), extra, gte(apiSends.at, since)))
       .get()?.n ?? 0;
 
-  return checkSendLimit(
-    { minute: count(now - MINUTE), hour: count(now - HOUR), day: count(now - DAY) },
-    // 授权上的额度只能收紧不能放宽 —— 见 effectiveLimits
-    effectiveLimits(grant),
-  );
+  const windows = (extra: SQL | undefined) => ({
+    minute: countWhere(extra, now - MINUTE),
+    hour: countWhere(extra, now - HOUR),
+    day: countWhere(extra, now - DAY),
+  });
+
+  // ① 全站默认额度，跨群一起数
+  const global = checkSendLimit(windows(undefined), SEND_LIMIT);
+  if (!global.allowed) return global;
+
+  // ② 这条授权自己的额度，只数这个群。effectiveLimits 保证它不会比 ① 松
+  return checkSendLimit(windows(eq(apiSends.convId, convId)), effectiveLimits(grant));
 }
 
 /** 记一条发送。成功失败都记，理由见 `sendAllowance` 和 schema */
 export function recordSend(input: {
-  tokenId: string;
+  /** 网页上发的传 null */
+  tokenId: string | null;
   userId: string;
   convId: string;
   /** **拼好署名之后的整条**，也就是群里真正看到的那一条 */
@@ -327,7 +360,8 @@ export function senderNameOf(userId: string): string {
 
 export interface SendLogRow {
   id: string;
-  tokenId: string;
+  /** 网页上发的是 null */
+  tokenId: string | null;
   tokenName: string | null;
   userId: string;
   convId: string;
@@ -380,12 +414,12 @@ export function sendLog(input: {
 }
 
 /** 一把令牌最近用掉了多少额度 —— 界面上要能回答「我还能发几条」 */
-export function usageOf(tokenId: string, now = Date.now()): { minute: number; hour: number; day: number } {
+export function usageOf(userId: string, now = Date.now()): { minute: number; hour: number; day: number } {
   const count = (since: number) =>
     db
       .select({ n: sql<number>`count(*)` })
       .from(apiSends)
-      .where(and(eq(apiSends.tokenId, tokenId), gte(apiSends.at, since)))
+      .where(and(eq(apiSends.userId, userId), gte(apiSends.at, since)))
       .get()?.n ?? 0;
   return { minute: count(now - MINUTE), hour: count(now - HOUR), day: count(now - DAY) };
 }

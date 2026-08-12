@@ -2,13 +2,20 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { ApiConsole } from "@/components/api/ApiConsole";
+import { GroupComposer } from "@/components/api/GroupComposer";
 import { SendLog } from "@/components/api/SendLog";
 import { TokenManager } from "@/components/api/TokenManager";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { BackLink, PageNote, Section } from "@/components/ui/primitives";
 import { NOT_POSSIBLE, ENDPOINTS } from "@/lib/api-tokens/catalog";
-import { SCOPES, SEND_LIMIT } from "@/lib/api-tokens/rules";
-import { grantedGroups, sendLog, tokensOf, usageOf } from "@/lib/api-tokens/store";
+import {
+  attributionCost,
+  MAX_MESSAGE_CHARS,
+  SCOPES,
+  SEND_LIMIT,
+  withAttribution,
+} from "@/lib/api-tokens/rules";
+import { grantedGroups, sendLog, senderNameOf, tokensOf, usageOf } from "@/lib/api-tokens/store";
 import { getCurrentUser } from "@/lib/auth/session";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
 
@@ -43,9 +50,14 @@ export default async function ApiPage() {
    * 界面上要答得出「我还能发几条」—— 只写上限不写用量的话，
    * 撞限流的人第一反应是「是不是坏了」，而不是「我发太多了」。
    */
-  const usage = Object.fromEntries(
-    tokens.filter((t) => t.revokedAt === null).map((t) => [t.id, usageOf(t.id)]),
-  );
+  /*
+   * 用量是**按人**算的，不是按令牌 —— 十把令牌共用一份额度。
+   *
+   * 界面上要答得出「我还能发几条」：只写上限不写用量的话，
+   * 撞限流的人第一反应是「是不是坏了」，而不是「我发太多了」。
+   */
+  const usage = usageOf(user.id);
+  const senderName = senderNameOf(user.id);
   const visible = new Map(visibleGroupsFor(user).map((g) => [g.convId, g.name]));
   const sendable = grantedGroups(user.id)
     .filter((c) => visible.has(c))
@@ -59,9 +71,19 @@ export default async function ApiPage() {
         subtitle="用令牌以你的身份读数据、往被授权的群发消息"
       />
 
-      <TokenManager tokens={tokens} scopes={[...SCOPES]} usage={usage} limits={SEND_LIMIT} />
+      <TokenManager tokens={tokens} scopes={[...SCOPES]} />
 
       <Section title="你能发到哪几个群">
+        {sendable.length > 0 && (
+          <div className="mb-2">
+            <GroupComposer
+              groups={sendable}
+              maxChars={MAX_MESSAGE_CHARS - attributionCost(senderName)}
+              /* 服务端拼出来的那一行，原样给它 —— 前端不重拼 */
+              attributionLine={withAttribution("", senderName).trim()}
+            />
+          </div>
+        )}
         {sendable.length === 0 ? (
           <p className="t-caption px-1 leading-relaxed text-[var(--ink-tertiary)]">
             还没有。发消息要站长<strong>逐个群</strong>授权 —— 拿到授权之后这里会列出来，
@@ -83,6 +105,11 @@ export default async function ApiPage() {
           每把令牌最多 {SEND_LIMIT.perMinute} 条/分钟、{SEND_LIMIT.perHour} 条/小时、
           {SEND_LIMIT.perDay} 条/天（站长可以在授权上再调紧）。
           上游的额度是全站共用的，所以这里压得低 —— 剩下的要留给站长公告和系统告警。
+        </p>
+        <p className="t-caption2 mt-1 px-1 text-[var(--ink-quaternary)]">
+          这份额度<strong>按人算，不按令牌算</strong> —— 你手上几把令牌加上网页这条路，
+          一共就这么多。你今天已经发了 {usage.day}/{SEND_LIMIT.perDay} 条、这小时{" "}
+          {usage.hour}/{SEND_LIMIT.perHour} 条。
         </p>
       </Section>
 

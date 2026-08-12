@@ -39,6 +39,11 @@ export function stripComments(source: string): string {
 
 const ROOT = new URL("..", import.meta.url).pathname;
 
+/** `src/` 的绝对路径 —— 要自己遍历时用它当根 */
+export function srcRoot(): string {
+  return join(ROOT, "src");
+}
+
 /** 读 `src/` 下的一个文件 */
 export function readSource(relative: string): string {
   return readFileSync(join(ROOT, "src", relative), "utf8");

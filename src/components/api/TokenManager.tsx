@@ -27,22 +27,12 @@ interface Scope {
   danger: number;
 }
 
-interface Usage {
-  minute: number;
-  hour: number;
-  day: number;
-}
-
 export function TokenManager({
   tokens,
   scopes,
-  usage,
-  limits,
 }: {
   tokens: TokenRow[];
   scopes: Scope[];
-  usage: Record<string, Usage>;
-  limits: { perMinute: number; perHour: number; perDay: number };
 }) {
   const [name, setName] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set(["me:read"]));
@@ -179,16 +169,6 @@ export function TokenManager({
                   al_{t.visible}… · {t.scopes.join("、")}
                   {t.lastUsedAt ? " · 最近用过" : " · 还没用过"}
                 </p>
-                {/*
-                  * 用量。只写上限不写用量的话，撞限流的人第一反应是
-                  * 「是不是坏了」，而不是「我发太多了」。
-                  */}
-                {usage[t.id] && usage[t.id].day > 0 && (
-                  <p className="t-caption2 text-[var(--ink-quaternary)]">
-                    今天发了 {usage[t.id].day}/{limits.perDay} 条 · 这小时{" "}
-                    {usage[t.id].hour}/{limits.perHour}
-                  </p>
-                )}
               </div>
               <button
                 type="button"

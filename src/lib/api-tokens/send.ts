@@ -38,7 +38,8 @@ export type SendOutcome =
 
 export async function sendToGroup(input: {
   user: CurrentUser;
-  tokenId: string;
+  /** 哪把令牌发的。**网页上发的传 null** —— 那条路走的是登录会话，没有令牌 */
+  tokenId: string | null;
   convId: string;
   text: unknown;
 }): Promise<SendOutcome> {
@@ -77,8 +78,8 @@ export async function sendToGroup(input: {
   const message = validateMessage(input.text, senderName);
   if (!message.ok) return { ok: false, error: message.error ?? "内容不合要求", status: 400 };
 
-  // ④ 限流。放在打外网之前
-  const allowance = sendAllowance(tokenId, grant);
+  // ④ 限流。放在打外网之前。按**人**数不按令牌数 —— 见 sendAllowance
+  const allowance = sendAllowance(user.id, convId, grant);
   if (!allowance.allowed) {
     return {
       ok: false,
