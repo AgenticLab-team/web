@@ -257,6 +257,30 @@ export const nekobot = {
       body: JSON.stringify({ conv_id: convId, text }),
     }),
 
+  /**
+   * 读群公告。
+   *
+   * 上游后来加的。在这之前「群公告」在我们的文档里挂在「做不到的」那一栏 ——
+   * 现在能做了，那一栏就得改，否则它比没有更糟：它会让人不去试。
+   */
+  announcement: (convId: string) =>
+    request<{ text: string | null; updated_at?: number | null }>(
+      `/groups/${encodeURIComponent(convId)}/announcement`,
+    ),
+
+  /**
+   * 改群公告。
+   *
+   * ⚠️ 这是**整条替换**，不是追加 —— 一次调用会覆盖群里现有的公告，
+   * 而公告是一千六百人打开群就看见的那段字。所以调用方必须先读一遍
+   * 给人看，见 lib/api-tokens/announce.ts。
+   */
+  setAnnouncement: (convId: string, text: string) =>
+    request<SendResult>(`/groups/${encodeURIComponent(convId)}/announcement`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+
   /** 撤回自己发的消息。微信只允许很短的窗口，失败是常态，不能当成保证 */
   revoke: (convId: string, msgSvrId: string) =>
     request<SendResult>("/send/revoke", {

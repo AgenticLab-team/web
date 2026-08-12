@@ -58,10 +58,24 @@ export default async function ApiPage() {
    */
   const usage = usageOf(user.id);
   const senderName = senderNameOf(user.id);
-  const visible = new Map(visibleGroupsFor(user).map((g) => [g.convId, g.name]));
-  const sendable = grantedGroups(user.id)
-    .filter((c) => visible.has(c))
-    .map((c) => ({ convId: c, name: visible.get(c)! }));
+  /*
+   * 列的是**你在的所有群**，标出哪些能发。
+   *
+   * 原来这里只列被授权的那几个 —— 于是绝大多数人（一个授权都没有的）
+   * 看到的是一句「还没有」，而他真正需要的是 conv_id：
+   * 读消息、读公告这些不需要授权的接口，也一样要 conv_id 才调得动。
+   * 站长的原话是「开放平台看不到群列表啊」。
+   *
+   * 「群列表属于隐私」在这里仍然成立：visibleGroupsFor 给的就是
+   * 他在网页上看得到的那几个群，一个不多。
+   */
+  const granted = new Set(grantedGroups(user.id));
+  const myGroups = visibleGroupsFor(user).map((g) => ({
+    convId: g.convId,
+    name: g.name,
+    canSend: granted.has(g.convId),
+  }));
+  const sendable = myGroups.filter((g) => g.canSend);
 
   return (
     <>
@@ -73,7 +87,7 @@ export default async function ApiPage() {
 
       <TokenManager tokens={tokens} scopes={[...SCOPES]} />
 
-      <Section title="你能发到哪几个群">
+      <Section title="你在的群">
         {sendable.length > 0 && (
           <div className="mb-2">
             <GroupComposer
@@ -84,22 +98,51 @@ export default async function ApiPage() {
             />
           </div>
         )}
-        {sendable.length === 0 ? (
+        {myGroups.length === 0 ? (
           <p className="t-caption px-1 leading-relaxed text-[var(--ink-tertiary)]">
-            还没有。发消息要站长<strong>逐个群</strong>授权 —— 拿到授权之后这里会列出来，
-            而且每条发出去的消息都会自动带一行「本消息由「你」使用 AgenticLab.sh 代发」。
+            还没有绑定任何群。
           </p>
         ) : (
           <ul className="space-y-1.5">
-            {sendable.map((g) => (
+            {myGroups.map((g) => (
               <li key={g.convId} className="inset-group px-3.5 py-2.5">
-                <p className="t-subhead font-medium">{g.name}</p>
-                <code className="t-caption2 break-all text-[var(--ink-quaternary)]">
+                <p className="t-subhead flex items-center gap-1.5 font-medium">
+                  <span className="min-w-0 truncate">{g.name}</span>
+                  {/*
+                    * 能不能发要标出来。不标的话，人会挑一个群试着发，
+                    * 而「试」在这里意味着真的往一千六百人的群里发一条。
+                    */}
+                  {g.canSend ? (
+                    <span
+                      className="t-caption2 shrink-0 rounded-[var(--radius-control)] px-1.5 py-0.5"
+                      style={{
+                        background: "color-mix(in srgb, var(--success) 14%, transparent)",
+                        color: "var(--success)",
+                      }}
+                    >
+                      可代发
+                    </span>
+                  ) : (
+                    <span className="t-caption2 shrink-0 text-[var(--ink-quaternary)]">只读</span>
+                  )}
+                </p>
+                {/*
+                  * conv_id 要能一眼选中复制 —— 别的群接口全都要它，
+                  * 而它是一串没人记得住的东西。
+                  */}
+                <code className="t-caption2 mt-0.5 block break-all text-[var(--ink-quaternary)]">
                   {g.convId}
                 </code>
               </li>
             ))}
           </ul>
+        )}
+        {sendable.length === 0 && myGroups.length > 0 && (
+          <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
+            上面这些你都能<strong>读</strong>（消息、公告）。往群里发消息或改公告要站长
+            <strong>逐个群</strong>授权 —— 拿到之后这一行会变成「可代发」，
+            而且每条发出去的都会自动带一行「本消息由「你」使用 AgenticLab.sh 代发」。
+          </p>
         )}
         <p className="t-caption2 mt-2 px-1 text-[var(--ink-quaternary)]">
           每把令牌最多 {SEND_LIMIT.perMinute} 条/分钟、{SEND_LIMIT.perHour} 条/小时、

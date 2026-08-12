@@ -18,14 +18,17 @@ import type { GrantRow } from "@/lib/api-tokens/store";
 export function GrantManager({
   grants,
   groups,
+  people,
   limits,
 }: {
   grants: GrantRow[];
   groups: { convId: string; name: string }[];
+  /** 能被授权的人。全站注册账号一百多个，一个下拉框装得下 */
+  people: { id: string; name: string }[];
   limits: { perMinute: number; perHour: number; perDay: number };
 }) {
   const [convId, setConvId] = useState(groups[0]?.convId ?? "");
-  const [userId, setUserId] = useState("");
+  const [userId, setUserId] = useState(people[0]?.id ?? "");
   const [reason, setReason] = useState("");
   const [perDay, setPerDay] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +48,6 @@ export function GrantManager({
       });
       if (r.ok) {
         setNote(r.note);
-        setUserId("");
         setReason("");
         setPerDay("");
       } else setError(r.error);
@@ -78,15 +80,25 @@ export function GrantManager({
           ))}
         </select>
 
-        <label className="t-caption2 mt-3 block text-[var(--ink-quaternary)]">
-          账号 id（在用户管理页复制）
-        </label>
-        <input
+        <label className="t-caption2 mt-3 block text-[var(--ink-quaternary)]">授权给谁</label>
+        {/*
+          * 从人名里选，不是手打账号 id。
+          *
+          * 原来这里是一个填 `01JABC…` 的输入框 —— 而没有人知道另一个人的
+          * 内部 id 长什么样：得先开用户管理页、找到他、复制、再切回来。
+          * 于是这个功能虽然做出来了，实际上很难用。
+          */}
+        <select
           value={userId}
           onChange={(e) => setUserId(e.target.value)}
-          placeholder="01JABC…（账号 id）"
-          className="t-body mt-1 w-full rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-3 py-2 font-mono outline-none"
-        />
+          className="t-body mt-1 w-full rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-3 py-2 outline-none"
+        >
+          {people.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
 
         <label className="t-caption2 mt-3 block text-[var(--ink-quaternary)]">
           为什么给他（必填 —— 半年后这是唯一要问的问题）

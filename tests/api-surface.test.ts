@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
-import { ENDPOINTS } from "@/lib/api-tokens/catalog";
+import { ENDPOINTS, NOT_POSSIBLE } from "@/lib/api-tokens/catalog";
 import { SCOPE_KEYS } from "@/lib/api-tokens/rules";
 import { readCode } from "./_source";
 
@@ -151,5 +151,102 @@ describe("文档和实现对得上", () => {
         `${short} 有实现但没进文档`,
       );
     }
+  });
+});
+
+describe("在线测试真的能填参数", () => {
+  const console_ = readCode("components/api/ApiConsole.tsx");
+
+  it("**路径里有几个占位符就给几个框**", () => {
+    /*
+     * 第一版只认得 `{conv_id}` 一种，于是 `/posts/{id}/replies`
+     * 发出去的 URL 里原样带着 `{id}` 这五个字符 —— 服务端拿到的
+     * 帖子 id 就叫「{id}」，回一句 404，而人看不出哪里错了：
+     * 他填了令牌、选了端点、写了请求体，三样都对。
+     */
+    assert.match(console_, /matchAll\(\/\\\{\(\\w\+\)\\\}\/g\)/);
+    assert.equal(/\{conv_id\}/.test(console_), false, "不该再有写死的 conv_id");
+  });
+
+  it("**每条 POST 都带一份能直接按下去的请求体**", () => {
+    /*
+     * 原来所有 POST 共用 `{"text":"…"}` —— 对发消息是对的，
+     * 对发帖是错的（要 board / title / content），点下去拿到 400，
+     * 而人多半会以为是令牌的问题。
+     */
+    for (const e of ENDPOINTS.filter((x) => x.method === "POST")) {
+      assert.ok(e.sampleBody, `${e.path} 缺 sampleBody`);
+    }
+  });
+
+  it("端点用「方法+路径」认，不是只用路径", () => {
+    /*
+     * 同一个路径上 GET 和 POST 是两条端点（读群公告 / 改群公告）。
+     * 只按路径找会永远选中头一条 —— 于是选「改群公告」发出去的是 GET。
+     */
+    const paths = ENDPOINTS.map((e) => e.path);
+    assert.ok(new Set(paths).size < paths.length, "现在没有同路径不同方法的端点了？那这条可以删");
+    assert.match(console_, /\$\{e\.method\}\s+\$\{e\.path\}/);
+  });
+
+  it("参数没填齐就不让发", () => {
+    // 发出去只会拿到一句看不懂的 404
+    assert.match(console_, /missing\.length\s*>\s*0/);
+  });
+});
+
+describe("群列表这条路", () => {
+  it("**存在一条能拿到 conv_id 的接口**", () => {
+    /*
+     * 别的群接口全都要 conv_id，而在这条之前没有任何办法拿到它 ——
+     * 文档里写着一个示例值，谁也不知道自己的是什么。
+     */
+    const list = ENDPOINTS.find((e) => e.path === "/api/v1/groups" && e.method === "GET");
+    assert.ok(list, "没有列群的接口，那 conv_id 从哪来？");
+  });
+
+  it("它只给自己在的群 —— 群列表属于隐私", () => {
+    const route = readCode("app/api/v1/groups/route.ts");
+    assert.match(route, /visibleGroupsFor\(/);
+    // 不能是「列出所有群再过滤」
+    assert.equal(/listGroupsForAdmin|allGroups/.test(route), false);
+  });
+});
+
+describe("群公告", () => {
+  it("**它不在「做不到的」那一栏里了**", () => {
+    /*
+     * 上游后来加了读写公告的接口。一份说「做不到」而其实做得到的文档
+     * 比没有文档更糟：它让人根本不去试。
+     */
+    assert.equal(
+      NOT_POSSIBLE.some((n) => n.what.includes("群公告")),
+      false,
+      "上游已经能改公告了，这一栏得改",
+    );
+    assert.ok(ENDPOINTS.some((e) => e.path.endsWith("/announcement") && e.method === "POST"));
+  });
+
+  it("改公告和发消息共用同一套：授权、限流、署名", () => {
+    /*
+     * 另写一份的话，迟早有一份忘了加署名 ——
+     * 而公告是一千六百人打开群就看见的那段字。
+     */
+    const a = readCode("lib/api-tokens/announce.ts");
+    assert.match(a, /sendGrantFor\(/);
+    assert.match(a, /sendAllowance\(/);
+    assert.match(a, /withAttribution\(/);
+    assert.match(a, /recordSend\(/);
+  });
+
+  it("**被覆盖掉的原公告要记下来** —— 微信里没有历史版本", () => {
+    const a = readCode("lib/api-tokens/announce.ts");
+    assert.match(a, /previous/);
+    assert.match(a, /被覆盖的原公告/);
+  });
+
+  it("空字符串不算「清空」—— 更可能是没填的表单", () => {
+    const a = readCode("lib/api-tokens/announce.ts");
+    assert.match(a, /公告不能为空/);
   });
 });

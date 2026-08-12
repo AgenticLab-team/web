@@ -28,6 +28,20 @@ export interface Endpoint {
   example: string;
   /** 额外要注意的事，会原样显示在文档上 */
   note?: string;
+  /**
+   * 在线测试里预填的请求体。
+   *
+   * ─────────────────────────────────────────
+   * 没有它，POST 那几条在控制台里等于用不了
+   * ─────────────────────────────────────────
+   *
+   * 控制台原来给所有 POST 都填 `{"text":"…"}` —— 对发消息是对的，
+   * 对发帖是错的（要 board / title / content），而人点下去拿到的是
+   * 一句 400。他多半会以为是自己令牌不对，而不是这个框里的内容不对。
+   *
+   * 每条自己带一份能直接按下去的例子，这个问题就不存在了。
+   */
+  sampleBody?: Record<string, unknown>;
 }
 
 export const ENDPOINTS: readonly Endpoint[] = [
@@ -74,6 +88,7 @@ export const ENDPOINTS: readonly Endpoint[] = [
     note:
       "走的是网页那条同一段实现：版块权限、等级门槛、匿名规则、必填标签、敏感词、" +
       "发帖频率限制一条都不少。**令牌不是绕开规则的近路**",
+    sampleBody: { board: "general", title: "从 API 发的", content: "正文写这里" },
   },
   {
     method: "POST",
@@ -83,6 +98,41 @@ export const ENDPOINTS: readonly Endpoint[] = [
     example:
       `curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \\\n` +
       `  -d '{"content":"说得对"}' https://agenticlab.sh/api/v1/posts/<id>/replies`,
+    sampleBody: { content: "说得对" },
+  },
+  {
+    method: "GET",
+    path: "/api/v1/groups",
+    summary: "我在哪些群里（含能不能往那里发）",
+    scopes: ["groups:read"],
+    example: `curl -H "Authorization: Bearer $TOKEN" https://agenticlab.sh/api/v1/groups`,
+    note:
+      "别的群接口都要 conv_id，而这是**唯一**能拿到它的地方。" +
+      "只给你自己在的群 —— 群列表属于隐私，有令牌也看不到别人的",
+  },
+  {
+    method: "GET",
+    path: "/api/v1/groups/{conv_id}/announcement",
+    summary: "读群公告",
+    scopes: ["groups:read"],
+    example:
+      `curl -H "Authorization: Bearer $TOKEN" \\\n` +
+      `  https://agenticlab.sh/api/v1/groups/<conv_id>/announcement`,
+    note: "在群里就能读 —— 群里每个人本来就看得见",
+  },
+  {
+    method: "POST",
+    path: "/api/v1/groups/{conv_id}/announcement",
+    summary: "改群公告",
+    scopes: ["groups:send"],
+    example:
+      `curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \\\n` +
+      `  -d '{"text":"本周六线下"}' \\\n` +
+      `  https://agenticlab.sh/api/v1/groups/<conv_id>/announcement`,
+    note:
+      "⚠️ **整条替换，不是追加** —— 会把群里现在的公告顶掉，返回体里的 previous 就是被顶掉的那段。" +
+      "同样带代发署名，和发消息共用授权与额度",
+    sampleBody: { text: "本周六线下聚会，地点群里说" },
   },
   {
     method: "GET",
@@ -109,6 +159,7 @@ export const ENDPOINTS: readonly Endpoint[] = [
       "**发出去的消息一定会带一行代发署名**（「本消息由「你」使用 AgenticLab.sh 代发」）—— " +
       "消息由机器人账号发出，不署名的话群里没有人知道是谁说的。" +
       "另外：只能发到**站长授权过、而且你确实在其中**的群",
+    sampleBody: { text: "大家好" },
   },
 ];
 
@@ -128,13 +179,19 @@ export const ENDPOINTS: readonly Endpoint[] = [
  * 然后得出「文档不全」的结论 —— 而实际是它们不存在。
  */
 export const NOT_POSSIBLE: readonly { what: string; why: string }[] = [
+  /*
+   * 「群公告」原来在这一栏，写着「上游的 27 个端点里没有任何一个能改群的属性」。
+   * 后来上游加了读写公告的接口，这句话就成了假的 ——
+   * 而一份说「做不到」而其实做得到的文档比没有文档更糟：它让人根本不去试。
+   * 所以那一条挪去了 ENDPOINTS。这段注释留着，是为了记住这一栏会过期。
+   */
   {
-    what: "群公告 / 修改群名",
-    why: "上游的 27 个端点里没有任何一个能改群的属性 —— 它是只读的那一侧加上发消息",
+    what: "改群名",
+    why: "上游能改公告，但没有改群名的接口",
   },
   {
     what: "踢人 / 拉人",
-    why: "同上。成员名册只读，没有增删接口",
+    why: "成员名册是只读的，没有增删接口",
   },
   {
     what: "知道谁是群主",

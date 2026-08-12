@@ -31,23 +31,67 @@ interface Endpoint {
   path: string;
   summary: string;
   scopes: string[];
+  sampleBody?: Record<string, unknown>;
+}
+
+/**
+ * 路径里的占位符，比如 `/posts/{id}/replies` → `["id"]`。
+ *
+ * ─────────────────────────────────────────
+ * 第一版只认得 `{conv_id}` 一种
+ * ─────────────────────────────────────────
+ *
+ * 于是 `/posts/{id}/replies` 这条在控制台里发出去的 URL 里
+ * **原样带着 `{id}` 这五个字符** —— 服务端拿到的 id 就叫「{id}」，
+ * 回一句 404，而人看不出哪里错了：他填了令牌、选了端点、写了请求体，
+ * 三样都对。站长的原话是「post 没法填写参数」。
+ *
+ * 现在从路径里数出来，有几个占位符就给几个输入框 ——
+ * 以后新加端点也不用再改这里。
+ */
+function placeholdersOf(path: string): string[] {
+  return [...path.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
+}
+
+/** 占位符叫什么名字，就给一句人话的提示 */
+const ARG_HINT: Record<string, { label: string; placeholder: string }> = {
+  conv_id: { label: "群的 conv_id", placeholder: "先调 GET /api/v1/groups 拿" },
+  id: { label: "帖子 id", placeholder: "先调 GET /api/v1/posts 拿" },
+};
+
+/** 同一个路径上 GET 和 POST 是两条端点，所以 key 要带上方法 */
+function keyOf(e: Endpoint | undefined): string {
+  return e ? `${e.method} ${e.path}` : "";
 }
 
 export function ApiConsole({ endpoints }: { endpoints: Endpoint[] }) {
   const [token, setToken] = useState("");
-  const [chosen, setChosen] = useState(endpoints[0]?.path ?? "");
-  const [pathArg, setPathArg] = useState("");
-  const [body, setBody] = useState('{"text":"从在线测试发的"}');
+  /*
+   * 用 `方法 空格 路径` 当 key，不是光用路径。
+   *
+   * 同一个路径上 GET 和 POST 是两条不同的端点（读群公告 / 改群公告），
+   * 光按路径找会永远选中头一条 —— 于是选「改群公告」实际发出去的是 GET。
+   */
+  const [chosen, setChosen] = useState(keyOf(endpoints[0]));
+  const [args, setArgs] = useState<Record<string, string>>({});
+  // 首屏也要有例子 —— 空框和「填错了」在人眼里是同一件事
+  const [body, setBody] = useState(
+    endpoints[0]?.sampleBody ? JSON.stringify(endpoints[0].sampleBody, null, 2) : "",
+  );
   const [result, setResult] = useState<{ status: number; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const endpoint = endpoints.find((e) => e.path === chosen);
-  const needsArg = chosen.includes("{conv_id}");
+  const endpoint = endpoints.find((e) => keyOf(e) === chosen);
+  const needed = endpoint ? placeholdersOf(endpoint.path) : [];
   const isWrite = endpoint?.method === "POST";
 
-  const url = needsArg
-    ? chosen.replace("{conv_id}", encodeURIComponent(pathArg.trim()))
-    : chosen;
+  /* 有占位符没填就别让他发 —— 发出去只会拿到一句看不懂的 404 */
+  const missing = needed.filter((name) => !(args[name] ?? "").trim());
+
+  const url = needed.reduce(
+    (acc, name) => acc.replace(`{${name}}`, encodeURIComponent((args[name] ?? "").trim())),
+    endpoint?.path ?? "",
+  );
 
   async function run() {
     setBusy(true);
@@ -107,31 +151,44 @@ export function ApiConsole({ endpoints }: { endpoints: Endpoint[] }) {
       <select
         value={chosen}
         onChange={(e) => {
+          const next = endpoints.find((x) => keyOf(x) === e.target.value);
           setChosen(e.target.value);
           setResult(null);
+          /*
+           * 换端点时把请求体换成**这一条自己的**例子。
+           *
+           * 原来所有 POST 共用一个 `{"text":"…"}` —— 选「发帖」时那个
+           * 请求体是错的（要 board / title / content），点下去拿到 400，
+           * 而人多半会以为是令牌的问题。
+           */
+          setBody(next?.sampleBody ? JSON.stringify(next.sampleBody, null, 2) : "");
         }}
         className="t-body mt-1 w-full rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-3 py-2 outline-none"
       >
         {endpoints.map((e) => (
-          <option key={e.path} value={e.path}>
+          <option key={keyOf(e)} value={keyOf(e)}>
             {e.method} {e.path}
           </option>
         ))}
       </select>
+      {endpoint && (
+        <p className="t-caption2 mt-1 text-[var(--ink-tertiary)]">{endpoint.summary}</p>
+      )}
 
-      {needsArg && (
-        <>
+      {/* 路径里有几个占位符就给几个框 —— 见 placeholdersOf */}
+      {needed.map((name) => (
+        <div key={name}>
           <label className="t-caption2 mt-3 block text-[var(--ink-quaternary)]">
-            群的 conv_id（上面「你能发到哪几个群」里可以复制）
+            {ARG_HINT[name]?.label ?? name}
           </label>
           <input
-            value={pathArg}
-            onChange={(e) => setPathArg(e.target.value)}
-            placeholder="20000000003@chatroom"
+            value={args[name] ?? ""}
+            onChange={(e) => setArgs((prev) => ({ ...prev, [name]: e.target.value }))}
+            placeholder={ARG_HINT[name]?.placeholder ?? `{${name}}`}
             className="t-body mt-1 w-full rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-3 py-2 font-mono outline-none"
           />
-        </>
-      )}
+        </div>
+      ))}
 
       {isWrite && (
         <>
@@ -139,7 +196,7 @@ export function ApiConsole({ endpoints }: { endpoints: Endpoint[] }) {
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            rows={3}
+            rows={5}
             className="t-body mt-1 w-full rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-3 py-2 font-mono outline-none"
           />
           {/*
@@ -160,7 +217,7 @@ export function ApiConsole({ endpoints }: { endpoints: Endpoint[] }) {
 
       <button
         type="button"
-        disabled={busy || token.trim().length === 0}
+        disabled={busy || token.trim().length === 0 || missing.length > 0}
         onClick={run}
         className="t-footnote mt-3 inline-flex min-h-11 items-center gap-1 rounded-[var(--radius-pill)] px-3.5 font-medium text-[var(--accent)] transition active:opacity-60 disabled:opacity-45"
         style={{ background: "color-mix(in srgb, var(--accent) 12%, transparent)" }}
@@ -168,6 +225,13 @@ export function ApiConsole({ endpoints }: { endpoints: Endpoint[] }) {
         <Play className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
         {busy ? "请求中…" : isWrite ? "真的发出去" : "发起请求"}
       </button>
+
+      {/* 缺参数时说清楚缺哪个，而不是让按钮无声地灰着 */}
+      {missing.length > 0 && token.trim().length > 0 && (
+        <p className="t-caption2 mt-1.5 text-[var(--ink-tertiary)]">
+          还要填：{missing.map((m) => ARG_HINT[m]?.label ?? m).join("、")}
+        </p>
+      )}
 
       {result && (
         <div className="mt-3">
