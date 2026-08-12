@@ -17,6 +17,7 @@ import { isModuleEnabled } from "@/lib/modules/state";
 import { alerts, roles, userRoles, users } from "@/lib/db/schema";
 import { runHealthChecks, unhealthySince, type HealthReport } from "@/lib/health";
 import { nekobot } from "@/lib/nekobot/client";
+import { sendFailed } from "@/lib/nekobot/types";
 
 /**
  * 告警的检查与投递。健康探测任务每轮跑完调一次。
@@ -244,7 +245,14 @@ async function deliver(
   let firstError = "";
   for (const wxId of targets) {
     try {
-      await nekobot.sendText(wxId, text);
+      /*
+       * 同样要看 `ok` —— 上游发失败时回的是 200 加 `{"ok": false}`。
+       * 不看的话「告警发出去了」这句话本身会变成假的，
+       * 而告警恰恰是那种**没送到也没人会发现**的东西：
+       * 它平时本来就不该响。
+       */
+      const rejected = sendFailed(await nekobot.sendText(wxId, text));
+      if (rejected) throw new Error(rejected);
       sent++;
     } catch (error) {
       if (!firstError) firstError = error instanceof Error ? error.message : String(error);

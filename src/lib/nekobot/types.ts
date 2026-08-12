@@ -267,3 +267,45 @@ export interface SendResult {
   msg_svr_id?: string;
   [key: string]: unknown;
 }
+
+/**
+ * 上游**发送失败但仍然回 200** 时的判定。
+ *
+ * ═════════════════════════════════════════
+ * 这是站长说的那个「发消息 API 的 bug」
+ * ═════════════════════════════════════════
+ *
+ * `request()` 只在 HTTP 非 2xx 时抛错。而 `/send/text` 失败时
+ * 会回 `200 {"ok": false, ...}` —— 于是那一条在我们这边被记成
+ * **「已发送」**，计数说成功、界面说送达，而群里什么都没出现。
+ *
+ * 这个坑这个仓库已经踩过一次：GitHub 换 token 那个接口
+ * 「出错时也返回 200，错误信息在 body 里的 error 字段」，
+ * 注释就写在 `lib/github/api.ts` 上。同一类错，第二个上游。
+ *
+ * ─────────────────────────────────────────
+ * 只有 `ok === false` 才算失败
+ * ─────────────────────────────────────────
+ *
+ * `ok` 缺失时**当成功**：有些成功响应本来就不带这个字段，
+ * 把 `undefined` 当失败会让正常的发送变成「失败」并触发重发 ——
+ * 而重发的代价是同一条消息在一千六百人的群里出现两次。
+ * 宁可漏判一次失败，不能误判一次成功。
+ */
+export function sendFailed(result: SendResult): string | null {
+  if (result.ok !== false) return null;
+  const detail =
+    typeof result.error === "string"
+      ? result.error
+      : typeof result.message === "string"
+        ? result.message
+        : JSON.stringify(result);
+  /*
+   * **每一条分支都要截断**，不能只截兜底那条。
+   *
+   * 这句话会原样进数据库、再原样显示在群发结果页上 ——
+   * 上游回一段五千字的堆栈时，那一页会被一条错误信息撑爆，
+   * 而真正要看的「哪几个群没发出去」被挤到看不见。
+   */
+  return `上游拒绝了这一条：${detail.slice(0, 200)}`;
+}

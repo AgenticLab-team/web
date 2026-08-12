@@ -6,7 +6,8 @@ import { db } from "@/lib/db";
 import { isModuleEnabled } from "@/lib/modules/state";
 import { broadcastDeliveries, broadcasts } from "@/lib/db/schema";
 import { contentHash, sendIntervalMs } from "@/lib/broadcast/rules";
-import { nekobot } from "@/lib/nekobot/client";
+import { NekoBotError, nekobot } from "@/lib/nekobot/client";
+import { sendFailed } from "@/lib/nekobot/types";
 
 /**
  * 真正把消息发出去的地方。由后台进程调用，不在 web 请求里跑。
@@ -111,6 +112,14 @@ export async function deliverBroadcast(
 
     try {
       const result = await nekobot.sendText(delivery.convId, row.content);
+
+      /*
+       * **先看 `ok`**：上游发失败时会回 200 加 `{"ok": false}`，
+       * 而 `request()` 只在非 2xx 时抛错 —— 不看的话这一条会被记成
+       * 「已发送」，计数说成功、界面说送达，而群里什么都没出现。
+       */
+      const rejected = sendFailed(result);
+      if (rejected) throw new NekoBotError(rejected, "http");
 
       /*
        * msg_svr_id 拿不到时仍然算发送成功 —— 消息确实发出去了 ——
