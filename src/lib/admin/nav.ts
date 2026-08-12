@@ -282,6 +282,15 @@ export const ADMIN_NAV: AdminNavSection[] = [
         ready: true,
       },
       {
+        key: "api",
+        href: "/admin/api",
+        label: "开放 API",
+        icon: "sparkles",
+        permission: "system.settings",
+        description: "谁能借机器人的嘴说话，以及他们说了什么",
+        ready: true,
+      },
+      {
         key: "llm",
         href: "/admin/llm",
         label: "模型接入",

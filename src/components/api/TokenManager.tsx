@@ -27,7 +27,23 @@ interface Scope {
   danger: number;
 }
 
-export function TokenManager({ tokens, scopes }: { tokens: TokenRow[]; scopes: Scope[] }) {
+interface Usage {
+  minute: number;
+  hour: number;
+  day: number;
+}
+
+export function TokenManager({
+  tokens,
+  scopes,
+  usage,
+  limits,
+}: {
+  tokens: TokenRow[];
+  scopes: Scope[];
+  usage: Record<string, Usage>;
+  limits: { perMinute: number; perHour: number; perDay: number };
+}) {
   const [name, setName] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set(["me:read"]));
   const [fresh, setFresh] = useState<string | null>(null);
@@ -161,10 +177,18 @@ export function TokenManager({ tokens, scopes }: { tokens: TokenRow[]; scopes: S
                     * 只显示名字不够：人起的名字经常是「测试」「新的」「1」。
                     */}
                   al_{t.visible}… · {t.scopes.join("、")}
-                  {t.lastUsedAt
-                    ? ` · 最近用过`
-                    : ` · 还没用过`}
+                  {t.lastUsedAt ? " · 最近用过" : " · 还没用过"}
                 </p>
+                {/*
+                  * 用量。只写上限不写用量的话，撞限流的人第一反应是
+                  * 「是不是坏了」，而不是「我发太多了」。
+                  */}
+                {usage[t.id] && usage[t.id].day > 0 && (
+                  <p className="t-caption2 text-[var(--ink-quaternary)]">
+                    今天发了 {usage[t.id].day}/{limits.perDay} 条 · 这小时{" "}
+                    {usage[t.id].hour}/{limits.perHour}
+                  </p>
+                )}
               </div>
               <button
                 type="button"

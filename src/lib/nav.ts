@@ -196,6 +196,24 @@ export const NAV: NavSection[] = [
         requiresAuth: true,
         ready: true,
       },
+      {
+        /*
+         * 开放 API。
+         *
+         * 放在「我的东西」而不是单开一组：令牌是**他自己的**东西，
+         * 和收藏夹、草稿箱同一类 —— 都是「只属于我的那几样」。
+         *
+         * 不是一级入口（不进 `primary`）：没有人每天建令牌。
+         * 一级那几行要留给每天都点的，其余走「更多」，
+         * 这是这份文件开头那条判据（「多久点一次」，不是「重不重要」）。
+         */
+        key: "api",
+        href: "/me/api",
+        label: "开放 API",
+        icon: "key-round",
+        requiresAuth: true,
+        ready: true,
+      },
     ],
   },
   {

@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+import { ApiConsole } from "@/components/api/ApiConsole";
+import { SendLog } from "@/components/api/SendLog";
 import { TokenManager } from "@/components/api/TokenManager";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { BackLink, PageNote, Section } from "@/components/ui/primitives";
 import { NOT_POSSIBLE, ENDPOINTS } from "@/lib/api-tokens/catalog";
 import { SCOPES, SEND_LIMIT } from "@/lib/api-tokens/rules";
-import { grantedGroups, tokensOf } from "@/lib/api-tokens/store";
+import { grantedGroups, sendLog, tokensOf, usageOf } from "@/lib/api-tokens/store";
 import { getCurrentUser } from "@/lib/auth/session";
 import { visibleGroupsFor } from "@/lib/queries/visibility";
 
@@ -33,6 +35,17 @@ export default async function ApiPage() {
   if (!user) redirect("/login?next=/me/api");
 
   const tokens = tokensOf(user.id);
+  // 只给他自己那一份 —— 「看别人的」没有任何合理场景，只会变成越权入口
+  const log = sendLog({ userId: user.id, limit: 50 });
+  /*
+   * 每把令牌今天用掉了多少。
+   *
+   * 界面上要答得出「我还能发几条」—— 只写上限不写用量的话，
+   * 撞限流的人第一反应是「是不是坏了」，而不是「我发太多了」。
+   */
+  const usage = Object.fromEntries(
+    tokens.filter((t) => t.revokedAt === null).map((t) => [t.id, usageOf(t.id)]),
+  );
   const visible = new Map(visibleGroupsFor(user).map((g) => [g.convId, g.name]));
   const sendable = grantedGroups(user.id)
     .filter((c) => visible.has(c))
@@ -46,7 +59,7 @@ export default async function ApiPage() {
         subtitle="用令牌以你的身份读数据、往被授权的群发消息"
       />
 
-      <TokenManager tokens={tokens} scopes={[...SCOPES]} />
+      <TokenManager tokens={tokens} scopes={[...SCOPES]} usage={usage} limits={SEND_LIMIT} />
 
       <Section title="你能发到哪几个群">
         {sendable.length === 0 ? (
@@ -70,6 +83,19 @@ export default async function ApiPage() {
           每把令牌最多 {SEND_LIMIT.perMinute} 条/分钟、{SEND_LIMIT.perHour} 条/小时、
           {SEND_LIMIT.perDay} 条/天（站长可以在授权上再调紧）。
           上游的额度是全站共用的，所以这里压得低 —— 剩下的要留给站长公告和系统告警。
+        </p>
+      </Section>
+
+      <Section title="在线测试">
+        <ApiConsole endpoints={ENDPOINTS.map((e) => ({ ...e }))} />
+      </Section>
+
+      <Section title="代发日志">
+        <SendLog rows={log} />
+        <p className="t-caption2 mt-2 px-1 text-[var(--ink-quaternary)]">
+          存的是拼好署名之后的整条，也就是群里真正看到的那一条 ——
+          所以这里也看得出署名有没有真的加上。失败的也记，
+          否则「试了一百次都失败」在限流上等于没发生过。
         </p>
       </Section>
 

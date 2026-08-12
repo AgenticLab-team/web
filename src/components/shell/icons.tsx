@@ -16,6 +16,7 @@ import {
   Search,
   Shield,
   Trophy,
+  KeyRound,
   UserRound,
   Users,
   type LucideIcon,
@@ -44,6 +45,7 @@ const ICONS: Record<string, LucideIcon> = {
   bookmark: Bookmark,
   "user-plus": UserPlus,
   "file-text": FileText,
+  "key-round": KeyRound,
 };
 
 export function NavIcon({

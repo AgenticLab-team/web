@@ -5,7 +5,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { apiSends, apiTokens, groupSendGrants, users } from "@/lib/db/schema";
+import { apiSends, apiTokens, groupSendGrants, groups, users } from "@/lib/db/schema";
 
 import {
   checkSendLimit,
@@ -323,4 +323,107 @@ export function senderNameOf(userId: string): string {
     .where(eq(users.id, userId))
     .get();
   return (row?.site || row?.wx || "").trim();
+}
+
+export interface SendLogRow {
+  id: string;
+  tokenId: string;
+  tokenName: string | null;
+  userId: string;
+  convId: string;
+  convName: string | null;
+  text: string | null;
+  ok: boolean;
+  error: string | null;
+  at: number;
+}
+
+/**
+ * 代发日志。
+ *
+ * ═════════════════════════════════════════
+ * 这是「机器人到底说了什么」的唯一答案
+ * ═════════════════════════════════════════
+ *
+ * 消息署名是机器人，群里的人看不出是谁让它说的 ——
+ * 站长看这一页，看的正是那个。
+ *
+ * `userId` 传 null 就是全站视角（站长用），传具体的人就是他自己那一份。
+ * **不给「看别人的」这个中间态** —— 要么是自己的，要么是管理员；
+ * 中间那一档没有任何合理的使用场景，只会变成一个越权的入口。
+ */
+export function sendLog(input: {
+  userId: string | null;
+  limit?: number;
+}): SendLogRow[] {
+  const rows = db
+    .select({
+      id: apiSends.id,
+      tokenId: apiSends.tokenId,
+      tokenName: apiTokens.name,
+      userId: apiSends.userId,
+      convId: apiSends.convId,
+      convName: groups.name,
+      text: apiSends.text,
+      ok: apiSends.ok,
+      error: apiSends.error,
+      at: apiSends.at,
+    })
+    .from(apiSends)
+    .leftJoin(apiTokens, eq(apiTokens.id, apiSends.tokenId))
+    .leftJoin(groups, eq(groups.convId, apiSends.convId))
+    .where(input.userId ? eq(apiSends.userId, input.userId) : undefined)
+    .orderBy(desc(apiSends.at))
+    .limit(input.limit ?? 100)
+    .all();
+  return rows;
+}
+
+/** 一把令牌最近用掉了多少额度 —— 界面上要能回答「我还能发几条」 */
+export function usageOf(tokenId: string, now = Date.now()): { minute: number; hour: number; day: number } {
+  const count = (since: number) =>
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(apiSends)
+      .where(and(eq(apiSends.tokenId, tokenId), gte(apiSends.at, since)))
+      .get()?.n ?? 0;
+  return { minute: count(now - MINUTE), hour: count(now - HOUR), day: count(now - DAY) };
+}
+
+export interface GrantRow {
+  convId: string;
+  convName: string | null;
+  userId: string;
+  userName: string | null;
+  grantedBy: string;
+  reason: string | null;
+  perMinute: number | null;
+  perHour: number | null;
+  perDay: number | null;
+  createdAt: number;
+}
+
+/** 所有还生效的逐群发送授权 —— 站长那一页要列全 */
+export function allGrants(): GrantRow[] {
+  return db
+    .select({
+      convId: groupSendGrants.convId,
+      convName: groups.name,
+      userId: groupSendGrants.userId,
+      userName: users.siteNickname,
+      wxName: users.wxNickname,
+      grantedBy: groupSendGrants.grantedBy,
+      reason: groupSendGrants.reason,
+      perMinute: groupSendGrants.perMinute,
+      perHour: groupSendGrants.perHour,
+      perDay: groupSendGrants.perDay,
+      createdAt: groupSendGrants.createdAt,
+    })
+    .from(groupSendGrants)
+    .leftJoin(groups, eq(groups.convId, groupSendGrants.convId))
+    .leftJoin(users, eq(users.id, groupSendGrants.userId))
+    .where(isNull(groupSendGrants.revokedAt))
+    .orderBy(desc(groupSendGrants.createdAt))
+    .all()
+    .map(({ wxName, ...r }) => ({ ...r, userName: r.userName ?? wxName }));
 }
