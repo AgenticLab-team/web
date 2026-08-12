@@ -1,8 +1,9 @@
-import { CheckCircle2, MessageSquare, Pin, Sparkles } from "lucide-react";
+import { BookOpen, CheckCircle2, MessageSquare, Pin, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 import { ANONYMOUS_PALETTE, Avatar } from "@/components/Avatar";
 import { Empty } from "@/components/ui/primitives";
+import { isLongform, readingLabel } from "@/lib/forum/longform";
 import type { PostSummary } from "@/lib/forum/queries";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -88,6 +89,25 @@ export function PostList({ posts, showBoard = false }: { posts: PostSummary[]; s
                     <>
                       <span aria-hidden>·</span>
                       <span>{post.boardName}</span>
+                    </>
+                  )}
+                  {/*
+                    * 「读完要多久」只给长文标。
+                    *
+                    * 每条都标的话，「1 分钟」会出现在九成的帖子上，
+                    * 于是它变成噪音，长文那条也就跟着没人看见了 ——
+                    * 而这个标记存在的全部意义正是**让长文看起来不一样**。
+                    *
+                    * 它同时是一句预告：点进去是一篇文章，不是一句话。
+                    * 没有这句预告的人在地铁上点开一万三千字，会直接退出去。
+                    */}
+                  {isLongform(post.charCount) && (
+                    <>
+                      <span aria-hidden>·</span>
+                      <span className="flex items-center gap-0.5 text-[var(--ink-secondary)]">
+                        <BookOpen className="h-3 w-3" strokeWidth={2} aria-hidden />
+                        {readingLabel(post.charCount)}
+                      </span>
                     </>
                   )}
                   {VISIBILITY_HINT[post.visibility] && (

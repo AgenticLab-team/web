@@ -10,6 +10,7 @@ import { siteHosts } from "@/lib/moderation/site-hosts";
 import { getSettingInt } from "@/lib/settings/store";
 import { resolveDisplayName } from "@/lib/users/display-name";
 
+import { charCountOf, LONGFORM_CHARS } from "./longform";
 import { isEffectivelyPinned } from "./pin";
 import { canSeePost, type PostVisibilityInfo, type ViewerContext } from "./visibility";
 import { canEditReply } from "./reply-rules";
@@ -47,6 +48,13 @@ export interface PostSummary {
   /** 置顶到什么时候；null = 管理员手动置顶，不会到期 */
   pinnedUntil: number | null;
   featured: boolean;
+  /**
+   * 正文有多少字 —— 列表上要据此显示「读完大概几分钟」。
+   *
+   * 在这里算而不是把正文一路带到组件里：正文最长的那篇一万三千字，
+   * 十五条一页就是二十万字穿过 RSC 边界，而屏幕上只会显示「45 分钟」。
+   */
+  charCount: number;
   solved: boolean;
   replyCount: number;
   reactionCount: number;
@@ -84,9 +92,15 @@ export function toVisibilityInfo(row: typeof posts.$inferSelect): PostVisibility
 export interface ListPostsOptions {
   boardId?: string;
   authorId?: string;
-  sort?: "recent" | "created" | "hot" | "unanswered";
+  sort?: "recent" | "created" | "hot" | "unanswered" | "deep";
   limit?: number;
   offset?: number;
+  /**
+   * 只要「值得坐下来读」的：站长标过精华的，或者正文够长的。
+   *
+   * 存在的理由见 longform.ts —— 一句话是：这个站现在会把长文冲走。
+   */
+  longformOnly?: boolean;
 }
 
 export function listPosts(viewer: ViewerContext, options: ListPostsOptions = {}) {
@@ -129,6 +143,23 @@ export function listPosts(viewer: ViewerContext, options: ListPostsOptions = {})
    */
   const stillPinned = sql`(${posts.pinned} = 1 AND (${posts.pinnedUntil} IS NULL OR ${posts.pinnedUntil} > ${Date.now()}))`;
 
+  /*
+   * 「值得读」= 站长标了精华，**或者**正文够长。
+   *
+   * 两条都要：只认精华的话，这个位置永远只有站长手点过的那几篇，
+   * 而现在全站一共两篇；只认长度的话，一篇长而水的帖子和一篇
+   * 被认可的短文待遇一样。
+   *
+   * `length()` 在 SQLite 里数的是字符不是字节（正文列是 TEXT），
+   * 所以中文不会被算成三倍。这一点值得写下来 ——
+   * 用 `length(cast(content as blob))` 就会。
+   */
+  if (options.longformOnly) {
+    conditions.push(
+      sql`(${posts.featured} = 1 OR length(${posts.content}) >= ${LONGFORM_CHARS})`,
+    );
+  }
+
   const order = {
     recent: [desc(stillPinned), desc(sql`COALESCE(${posts.lastReplyAt}, ${posts.createdAt})`)],
     created: [desc(stillPinned), desc(posts.createdAt)],
@@ -139,6 +170,25 @@ export function listPosts(viewer: ViewerContext, options: ListPostsOptions = {})
                / (((${Date.now()} - ${posts.createdAt}) / 3600000.0) + 2)`),
     ],
     unanswered: [asc(posts.replyCount), desc(posts.createdAt)],
+    /*
+     * 「深度」排序 —— 给长文用的，和 hot 的关键差别是**衰减慢得多**。
+     *
+     * hot 的分母是「小时数 + 2」，一篇帖子一天之后就基本沉了。
+     * 那对快讯是对的，对一篇讲架构的长文是错的：它半年后还成立，
+     * 而写它花了一天。这里分母按**天**算，再加 7 天的缓冲 ——
+     * 于是一篇好文的架子能挂一两个月，而不是一个下午。
+     *
+     * 精华权重给得很重（+50），因为那是唯一一个「有人真的读过并且
+     * 认为值得」的信号 —— 浏览和回复都可以是路过。
+     */
+    deep: [
+      desc(stillPinned),
+      desc(sql`(${posts.featured} * 50
+                + ${posts.reactionCount} * 3
+                + ${posts.replyCount} * 2
+                + ${posts.viewCount} * 0.2)
+               / (((${Date.now()} - ${posts.createdAt}) / 86400000.0) + 7)`),
+    ],
   }[options.sort ?? "recent"];
 
   // 精判会滤掉一部分，所以先多取一些，避免翻页时页面变空
@@ -220,6 +270,8 @@ function hydrateAuthors(rows: { post: typeof posts.$inferSelect; board: typeof b
       pinned: isEffectivelyPinned(post, Date.now()),
       pinnedUntil: post.pinnedUntil,
       featured: post.featured,
+      // 按码点数，`.length` 会把每个 emoji 数成两个 —— 见 longform.ts
+      charCount: charCountOf(post.content),
       solved: Boolean(post.solvedReplyId),
       replyCount: post.replyCount,
       reactionCount: post.reactionCount,
