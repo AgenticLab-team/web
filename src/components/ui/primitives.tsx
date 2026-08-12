@@ -2,6 +2,8 @@ import { ChevronLeft, Search } from "lucide-react";
 import Link from "next/link";
 import { Children } from "react";
 
+import { FloatingBack } from "@/components/ui/FloatingBack";
+
 /**
  * 基础构件。刻意做得少而准 —— 每多一个变体，页面之间就多一分不一致的机会。
  *
@@ -338,16 +340,32 @@ export function Callout({
 /**
  * 子页面顶部的返回链接。手写过 12 次，第 12 次（用户详情页）漏了 mt-6，
  * 于是那一页的标题比别的子页高出 1.5rem —— 这种差异没人会报告，只会觉得怪。
+ *
+ * ─────────────────────────────────────────
+ * 它还带一个「划下去之后」的分身
+ * ─────────────────────────────────────────
+ *
+ * 站长报「读完长文章要回去就得翻回最上面」，以及「手机上不能回到上一页」。
+ * 后一条的根子是 `display: standalone` —— 装成 App 之后浏览器那一整条
+ * chrome 都没了，**连返回按钮一起没了**，站内这个链接就是唯一的出口，
+ * 而它在两屏之外。
+ *
+ * 所以这里挂一个 `FloatingBack`：原来这条滚出视野之后，
+ * 左下角浮出同一个去处。二十个页面用着 BackLink，
+ * 改在这一处就全都有了 —— 逐页去加是二十次漏掉一处的机会。
  */
 export function BackLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <Link
-      href={href}
-      className="t-subhead -ml-1 mt-6 inline-flex items-center gap-0.5 text-[var(--accent)] transition active:opacity-60"
-    >
-      <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
-      {children}
-    </Link>
+    <>
+      <Link
+        href={href}
+        className="t-subhead -ml-1 mt-6 inline-flex items-center gap-0.5 text-[var(--accent)] transition active:opacity-60"
+      >
+        <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
+        {children}
+      </Link>
+      <FloatingBack href={href}>{children}</FloatingBack>
+    </>
   );
 }
 

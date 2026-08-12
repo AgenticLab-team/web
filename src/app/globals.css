@@ -74,6 +74,18 @@
   --tabbar-height: 3.25rem;
 
   /*
+   * 浮出来的那个返回按钮离底边多远（见 components/ui/FloatingBack.tsx）。
+   *
+   * 手机上要让开底部 Tab Bar 和 Home Indicator —— 压在 Tab Bar 上
+   * 正是站长抱怨过的那种叠加。桌面端 Tab Bar 是 `lg:hidden`，
+   * 但 `--tabbar-height` 本身**不会跟着变 0**，所以这里单独覆盖一次；
+   * 不覆盖的话桌面上那个按钮会莫名其妙地悬空三行。
+   */
+  --floating-back-bottom: calc(
+    var(--tabbar-height) + env(safe-area-inset-bottom, 0px) + 0.75rem
+  );
+
+  /*
    * 正文栏宽。
    *
    * 52rem 是给**读的东西**定的 —— 帖子、消息、说明文字，
@@ -305,10 +317,44 @@ body {
   to   { background: var(--accent-soft); }
 }
 
+@media (min-width: 64rem) {
+  :root {
+    /* 桌面端没有 Tab Bar，贴着窗口底边就行 */
+    --floating-back-bottom: 1.5rem;
+  }
+}
+
+/*
+ * 顶栏 / 底栏那层毛玻璃。
+ *
+ * ─────────────────────────────────────────
+ * 站长：「这个 heading 的模糊怪怪的」
+ * ─────────────────────────────────────────
+ *
+ * 原来是 `saturate(180%) blur(20px)` —— 这是照搬 Apple 那套材质的配方，
+ * 而它在这里有两个问题：
+ *
+ *   · **180% 的饱和会把划过去的东西调成荧光色**。头像、绿色强调色、
+ *     代码块的高亮从条子底下经过时明显发艳，看着像蒙了一层油。
+ *     Apple 那份能成立是因为底色和内容一起调过，我们只抄了一半。
+ *   · **不支持 backdrop-filter 时没有兜底**。那时留下的是一条
+ *     78% 半透的底 —— 正文直接透上来压着标题，看起来像是渲染坏了。
+ *     这一档在安卓中低端机和开了「降低透明度」的设备上并不罕见。
+ *
+ * 现在：饱和收到 140%（还有一点通透感，但不发艳），
+ * 并且给不支持的浏览器一条**完全不透明**的兜底。
+ */
 .chrome {
   background: var(--chrome);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(140%) blur(20px);
+  -webkit-backdrop-filter: saturate(140%) blur(20px);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .chrome {
+    /* 没有毛玻璃就别装作有 —— 半透的条子比不透明的难看得多 */
+    background: var(--canvas);
+  }
 }
 
 .hairline {
