@@ -1,0 +1,546 @@
+import "server-only";
+
+import { and, count, eq, gt, sql } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+
+import { audit } from "@/lib/audit";
+import type { CurrentUser } from "@/lib/auth/session";
+import { db } from "@/lib/db";
+import {
+  boards,
+  pollOptions,
+  polls,
+  posts,
+  replies,
+  users,
+} from "@/lib/db/schema";
+import { renderMarkdown } from "@/lib/markdown";
+import { can } from "@/lib/rbac/can";
+import { getSettingInt } from "@/lib/settings/store";
+
+/**
+ * 发帖和回帖的**真正实现**。
+ *
+ * ═════════════════════════════════════════
+ * 为什么它不在 actions.ts 里
+ * ═════════════════════════════════════════
+ *
+ * 开放 API 也要能发帖和回帖，而那条路上没有 cookie 会话 ——
+ * 调用方是一把令牌。所以这两个函数必须接受「以谁的身份」作为参数。
+ *
+ * 而 `"use server"` 文件里**导出的每一个 async 函数都是一个服务端动作**，
+ * 客户端可以直接调、参数完全由客户端给。把一个收 `user` 参数的函数
+ * 放在那种文件里，等于开一个「以任意人的身份发帖」的接口 ——
+ * 那不是理论风险，那就是个后门。
+ *
+ * 所以核心搬到这里（server-only，不是动作），
+ * `actions.ts` 里留两个薄壳负责取会话，API 那条路负责验令牌。
+ * **规则只有这一份** —— 敏感词、版块权限、等级门槛、匿名判定、
+ * 标签必填、限流，两条路走的是同一段代码。
+ */
+
+import { buildViewerContext } from "@/lib/forum/context";
+import { cleanTags } from "@/lib/forum/tag-rules";
+import {
+  countExternalLinks,
+  isNewbie,
+  newbieLinkNotice,
+} from "@/lib/moderation/link-defang-rules";
+import { siteHosts } from "@/lib/moderation/site-hosts";
+import { checkSchedule } from "./schedule-rules";
+import { recountBoardPosts } from "./board-stats";
+import { dropDraft } from "./drafts";
+import { autoSubscribe, notifyNewPost, notifyNewReply } from "./notify";
+import { indexPost, indexReply } from "./search";
+import { newShareCode } from "@/lib/forum/share-code";
+import { applyTags } from "@/lib/forum/tags-write";
+import { resolveDisplayName } from "@/lib/users/display-name";
+import { checkClosesAt, normalizePollDraft } from "./poll-rules";
+import { normalizePostVisibility } from "./visibility";
+import { getPost } from "@/lib/forum/queries";
+import { checkContent, fileForReview } from "@/lib/moderation/word-gate";
+
+export interface ActionResult {
+  ok: boolean;
+  error?: string;
+  postId?: string;
+  replyId?: string;
+  /**
+   * 成功了、但有话要说。
+   *
+   * 新人发外链现在不拦了，改成降权 + 说明 —— 而「说明」如果没有一条
+   * 能送到人眼前的路，这条规则就退化成了「我的链接怎么坏了」。
+   */
+  note?: string;
+}
+
+export const fail = (error: string): ActionResult => ({ ok: false, error });
+
+/** 提及解析：把 @昵称 映射到账号 id */
+export function mentionResolver() {
+  const rows = db
+    .select({
+      id: users.id,
+      siteNickname: users.siteNickname,
+      wxNickname: users.wxNickname,
+    })
+    .from(users)
+    .all();
+
+  const byName = new Map<string, string>();
+  for (const row of rows) {
+    if (row.siteNickname) byName.set(row.siteNickname, row.id);
+    if (row.wxNickname && !byName.has(row.wxNickname)) byName.set(row.wxNickname, row.id);
+  }
+  return (name: string) => byName.get(name) ?? null;
+}
+
+/**
+ * 新人发外链：**不拦，降权 + 说一句**。
+ *
+ * 以前这里直接返回「不让发」。拦截只教会人「这里不让说话」——
+ * 一个新人被拦一次多半就不发第二次了，而我们要挡的是广告号，
+ * 不是第一天来的人。
+ *
+ * 现在内容照常落库（**存原文**），链接的可点性在渲染那一层拆掉
+ * （见 forum/queries.ts 与 link-defang-rules.ts），这里只负责
+ * 把那句说明带回给发帖的人。
+ *
+ * 返回 null 表示没什么要说的。
+ */
+export function newbieLinkNote(
+  user: { firstBoundAt: number | null },
+  content: string,
+  what: "帖子" | "回复",
+): string | null {
+  const days = getSettingInt("forum.newbie_no_link_days", 3);
+  if (!isNewbie(user.firstBoundAt, days, Date.now())) return null;
+  if (countExternalLinks(content, { siteHosts: siteHosts() }) === 0) return null;
+  return newbieLinkNotice(days, what);
+}
+
+export function tooFrequent(userId: string, table: "post" | "reply"): boolean {
+  const windowMs = getSettingInt("forum.rate_window_seconds", 600) * 1000;
+  const max = getSettingInt(
+    table === "post" ? "forum.max_posts_per_window" : "forum.max_replies_per_window",
+    table === "post" ? 3 : 15,
+  );
+  const since = Date.now() - windowMs;
+
+  const n =
+    table === "post"
+      ? db
+          .select({ n: count() })
+          .from(posts)
+          .where(and(eq(posts.authorId, userId), gt(posts.createdAt, since)))
+          .get()?.n
+      : db
+          .select({ n: count() })
+          .from(replies)
+          .where(and(eq(replies.authorId, userId), gt(replies.createdAt, since)))
+          .get()?.n;
+
+  return (n ?? 0) >= max;
+}
+
+export async function createPostAs(
+  user: CurrentUser,
+  input: {
+  boardKey: string;
+  title: string;
+  content: string;
+  type?: "discussion" | "question" | "showcase";
+  visibility?: "public" | "unlisted" | "member" | "private";
+  anonymous?: boolean;
+  /** 标签。归一化、去重、封顶都在 tags-write.ts 里 */
+  tags?: string[];
+  /**
+   * 顺带建一个投票。
+   *
+   * **和帖子在同一个事务里建**，不是发完帖再调一次 createPoll ——
+   * 那样中间失败会留下一个「类型是投票、但没有投票」的帖子，
+   * 而界面上那种帖子看起来就是坏的，作者也修不了。
+   */
+  poll?: {
+    question?: string;
+    options: string[];
+    multi?: boolean;
+    hideUntilVoted?: boolean;
+    closesAt?: number;
+  };
+  /**
+   * 定时发布。到点之前存成草稿（只有作者和版主看得到）。
+   *
+   * `scheduled_at` 这一列在 schema 里躺了很久，全站零引用。
+   */
+  scheduledAt?: number;
+  },
+): Promise<ActionResult> {
+
+  const board = db.select().from(boards).where(eq(boards.key, input.boardKey)).get();
+  if (!board) return fail("版块不存在");
+  if (board.locked) return fail("该版块已锁定");
+
+  // ① 权限点
+  const permission = (board.postPermission ?? "forum.post.create") as "forum.post.create";
+  const verdict = can(user, permission, { scopeType: "board", scopeId: board.id });
+  if (!verdict.allowed) return fail(verdict.reason);
+
+  // ② 版块规则
+  if (user.level < board.postMinLevel) {
+    return fail(`该版块需要 L${board.postMinLevel} 才能发帖，你当前 L${user.level}`);
+  }
+  if (input.anonymous && !board.allowAnonymous) return fail("该版块不允许匿名发帖");
+
+  /*
+   * 版块可以要求必填标签。
+   *
+   * `require_tags` 这一列在 schema 里躺着、后台可以改，而**没有一行代码
+   * 读它** —— 也就是说管理员在后台把它打开，什么都不会发生。
+   * 一个开着却不生效的开关，比没有这个开关更糟。
+   */
+  const wantedTags = cleanTags(input.tags ?? []);
+  if (board.requireTags && wantedTags.length === 0) {
+    return fail("这个版块要求至少一个标签 —— 别人靠它找到你这篇");
+  }
+
+  const title = input.title.trim();
+  const content = input.content.trim();
+  if (title.length < 2) return fail("标题太短了");
+  if (title.length > 120) return fail("标题不能超过 120 字");
+  if (content.length < 2) return fail("正文不能为空");
+
+  /*
+   * ③ 反滥用。
+   *
+   * 新人的外链**不再拦**：算出那句要带回去的说明，内容照常往下走。
+   * 频率仍然拦 —— 「发得太快」和「发了链接」不是一回事，
+   * 前者不管新老都该挡。
+   */
+  const linkNote = newbieLinkNote(user, content, "帖子");
+  if (tooFrequent(user.id, "post")) return fail("发帖太频繁了，歇一会儿");
+
+  /*
+   * ④ 敏感词。
+   *
+   * 标题和正文**分开扫**。拼成一段再扫看着省事，但替换档会改写文本，
+   * 拼接后再按原长度切回来，只要标题里发生过替换，切点就错了 ——
+   * 结果是正文开头被啃掉几个字。
+   * 只扫正文同样不行：把词放标题里就绕过去了。
+   */
+  const titleGate = checkContent(title);
+  if (!titleGate.allowed) return fail(titleGate.message!);
+  const contentGate = checkContent(content);
+  if (!contentGate.allowed) return fail(contentGate.message!);
+
+  const safeTitle = titleGate.content;
+  const safeContent = contentGate.content;
+  const needsReview = titleGate.needsReview || contentGate.needsReview;
+
+  const rendered = await renderMarkdown(safeContent, { resolveMention: mentionResolver() });
+
+  const normalized = normalizePostVisibility({
+    requested: input.visibility ?? board.defaultVisibility,
+    boardMax: board.maxVisibility,
+  });
+
+  /*
+   * 定时的校验也放在开事务之前 —— 和投票同理，
+   * 一个「时间填早了」不该连累刚写完的两千字回滚。
+   */
+  let schedule: number | null = null;
+  if (input.scheduledAt) {
+    const verdict = checkSchedule(input.scheduledAt, Date.now());
+    if (!verdict.ok) return fail(verdict.reason);
+    schedule = verdict.at;
+  }
+
+  /*
+   * 投票的校验放在开事务**之前**。
+   *
+   * 放进去的话，一个「只填了一个选项」这样的小错会连累整篇帖子回滚 ——
+   * 而人刚写完两千字。校验和落库分开，错了只需要改那两行选项。
+   */
+  let pollDraft: { options: string[]; question: string | null } | null = null;
+  if (input.poll) {
+    const check = normalizePollDraft(input.poll);
+    if (!check.ok) return fail(check.error);
+    const timeCheck = checkClosesAt(input.poll.closesAt, Date.now());
+    if (timeCheck && !timeCheck.ok) return fail(timeCheck.error);
+    pollDraft = { options: check.options, question: check.question };
+  }
+
+  const created = db.transaction((tx) => {
+    const row = tx
+      .insert(posts)
+      .values({
+        boardId: board.id,
+        authorId: user.id,
+        title: safeTitle,
+        content: safeContent,
+        contentHtml: rendered.html,
+        excerpt: rendered.excerpt,
+        // 带了投票就是投票帖 —— 类型和内容在同一个事务里定下来，不会对不上
+        type: pollDraft ? "poll" : (input.type ?? "discussion"),
+        /*
+         * 定时的先存成草稿。
+         *
+         * 复用 draft 这个状态，而不是新加一个 "scheduled" ——
+         * `canSeePost` 已经把 draft 判成「只有作者和版主可见」，
+         * 列表查询也已经把 draft 排除在别人的列表之外。
+         * 新加一个状态意味着这两处、以及所有 `status !== "published"`
+         * 的判断都要跟着改一遍，而漏掉任何一处就是一个提前泄露。
+         */
+        status: schedule ? "draft" : "published",
+        scheduledAt: schedule,
+        visibility: normalized.visibility,
+        visibilityGroupId: normalized.visibilityGroupId,
+        visibilityLocked: normalized.locked,
+        anonymous: Boolean(input.anonymous),
+        shareCode: newShareCode(),
+      })
+      .returning({ id: posts.id })
+      .get();
+
+    if (pollDraft) {
+      const poll = tx
+        .insert(polls)
+        .values({
+          postId: row.id,
+          question: pollDraft.question,
+          multi: Boolean(input.poll?.multi),
+          hideUntilVoted: Boolean(input.poll?.hideUntilVoted),
+          closesAt: input.poll?.closesAt,
+        })
+        .returning({ id: polls.id })
+        .get();
+
+      pollDraft.options.forEach((text, sort) => {
+        tx.insert(pollOptions).values({ pollId: poll.id, text, sort }).run();
+      });
+    }
+
+    /*
+     * 标签和帖子**在同一个事务里**写。
+     *
+     * 发完帖再调一次写标签的动作，中间失败会留下一篇没有标签的帖子 ——
+     * 而作者未必知道该回去补，版块要求必填标签时更是直接自相矛盾。
+     * 和上面投票那一段是同一条理由。
+     */
+    if (wantedTags.length > 0) applyTags(tx, row.id, wantedTags, user.id);
+
+    // 计数统一走重算，不再手写 +1 —— 「+1」是第二份真相，
+    // 群聊转帖那条路当年就是忘了抄这一句，沉淀版因此常年显示 0
+    recountBoardPosts(board.id, tx);
+    tx.update(boards).set({ lastPostAt: Date.now() }).where(eq(boards.id, board.id)).run();
+
+    return row;
+  });
+
+  indexPost(created.id, safeTitle, safeContent);
+
+  // 送审档照常发布，只是进队列。先扣下再审的话，误伤一次就是
+  // 有人的内容凭空消失几小时，而子串匹配的误伤率注定不低
+  if (needsReview) {
+    fileForReview({
+      targetType: "post",
+      targetId: created.id,
+      targetUserId: user.id,
+      scan: titleGate.needsReview ? titleGate.scan : contentGate.scan,
+    });
+  }
+
+  /*
+   * 发出去了就把服务端草稿删掉。
+   *
+   * 不删的话，下次点「发帖」会把**已经发表过的内容**当草稿恢复出来 ——
+   * 而人多半会以为上次没发成功，于是再发一遍。
+   */
+  dropDraft(user.id, "post", board.key);
+
+  // 发帖后自动订阅自己的帖子，有人回复才收得到通知
+  autoSubscribe(user.id, created.id);
+
+  /*
+   * 扇给关注这个作者 / 版块 / 标签的人。
+   *
+   * **定时的帖子这一刻不扇** —— 那会在帖子还看不见的时候
+   * 就把标题推到所有粉丝的通知栏里。到点发布时由
+   * publishDueScheduled 再调一次（notifyNewPost 自己也会
+   * 因为 status !== "published" 而拒绝，这里是第二道）。
+   *
+   * 在这一行之前，**发新帖不通知任何人** —— 站里只有
+   * notifyNewReply，而 subscriptions.target_type 里的
+   * user / board / tag 三个值从来没有一行数据。
+   *
+   * 逐人可见性判定在 notifyNewPost 里面做，不在这里 ——
+   * 放在调用点的话，下一个调用点（转帖、定时发布）就会忘掉。
+   */
+  if (!schedule) {
+    notifyNewPost({
+      postId: created.id,
+      title: safeTitle,
+      authorId: user.id,
+      // 匿名与否由 notifyNewPost 自己从帖子行上判 —— 调用点判的话，
+      // 下一个调用点（转帖、定时发布）会忘掉，而忘掉的后果是匿名失效
+      authorName: resolveDisplayName([user.siteNickname, user.wxNickname], {
+        wxId: user.wxId,
+        fallback: "有人",
+      }),
+      boardId: board.id,
+      boardName: board.name,
+    });
+  }
+
+  audit({ actorId: user.id }, {
+    action: "forum.post.create",
+    targetType: "post",
+    targetId: created.id,
+    targetLabel: title,
+    after: { boardKey: board.key, visibility: normalized.visibility },
+  });
+
+  revalidatePath("/forum");
+  revalidatePath(`/forum/${board.key}`);
+  return { ok: true, postId: created.id, note: linkNote ?? undefined };
+}
+
+export async function createReplyAs(
+  user: CurrentUser,
+  input: {
+  postId: string;
+  content: string;
+  quotedReplyId?: string;
+  anonymous?: boolean;
+  },
+): Promise<ActionResult> {
+
+  const viewer = buildViewerContext(user);
+  const post = getPost(viewer, input.postId);
+  // 看不见的帖子不能回复，且错误信息与「不存在」一致，不泄露存在性
+  if (!post) return fail("帖子不存在");
+  if (post.raw.status === "locked") return fail("该帖已锁定，不能再回复");
+
+  const board = post.board;
+
+  /*
+   * 匿名回复要和匿名发帖同一条判定。
+   *
+   * 原来这里**完全不校验** —— 发帖那条走了 `board.allowAnonymous`，
+   * 回复这条没走，于是不允许匿名的版块里照样能匿名回复。
+   * 今天没有界面所以触发不到，但一个只在其中一条路上生效的规则，
+   * 等于没有这条规则。
+   */
+  if (input.anonymous && !board.allowAnonymous) return fail("该版块不允许匿名回复");
+
+  const permission = (board.replyPermission ?? "forum.reply.create") as "forum.reply.create";
+  const verdict = can(user, permission, { scopeType: "board", scopeId: board.id });
+  if (!verdict.allowed) return fail(verdict.reason);
+
+  const content = input.content.trim();
+  if (content.length < 1) return fail("回复不能为空");
+  // 和发帖同一条路：外链不拦，只带一句说明回去
+  const linkNote = newbieLinkNote(user, content, "回复");
+  if (tooFrequent(user.id, "reply")) return fail("回复太频繁了，歇一会儿");
+
+  const gate = checkContent(content);
+  if (!gate.allowed) return fail(gate.message!);
+  const safeReply = gate.content;
+
+  const rendered = await renderMarkdown(safeReply, { resolveMention: mentionResolver() });
+
+  const created = db.transaction((tx) => {
+    /*
+     * 楼层号必须在事务里算。两个人同时回复时，
+     * 事务外算 max+1 会得到同一个楼层号，撞上唯一索引其中一个直接失败。
+     */
+    const maxFloor =
+      tx
+        .select({ max: sql<number>`COALESCE(MAX(${replies.floor}), 0)` })
+        .from(replies)
+        .where(eq(replies.postId, input.postId))
+        .get()?.max ?? 0;
+
+    let quotedExcerpt: string | null = null;
+    /*
+     * 回复某一楼 = 树上的一条边。
+     *
+     * `parent_id` 一直空着，因为没有任何地方写它。而「引用某一楼」
+     * 就是「回复某一楼」，不该是两个各自记一份的关系 ——
+     * 两份迟早对不上，而且没人说得清哪一份算数。
+     *
+     * 所以这里一次写两列，分工写清楚：
+     *   · parent_id       —— 结构，树形视图按它排
+     *   · quoted_excerpt  —— 显示，那一小段引文
+     */
+    let parentId: string | null = null;
+    if (input.quotedReplyId) {
+      const quoted = tx.select().from(replies).where(eq(replies.id, input.quotedReplyId)).get();
+      // 只引用同一帖内的回复，避免跨帖拼接出误导性的上下文
+      if (quoted && quoted.postId === input.postId) {
+        quotedExcerpt = quoted.content.slice(0, 80);
+        parentId = quoted.id;
+      }
+    }
+
+    const row = tx
+      .insert(replies)
+      .values({
+        postId: input.postId,
+        authorId: user.id,
+        content: safeReply,
+        contentHtml: rendered.html,
+        floor: maxFloor + 1,
+        // 跨帖引用会被上面滤掉，那时 parentId 是 null，这一条就是顶层
+        parentId,
+        quotedReplyId: parentId ? input.quotedReplyId : null,
+        quotedExcerpt,
+        anonymous: Boolean(input.anonymous),
+      })
+      .returning({ id: replies.id, floor: replies.floor })
+      .get();
+
+    tx.update(posts)
+      .set({
+        replyCount: sql`${posts.replyCount} + 1`,
+        lastReplyAt: Date.now(),
+      })
+      .where(eq(posts.id, input.postId))
+      .run();
+
+    return row;
+  });
+
+  indexReply(input.postId, created.id, safeReply);
+  // 回复发出去了，服务端那份草稿也该没了
+  dropDraft(user.id, "reply", input.postId);
+
+  autoSubscribe(user.id, input.postId);
+
+  if (gate.needsReview) {
+    fileForReview({
+      targetType: "reply",
+      targetId: created.id,
+      targetUserId: user.id,
+      scan: gate.scan,
+    });
+  }
+
+  notifyNewReply({
+    postId: input.postId,
+    postTitle: post.title,
+    postAuthorId: post.authorId,
+    replyAuthorId: user.id,
+    replyAuthorName: input.anonymous
+      ? "匿名"
+      : resolveDisplayName([user.siteNickname, user.wxNickname], {
+          wxId: user.wxId,
+          fallback: "有人",
+        }),
+    floor: created.floor,
+    mentions: rendered.mentions,
+  });
+
+  revalidatePath(`/forum/p/${input.postId}`);
+  return { ok: true, replyId: created.id, note: linkNote ?? undefined };
+}

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
 
 import { MAX_TAGS_PER_POST, MAX_TAG_LENGTH, cleanTags, slugify } from "@/lib/forum/tag-rules";
-import { stripComments as strip } from "./_source";
+import { stripComments as strip, forumWritePath } from "./_source";
 
 /**
  * 标签体系接线。
@@ -83,7 +83,7 @@ describe("接线", () => {
   it("**发帖时能加标签**", () => {
     // 这就是整件事：以前这里什么都没有
     assert.match(strip(src("components/forum/ComposeForm.tsx")), /<TagInput/);
-    assert.match(strip(src("lib/forum/actions.ts")), /tags\?: string\[\]/);
+    assert.match(strip(forumWritePath()), /tags\?: string\[\]/);
   });
 
   it("**标签和帖子在同一个事务里写**", () => {
@@ -91,19 +91,19 @@ describe("接线", () => {
      * 发完帖再调一次写标签，中间失败会留下一篇没有标签的帖子 ——
      * 而作者未必知道该回去补，版块要求必填标签时更是直接自相矛盾。
      */
-    const body = strip(src("lib/forum/actions.ts"));
+    const body = strip(forumWritePath());
     const tx = body.slice(body.indexOf("const created = db.transaction"), body.indexOf("indexPost("));
     assert.match(tx, /applyTags\(tx,/);
   });
 
   it("**`require_tags` 终于有人读了**", () => {
     // 后台能改、显示成开着的，而没有一行代码读它
-    assert.match(strip(src("lib/forum/actions.ts")), /board\.requireTags/);
+    assert.match(strip(forumWritePath()), /board\.requireTags/);
   });
 
   it("必填时的提示要说清楚为什么", () => {
     // 「必须填标签」只是命令；「别人靠它找到你这篇」才是理由
-    assert.match(src("lib/forum/actions.ts"), /别人靠它找到/);
+    assert.match(forumWritePath(), /别人靠它找到/);
   });
 
   it("**帖子上显示标签，而且点得动**", () => {

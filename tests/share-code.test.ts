@@ -79,13 +79,15 @@ describe("接线", () => {
      * 群聊转帖那条路以前不生成码 —— 生产库里 4 篇没有。
      * 两处各写一份的话，迟早又有一条路忘了写。
      */
-    for (const file of ["lib/forum/actions.ts", "lib/forum/convert.ts"]) {
+    // 发帖那条路搬去了 write.ts（理由见 _source.ts 的 forumWritePath），
+    // 群聊转帖那条还在 convert.ts
+    for (const file of ["lib/forum/write.ts", "lib/forum/convert.ts"]) {
       assert.match(strip(src(file)), /newShareCode\(\)/, file);
     }
   });
 
   it("那个会产出短码的写法没了", () => {
-    for (const file of ["lib/forum/actions.ts", "lib/forum/convert.ts"]) {
+    for (const file of ["lib/forum/write.ts", "lib/forum/convert.ts"]) {
       assert.equal(
         strip(src(file)).includes("Math.random().toString(36)"),
         false,

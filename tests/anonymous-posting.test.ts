@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { stripComments as strip } from "./_source";
+import { stripComments as strip, forumWritePath } from "./_source";
 
 /**
  * 匿名发帖与回复。
@@ -29,7 +29,7 @@ const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url),
 
 describe("**发帖和回复走同一条判定**", () => {
   it("发帖校验版块允不允许", () => {
-    assert.match(strip(src("lib/forum/actions.ts")), /input\.anonymous && !board\.allowAnonymous/);
+    assert.match(strip(forumWritePath()), /input\.anonymous && !board\.allowAnonymous/);
   });
 
   it("**回复也要校验** —— 原来这条完全没有", () => {
@@ -38,7 +38,7 @@ describe("**发帖和回复走同一条判定**", () => {
      * 于是不允许匿名的版块里照样能匿名回复。
      * 一个只在其中一条路上生效的规则，等于没有这条规则。
      */
-    const body = strip(src("lib/forum/actions.ts"));
+    const body = strip(forumWritePath());
     const fn = body.slice(body.indexOf("export async function createReply"));
     assert.match(fn, /!board\.allowAnonymous/);
   });

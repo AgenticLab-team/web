@@ -118,11 +118,36 @@ export function getWebPushConfig(raw: RawKeys = env.webpush): WebPushConfig | nu
   };
 }
 
-/** 给 scripts/webpush-keys.ts 用 */
+/**
+ * 给 scripts/webpush-keys.ts 用。
+ *
+ * ═════════════════════════════════════════
+ * 私钥必须**补足 32 字节**
+ * ═════════════════════════════════════════
+ *
+ * `ecdh.getPrivateKey()` 回的是这个大数的**最短**大端表示 ——
+ * 标量的最高位字节碰巧是 0x00 时，它就只有 31 字节（实测 20 万次里
+ * 有 797 次短了，约 1/250）。
+ *
+ * 而 32 是硬要求，不是我们自己定的规矩：RFC 8292 的 VAPID 签名走 JWK，
+ * 那里的 `d` 定长 32；上面 `configProblem` 也照着这条判。
+ *
+ * 不补的话，这个坏法**不会在生成的时候露面**：脚本高高兴兴打印出一对
+ * 看起来正常的密钥，人把它抄进 `.env.local`，然后站起不来，
+ * 报的还是「VAPID_PRIVATE_KEY 不是 base64url 的 32 字节 P-256 私钥」——
+ * 于是他以为是自己复制少了一个字符，回去重抄一遍，还是不行。
+ * 二百五十分之一的概率，加上一句把人指向错误方向的报错。
+ */
 export function generateVapidKeys(): { publicKey: string; privateKey: string } {
   const ecdh = createECDH("prime256v1");
   ecdh.generateKeys();
-  return { publicKey: b64u(ecdh.getPublicKey()), privateKey: b64u(ecdh.getPrivateKey()) };
+
+  // 左边补零 —— 大端数补高位不改变它的值
+  const raw = ecdh.getPrivateKey();
+  const privateKey = Buffer.alloc(32);
+  raw.copy(privateKey, 32 - raw.length);
+
+  return { publicKey: b64u(ecdh.getPublicKey()), privateKey: b64u(privateKey) };
 }
 
 // ── RFC 8291 载荷加密（aes128gcm）────────────────────────────

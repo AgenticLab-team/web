@@ -12,7 +12,7 @@ import {
   isNewbie,
   newbieLinkNotice,
 } from "@/lib/moderation/link-defang-rules";
-import { stripComments as strip } from "./_source";
+import { stripComments as strip, forumWritePath } from "./_source";
 
 /**
  * 新人外链：从「拦」改成「降权 + 说明」。
@@ -205,7 +205,7 @@ describe("**那句给新人的话**", () => {
 
 describe("接线", () => {
   it("**发帖和回帖都不再因为外链失败**", () => {
-    const actions = strip(src("lib/forum/actions.ts"));
+    const actions = strip(forumWritePath());
     assert.equal(/暂时不能发外链/.test(actions), false, "还留着拦截那句话");
     assert.equal(/violatesNewbieLinkRule/.test(actions), false, "还留着拦截那个函数");
     // 两条路都要把那句说明带回去
@@ -223,7 +223,7 @@ describe("接线", () => {
     // 两个 contentHtml 出口都要经过它
     assert.equal((queries.match(/defangFor\(/g) ?? []).length, 3, "单帖、楼层各一次 + 定义");
 
-    const actions = strip(src("lib/forum/actions.ts"));
+    const actions = strip(forumWritePath());
     assert.equal(/defangHtml/.test(actions), false, "写入层不该动内容");
   });
 

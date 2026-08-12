@@ -9,7 +9,7 @@ import {
   checkReplyContent,
   collapsedView,
 } from "@/lib/forum/reply-rules";
-import { stripComments as strip } from "./_source";
+import { stripComments as strip, forumWritePath } from "./_source";
 
 /**
  * 编辑与折叠回复。
@@ -104,7 +104,7 @@ describe("**改过就标，没有「小改不算」**", () => {
      * 「给出小改不算的口子就会被用来悄悄改意思」那段理由，
      * 已经挪到 actions.ts 那一行旁边。
      */
-    const code = strip(src("lib/forum/actions.ts"));
+    const code = strip(forumWritePath());
     const fn = code.slice(code.indexOf("function editReply"));
     assert.match(fn, /editCount: sql`\$\{replies\.editCount\} \+ 1`/);
   });
@@ -120,26 +120,26 @@ describe("**编辑不能变成绕过审核的后门**", () => {
      * 省掉的话：发一条干净的，然后编辑成任何内容 ——
      * 而审核只看发表那一刻。
      */
-    const code = strip(src("lib/forum/actions.ts"));
+    const code = strip(forumWritePath());
     const fn = code.slice(code.indexOf("function editReply"));
     assert.match(fn, /checkContent\(/);
   });
 
   it("走同一个 markdown 渲染（净化 + @解析）", () => {
-    const code = strip(src("lib/forum/actions.ts"));
+    const code = strip(forumWritePath());
     const fn = code.slice(code.indexOf("function editReply"));
     assert.match(fn, /renderMarkdown\(/);
     assert.match(fn, /mentionResolver\(\)/);
   });
 
   it("预览态下不能改", () => {
-    const code = strip(src("lib/forum/actions.ts"));
+    const code = strip(forumWritePath());
     const fn = code.slice(code.indexOf("function editReply"));
     assert.match(fn.slice(0, 400), /assertNotPreviewing\(\)/);
   });
 
   it("**服务端再判一次时间窗** —— 页面开着不动半小时，按钮还在", () => {
-    const code = strip(src("lib/forum/actions.ts"));
+    const code = strip(forumWritePath());
     const fn = code.slice(code.indexOf("function editReply"));
     assert.match(fn, /canEditReply\(/);
   });

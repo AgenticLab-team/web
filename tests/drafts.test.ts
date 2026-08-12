@@ -13,7 +13,7 @@ import {
   draftKey,
   pickDraft,
 } from "@/lib/forum/draft-rules";
-import { stripComments as strip } from "./_source";
+import { stripComments as strip, forumWritePath } from "./_source";
 
 /**
  * 服务端草稿。
@@ -254,7 +254,7 @@ describe("接线", () => {
      * 不删的话，下次点「发帖」会把已经发表过的内容当草稿恢复出来，
      * 而人多半会以为上次没发成功，于是再发一遍。
      */
-    const actions = strip(src("lib/forum/actions.ts"));
+    const actions = strip(forumWritePath());
     assert.match(actions, /dropDraft\(user\.id, "post", board\.key\)/);
     assert.match(actions, /dropDraft\(user\.id, "reply", input\.postId\)/);
   });

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+
+import { forumWritePath } from "./_source";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -124,12 +126,12 @@ describe("**两条创建路径共用同一份校验**", () => {
      * 没人查得出为什么。
      */
     assert.match(src("lib/forum/polls.ts"), /normalizePollDraft\(/);
-    assert.match(src("lib/forum/actions.ts"), /normalizePollDraft\(/);
+    assert.match(forumWritePath(), /normalizePollDraft\(/);
   });
 
   it("两边都查截止时间", () => {
     assert.match(src("lib/forum/polls.ts"), /checkClosesAt\(/);
-    assert.match(src("lib/forum/actions.ts"), /checkClosesAt\(/);
+    assert.match(forumWritePath(), /checkClosesAt\(/);
   });
 
   it("规则层不碰数据库", () => {
@@ -146,7 +148,7 @@ describe("**投票和帖子在同一个事务里建**", () => {
      * 分两次的话，中间失败会留下一个「类型是投票、但没有投票」的帖子 ——
      * 界面上那种帖子看起来就是坏的，作者也修不了。
      */
-    const code = src("lib/forum/actions.ts");
+    const code = forumWritePath();
     const create = code.slice(code.indexOf("export async function createPost"));
     const txStart = create.indexOf("db.transaction((tx)");
     const pollInsert = create.indexOf("insert(polls)");
@@ -154,7 +156,7 @@ describe("**投票和帖子在同一个事务里建**", () => {
   });
 
   it("**校验在开事务之前** —— 一个填错的选项不该连累两千字回滚", () => {
-    const code = src("lib/forum/actions.ts");
+    const code = forumWritePath();
     const create = code.slice(code.indexOf("export async function createPost"));
     const check = create.indexOf("normalizePollDraft(");
     const tx = create.indexOf("db.transaction((tx)");
@@ -162,13 +164,13 @@ describe("**投票和帖子在同一个事务里建**", () => {
   });
 
   it("带投票的帖子类型由服务端定 —— 两处各判一次迟早对不上", () => {
-    const code = src("lib/forum/actions.ts");
+    const code = forumWritePath();
     assert.match(code, /pollDraft \? "poll" :/);
   });
 
   it("**createReply 里没有混进投票逻辑**", () => {
     // 改的时候误加进去过一次，这条锁住
-    const code = src("lib/forum/actions.ts");
+    const code = forumWritePath();
     const reply = code.slice(code.indexOf("export async function createReply"));
     assert.doesNotMatch(reply, /normalizePollDraft|insert\(polls\)/);
   });

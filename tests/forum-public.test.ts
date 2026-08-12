@@ -136,8 +136,32 @@ describe("**每一条读论坛的口子都被管住**", () => {
       }
     };
     walk(join(root, "src/app/api"));
-    const forumish = apis.filter((p) => /forum|post|reply/.test(p));
-    assert.deepEqual(forumish, ["/forum/draft/route.ts"], `新的论坛接口要过一遍这个开关：${forumish}`);
+    const forumish = apis.filter((p) => /forum|post|reply/.test(p)).sort();
+    assert.deepEqual(
+      forumish,
+      [
+        "/forum/draft/route.ts",
+        "/v1/posts/[id]/replies/route.ts",
+        "/v1/posts/[id]/route.ts",
+        "/v1/posts/route.ts",
+      ],
+      `新的论坛接口要过一遍这个开关：${forumish}`,
+    );
+  });
+
+  it("**开放 API 那几条论坛接口也判了功能开关**", () => {
+    /*
+     * 网页那边关掉论坛之后 `requireFeature` 会 404。
+     * API 这条路不判的话，它就是一个绕过开关的后门 ——
+     * 站长以为关掉了，实际上带令牌照样读得到、发得出去。
+     */
+    for (const f of [
+      "app/api/v1/posts/route.ts",
+      "app/api/v1/posts/[id]/route.ts",
+      "app/api/v1/posts/[id]/replies/route.ts",
+    ]) {
+      assert.match(strip(src(f)), /featureEnabled\("forum"/, f);
+    }
   });
 });
 

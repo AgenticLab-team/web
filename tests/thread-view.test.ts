@@ -10,7 +10,7 @@ import {
   parseViewMode,
   threadingIsMeaningful,
 } from "@/lib/forum/thread-rules";
-import { stripComments as strip } from "./_source";
+import { stripComments as strip, forumWritePath } from "./_source";
 
 /**
  * 楼中楼（树形视图）。
@@ -216,13 +216,13 @@ describe("**楼层号不跟着树变**", () => {
 
 describe("接线", () => {
   it("**回复某一楼会写 parent_id** —— 这一列原来零引用", () => {
-    const actions = strip(src("lib/forum/actions.ts"));
+    const actions = strip(forumWritePath());
     assert.match(actions, /parentId = quoted\.id;/);
     assert.match(actions, /parentId,/);
   });
 
   it("跨帖引用被滤掉时 parentId 是 null，那条就是顶层", () => {
-    const actions = strip(src("lib/forum/actions.ts"));
+    const actions = strip(forumWritePath());
     assert.match(actions, /quotedReplyId: parentId \? input\.quotedReplyId : null/);
   });
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { createPublicKey, verify as verifyRaw } from "node:crypto";
+import { createECDH, createPublicKey, verify as verifyRaw } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -207,6 +207,52 @@ describe("没配置时的降级", () => {
       }),
       null,
     );
+  });
+
+  it("**生成出来的私钥永远是 32 字节** —— 约 1/250 会短一截，而它不在生成时露面", () => {
+    /*
+     * `ecdh.getPrivateKey()` 回的是最短大端表示：标量最高位字节
+     * 碰巧为 0x00 时只有 31 字节。实测 20 万次里短了 797 次。
+     *
+     * 这一条**不能靠随机撞**。直接 `generateVapidKeys()` 跑几次的话，
+     * 249/250 的运行是绿的 —— 而它就是这么溜过 CI、在服务器上红一次的
+     * （本地绿、线上红，看起来像环境问题，其实是掷骰子）。
+     *
+     * 所以两头都钉死：
+     *   ① 先证明**前提还在** —— Node 确实会回短的
+     *   ② 再证明**我们的产出不会** —— 补零补上了
+     *
+     * ① 要是哪天 Node 改成定长了，这条会红，那时候可以删掉补零。
+     * 少了 ①，补零就成了没人知道还在防什么的一段代码。
+     */
+    let sawShort = false;
+    for (let i = 0; i < 4000 && !sawShort; i++) {
+      const ecdh = createECDH("prime256v1");
+      ecdh.generateKeys();
+      if (ecdh.getPrivateKey().length < 32) sawShort = true;
+    }
+    assert.ok(sawShort, "Node 不再回短私钥了？那 generateVapidKeys 里的补零可以删了");
+
+    for (let i = 0; i < 4000; i++) {
+      const keys = wp.generateVapidKeys();
+      assert.equal(wp.b64uDecode(keys.privateKey).length, 32, "私钥短了一截");
+    }
+  });
+
+  it("**补零之后公私钥还是配对的** —— 补高位不改变大数的值", () => {
+    /*
+     * 补零补错一边（补到右边）的话，长度检查照样过，
+     * 而那是一个**完全不同的标量** —— 于是每次推送被 401 拒掉，
+     * 站内一切正常。所以不能只量长度。
+     */
+    for (let i = 0; i < 500; i++) {
+      const keys = wp.generateVapidKeys();
+      assert.equal(
+        wp.configProblem({ ...keys, subject: "https://agenticlab.sh" }),
+        null,
+        "生成出来的一对，自己的 validator 应当认",
+      );
+    }
   });
 
   it("**真的跑一遍生成脚本，validator 认得它的产出**", () => {
