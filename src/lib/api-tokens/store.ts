@@ -386,10 +386,57 @@ export interface SendLogRow {
  * **不给「看别人的」这个中间态** —— 要么是自己的，要么是管理员；
  * 中间那一档没有任何合理的使用场景，只会变成一个越权的入口。
  */
-export function sendLog(input: {
+export interface SendLogQuery {
+  /**
+   * 谁发的。**null = 全站**，只有管理页能这么传。
+   *
+   * 保留成必填参数（而不是可选）是有意的：写成可选的话，
+   * 「我的」那一页少传一个字段就会把所有人的代发内容列出来 ——
+   * 而那一页看起来一切正常，没有任何地方会报错。
+   */
   userId: string | null;
+  /** 只看某个群 */
+  convId?: string | null;
+  /** 只看成功的 / 只看失败的 */
+  status?: "all" | "ok" | "failed";
+  /** 在正文里搜。代发内容是要能审计的，搜不了等于没存 */
+  query?: string | null;
   limit?: number;
-}): SendLogRow[] {
+  offset?: number;
+}
+
+/**
+ * 代发日志。**带总数一起回**。
+ *
+ * 不回总数的话，分页只能做成「还有没有下一页」——
+ * 而站长在这一页要回答的是「他一共代发过多少条」，
+ * 那个问题没有总数就答不了。
+ */
+export function sendLog(input: SendLogQuery): { rows: SendLogRow[]; total: number } {
+  const conditions = [
+    input.userId ? eq(apiSends.userId, input.userId) : undefined,
+    input.convId ? eq(apiSends.convId, input.convId) : undefined,
+    input.status === "ok" ? eq(apiSends.ok, true) : undefined,
+    input.status === "failed" ? eq(apiSends.ok, false) : undefined,
+    /*
+     * 正文搜索走 LIKE。
+     *
+     * 这张表是审计用的，量不大（一条代发一行，而额度是每天几十条），
+     * 所以一次扫描比再建一套 FTS 便宜得多 —— 后者要多一张表、
+     * 多一处同步，而同步漏掉的那些行会**安静地搜不到**。
+     *
+     * `%` 和 `_` 先转义掉，否则搜一个下划线等于匹配任意字符。
+     */
+    input.query?.trim()
+      ? sql`${apiSends.text} LIKE ${"%" + escapeLike(input.query.trim()) + "%"} ESCAPE '\\'`
+      : undefined,
+  ].filter(Boolean);
+
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const total =
+    db.select({ n: sql<number>`count(*)` }).from(apiSends).where(where).get()?.n ?? 0;
+
   const rows = db
     .select({
       id: apiSends.id,
@@ -406,11 +453,18 @@ export function sendLog(input: {
     .from(apiSends)
     .leftJoin(apiTokens, eq(apiTokens.id, apiSends.tokenId))
     .leftJoin(groups, eq(groups.convId, apiSends.convId))
-    .where(input.userId ? eq(apiSends.userId, input.userId) : undefined)
+    .where(where)
     .orderBy(desc(apiSends.at))
-    .limit(input.limit ?? 100)
+    .limit(input.limit ?? 50)
+    .offset(input.offset ?? 0)
     .all();
-  return rows;
+
+  return { rows, total };
+}
+
+/** LIKE 里的通配符要转义 —— 不转的话搜 `_` 等于匹配任意一个字符 */
+function escapeLike(raw: string): string {
+  return raw.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
 /** 一把令牌最近用掉了多少额度 —— 界面上要能回答「我还能发几条」 */

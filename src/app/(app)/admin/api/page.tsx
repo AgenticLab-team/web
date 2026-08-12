@@ -2,7 +2,9 @@ import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
 
 import { GrantManager } from "@/components/api/GrantManager";
+import { LogFilters } from "@/components/api/LogFilters";
 import { SendLog } from "@/components/api/SendLog";
+import { Pager } from "@/components/ui/Pager";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { BackLink, PageNote, Section } from "@/components/ui/primitives";
 import { SEND_LIMIT } from "@/lib/api-tokens/rules";
@@ -26,12 +28,40 @@ export const dynamic = "force-dynamic";
  * 分成两页的话，授权那一页会变成一张没有人回头看的名单 ——
  * 而判断「这条授权还该不该留着」的唯一依据，正是他到底用它做了什么。
  */
-export default async function AdminApiPage() {
+/** 日志一页多少条 */
+const PER_PAGE = 25;
+
+export default async function AdminApiPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await requireAdmin("system.settings");
+
+  const sp = await searchParams;
+  const one = (key: string) => {
+    const value = sp[key];
+    return Array.isArray(value) ? value[0] : value;
+  };
+
+  const conv = one("conv") ?? "";
+  const rawStatus = one("status");
+  // 认不出来的一律当「全部」—— 地址栏里的东西什么都可能有
+  const status = rawStatus === "ok" || rawStatus === "failed" ? rawStatus : "all";
+  const q = one("q") ?? "";
+  const page = Math.max(1, Number(one("page") ?? 1) || 1);
 
   const grants = allGrants();
   // 全站视角：这一页的意义就是看别人发了什么
-  const log = sendLog({ userId: null, limit: 100 });
+  const log = sendLog({
+    userId: null,
+    convId: conv || null,
+    status,
+    query: q || null,
+    limit: PER_PAGE,
+    offset: (page - 1) * PER_PAGE,
+  });
+  const pages = Math.max(1, Math.ceil(log.total / PER_PAGE));
   const groups = listGroupsForAdmin()
     .filter((g) => g.syncEnabled)
     .map((g) => ({ convId: g.convId, name: g.name }));
@@ -76,7 +106,14 @@ export default async function AdminApiPage() {
       </Section>
 
       <Section title="代发日志（全站）">
-        <SendLog rows={log} showWho />
+        <LogFilters groups={groups.map((g) => ({ value: g.convId, label: g.name }))} />
+        <SendLog rows={log.rows} showWho />
+        <Pager
+          page={Math.min(page, pages)}
+          pages={pages}
+          total={log.total}
+          params={{ conv, status: status === "all" ? undefined : status, q }}
+        />
       </Section>
 
       <PageNote>

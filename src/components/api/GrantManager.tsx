@@ -1,9 +1,15 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Check, Search } from "lucide-react";
+import { Check, Search, X } from "lucide-react";
 
 import { grantSendManyAction, revokeSendAction } from "@/lib/api-tokens/actions";
+import {
+  filterPersonGrants,
+  mergeGrantsByUser,
+  paginate,
+  type PersonGrants,
+} from "@/lib/api-tokens/grant-view";
 import type { GrantRow } from "@/lib/api-tokens/store";
 
 /**
@@ -16,6 +22,9 @@ import type { GrantRow } from "@/lib/api-tokens/store";
  * 这是一次把「以机器人身份说话」的能力交出去的操作，
  * 而半年后回头看的时候，「为什么给了他」是唯一要问的问题。
  */
+/** 一页显示几个人。手机上再多就要划很久 */
+const PER_PAGE = 8;
+
 export function GrantManager({
   grants,
   groups,
@@ -38,6 +47,9 @@ export function GrantManager({
   const [personQuery, setPersonQuery] = useState("");
   const [reason, setReason] = useState("");
   const [perDay, setPerDay] = useState("");
+  /* 已给出去的那张列表自己的筛选和页码 —— 和上面那个表单互不相干 */
+  const [listQuery, setListQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -91,13 +103,44 @@ export function GrantManager({
       } else setError(r.error);
     });
 
-  const revoke = (g: GrantRow) =>
+  /*
+   * 一个人一张卡。库里存的仍然是逐群的行 ——
+   * 合并只发生在显示这一层，见 grant-view.ts。
+   */
+  const merged = useMemo(() => mergeGrantsByUser(grants), [grants]);
+  const shown = useMemo(
+    () => paginate(filterPersonGrants(merged, listQuery), page, PER_PAGE),
+    [merged, listQuery, page],
+  );
+
+  const revoke = (convId: string, uid: string) =>
     start(async () => {
       setError(null);
       setNote(null);
-      const r = await revokeSendAction(g.convId, g.userId);
+      const r = await revokeSendAction(convId, uid);
       if (r.ok) setNote(r.note);
       else setError(r.error);
+    });
+
+  const revokeAll = (person: PersonGrants) =>
+    start(async () => {
+      setError(null);
+      setNote(null);
+      /*
+       * 一个个来，不做成一次批量调用。
+       *
+       * 收回是逐群的（审计也是逐群的），而「全部收回」只是替他
+       * 少点几下 —— 把它做成一个批量接口的话，就多出一条
+       * 需要单独测、单独想权限的路，换来的只是少几次往返。
+       */
+      for (const g of person.groups) {
+        const r = await revokeSendAction(g.convId, person.userId);
+        if (!r.ok) {
+          setError(r.error);
+          return;
+        }
+      }
+      setNote(`收回了「${person.userName}」的 ${person.groups.length} 个群`);
     });
 
   return (
@@ -252,36 +295,154 @@ export function GrantManager({
         {note && <p className="t-caption mt-2 text-[var(--accent)]">{note}</p>}
       </div>
 
-      {grants.length === 0 ? (
+      {/* ── 已经给出去的 ─────────────────────────────── */}
+
+      {merged.length === 0 ? (
         <p className="t-caption px-1 text-[var(--ink-tertiary)]">还没有授权过任何人。</p>
       ) : (
-        <div className="space-y-1.5">
-          {grants.map((g) => (
-            <div
-              key={`${g.convId}:${g.userId}`}
-              className="inset-group flex items-start gap-2.5 px-3.5 py-2.5"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="t-subhead font-medium">
-                  {g.userName ?? g.userId} → {g.convName ?? g.convId}
-                </p>
-                <p className="t-caption2 text-[var(--ink-quaternary)]">
-                  {g.reason ?? "（没写理由）"}
-                  {g.perDay !== null && ` · 每天 ${g.perDay} 条`}
-                </p>
-              </div>
+        <>
+          {/*
+            * 人多了才给搜索框。三个人的时候一个搜索框只是噪音，
+            * 而它占的那一行在手机上是实打实的一屏的十分之一。
+            */}
+          {merged.length > 5 && (
+            <div className="mb-2 flex items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-2.5">
+              <Search
+                className="h-3.5 w-3.5 shrink-0 text-[var(--ink-quaternary)]"
+                strokeWidth={2}
+                aria-hidden
+              />
+              <input
+                value={listQuery}
+                onChange={(e) => {
+                  setListQuery(e.target.value);
+                  // 筛完可能只剩一页，停在第 3 页会看到空白
+                  setPage(1);
+                }}
+                placeholder="搜人名、群名或理由"
+                aria-label="筛选授权"
+                className="t-body min-w-0 flex-1 bg-transparent py-2 outline-none"
+              />
+            </div>
+          )}
+
+          {shown.items.length === 0 ? (
+            <p className="t-caption px-1 text-[var(--ink-tertiary)]">没有匹配的。</p>
+          ) : (
+            <div className="space-y-1.5">
+              {shown.items.map((person) => (
+                <div key={person.userId} className="inset-group px-3.5 py-3">
+                  <div className="flex items-start gap-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="t-subhead font-medium">
+                        {person.userName}
+                        <span className="t-caption2 ml-1.5 font-normal text-[var(--ink-quaternary)]">
+                          {person.groups.length} 个群
+                        </span>
+                      </p>
+                      {/*
+                        * 理由和额度一致时合成一句；不一致就交给下面逐群显示。
+                        * 合成一句是**在界面上说假话**的地方 —— 见 grant-view.ts。
+                        */}
+                      {!person.mixed && (
+                        <p className="t-caption2 mt-0.5 text-[var(--ink-quaternary)]">
+                          {person.uniformReason ?? "（没写理由）"}
+                          {person.uniformPerDay !== null && ` · 每天 ${person.uniformPerDay} 条`}
+                        </p>
+                      )}
+                    </div>
+                    {person.groups.length > 1 && (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => revokeAll(person)}
+                        className="t-caption2 shrink-0 rounded-[var(--radius-pill)] px-2.5 py-1 transition active:opacity-60 disabled:opacity-45"
+                        style={{
+                          background: "color-mix(in srgb, var(--danger) 10%, transparent)",
+                          color: "var(--danger)",
+                        }}
+                      >
+                        全部收回
+                      </button>
+                    )}
+                  </div>
+
+                  {/*
+                    * 群做成一排可点的标签，点一下收回那一个。
+                    *
+                    * 每个群单独一行的话，十二个群就是十二行 ——
+                    * 而合并显示的全部意义就是不要那十二行。
+                    */}
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {person.groups.map((g) => (
+                      <button
+                        key={g.convId}
+                        type="button"
+                        disabled={pending}
+                        onClick={() => revoke(g.convId, person.userId)}
+                        title={`收回「${g.convName}」的发送权限`}
+                        className="t-caption2 inline-flex min-h-8 items-center gap-1 rounded-[var(--radius-pill)] px-2.5 transition active:opacity-60 disabled:opacity-45"
+                        style={{ background: "var(--fill)" }}
+                      >
+                        <span className="max-w-[11rem] truncate">{g.convName}</span>
+                        {/*
+                          * 额度和理由不一致时，把这个群自己的额度标在它身上 ——
+                          * 上面那句合并的话已经没了，不标的话这条信息就消失了。
+                          */}
+                        {person.mixed && g.perDay !== null && (
+                          <span className="text-[var(--warning)]">{g.perDay}/天</span>
+                        )}
+                        <X className="h-3 w-3 shrink-0 text-[var(--ink-quaternary)]" strokeWidth={2.4} aria-hidden />
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 理由不一致时逐条列出来 —— 合成一句会把差异抹掉 */}
+                  {person.mixed && (
+                    <ul className="mt-2 space-y-0.5">
+                      {person.groups.map((g) => (
+                        <li key={g.convId} className="t-caption2 text-[var(--ink-quaternary)]">
+                          {g.convName}：{g.reason ?? "（没写理由）"}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {shown.pages > 1 && (
+            <div className="mt-2 flex items-center justify-between gap-2 px-1">
               <button
                 type="button"
-                disabled={pending}
-                onClick={() => revoke(g)}
-                className="t-caption2 shrink-0 rounded-[var(--radius-pill)] px-2.5 py-1 text-[var(--ink-tertiary)] transition active:opacity-60 disabled:opacity-45"
+                disabled={shown.page <= 1}
+                onClick={() => setPage(shown.page - 1)}
+                className="t-footnote min-h-9 rounded-[var(--radius-control)] px-3 transition active:opacity-60 disabled:opacity-35"
                 style={{ background: "var(--fill)" }}
               >
-                收回
+                上一页
+              </button>
+              <span className="tabular t-caption2 text-[var(--ink-quaternary)]">
+                第 {shown.page} / {shown.pages} 页 · 共 {shown.total} 人
+              </span>
+              <button
+                type="button"
+                disabled={shown.page >= shown.pages}
+                onClick={() => setPage(shown.page + 1)}
+                className="t-footnote min-h-9 rounded-[var(--radius-control)] px-3 transition active:opacity-60 disabled:opacity-35"
+                style={{ background: "var(--fill)" }}
+              >
+                下一页
               </button>
             </div>
-          ))}
-        </div>
+          )}
+          {shown.pages <= 1 && (
+            <p className="t-caption2 mt-2 px-1 text-[var(--ink-quaternary)]">
+              一共 {shown.total} 人拿到过授权
+            </p>
+          )}
+        </>
       )}
     </>
   );

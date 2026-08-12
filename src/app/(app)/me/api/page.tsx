@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 
 import { ApiConsole } from "@/components/api/ApiConsole";
 import { EndpointDoc } from "@/components/api/EndpointDoc";
+import { LogFilters } from "@/components/api/LogFilters";
+import { Pager } from "@/components/ui/Pager";
 import { GroupComposer } from "@/components/api/GroupComposer";
 import { SendLog } from "@/components/api/SendLog";
 import { TokenManager } from "@/components/api/TokenManager";
@@ -39,13 +41,44 @@ export const dynamic = "force-dynamic";
  * （站长授权过 **且** 你确实还在那个群里），只列其中一个都会给出
  * 一个调用必然失败的 conv_id。
  */
-export default async function ApiPage() {
+/** 日志一页多少条 */
+const PER_PAGE = 20;
+
+export default async function ApiPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/me/api");
 
+  const sp = await searchParams;
+  const one = (key: string) => {
+    const value = sp[key];
+    return Array.isArray(value) ? value[0] : value;
+  };
+  const conv = one("conv") ?? "";
+  const rawStatus = one("status");
+  const status = rawStatus === "ok" || rawStatus === "failed" ? rawStatus : "all";
+  const q = one("q") ?? "";
+  const page = Math.max(1, Number(one("page") ?? 1) || 1);
+
   const tokens = tokensOf(user.id);
-  // 只给他自己那一份 —— 「看别人的」没有任何合理场景，只会变成越权入口
-  const log = sendLog({ userId: user.id, limit: 50 });
+  /*
+   * 只给他自己那一份 —— 「看别人的」没有任何合理场景，只会变成越权入口。
+   *
+   * `userId` 写死成 user.id，**不从 searchParams 里取**：
+   * 从地址栏取的话，改一个参数就能看别人代发了什么。
+   */
+  const log = sendLog({
+    userId: user.id,
+    convId: conv || null,
+    status,
+    query: q || null,
+    limit: PER_PAGE,
+    offset: (page - 1) * PER_PAGE,
+  });
+  const logPages = Math.max(1, Math.ceil(log.total / PER_PAGE));
   /*
    * 每把令牌今天用掉了多少。
    *
@@ -183,7 +216,17 @@ export default async function ApiPage() {
       </Section>
 
       <Section title="代发日志">
-        <SendLog rows={log} />
+        {/* 一条都没发过的时候不给过滤条 —— 过滤一个空列表是纯噪音 */}
+        {(log.total > 0 || conv || q || status !== "all") && (
+          <LogFilters groups={myGroups.map((g) => ({ value: g.convId, label: g.name }))} />
+        )}
+        <SendLog rows={log.rows} />
+        <Pager
+          page={Math.min(page, logPages)}
+          pages={logPages}
+          total={log.total}
+          params={{ conv, status: status === "all" ? undefined : status, q }}
+        />
         <p className="t-caption2 mt-2 px-1 text-[var(--ink-quaternary)]">
           存的是拼好署名之后的整条，也就是群里真正看到的那一条 ——
           所以这里也看得出署名有没有真的加上。失败的也记，
