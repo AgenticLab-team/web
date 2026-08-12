@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
 import { env } from "@/lib/env";
+import { SIDEBAR_INIT_SCRIPT } from "@/lib/sidebar";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 import "./globals.css";
@@ -38,6 +39,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           hydration 后才切暗色，用户看到的是一次刺眼的白屏闪烁。
         */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {/*
+          侧栏收没收起也一样：晚一步定，收起过侧栏的人每次访问
+          都会先看见完整侧栏、再看它缩回去，主内容跟着横跳一次。
+        */}
+        <script dangerouslySetInnerHTML={{ __html: SIDEBAR_INIT_SCRIPT }} />
       </head>
       <body className="min-h-dvh antialiased">{children}</body>
     </html>

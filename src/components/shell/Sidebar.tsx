@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, LogIn } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -17,6 +17,7 @@ import {
 } from "@/lib/nav";
 
 import { NavIcon } from "./icons";
+import { SidebarToggle } from "./SidebarToggle";
 
 /**
  * 桌面侧栏。
@@ -41,7 +42,7 @@ import { NavIcon } from "./icons";
  * 那个按钮迟早会和它上下的行长得不一样，而那正是「乱」的来源。
  */
 const rowClass = (isActive: boolean) =>
-  `group flex w-full items-center gap-3 rounded-[var(--radius-control)] px-3 py-2 transition-colors ${
+  `sidebar-row group relative flex w-full items-center gap-3 rounded-[var(--radius-control)] px-3 py-2 transition-colors ${
     isActive
       ? "bg-[var(--accent-soft)] text-[var(--accent)]"
       : "text-[var(--ink-secondary)] hover:bg-[var(--fill)] hover:text-[var(--ink)]"
@@ -49,7 +50,7 @@ const rowClass = (isActive: boolean) =>
 
 function Badge({ count }: { count: number }) {
   return (
-    <span className="tabular flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[0.6875rem] font-semibold text-[var(--accent-ink)]">
+    <span className="sidebar-badge tabular flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[0.6875rem] font-semibold text-[var(--accent-ink)]">
       {count > 99 ? "99+" : count}
     </span>
   );
@@ -58,13 +59,19 @@ function Badge({ count }: { count: number }) {
 function NavRow({ item, isActive, count }: { item: NavItem; isActive: boolean; count: number }) {
   return (
     <li>
-      <Link href={item.href} aria-current={isActive ? "page" : undefined} className={rowClass(isActive)}>
+      <Link
+        href={item.href}
+        aria-current={isActive ? "page" : undefined}
+        /* 收起后图标是唯一线索 —— 悬停总得说得出这是哪一页 */
+        title={item.label}
+        className={rowClass(isActive)}
+      >
         <NavIcon
           name={item.icon}
           className="h-[1.125rem] w-[1.125rem] shrink-0"
           strokeWidth={isActive ? 2.1 : 1.75}
         />
-        <span className="t-subhead flex-1 font-medium">{item.label}</span>
+        <span className="sidebar-label t-subhead flex-1 font-medium">{item.label}</span>
         {count > 0 && <Badge count={count} />}
       </Link>
     </li>
@@ -134,13 +141,22 @@ export function Sidebar({
 
   return (
     <aside className="hairline-r fixed inset-y-0 left-0 z-30 hidden w-[var(--sidebar-width)] flex-col lg:flex">
-      <div className="flex h-16 shrink-0 items-center px-5">
-        <Link href="/" className="flex items-center gap-2.5 transition active:scale-[0.98]">
-          <span className="flex h-7 w-7 items-center justify-center rounded-[0.5rem] bg-[var(--accent)] text-[0.8125rem] font-bold text-[var(--accent-ink)]">
+      {/*
+        * 收起后这一行只剩两个东西：AL 那个方块和收起按钮，
+        * 于是改成竖排居中 —— 4rem 宽里横着摆两个 44px 的目标放不下。
+        */}
+      <div className="sidebar-head flex h-16 shrink-0 items-center justify-between gap-1 px-5">
+        <Link
+          href="/"
+          title="Agentic Lab"
+          className="sidebar-row flex min-w-0 items-center gap-2.5 transition active:scale-[0.98]"
+        >
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[0.5rem] bg-[var(--accent)] text-[0.8125rem] font-bold text-[var(--accent-ink)]">
             AL
           </span>
-          <span className="t-headline">Agentic Lab</span>
+          <span className="sidebar-label t-headline truncate">Agentic Lab</span>
         </Link>
+        <SidebarToggle />
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 pb-4">
@@ -165,10 +181,10 @@ export function Sidebar({
               className={rowClass(false)}
             >
               <NavIcon name="more" className="h-[1.125rem] w-[1.125rem] shrink-0" strokeWidth={1.75} />
-              <span className="t-subhead flex-1 text-left font-medium">更多</span>
+              <span className="sidebar-label t-subhead flex-1 text-left font-medium">更多</span>
               {!moreOpen && moreBadge > 0 && <Badge count={moreBadge} />}
               <ChevronDown
-                className={`h-4 w-4 shrink-0 transition-transform ${moreOpen ? "rotate-180" : ""}`}
+                className={`sidebar-chevron h-4 w-4 shrink-0 transition-transform ${moreOpen ? "rotate-180" : ""}`}
                 strokeWidth={2}
                 aria-hidden
               />
@@ -176,7 +192,7 @@ export function Sidebar({
 
             {moreOpen &&
               moreSections.map((section) => (
-                <div key={section.key} className="mt-2">
+                <div key={section.key} className="sidebar-more-panel mt-2">
                   {section.label && <p className="t-group-label mb-1.5 px-3">{section.label}</p>}
                   <ul className="space-y-0.5">
                     {section.items.map((item) => (
@@ -194,15 +210,18 @@ export function Sidebar({
         )}
       </nav>
 
-      <div className="shrink-0 space-y-2 p-3">
-        <ThemeToggle />
+      <div className="sidebar-foot shrink-0 space-y-2 p-3">
+        <div className="sidebar-theme">
+          <ThemeToggle />
+        </div>
         {user ? (
           <Link
             href="/me"
-            className="flex items-center gap-2.5 rounded-[var(--radius-control)] p-2 transition-colors hover:bg-[var(--fill)]"
+            title={user.name}
+            className="sidebar-row flex items-center gap-2.5 rounded-[var(--radius-control)] p-2 transition-colors hover:bg-[var(--fill)]"
           >
             <Avatar wxId={user.wxId} name={user.name} src={user.avatarUrl} size={32} />
-            <span className="min-w-0 flex-1">
+            <span className="sidebar-label min-w-0 flex-1">
               <span className="t-subhead block truncate font-medium">{user.name}</span>
               <span className="tabular t-caption block text-[var(--ink-tertiary)]">
                 L{user.level} · {user.points} 分
@@ -212,9 +231,15 @@ export function Sidebar({
         ) : (
           <Link
             href="/login"
-            className="t-subhead flex items-center justify-center rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2.5 font-medium text-[var(--accent-ink)] transition active:scale-[0.98]"
+            title="登录"
+            className="sidebar-row t-subhead flex items-center justify-center rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2.5 font-medium text-[var(--accent-ink)] transition active:scale-[0.98]"
           >
-            登录
+            {/*
+              * 「登录」两个字在 4rem 宽里会把按钮撑破，所以窄栏下换成图标。
+              * 两个都渲染、由 CSS 决定露哪个 —— 换树会在加载时闪。
+              */}
+            <span className="sidebar-label">登录</span>
+            <LogIn className="sidebar-rail-only h-[1.125rem] w-[1.125rem]" strokeWidth={2} aria-hidden />
           </Link>
         )}
       </div>

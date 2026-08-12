@@ -71,6 +71,8 @@
   --default-transition-duration: var(--motion-feedback);
 
   --sidebar-width: 15.5rem;
+  /* 收起后的窄栏：只剩图标，宽度刚好容下 44px 的点击区加两边留白 */
+  --sidebar-width-rail: 4.25rem;
   --tabbar-height: 3.25rem;
 
   /*
@@ -373,6 +375,103 @@ body {
 
 .hairline-r {
   box-shadow: inset -0.5px 0 0 var(--separator);
+}
+
+/* ── 侧栏收起 ───────────────────────────────────────────
+ *
+ * 全部由 <html data-sidebar="rail"> 驱动，React 那边两种状态
+ * 渲染的是**同一棵树** —— 理由见 lib/sidebar.ts：换树会在每次
+ * 加载时先闪一下完整侧栏，主内容跟着横跳。
+ *
+ * 主内容那条 `lg:pl-[var(--sidebar-width)]` 什么都不用改：
+ * 换的是变量本身。
+ */
+:root[data-sidebar="rail"] {
+  --sidebar-width: var(--sidebar-width-rail);
+}
+
+/*
+ * 文字整条抽掉，不是 `opacity: 0`。
+ *
+ * 透明的文字还占着宽度，也还能被读屏和「页内查找」找到 ——
+ * 于是键盘用户会 Tab 到一个看不见的东西上。`display: none`
+ * 是这里唯一诚实的做法：收起来就是真的不在。
+ */
+:root[data-sidebar="rail"] .sidebar-label {
+  display: none;
+}
+
+/* 图标居中；行内那些 gap 收起来之后会把图标推偏 */
+:root[data-sidebar="rail"] .sidebar-row {
+  justify-content: center;
+  gap: 0;
+  padding-inline: 0;
+}
+
+/*
+ * 未读红点改成角标。
+ *
+ * 收起来之后没地方摆「3」那个数字了，但**红点不能跟着消失** ——
+ * 它正是让人回到站里的那个东西。所以缩成一个不带数字的点，
+ * 贴在图标右上角。
+ */
+:root[data-sidebar="rail"] .sidebar-badge {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.9rem;
+  height: 0.5rem;
+  min-width: 0.5rem;
+  padding: 0;
+  font-size: 0;
+}
+
+/* 收起时「更多」那个展开箭头没有意义 —— 展开的那一层整个不显示 */
+:root[data-sidebar="rail"] .sidebar-chevron,
+:root[data-sidebar="rail"] .sidebar-more-panel {
+  display: none;
+}
+
+/*
+ * 底部那块（头像 / 登录按钮）也收窄。
+ *
+ * 登录按钮上的「登录」两个字在 4rem 宽里放不下，会撑破按钮 ——
+ * 所以它在窄栏下换成一个图标，那是这里唯一需要**换内容**的地方。
+ */
+:root[data-sidebar="rail"] .sidebar-foot {
+  padding-inline: 0.5rem;
+}
+
+/* 只在窄栏下露面的东西（比如登录按钮上那个图标）。默认不在 */
+.sidebar-rail-only {
+  display: none;
+}
+
+:root[data-sidebar="rail"] .sidebar-rail-only {
+  display: block;
+}
+
+/*
+ * 顶上那一行收起后改竖排：4rem 宽里横着摆
+ * 「AL 方块」和「收起按钮」两个 44px 的目标放不下。
+ */
+:root[data-sidebar="rail"] .sidebar-head {
+  flex-direction: column;
+  justify-content: center;
+  height: auto;
+  gap: 0.25rem;
+  padding: 0.75rem 0 0.25rem;
+}
+
+/*
+ * 三档配色开关横着放不下，改成竖排的三个图标。
+ * 文字整条抽掉 —— 图标本身（太阳 / 月亮 / 自动）已经说清楚了。
+ */
+:root[data-sidebar="rail"] .sidebar-theme > div {
+  flex-direction: column;
+}
+
+:root[data-sidebar="rail"] .sidebar-theme span {
+  display: none;
 }
 
 /* ── 动效 ───────────────────────────────────────────────
