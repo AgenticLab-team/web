@@ -83,6 +83,29 @@ export const DELETION_PLAN: readonly TablePlan[] = [
   { table: "join_requests", disposition: "wx-space", why: "按 wx_id 记的入群申请。它记录的是「这个微信号申请过」，和站内账号不是一回事" },
 
   /* ── 纯属这个账号的痕迹：删 ───────────────────────── */
+  {
+    table: "api_tokens",
+    disposition: "purge",
+    why:
+      "开放 API 的令牌。和登录凭证同一个道理：账号都没了还留着一把能替他做事的钥匙，" +
+      "只剩下风险 —— 而且这些钥匙里有的能往群里发消息",
+  },
+  {
+    table: "group_send_grants",
+    disposition: "purge",
+    why:
+      "「他可以往某个群发消息」的授权。账号没了，这条授权就没有对象了；" +
+      "留着的话，哪天有人复用同一个 user_id 就会凭空继承一个发送权限",
+  },
+  {
+    table: "api_sends",
+    disposition: "anonymize",
+    why:
+      "通过 API 代发的消息记录。**不能直接删** —— 那些消息已经出现在群里了，" +
+      "而且每一条都带着「本消息由某某代发」的署名，群里的人看得见。" +
+      "删掉记录不会让消息消失，只会让「这条到底是谁让机器人说的」永远答不上来。" +
+      "所以抹掉 user_id/token_id，正文和时间留下",
+  },
   { table: "credentials", disposition: "purge", why: "登录凭证（密码哈希、Passkey）。账号都没了还留着凭证，只剩下风险，没有任何用处" },
   { table: "sessions", disposition: "purge", why: "会话。必须删，否则注销之后旧 cookie 还能进来" },
   { table: "login_attempts", disposition: "purge", why: "登录尝试记录。它是给风控看「这个账号最近被试了多少次」的，账号没了就没有对象了" },

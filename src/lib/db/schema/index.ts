@@ -8,6 +8,7 @@ export * from "./points";
 export * from "./moderation";
 export * from "./titles";
 export * from "./escalation";
+export * from "./api";
 export * from "./broadcast";
 export * from "./invites";
 export * from "./activities";
