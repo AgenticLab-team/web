@@ -95,6 +95,88 @@ export async function revokeTokenAction(id: string): Promise<TokenActionResult> 
 
 export type GrantResult = { ok: true; note: string } | { ok: false; error: string };
 
+/**
+ * 一次授权多个群。
+ *
+ * ═════════════════════════════════════════
+ * 「全部群」是**展开成当时那几个**，不是一条通配授权
+ * ═════════════════════════════════════════
+ *
+ * 通配听起来更省事：以后新建群自动包含，收回也只用删一行。
+ * 但它有一个很难发现的后果 —— **授权会自己长大**。
+ *
+ * 授权理由那一栏写的是「他在维护打卡机器人」，站长当时心里过了一遍的是
+ * 那十二个群。三个月后多了一个群，通配授权会把它一起给出去，
+ * 而这件事没有人做过决定、审计日志里也没有对应的一行。
+ *
+ * 所以这里存的永远是**逐群的具体行**：勾「全选」等于一次点十二下，
+ * 审计日志里就是十二条，收回也一个个来。以后新加的群不在里面 ——
+ * 界面上写清楚了这句话。
+ */
+export async function grantSendManyAction(input: {
+  convIds: string[];
+  userId: string;
+  reason: string;
+  perMinute?: number | null;
+  perHour?: number | null;
+  perDay?: number | null;
+}): Promise<GrantResult> {
+  const admin = await requireWritableAdmin("system.settings");
+
+  if (!input.reason.trim()) {
+    return { ok: false, error: "要写清楚为什么给他这些群的发送权限" };
+  }
+  /*
+   * 去重。界面上不该出现重复，但这个函数是客户端可以直接调的
+   * （见 server-action-surface 那份守卫）—— 重复的话审计日志里
+   * 会出现两条一模一样的记录，而那会让人以为授权过两次。
+   */
+  const convIds = [...new Set(input.convIds.filter((c) => typeof c === "string" && c.trim()))];
+  if (convIds.length === 0) return { ok: false, error: "至少选一个群" };
+
+  const limits = {
+    perMinute: input.perMinute ?? null,
+    perHour: input.perHour ?? null,
+    perDay: input.perDay ?? null,
+  };
+
+  for (const convId of convIds) {
+    grantSend({
+      convId,
+      userId: input.userId,
+      grantedBy: admin.user.id,
+      reason: input.reason,
+      limits,
+    });
+
+    /*
+     * **一个群一条审计**，不是一条写着「批量授权 12 个群」。
+     *
+     * 收回是逐群的，所以审计也必须逐群 —— 否则「这个群他是什么时候
+     * 拿到权限的」这个问题，在一条批量记录面前答不上来。
+     */
+    audit(
+      { actorId: admin.user.id },
+      {
+        action: "group.send_grant",
+        targetType: "user",
+        targetId: input.userId,
+        after: { convId, ...limits },
+        reason: input.reason,
+      },
+    );
+  }
+
+  revalidatePath("/admin/api");
+  return {
+    ok: true,
+    note:
+      convIds.length === 1
+        ? "给了。他现在可以通过网页或 API 往这个群发消息，每条都会带代发署名"
+        : `给了 ${convIds.length} 个群。每条发出去的都会带代发署名 —— 以后新加的群不在里面，要另外授权`,
+  };
+}
+
 export async function grantSendAction(input: {
   convId: string;
   userId: string;

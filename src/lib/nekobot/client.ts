@@ -107,6 +107,31 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         headers: {
           "X-API-Key": env.nekobot.apiKey,
           Accept: "application/json",
+          /*
+           * ═════════════════════════════════════════
+           * 带 body 就必须声明 Content-Type
+           * ═════════════════════════════════════════
+           *
+           * 少了这一行，`fetch` 会自作主张填 `text/plain;charset=UTF-8` ——
+           * 而上游是 FastAPI，它按 Content-Type 决定怎么解析请求体：
+           * 拿到 text/plain 时，那串 JSON 被当成**一个字符串**交给 pydantic，
+           * 于是每一次 POST 都回 422：
+           *
+           *   {"type":"model_attributes_type",
+           *    "msg":"Input should be a valid dictionary or object…",
+           *    "input":"{\"conv_id\":\"…\",\"text\":\"…\"}"}
+           *
+           * 注意 `input` 里那串东西**看起来完全正确** —— 它就是我们要发的
+           * 那个 JSON。所以读这条报错的人会一遍遍检查自己的字段名，
+           * 而问题根本不在正文里，在一个没写的头上。
+           *
+           * 这条影响的是**所有** POST：发消息、撤回、通过好友申请、改群公告。
+           * 也就是说站里从来没有成功发出去过一条 —— 而它一直安静地
+           * 记成「发送失败：上游返回 422」，看起来像上游的问题。
+           *
+           * 放在这里而不是每个调用点：调用点有八个，第九个一定会忘。
+           */
+          ...(init?.body ? { "Content-Type": "application/json" } : {}),
           ...init?.headers,
         },
         // 上游数据由同步任务落库，这里永远取实时值

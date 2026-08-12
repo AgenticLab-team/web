@@ -260,12 +260,23 @@ for attempt in $(seq 1 10); do
     chunks_of() {
       curl -s -m 10 "$1" | grep -oE '/_next/static/chunks/[A-Za-z0-9_-]+\.js' | sort -u
     }
+    # 本地压一遍，**不要信服务端压没压**。
+    #
+    # 原来是 `-H 'Accept-Encoding: br, gzip'` 然后量 size_download ——
+    # 而那个数取决于 Cloudflare 这一刻有没有缓存：
+    # 刚部署完全是 MISS，回源拿到的可能是**没压过**的原文，
+    # 于是同一份产物量出来是 628 KB 而不是 192 KB（比值 3.27，
+    # 正好是 gzip 前后的比）。这条守卫因此会随机失败一次，
+    # 而随机失败的守卫最后都会被人调高阈值绕过去。
+    #
+    # `--compressed` 让 curl 自己解码，拿到原始字节，再本地 gzip ——
+    # 得到的数和 CDN 状态无关，任何时候都可比。
+    # 浏览器多半用 brotli（更小），所以这个数是个偏保守的上界。
     sum_of() {
       local total=0 size
       while read -r chunk; do
         [ -n "$chunk" ] || continue
-        # 带上 Accept-Encoding：量的是用户真的要下的字节数
-        size=$(curl -s -m 10 -H 'Accept-Encoding: br, gzip' -o /dev/null -w '%{size_download}' "$URL$chunk" || echo 0)
+        size=$(curl -s -m 10 --compressed "$URL$chunk" | gzip -9c | wc -c)
         total=$((total + size))
       done
       printf '%s' "$total"

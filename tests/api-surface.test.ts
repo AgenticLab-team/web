@@ -250,3 +250,67 @@ describe("群公告", () => {
     assert.match(a, /公告不能为空/);
   });
 });
+
+describe("逐群授权的表单", () => {
+  const grant = readCode("components/api/GrantManager.tsx");
+  const actions = readCode("lib/api-tokens/actions.ts");
+
+  it("**能一次给多个群** —— 原来一次只能给一个，「给他所有群」要点十二遍", () => {
+    assert.match(grant, /grantSendManyAction/);
+    assert.match(actions, /export async function grantSendManyAction/);
+  });
+
+  it("**「全选」存的是逐群的具体行，不是一条通配**", () => {
+    /*
+     * 通配会让授权自己长大：三个月后多一个群，它会被一起给出去，
+     * 而那件事没有人做过决定、审计日志里也没有对应的一行。
+     */
+    const fn = actions.slice(actions.indexOf("grantSendManyAction"));
+    assert.match(fn.slice(0, 1600), /for \(const convId of convIds\)/);
+    assert.equal(/wildcard|"\*"|ALL_GROUPS/.test(fn.slice(0, 1600)), false);
+  });
+
+  it("**一个群一条审计** —— 收回是逐群的，审计也必须逐群", () => {
+    /*
+     * 一条写着「批量授权 12 个群」的记录，答不出
+     * 「这个群他是什么时候拿到权限的」。
+     */
+    const fn = actions.slice(actions.indexOf("grantSendManyAction"));
+    const loop = fn.slice(fn.indexOf("for (const convId of convIds)"), fn.indexOf("revalidatePath"));
+    assert.match(loop, /audit\(/);
+    assert.match(loop, /group\.send_grant/);
+  });
+
+  it("界面上说清楚全选不含以后新加的群", () => {
+    // 不写的话，站长会合理地以为「全选」包含以后的群
+    assert.match(grant, /以后新加的群/);
+  });
+
+  it("选人有搜索框 —— 一百多个人下拉框里翻不动", () => {
+    assert.match(grant, /personQuery/);
+  });
+
+  it("**筛完之后提交的是屏幕上那个人**", () => {
+    /*
+     * 这是这个表单唯一可能把权限给错人的地方：筛选会改变列表，
+     * 而选中的 id 可能已经不在结果里 —— 那时候屏幕上写着 A，
+     * 提交的却是 B。所以有 effectiveId，而且提交用的就是它。
+     */
+    assert.match(grant, /effectiveId/);
+    assert.match(grant, /userId:\s*effectiveId/);
+    assert.equal(
+      /userId:\s*userId\.trim\(\)/.test(grant),
+      false,
+      "提交的应该是 effectiveId，不是那个可能已经被筛掉的 userId",
+    );
+  });
+
+  it("一个群都没选就不让提交", () => {
+    assert.match(grant, /picked\.size === 0/);
+    assert.match(actions, /至少选一个群/);
+  });
+
+  it("去重 —— 这个函数客户端可以直接调，重复会记出两条一样的审计", () => {
+    assert.match(actions, /new Set\(input\.convIds/);
+  });
+});

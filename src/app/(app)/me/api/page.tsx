@@ -2,17 +2,19 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { ApiConsole } from "@/components/api/ApiConsole";
+import { EndpointDoc } from "@/components/api/EndpointDoc";
 import { GroupComposer } from "@/components/api/GroupComposer";
 import { SendLog } from "@/components/api/SendLog";
 import { TokenManager } from "@/components/api/TokenManager";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { BackLink, PageNote, Section } from "@/components/ui/primitives";
-import { NOT_POSSIBLE, ENDPOINTS } from "@/lib/api-tokens/catalog";
+import { allowedFor, blockedFor, NOT_POSSIBLE, ENDPOINTS } from "@/lib/api-tokens/catalog";
 import {
   attributionCost,
   MAX_MESSAGE_CHARS,
   SCOPES,
   SEND_LIMIT,
+  type ScopeKey,
   withAttribution,
 } from "@/lib/api-tokens/rules";
 import { grantedGroups, sendLog, senderNameOf, tokensOf, usageOf } from "@/lib/api-tokens/store";
@@ -69,6 +71,26 @@ export default async function ApiPage() {
    * 「群列表属于隐私」在这里仍然成立：visibleGroupsFor 给的就是
    * 他在网页上看得到的那几个群，一个不多。
    */
+  /*
+   * ═════════════════════════════════════════
+   * 文档按**他手上真有的令牌**算
+   * ═════════════════════════════════════════
+   *
+   * 这一页原来把 ENDPOINTS 整份列出来 —— 而站长要的是
+   * 「附有按照权限变动的动态 api 文档」。
+   *
+   * 一份写死的清单最常见的坏法不是过期，是**它描述的是另一个人的世界**：
+   * 读的人照着调，拿回一串 403，然后开始怀疑是自己写错了。
+   *
+   * 并集而不是逐把算：他可能一把管读、一把管写，而「我能不能调这条」
+   * 的答案是「手上有没有任何一把能调」。
+   */
+  const liveScopes = [
+    ...new Set(tokens.filter((t) => t.revokedAt === null).flatMap((t) => t.scopes)),
+  ] as ScopeKey[];
+  const usable = allowedFor(liveScopes);
+  const locked = blockedFor(liveScopes);
+
   const granted = new Set(grantedGroups(user.id));
   const myGroups = visibleGroupsFor(user).map((g) => ({
     convId: g.convId,
@@ -169,37 +191,44 @@ export default async function ApiPage() {
         </p>
       </Section>
 
-      <Section title="端点">
-        <div className="space-y-2">
-          {ENDPOINTS.map((e) => (
-            <div key={`${e.method} ${e.path}`} className="inset-group px-3.5 py-3">
-              <p className="t-subhead font-medium">
-                <span className="t-caption2 mr-1.5 rounded-[var(--radius-control)] bg-[var(--fill)] px-1.5 py-0.5 text-[var(--ink-secondary)]">
-                  {e.method}
-                </span>
-                <code className="break-all">{e.path}</code>
-              </p>
-              <p className="t-caption mt-1 text-[var(--ink-secondary)]">{e.summary}</p>
-              {e.scopes.length > 0 && (
-                <p className="t-caption2 mt-1 text-[var(--ink-quaternary)]">
-                  需要：{e.scopes.join("、")}
-                </p>
-              )}
-              {e.note && (
-                <p className="t-caption2 mt-1 leading-relaxed text-[var(--ink-tertiary)]">
-                  {e.note}
-                </p>
-              )}
-              <pre className="t-caption2 mt-2 overflow-x-auto rounded-[var(--radius-control)] bg-[var(--surface-sunken)] p-2.5 text-[var(--ink-secondary)]">
-                {e.example}
-              </pre>
-            </div>
-          ))}
-        </div>
+      {/*
+        * 分成「调得动的」和「还差权限的」两栏。
+        *
+        * 两栏都要有 —— 只列调得动的话，人根本不知道站里还有别的接口；
+        * 混在一起的话，他会照着一条自己调不动的去写，
+        * 然后对着 403 检查半天令牌。
+        */}
+      <Section title={`你现在调得动的（${usable.length}）`}>
+        {usable.length === 0 ? (
+          <p className="t-caption px-1 leading-relaxed text-[var(--ink-tertiary)]">
+            还没有可用的令牌。上面建一把，勾上你要的权限。
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {usable.map((e) => (
+              <EndpointDoc key={`${e.method} ${e.path}`} endpoint={e} />
+            ))}
+          </div>
+        )}
         <p className="t-caption2 mt-2 px-1 text-[var(--ink-quaternary)]">
-          带上令牌调 <code>/api/v1/docs</code>，拿到的是<strong>按你这把令牌算过</strong>的同一份清单。
+          带上令牌调 <code>/api/v1/docs</code>，拿到的是<strong>这一份的 JSON 版</strong> ——
+          同一套算法，所以它不会和这一页说不同的话。
         </p>
       </Section>
+
+      {locked.length > 0 && (
+        <Section title={`还差权限的（${locked.length}）`}>
+          <div className="space-y-2">
+            {locked.map(({ endpoint, missing }) => (
+              <EndpointDoc
+                key={`${endpoint.method} ${endpoint.path}`}
+                endpoint={endpoint}
+                missing={missing}
+              />
+            ))}
+          </div>
+        </Section>
+      )}
 
       {/*
         * 做不到的也写出来。
