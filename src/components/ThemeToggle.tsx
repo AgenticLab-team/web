@@ -3,7 +3,7 @@
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useSyncExternalStore } from "react";
 
-import { THEME_STORAGE_KEY, readThemeChoice, type ThemeChoice } from "@/lib/theme";
+import { paintThemeColor, THEME_STORAGE_KEY, readThemeChoice, type ThemeChoice } from "@/lib/theme";
 
 const OPTIONS: { value: ThemeChoice; label: string; Icon: typeof Sun }[] = [
   { value: "system", label: "自动", Icon: Monitor },
@@ -51,6 +51,14 @@ function applyTheme(choice: ThemeChoice) {
     root.setAttribute("data-theme", choice);
     localStorage.setItem(THEME_STORAGE_KEY, choice);
   }
+  /*
+   * 状态栏和底部安全区的颜色跟着一起换。
+   *
+   * 不换的话，从「深色」切到「浅色」页面变白了，
+   * 而上下两条安全区还是黑的 —— 一直到下次整页刷新。
+   */
+  paintThemeColor(choice);
+
   // 同一个标签页内 storage 事件不会触发，得自己通知
   for (const listener of listeners) listener();
 }

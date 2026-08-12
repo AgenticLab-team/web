@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next";
 
+import { CANVAS_COLOR } from "@/lib/theme";
+
 /**
  * PWA manifest。
  *
@@ -32,13 +34,19 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     /*
-     * 背景色和主题色跟着浅色主题走。
+     * 背景色和主题色跟着**浅色主题**走。
      *
      * 这两个值在启动画面和状态栏上用，而系统**不会**跟着切深色 ——
      * 给深色值的话，浅色系统里打开会闪一下深色底。
+     *
+     * ⚠ `theme_color` 原来是 `#0d5c47`（一个深绿），而站内没有任何
+     * 一处是这个颜色。装成 App 之后它去涂浏览器 chrome，于是
+     * **回复框和底部栏叠在一起时会冒出一条谁也认不出的绿色**
+     * —— 站长报的就是这条。现在和浅色主题的 `--canvas` 对齐，
+     * 由 tests/theme.test.ts 钉着不许再分叉。
      */
-    background_color: "#ffffff",
-    theme_color: "#0d5c47",
+    background_color: CANVAS_COLOR.light,
+    theme_color: CANVAS_COLOR.light,
     lang: "zh-CN",
     icons: [
       { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },

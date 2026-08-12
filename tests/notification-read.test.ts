@@ -187,7 +187,16 @@ describe("**PWA manifest —— 这是 iPhone 能收推送的前提**", () => {
     assert.match(manifest, /purpose: "maskable"/);
   });
 
-  it("主题色和品牌色一致", () => {
-    assert.match(manifest, /theme_color: "#0d5c47"/);
+  it("**主题色跟页面底色走，不跟品牌色走**", () => {
+    /*
+     * 原来这里钉的是品牌绿 `#0d5c47`（也就是 `--accent`）。
+     * 站长报「回复按钮和底部栏重合时会出现一条非常诡异的绿色栏」——
+     * 就是它：`theme_color` 涂的是**浏览器 chrome**，
+     * 而 chrome 紧挨着的是页面底色（近白 / 近黑），不是品牌色。
+     *
+     * 品牌绿没有被削弱，它照旧是全站的 `--accent`；
+     * 只是「贴着页面边缘的那一条」该和页面同色。
+     */
+    assert.match(manifest, /theme_color: CANVAS_COLOR\.light/);
   });
 });
