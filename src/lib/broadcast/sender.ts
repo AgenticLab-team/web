@@ -97,6 +97,24 @@ export async function deliverBroadcast(
     .where(eq(broadcastDeliveries.broadcastId, broadcastId))
     .all();
 
+  /*
+   * **一条待发记录都没有 = 出错了，不是发完了。**
+   *
+   * 原来这里直接往下走：循环零次，最后把广播标成 `sent` ——
+   * 于是一条发给零个群的广播，在状态、返回值和日志三处都说自己成功了。
+   *
+   * 这不是假想：日报那条路第一版忘了建逐群记录，试发之后群里什么都没有，
+   * 而后台显示「已发送」。查了三层才找到，因为**没有任何一处是红的**。
+   */
+  if (deliveries.length === 0) {
+    const error = "没有任何待发记录 —— 这条广播没有目标群，不是发完了";
+    db.update(broadcasts)
+      .set({ status: "failed", error, finishedAt: Date.now() })
+      .where(eq(broadcasts.id, broadcastId))
+      .run();
+    return { broadcastId, sent: 0, failed: 0, skipped: 0, error };
+  }
+
   let sent = 0;
   let failed = 0;
   let skipped = 0;

@@ -2,9 +2,10 @@ import "server-only";
 
 import { and, eq, gte, ne } from "drizzle-orm";
 
+import { sendableGroups } from "@/lib/broadcast/queries";
 import { contentHash } from "@/lib/broadcast/rules";
 import { db } from "@/lib/db";
-import { broadcasts, digestRuns, posts, users } from "@/lib/db/schema";
+import { broadcastDeliveries, broadcasts, digestRuns, posts, users } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { isModuleEnabled } from "@/lib/modules/state";
 import { dateKey } from "@/lib/time";
@@ -73,6 +74,7 @@ function candidates(now: number): DigestCandidate[] {
       replyCount: posts.replyCount,
       reactionCount: posts.reactionCount,
       viewCount: posts.viewCount,
+      content: posts.content,
       createdAt: posts.createdAt,
       authorId: posts.authorId,
       anonymous: posts.anonymous,
@@ -100,6 +102,8 @@ function candidates(now: number): DigestCandidate[] {
       replyCount: r.replyCount ?? 0,
       reactionCount: r.reactionCount ?? 0,
       viewCount: r.viewCount ?? 0,
+      // 按码点数 —— `.length` 会把每个 emoji 数成两个，见 forum/longform.ts
+      charCount: [...(r.content ?? "")].length,
       createdAt: r.createdAt,
       authorId: r.authorId,
       // 和周报同一条口径：可见性是 group 的就是群聊转帖
@@ -120,9 +124,31 @@ function candidates(now: number): DigestCandidate[] {
     }));
 }
 
-export function buildDailyDigest(options: { now?: number; force?: boolean } = {}): DailyResult {
+export function buildDailyDigest(
+  options: {
+    now?: number;
+    force?: boolean;
+    /**
+     * 只发给这几个群，而不是所有已接入的群。
+     *
+     * ═════════════════════════════════════════
+     * 给它一个值 = **试发**，而试发和正式发有三处不同
+     * ═════════════════════════════════════════
+     *
+     *   ① **不落 `digest_runs`**。试发要是记了账，今天的正式那条
+     *      会以为「已经发过了」而跳过；更糟的是那几篇文章会被标成
+     *      「推过了」，于是它们再也不会出现在任何一期里 ——
+     *      一次试发吃掉了三篇好文。
+     *   ② **不受模块开关拦**。那个开关护的是「每天自动发给所有群」，
+     *      而试发是人手动发给一个指定的群 —— 两件事的危险程度差一个量级。
+     *   ③ **必须显式点名群**。没有「试发给所有人」这种东西。
+     */
+    targetConvIds?: string[];
+  } = {},
+): DailyResult {
   const now = options.now ?? Date.now();
   const date = dateKey(now);
+  const isTest = (options.targetConvIds?.length ?? 0) > 0;
 
   /*
    * 独立开关，不复用 `digest`。
@@ -131,7 +157,8 @@ export function buildDailyDigest(options: { now?: number; force?: boolean } = {}
    * 而周报是只生成草稿的，本来就没有需要停的理由。
    * 一个开关管两件危险程度差一个量级的事，最后一定是没人敢动它。
    */
-  if (!isModuleEnabled("digest_daily")) {
+  // 试发不受它拦 —— 它护的是「自动发给所有群」，见 targetConvIds 那段
+  if (!isTest && !isModuleEnabled("digest_daily")) {
     return { date, ok: false, reason: "每日推送这个模块没有启用", itemCount: 0 };
   }
   // 群发关掉时也不发 —— 排进队列也没人送，那不如不排
@@ -145,7 +172,7 @@ export function buildDailyDigest(options: { now?: number; force?: boolean } = {}
     .where(and(eq(digestRuns.kind, "daily"), eq(digestRuns.weekStart, date)))
     .get();
 
-  if (existing && !options.force) {
+  if (existing && !options.force && !isTest) {
     return {
       date,
       ok: false,
@@ -156,7 +183,14 @@ export function buildDailyDigest(options: { now?: number; force?: boolean } = {}
   }
 
   const selection = selectDaily(candidates(now), alreadySent());
-  const verdict = shouldSendDaily(selection);
+  /*
+   * 把日期传进去 —— 周一跳过（每周精选那天早上已经占了一条）。
+   *
+   * 试发不受它拦：人手动试发时，「今天是周一」不是他要的答案。
+   */
+  const verdict = isTest
+    ? shouldSendDaily(selection)
+    : shouldSendDaily(selection, date);
 
   const record = (postIds: string[], broadcastId: string | null, skipReason: string | null) =>
     db
@@ -176,8 +210,8 @@ export function buildDailyDigest(options: { now?: number; force?: boolean } = {}
       .run();
 
   if (!verdict.send) {
-    // 不发也留一行 —— 「今天怎么没有」要答得上来
-    record([], null, verdict.reason);
+    // 不发也留一行 —— 「今天怎么没有」要答得上来。试发不记账
+    if (!isTest) record([], null, verdict.reason);
     return { date, ok: false, reason: verdict.reason, itemCount: 0 };
   }
 
@@ -194,7 +228,8 @@ export function buildDailyDigest(options: { now?: number; force?: boolean } = {}
       content,
       contentHash: contentHash(content),
       // 留空 = 所有已接入的群。内容只含所有成员都能看的帖子，所以一份就够
-      targetConvIds: null,
+      // 试发点名一个群；正式发留空 = 所有已接入的群
+      targetConvIds: options.targetConvIds ?? null,
       /*
        * 直接 `sending`，不走 draft → pending → approved。
        *
@@ -208,11 +243,35 @@ export function buildDailyDigest(options: { now?: number; force?: boolean } = {}
     .returning({ id: broadcasts.id })
     .get();
 
-  record(
-    selection.items.map((i) => i.id),
-    broadcast.id,
-    null,
-  );
+  /*
+   * ⚠️ **逐群的待发记录必须自己建。**
+   *
+   * `deliverBroadcast` 只**读** `broadcast_deliveries`，不创建它们 ——
+   * 正常那条路上它们是人工提交时建的（broadcast/actions.ts）。
+   *
+   * 第一版漏了这一步，后果不是报错：它遍历了一个空列表，
+   * 然后把广播标成 `sent`。也就是**「成功」地发给了零个群**，
+   * 而返回值、状态、后台三处都说它发出去了。
+   * 试发到 #1 群、群里什么都没有，才发现。
+   */
+  const names = new Map(sendableGroups().map((g) => [g.convId, g.name]));
+  for (const convId of options.targetConvIds ?? [...names.keys()]) {
+    db.insert(broadcastDeliveries)
+      .values({ broadcastId: broadcast.id, convId, convName: names.get(convId) ?? null })
+      .run();
+  }
+
+  /*
+   * 试发**不记账** —— 记了的话今天的正式那条会以为已经发过，
+   * 而且那几篇文章会被标成「推过了」，从此不再出现在任何一期里。
+   */
+  if (!isTest) {
+    record(
+      selection.items.map((i) => i.id),
+      broadcast.id,
+      null,
+    );
+  }
 
   return {
     date,

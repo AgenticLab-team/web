@@ -1,5 +1,7 @@
 import { MAX_WECHAT_LENGTH } from "@/lib/broadcast/rules";
 
+import { LONGFORM_CHARS } from "@/lib/forum/longform";
+
 import { MAX_PER_AUTHOR, selectDigest, type DigestCandidate, type Selection } from "./weekly";
 
 /**
@@ -70,6 +72,14 @@ export function selectDaily(
   return selectDigest(candidates, {
     alreadySent,
     minEngagement: DAILY_MIN_ENGAGEMENT,
+    /*
+     * 够长就免检互动。
+     *
+     * 站长要的是「同步高质量文章」，而线上长文平均只有 0.21 条回复 ——
+     * 只看互动的话，这个功能会**结构性地推不出任何一篇长文**，
+     * 推出来的全是热闹的短帖。和「坐下来读」那一栏同一个门槛。
+     */
+    longformChars: LONGFORM_CHARS,
     max: DAILY_MAX_ITEMS,
     maxPerAuthor: MAX_PER_AUTHOR,
   });
@@ -138,7 +148,46 @@ function truncate(text: string, max: number): string {
  * 一篇好文就够了；而要求两条会让很多天变成没有，
  * 于是这件事重新变成「有时候有」。
  */
-export function shouldSendDaily(selection: Selection): { send: boolean; reason: string } {
+/**
+ * 周一不发。
+ *
+ * ═════════════════════════════════════════
+ * 因为周一已经有一条了
+ * ═════════════════════════════════════════
+ *
+ * 每周精选是**周一 09:00** 备稿的（`agenticlab-digest.timer`）。
+ * 那一条发出去之后，同一天晚上八点再来一条「今天值得读的」，
+ * 群里一天收到两条来自同一个站的推送 —— 而这两条讲的还是
+ * 高度重叠的内容（都从同一批帖子里挑，只是窗口不同）。
+ *
+ * 一天两条是「这个站开始刷屏了」的第一印象，而那个印象只需要
+ * 建立一次。
+ *
+ * ─────────────────────────────────────────
+ * 为什么不是「周报发了才跳过」
+ * ─────────────────────────────────────────
+ *
+ * 那样更精确，但它把日报的行为绑在了另一个任务的结果上：
+ * 周报因为没内容而没发的那些周一，日报会突然出现 ——
+ * 于是「周一有没有推送」变成一件要查两处才能回答的事。
+ *
+ * 固定跳过周一，代价是偶尔少发一条，换来的是这件事**一句话说得清**。
+ *
+ * ⚠️ 用东八区的星期几。服务器时区不一定是东八，
+ * 而「周一」对群里的人是他们的周一。
+ */
+export function isSkipDay(dateKey: string): boolean {
+  // dateKey 已经是东八区切好的 YYYY-MM-DD，按 UTC 解析回来星期几才不会偏
+  return new Date(`${dateKey}T00:00:00Z`).getUTCDay() === 1;
+}
+
+export function shouldSendDaily(
+  selection: Selection,
+  dateKey?: string,
+): { send: boolean; reason: string } {
+  if (dateKey && isSkipDay(dateKey)) {
+    return { send: false, reason: "周一不发 —— 每周精选已经在这天早上占了一条" };
+  }
   if (selection.items.length === 0) {
     return { send: false, reason: "今天没有够格的帖子 —— 宁可不发，也不发一条空的" };
   }

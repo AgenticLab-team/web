@@ -1,5 +1,6 @@
 import { MAX_WECHAT_LENGTH } from "@/lib/broadcast/rules";
 import type { Visibility } from "@/lib/db/schema/forum";
+import { readingLabel } from "@/lib/forum/longform";
 
 /**
  * 每周精选。纯函数。
@@ -67,6 +68,12 @@ export interface DigestCandidate {
   createdAt: number;
   /** 是否来自群聊转帖 */
   fromGroupChat: boolean;
+  /**
+   * 正文有多少字。用来判「这是不是一篇长文」。
+   *
+   * 可选：老的调用点没有它，行为和以前一样（只看互动和精华）。
+   */
+  charCount?: number;
 }
 
 export interface DigestItem extends DigestCandidate {
@@ -91,11 +98,30 @@ export function scorePost(post: DigestCandidate): number {
 }
 
 /** 为什么它在这儿 —— 精选要说得出理由，否则就是「编辑随便挑的」 */
-export function reasonFor(post: DigestCandidate): string {
+/**
+ * 那一行「为什么它在这」。
+ *
+ * ─────────────────────────────────────────
+ * 「0 个表情」不是一个理由
+ * ─────────────────────────────────────────
+ *
+ * 原来最后一档无条件回 `${reactionCount} 个表情`，而这个数可以是 0 ——
+ * 试发预览里真出现了「启 · 0 个表情」。那句话不但没解释它为什么入选，
+ * 还在暗示它没人理。
+ *
+ * 长文本来就是靠**长度**入选的（见 `longformChars`），
+ * 那才是它该说的理由：读完要花多久。
+ */
+export function reasonFor(post: DigestCandidate, longformChars = 0): string {
   if (post.featured) return "已加精";
-  if (post.replyCount >= 5) return `${post.replyCount} 条回复`;
   if (post.replyCount > 0) return `${post.replyCount} 条回复`;
-  return `${post.reactionCount} 个表情`;
+  if (longformChars > 0 && (post.charCount ?? 0) >= longformChars) {
+    // 和列表页同一套算法，读者两处看到的数字一致
+    return `${readingLabel(post.charCount ?? 0)}读完`;
+  }
+  if (post.reactionCount > 0) return `${post.reactionCount} 个表情`;
+  // 三样都没有还进来了，只可能是长度那条路 —— 但没开启时也别说空话
+  return "值得一读";
 }
 
 export interface SelectOptions {
@@ -112,6 +138,25 @@ export interface SelectOptions {
   minEngagement?: number;
   /** 同一个作者最多占几条 —— 0 或负数表示不限 */
   maxPerAuthor?: number;
+  /**
+   * 正文超过这么多字就**免检互动**。0 表示不启用这条。
+   *
+   * ═════════════════════════════════════════
+   * 不加这一条的话，「高质量文章」一篇都进不来
+   * ═════════════════════════════════════════
+   *
+   * 线上量过：长文（≥2000 字）平均 2.3 次浏览、**0.21 条回复**，
+   * 短帖是 8.2 次、1.28 条。互动门槛因此是一道**结构性地排除长文**
+   * 的闸 —— 它不是偶尔漏掉长文，是设计上永远选不中长文。
+   *
+   * 试发前的预览里这件事一眼可见：选出来的是「能不能整个匿名」
+   * （21 个字的提问），而当天那批几千字的文章全被
+   * 「只有 0 条互动，够不上」刷掉了。而站长要的原话是
+   * 「定期同步**高质量文章**」。
+   *
+   * 所以够长本身就是一种资格 —— 和「精华」并列，都是绕过互动门槛的路。
+   */
+  longformChars?: number;
 }
 
 export interface Selection {
@@ -152,12 +197,18 @@ export function selectDigest(
     }
 
     const engagement = post.replyCount + post.reactionCount;
-    if (!post.featured && engagement < minEngagement) {
+    /*
+     * 三条路进来：精华（人工挑过）、够长（写的人花了功夫）、有互动（别人在读）。
+     * 少了中间那条，长文一篇都进不来 —— 见 longformChars 那段。
+     */
+    const longform =
+      (options.longformChars ?? 0) > 0 && (post.charCount ?? 0) >= (options.longformChars ?? 0);
+    if (!post.featured && !longform && engagement < minEngagement) {
       rejected.push({ id: post.id, reason: `只有 ${engagement} 条互动，够不上` });
       continue;
     }
 
-    items.push({ ...post, score: scorePost(post), reason: reasonFor(post) });
+    items.push({ ...post, score: scorePost(post), reason: reasonFor(post, options.longformChars ?? 0) });
   }
 
   items.sort((a, b) => b.score - a.score || b.createdAt - a.createdAt);
