@@ -67,9 +67,52 @@ export const MIN_DAYS = 3;
 /** 使用率至少是同群其他人的这么多倍 */
 export const MIN_LIFT = 2;
 
+/**
+ * 至少这么大比例的出现要落在句子边界上。
+ *
+ * 39k 条真实消息上量出来的边界率分布：
+ *
+ *   话题词  智能 0.0% / 公益站 0.0% / 香港 0.8% / 域名 1.1%
+ *   功能词  可以 2.0% / 然后 4.2% / 哈哈哈 5.8% / 所以 6.8%
+ *   口头禅  离谱 16.1% / 确实 19.1% / 卧槽 65.4%
+ *
+ * 5% 卡在功能词中间：挡掉全部话题词，也挡掉「可以」「然后」，
+ * 而放过「哈哈哈」—— 后者是真口头禅，只是常写成「哈哈哈哈哈」
+ * 被四字窗口切在中间，边界率被稀释了。
+ *
+ * **不做停用词表**：「然后」对某些人就是真口头禅（「然后…然后…」），
+ * 停用词会把一个人最显著的特征一刀切掉。区分他和别人的不是这个词，
+ * 是他说得比别人多多少 —— 那件事 lift 在管。
+ */
+export const MIN_EDGE_RATE = 0.05;
+
+/**
+ * 或者：至少这么大比例的**消息**里，它自己就是全部内容。
+ *
+ * ═════════════════════════════════════════
+ * 这是分开「口头禅」和「话题词」最锋利的一刀
+ * ═════════════════════════════════════════
+ *
+ * 线上整条率：
+ *
+ *   神了 94% / 绷 92% / 草 89% / 笑死我了 88% / wow 86% / nb 79%
+ *   卧槽 66% / 确实 52% / 我靠 49% / 我去 35%
+ *   —— 而 claude、api、gpt、香港、域名 全都接近 0
+ *
+ * 它对中文和字母**同时**成立，所以放开字母之后不会被品牌词淹掉。
+ *
+ * 15% 离两边都很远，所以这条线不敏感：调到 10% 或 25% 结论几乎一样。
+ * 一个需要精调的门槛说明信号选错了。
+ */
+export const MIN_SOLO_RATE = 0.15;
+
 export interface PhraseStat {
   /** 总共出现多少次 */
   hits: number;
+  /** 其中有多少次落在句子边界上 —— 见 phrasesWithEdge */
+  edgeHits: number;
+  /** 有多少**条**消息里它自己就是全部内容 */
+  soloHits: number;
   /** 出现在多少条不同的消息里 */
   msgs: number;
   /** 横跨多少个不同的天 */
@@ -101,6 +144,17 @@ export interface Catchphrase {
  */
 const BRACKET = /\[[^\[\]]{1,8}\]/g;
 
+/** 先把链接整段拿掉 —— 不然 `https` `github` `com` 会成为高频「口头禅」 */
+const URL = /https?:\/\/\S+|www\.\S+/g;
+
+export interface PhraseHit {
+  phrase: string;
+  /** 这次出现贴着句子边界（段首或段尾）。**字母串恒为 false**，见下 */
+  edge: boolean;
+  /** 这次出现时，它自己就是一整条消息 —— 最强的那个信号 */
+  standalone: boolean;
+}
+
 /** 消息里的表情词，`[旺柴]` → `旺柴` */
 export function emojiOf(text: string): string[] {
   return (text.match(BRACKET) ?? []).map((s) => s.slice(1, -1));
@@ -112,13 +166,59 @@ export function emojiOf(text: string): string[] {
  * 只认汉字连续段：URL、代码、数字都在这一步被切开，不必再单独排除。
  * 方括号表情先摘掉（见 BRACKET）。
  */
-export function phrasesOf(text: string): string[] {
-  const out: string[] = [];
-  for (const run of text.replace(BRACKET, "，").match(/[一-鿿]+/g) ?? []) {
+export function phrasesWithEdge(text: string): PhraseHit[] {
+  const cleaned = text.replace(URL, " ").replace(BRACKET, "，");
+  /*
+   * 整条消息去掉尾部语气符之后剩什么 —— 用来判「这个片段是不是
+   * 自己就是一整条消息」。「草。」「草！」和「草」是同一件事。
+   */
+  const whole = cleaned.trim().toLowerCase().replace(/[。！？~…\s]+$/u, "");
+
+  const out: PhraseHit[] = [];
+
+  /*
+   * 汉字连续段和**字母串**都要。
+   *
+   * 字母原来整段被丢掉，理由是「一个人的口头禅不可能是 https」——
+   * 那句话对 URL 成立，但把 `uwu` / `orz` / `xswl` / `nb` 一起误伤了，
+   * 而它们恰恰是最有个人特色的那一类。正确做法是先去掉 URL（上面那行），
+   * 而不是禁掉字母。
+   */
+  for (const run of cleaned.match(/[一-鿿]+|[A-Za-z]{2,8}/g) ?? []) {
+    const latin = !/[一-鿿]/.test(run);
     const chars = [...run];
+
+    if (latin) {
+      /*
+       * 字母串不切 n-gram：`claude` 切出来的 `laud` 不是任何人的口头禅。
+       *
+       * ⚠ `edge` 恒为 **false**，不是 true。
+       *
+       * 第一版写成 true，线上重算之后榜首直接变成 `der` `ude` `dex`
+       * `ck`（lift 高到 2455）—— 全是被昵称清洗切碎的单词残片
+       * （codex → dex、claude → ude），又短又稀有所以 lift 爆表。
+       *
+       * 原因：中文里的字母串本来就被空格包着，「贴着边界」对它们
+       * **恒成立**，于是这一位不携带任何信息，而它同时是门槛的一条 ——
+       * 等于所有字母串免检放行。
+       *
+       * 字母串只能靠**整条率**过门槛：`uwu` `nb` `wow` 常常自己就是
+       * 一整条消息，而 `dex` 永远不会。
+       */
+      const phrase = run.toLowerCase();
+      out.push({ phrase, edge: false, standalone: whole === phrase });
+      continue;
+    }
+
     for (let len = MIN_LEN; len <= MAX_LEN; len++) {
       for (let i = 0; i + len <= chars.length; i++) {
-        out.push(chars.slice(i, i + len).join(""));
+        const phrase = chars.slice(i, i + len).join("");
+        out.push({
+          phrase,
+          // 段首或段尾 —— 两头都算，「确实……」和「……确实」都是口头禅的样子
+          edge: i === 0 || i + len === chars.length,
+          standalone: whole === phrase,
+        });
       }
     }
   }
@@ -143,19 +243,28 @@ export function tally(messages: readonly Said[]): Map<string, PhraseStat> {
   const total = new Map<string, PhraseStat>();
   for (const { text, day } of messages) {
     // 同一条消息里重复出现只算一条「不同消息」，但次数照数
-    const here = new Map<string, number>();
-    for (const p of phrasesOf(text)) here.set(p, (here.get(p) ?? 0) + 1);
-    for (const [p, n] of here) {
+    const here = new Map<string, { n: number; edge: number; solo: number }>();
+    for (const { phrase, edge, standalone } of phrasesWithEdge(text)) {
+      const cur = here.get(phrase) ?? { n: 0, edge: 0, solo: 0 };
+      cur.n += 1;
+      if (edge) cur.edge += 1;
+      // 「整条」按**消息**算：一条消息只可能整体等于它一次
+      if (standalone) cur.solo = 1;
+      here.set(phrase, cur);
+    }
+    for (const [p, { n, edge, solo }] of here) {
       const cur = total.get(p);
       if (cur) {
         cur.hits += n;
+        cur.edgeHits += edge;
+        cur.soloHits += solo;
         cur.msgs += 1;
         if (cur.lastDay !== day) {
           cur.days += 1;
           cur.lastDay = day;
         }
       } else {
-        total.set(p, { hits: n, msgs: 1, days: 1, lastDay: day });
+        total.set(p, { hits: n, edgeHits: edge, soloHits: solo, msgs: 1, days: 1, lastDay: day });
       }
     }
   }
@@ -289,7 +398,40 @@ export function pickCatchphrase(input: CatchphraseInput): Catchphrase | null {
      * 这就是语料库语言学里算 keyness 的常规做法：
      * 光看频率得到的是虚词，光看独特性得到的是噪声。
      */
-    const score = myRate * Math.log(lift);
+    /*
+     * ═════════════════════════════════════════
+     * 「有个人特色」不等于「说得最多」
+     * ═════════════════════════════════════════
+     *
+     * 站长的原话：「不一定是最多说的，比如草草草、我服惹、uwu、摸摸你
+     * 这种，很有个人特色的」。
+     *
+     * 而原来是 `使用率 × log(lift)` —— 使用率**线性**，于是它压倒一切：
+     * 说了三百次的「可以」永远赢过说了二十次的「卧槽」。
+     * 线上算出来的因此是「香港」「域名」「智能」「公益站」这种话题词。
+     */
+    const edgeRate = stat.edgeHits / stat.hits;
+    const soloRate = stat.soloHits / stat.msgs;
+
+    /*
+     * 两个信号**任一**达标即可，不是都要达标。
+     *
+     * 用「或」：`uwu` 整条率很高但从不出现在句子中间，「然后」正相反。
+     * 要求都达标等于只留中间那一类，而那类恰恰最没意思。
+     */
+    if (soloRate < MIN_SOLO_RATE && edgeRate < MIN_EDGE_RATE) continue;
+
+    /*
+     * 频次改成**对数** —— 这是「不一定是最多说的」那句话的落点。
+     *
+     * 频次仍然要算（说过五次的成不了口头禅，那是偶然），但不该压倒一切。
+     * 取对数之后 300 次和 30 次的差距从十倍缩到两倍多，
+     * 于是「说得多」不再自动赢过「说得怪」。
+     *
+     * 整条率权重给到 3：它是三个信号里唯一一个能一眼认出
+     * 「这是个语气词」的。
+     */
+    const score = Math.log(1 + stat.hits) * Math.log(lift) * (1 + 3 * soloRate + edgeRate);
 
     candidates.push({ phrase, hits: stat.hits, msgs: stat.msgs, days: stat.days, lift, score });
   }
@@ -310,16 +452,49 @@ export function pickCatchphrase(input: CatchphraseInput): Catchphrase | null {
    * 于是按次数比永远是 2:1，长的一次都赢不了。
    * 按消息条数比才是同一个尺度：两个都是「这条消息里有没有」。
    */
-  const best = candidates[0];
-  const longer = candidates
-    .filter(
-      (c) =>
-        c.phrase !== best.phrase &&
-        c.phrase.includes(best.phrase) &&
-        // 0.9 而不是 0.8：松一点就会把「断章取义」推成「长断章取义」
-        c.msgs >= best.msgs * 0.9,
-    )
-    // 有多个更长的都符合时取最长的那个
-    .sort((a, b) => b.phrase.length - a.phrase.length)[0];
-  return longer ?? best;
+  /*
+   * ── 先过滤，再挑冠军 ─────────────────────────
+   *
+   * 原来这一步**只作用在冠军一个身上**：挑出分最高的，再看有没有
+   * 更长的可以把它顶上去。那挡不住残片当冠军 —— 线上真出现过：
+   * ShipOwner 的口头禅被算成「工智能」（644 次），
+   * 而它是「人工智能」被切掉一个字的残片；还有「音极速版」
+   * （抖音极速版）、「蛋笨」。
+   *
+   * 残片能过边界门槛是因为**长词的后缀天然贴着段尾** ——
+   * 「人工智能」里的「工智能」结束在段尾，edge 恒成立。
+   * 门槛因此对这一类完全失效。
+   *
+   * 改成先把所有被更长候选吸收掉的短片段整个删掉，再排名。
+   */
+  const survivors = candidates.filter(
+    (c) =>
+      /*
+       * ⚠ 在**整个 tally** 里找更长的，不是只在通过了门槛的候选里找。
+       *
+       * 第一版只看 candidates，于是「工智能」照样当上了冠军 ——
+       * 线上实测它和「人工智能」的 hits/msgs 一模一样（644 / 31），
+       * 本该被吸收，但「人工智能」自己没进候选集，于是残片没人管。
+       *
+       * 「这是不是残片」是**文本的性质**，不该取决于长的那个
+       * 有没有通过门槛。
+       */
+      ![...mine.entries()].some(
+        ([phrase, longer]) =>
+          phrase !== c.phrase &&
+          phrase.includes(c.phrase) &&
+          /*
+           * 0.9 而不是 0.8：松一点就会把「断章取义」推成「长断章取义」。
+           *
+           * 比的是**出现在多少条不同消息里**，不是总次数 ——
+           * 短的必然在长的内部重复（「哈哈哈」里有两个「哈哈」），
+           * 按次数比永远是 2:1，长的一次都赢不了。
+           * 按消息条数比才是同一个尺度：两个都是「这条消息里有没有」。
+           */
+          longer.msgs >= c.msgs * 0.9,
+      ),
+  );
+
+  // 全被吸收掉是不可能的（最长的那个没人能吸收它），但兜一下底
+  return (survivors.length > 0 ? survivors : candidates)[0];
 }
