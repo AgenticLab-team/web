@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
 import { getRealUser } from "@/lib/auth/session";
 import { env } from "@/lib/env";
@@ -48,17 +48,37 @@ export const dynamic = "force-dynamic";
  * 结果是一次沉默的失败，而且看起来像是「GitHub 又抽风了」。
  * 先验 state 能让「链接失效了，重新点一次」这句话是准确的。
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const config = githubConfig();
   if (!config) return new NextResponse(null, { status: 404 });
 
   const url = new URL(request.url);
-  const cookie = request.headers
-    .get("cookie")
-    ?.split(";")
-    .map((c) => c.trim())
-    .find((c) => c.startsWith(`${GITHUB_STATE_COOKIE}=`))
-    ?.slice(GITHUB_STATE_COOKIE.length + 1);
+
+  /*
+   * ═════════════════════════════════════════
+   * 读 cookie 必须和写 cookie 用同一套抽象
+   * ═════════════════════════════════════════
+   *
+   * 这里原来是从**原始 `cookie` 请求头**里手工切出来的，
+   * 而写的那一头用的是 `response.cookies.set()` —— 后者会
+   * **`encodeURIComponent` 整个值**。
+   *
+   * 于是 `state|/me/security` 落到浏览器上是
+   *
+   *   al_gh_state=abc123%7C%2Fme%2Fsecurity
+   *
+   * 回来时按 `|` 切，那个字符根本不存在：`cookieState` 拿到的是
+   * 整串编码后的东西，`stateMatches` 必然为假。
+   *
+   * **结果是每一次 GitHub 绑定都以 `bad_state` 告终，一次都没成功过。**
+   * 而它看起来完全像是「链接失效了，重新点一次」—— 那句提示还是
+   * 我们自己写的，于是没有人会怀疑到代码上。
+   *
+   * 改成 `request.cookies.get()`：它和 `response.cookies.set()`
+   * 是一对，编码解码对称。手工切原始头这件事本身不算错，
+   * 错在**只有一头知道有编码这回事**。
+   */
+  const cookie = request.cookies.get(GITHUB_STATE_COOKIE)?.value;
 
   const [cookieState, cookieReturn] = (cookie ?? "").split("|");
   const returnTo = safeReturnPath(cookieReturn);
