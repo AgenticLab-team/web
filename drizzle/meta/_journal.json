@@ -414,6 +414,20 @@
       "when": 1786635462672,
       "tag": "0061_ancient_kat_farrell",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "6",
+      "when": 1786646600006,
+      "tag": "0062_stiff_rawhide_kid",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "6",
+      "when": 1786646679675,
+      "tag": "0063_bouncy_deathstrike",
+      "breakpoints": true
     }
   ]
 }

@@ -44,9 +44,19 @@ export const DELETED_LABEL = "已注销";
  * 不显式写出来的话只能猜列名，而猜错的表现是**这张表根本没被清**，
  * 且不报错 —— 注销跑完了，痕迹还在。
  */
-const OWNER_COLUMN: Record<string, string> = {
+/**
+ * 哪些表不是按 `user_id` 找主人的。
+ *
+ * 导出是为了让测试用**同一份**：测试里原来抄了一份
+ * （`plan.table === "keyword_hits" ? "sub_id" : "user_id"`），
+ * 于是加第二张挂靠表时，代码改了而测试还按老映射跑 ——
+ * 它报「列名对不上」，而实际上对得上，只是测试不知道。
+ */
+export const OWNER_COLUMN: Record<string, string> = {
   // 雷达命中挂在订阅下面，没有直接的 user_id
   keyword_hits: "sub_id",
+  // 刷新令牌挂在授权关系下面，同理
+  oauth_refresh_tokens: "grant_id",
 };
 
 export function deleteAccount(

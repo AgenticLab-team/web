@@ -1,0 +1,1 @@
+ALTER TABLE `api_tokens` ADD `app_id` text;

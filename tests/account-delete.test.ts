@@ -38,7 +38,7 @@ describe("注销", async () => {
   const schema = await import("@/lib/db/schema");
   const { migrate } = await import("drizzle-orm/better-sqlite3/migrator");
   migrate(dbm.db, { migrationsFolder: "./drizzle" });
-  const { deleteAccount } = await import("@/lib/users/delete");
+  const { deleteAccount, OWNER_COLUMN } = await import("@/lib/users/delete");
   const { DELETION_PLAN } = await import("@/lib/users/deletion-plan");
   const { sql, eq } = await import("drizzle-orm");
 
@@ -164,7 +164,8 @@ describe("注销", async () => {
       const bad: string[] = [];
       for (const plan of DELETION_PLAN) {
         if (plan.disposition !== "purge") continue;
-        const col = plan.table === "keyword_hits" ? "sub_id" : "user_id";
+        // 用**代码里那一份**映射，不再自己抄一遍 —— 抄的那份会和代码分叉
+        const col = OWNER_COLUMN[plan.table] ?? "user_id";
         try {
           dbm.db.all(sql.raw(`select count(*) from ${plan.table} where ${col} = ''`));
         } catch (e) {

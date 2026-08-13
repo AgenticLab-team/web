@@ -291,6 +291,15 @@ export const ADMIN_NAV: AdminNavSection[] = [
         ready: true,
       },
       {
+        key: "oauth",
+        href: "/admin/oauth",
+        label: "OAuth 应用",
+        icon: "shield",
+        permission: "system.settings",
+        description: "谁能拿站里的账号去登录别的地方",
+        ready: true,
+      },
+      {
         key: "llm",
         href: "/admin/llm",
         label: "模型接入",

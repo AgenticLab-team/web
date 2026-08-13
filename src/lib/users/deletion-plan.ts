@@ -84,6 +84,30 @@ export const DELETION_PLAN: readonly TablePlan[] = [
 
   /* ── 纯属这个账号的痕迹：删 ───────────────────────── */
   {
+    table: "oauth_grants",
+    disposition: "purge",
+    why:
+      "「他授权过某个应用」。账号都没了还留着一条授权，等于那个应用" +
+      "还能以一个不存在的人的名义做事 —— 而且没有任何人能再去撤销它",
+  },
+  {
+    table: "oauth_refresh_tokens",
+    disposition: "purge",
+    why:
+      "刷新令牌。它能换出新的访问令牌，所以留着它等于留着一把" +
+      "**能自我续期**的钥匙 —— 比访问令牌本身更该删。" +
+      "它只有 grant_id、不直接写人，自动扫描发现不了它",
+    via: { table: "oauth_grants", column: "grant_id" },
+  },
+  {
+    table: "oauth_codes",
+    disposition: "purge",
+    why:
+      "还没换成令牌的授权码。它 60 秒就过期，所以绝大多数时候是空的 —— " +
+      "但「绝大多数时候」不是「永远」：注销那一刻正好有一个没用掉的码，" +
+      "它还能换出一把属于已注销账号的令牌",
+  },
+  {
     table: "api_tokens",
     disposition: "purge",
     why:

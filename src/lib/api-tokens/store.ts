@@ -42,6 +42,13 @@ export function createToken(input: {
   name: string;
   scopes: readonly ScopeKey[];
   expiresAt?: number | null;
+  /**
+   * 哪个 OAuth 应用换来的。自己在页面上建的不传。
+   *
+   * 这一个可选参数就是整套 OAuth 复用这条路的全部代价 ——
+   * 验令牌、限流、留痕、撤销一个字都不用改。
+   */
+  appId?: string | null;
 }): CreatedToken {
   const { plaintext, visible } = formatToken(randomBytes(32));
   const id = crypto.randomUUID().replace(/-/g, "");
@@ -54,6 +61,7 @@ export function createToken(input: {
       hash: hashToken(plaintext),
       scopes: normalizeScopes([...input.scopes]),
       expiresAt: input.expiresAt ?? null,
+      appId: input.appId ?? null,
     })
     .run();
   return { id, plaintext, visible };
