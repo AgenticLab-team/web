@@ -55,7 +55,38 @@ export function Portrait({
           </span>
           <div className="min-w-0 flex-1">
             <p className="t-caption2 text-[var(--ink-quaternary)]">常挂在嘴边</p>
-            <p className="t-body mt-0.5 font-medium">「{catchphrase.phrase}」</p>
+
+            {/*
+              * ═════════════════════════════════════════
+              * 词的**大小**就是它的分量
+              * ═════════════════════════════════════════
+              *
+              * 站长两句话：「怎么还有一个，3～5 个左右」「现在没有艺术效果」。
+              *
+              * 排成一行等大的词是一张列表，读起来是「这个人说过这些」。
+              * 而按分数缩放之后，一眼看过去就能感觉到**哪个才是他** ——
+              * 排版本身在传信息，不是在装饰。这也是为什么不做成
+              * 真正的词云：词云为了填满形状会把小词放大、把位置打乱，
+              * 那时候大小就不再意味着任何东西了。
+              *
+              * 只缩到 0.72 倍为止。再小就不像一个词、像一处噪点，
+              * 而这几个词每一个都够格出现在这里 —— 它们只是没那么突出。
+              */}
+            <p className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              {[catchphrase, ...catchphrase.more].map((c, i) => (
+                <span
+                  key={c.phrase}
+                  className={i === 0 ? "font-medium" : ""}
+                  style={{
+                    fontSize: `${(1 - i * 0.07).toFixed(2)}rem`,
+                    color: i === 0 ? "var(--ink)" : "var(--ink-secondary)",
+                  }}
+                  title={`说过 ${c.hits} 次 · 横跨 ${c.days} 天`}
+                >
+                  「{c.phrase}」
+                </span>
+              ))}
+            </p>
             {/*
               * 把依据摆出来：说了多少次、横跨多少天、比别人多几倍。
               *
@@ -63,8 +94,16 @@ export function Portrait({
               * 而它确实可能不准。给了依据，他自己就能看出
               * 「说了 129 次、横跨 12 天」和「说了 5 次」不是一回事。
               */}
-            <p className="t-caption2 mt-0.5 text-[var(--ink-tertiary)]">
-              说过 {catchphrase.hits} 次 · 横跨 {catchphrase.days} 天 · 是同群其他人的{" "}
+            {/*
+              * 依据只给**排第一的那个**。
+              *
+              * 五个词各带一行「说过 N 次、横跨 M 天、是别人的 K 倍」
+              * 会把这一块变成一张表格，而这一块要的是一眼的印象。
+              * 其余几个的数字挂在 title 上，想知道的人悬停就有。
+              */}
+            <p className="t-caption2 mt-1 text-[var(--ink-tertiary)]">
+              「{catchphrase.phrase}」说过 {catchphrase.hits} 次 · 横跨 {catchphrase.days} 天 ·
+              是同群其他人的{" "}
               {catchphrase.lift < 10 ? catchphrase.lift.toFixed(1) : Math.round(catchphrase.lift)} 倍
             </p>
           </div>
@@ -146,9 +185,38 @@ export function Portrait({
               * 而「旺柴」是微信表情，他一个字都没说。
               */}
             <p className="t-caption2 text-[var(--ink-quaternary)]">最常用的表情</p>
-            <p className="t-body mt-0.5 font-medium">[{emoji.emoji}]</p>
-            <p className="t-caption2 mt-0.5 text-[var(--ink-tertiary)]">
-              点过 {emoji.hits} 次
+
+            {/*
+              * 两种表情**长得不一样，不能一起套方括号**。
+              *
+              * 微信自带的同步下来是 `旺柴` 这种词，写成「[旺柴]」正是
+              * 它在聊天框里的样子；而真的 emoji 是 😭 本身，
+              * 套上方括号会变成「[😭]」—— 看起来像渲染坏了。
+              *
+              * 原来只认前一种，线上量过：Unicode 那半边有 1394 个，
+              * 和方括号的 1604 个几乎一样多，也就是说**一半的表情
+              * 从来没被统计过**，而被漏掉的那些个人特色更强
+              * （有人光 🐟 就发了 150 次）。
+              */}
+            <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              {[emoji, ...emoji.more].map((e, i) => {
+                const unicode = /\p{Extended_Pictographic}/u.test(e.emoji);
+                return (
+                  <span
+                    key={e.emoji}
+                    className={i === 0 ? "font-medium" : "text-[var(--ink-secondary)]"}
+                    // emoji 本身要比方括号词大一点，不然一行里两种混着看很乱
+                    style={{ fontSize: `${((unicode ? 1.25 : 1) * (1 - i * 0.07)).toFixed(2)}rem` }}
+                    title={`点过 ${e.hits} 次`}
+                  >
+                    {unicode ? e.emoji : `[${e.emoji}]`}
+                  </span>
+                );
+              })}
+            </p>
+
+            <p className="t-caption2 mt-1 text-[var(--ink-tertiary)]">
+              最多的那个点过 {emoji.hits} 次
             </p>
           </div>
         </div>

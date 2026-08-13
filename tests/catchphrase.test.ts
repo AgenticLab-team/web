@@ -8,10 +8,15 @@ import {
   MIN_MESSAGES,
   emojiOf,
   phrasesWithEdge,
-  pickCatchphrase,
+  pickCatchphrases,
   tally,
   type Said,
 } from "@/lib/members/catchphrase";
+
+/** 只关心冠军是谁时用它 —— 生产里那一头现在给的是 3～5 个 */
+const pickCatchphrase = (input: Parameters<typeof pickCatchphrases>[0]) =>
+  pickCatchphrases(input)[0] ?? null;
+
 
 /**
  * 只关心「切出哪些片段」时用它。

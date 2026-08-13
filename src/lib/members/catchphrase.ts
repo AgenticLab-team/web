@@ -155,9 +155,38 @@ export interface PhraseHit {
   standalone: boolean;
 }
 
-/** 消息里的表情词，`[旺柴]` → `旺柴` */
+/**
+ * 一条消息里的表情。
+ *
+ * ═════════════════════════════════════════
+ * 两种表情，**一半原来被整个忽略了**
+ * ═════════════════════════════════════════
+ *
+ * 微信里有两套：
+ *
+ *   · 自带表情，同步下来是 `[旺柴]` 这种方括号词
+ *   · **真的 Unicode emoji**（😭🤔🐟），就是普通字符
+ *
+ * 原来只认前一种。线上量了三万条：方括号 1604 个、
+ * **Unicode 1394 个** —— 也就是说差不多一半的表情从来没被统计过，
+ * 而且被漏掉的那些个人特色更强（某个人光 🐟 就发了 150 次）。
+ *
+ * ─────────────────────────────────────────
+ * 为什么不能只匹配单个码点
+ * ─────────────────────────────────────────
+ *
+ * `👨‍👩‍👧` 是三个人形用 ZWJ 连起来的，`👍🏽` 是手势加肤色修饰符。
+ * 按单码点切的话，一个「全家」会被数成三次「人」，
+ * 而肤色会变成一个单独的表情。所以要连着 ZWJ 和修饰符一起吃掉。
+ */
+const UNICODE_EMOJI =
+  /\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier})?(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier})?)*/gu;
+
 export function emojiOf(text: string): string[] {
-  return (text.match(BRACKET) ?? []).map((s) => s.slice(1, -1));
+  return [
+    ...(text.match(BRACKET) ?? []).map((s) => s.slice(1, -1)),
+    ...(text.match(UNICODE_EMOJI) ?? []),
+  ];
 }
 
 /**
@@ -335,8 +364,17 @@ export interface CatchphraseInput {
  * 硬凑一个出来只会得到一句谁看了都觉得不像的话，
  * 而那会让人怀疑这一整块区域。
  */
-export function pickCatchphrase(input: CatchphraseInput): Catchphrase | null {
-  if (input.mine.length < MIN_MESSAGES) return null;
+/*
+ * 这里本来有个 `pickCatchphrase`（只回冠军一个）。
+ * 改成给 3～5 个之后，生产里没有任何地方再调它 ——
+ * 仓库那条「只有测试在用的导出」守卫拦下了，拦得对：
+ * `pickCatchphrases(input)[0]` 就是同一件事，多一个导出
+ * 就多一处将来会和另一处分叉的判定。
+ */
+
+/** 全部够格的候选，按分数排好。上面两个入口共用这一份 */
+function rankCatchphrases(input: CatchphraseInput): Catchphrase[] {
+  if (input.mine.length < MIN_MESSAGES) return [];
 
   /*
    * 昵称在**抽片段之前**就从原文里抹掉。
@@ -436,7 +474,7 @@ export function pickCatchphrase(input: CatchphraseInput): Catchphrase | null {
     candidates.push({ phrase, hits: stat.hits, msgs: stat.msgs, days: stat.days, lift, score });
   }
 
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) return [];
 
   // 分数高的在前；完全打平时取长的那个（更像一句话）
   candidates.sort(
@@ -496,5 +534,47 @@ export function pickCatchphrase(input: CatchphraseInput): Catchphrase | null {
   );
 
   // 全被吸收掉是不可能的（最长的那个没人能吸收它），但兜一下底
-  return (survivors.length > 0 ? survivors : candidates)[0];
+  return survivors.length > 0 ? survivors : candidates;
+}
+
+/**
+ * 同上，但给**前几个**。
+ *
+ * ═════════════════════════════════════════
+ * 为什么一个不够
+ * ═════════════════════════════════════════
+ *
+ * 站长：「常说的词怎么还有一个，3～5 个左右」。
+ *
+ * 一个词说不出一个人的样子 —— 「卧槽」只说明他会惊讶。
+ * 三到五个放在一起才有轮廓：「卧槽 / 确实 / 笑死 / 没绷住」
+ * 是一种人，「确实 / 所以说 / 本质上 / 反过来」是另一种。
+ *
+ * 上限五个不是随手定的：再多就会开始出现勉强过线的候选，
+ * 而**一个明显不像的词会让旁边四个也显得不可信**。
+ *
+ * 去重那一步（互相包含的吸收掉）在这里比单个时更要紧：
+ * 前五名很容易是同一个词的五种切法（「哈哈」「哈哈哈」「哈哈哈哈」…），
+ * 那样看起来就像算法坏了。
+ */
+export function pickCatchphrases(input: CatchphraseInput, limit = 5): Catchphrase[] {
+  const ranked = rankCatchphrases(input);
+  if (ranked.length === 0) return [];
+
+  /*
+   * 再去一次重：排名靠前的那几个里，把**互相包含**的收掉。
+   *
+   * 上面那一步吸收的是「被更长的完全盖住」的；这里要防的是另一种 ——
+   * 「笑死」和「笑死我了」都活了下来，各自都够格，但一起出现是废话。
+   * 保留先出现的（分更高的）那个。
+   */
+  const out: Catchphrase[] = [];
+  for (const c of ranked) {
+    if (out.some((kept) => kept.phrase.includes(c.phrase) || c.phrase.includes(kept.phrase))) {
+      continue;
+    }
+    out.push(c);
+    if (out.length >= limit) break;
+  }
+  return out;
 }

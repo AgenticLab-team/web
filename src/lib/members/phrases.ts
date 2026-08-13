@@ -9,7 +9,7 @@ import type { CurrentUser } from "@/lib/auth/session";
 import { dateKey } from "@/lib/time";
 
 import { MENTIONABLE_TYPES } from "@/lib/messages/interactions";
-import { emojiOf, pickCatchphrase, tally, type Said } from "./catchphrase";
+import { emojiOf, pickCatchphrases, tally, type Said } from "./catchphrase";
 
 /**
  * 「常挂在嘴边」：算一轮存下来，读的时候白拿。
@@ -178,16 +178,23 @@ export function computePersonPhrases(options: { force?: boolean } = {}): PhraseJ
           emojiCount.set(e, (emojiCount.get(e) ?? 0) + 1);
         }
       }
-      const topEmoji = [...emojiCount.entries()]
+      /*
+       * 表情也给前几个 —— 一个表情和一个词一样，说不出一个人的样子。
+       * 「🐟 / 🤔 / 😭」放在一起才有轮廓。
+       */
+      const emojiRanked = [...emojiCount.entries()]
         .filter(([, n]) => n >= MIN_EMOJI)
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, 5);
+      const topEmoji = emojiRanked[0];
 
-      const got = pickCatchphrase({
+      const picked = pickCatchphrases({
         mine,
         others: baseline,
         otherMessages: rows.length,
         exclude,
       });
+      const got = picked[0];
 
       if (!got && !topEmoji) {
         // 这一轮两样都没算出来 —— 把上一轮的删掉，别让过期的结论留在页面上
@@ -203,6 +210,17 @@ export function computePersonPhrases(options: { force?: boolean } = {}): PhraseJ
        */
       const row = {
         phrase: got?.phrase ?? "",
+        /*
+         * 冠军留在列上、其余进 JSON —— 成员列表那一页只要冠军，
+         * 让它去解 JSON 再取第一个是为不需要的通用性付常数代价。
+         */
+        morePhrases: picked.slice(1).map((c) => ({
+          phrase: c.phrase,
+          hits: c.hits,
+          days: c.days,
+          lift: c.lift,
+        })),
+        moreEmoji: emojiRanked.slice(1).map(([emoji, hits]) => ({ emoji, hits })),
         hits: got?.hits ?? 0,
         msgs: got?.msgs ?? 0,
         days: got?.days ?? 0,
@@ -233,11 +251,15 @@ export interface CatchphraseView {
   hits: number;
   days: number;
   lift: number;
+  /** 排在后面的那几个（最多四个）。冠军是上面那几个字段 */
+  more: { phrase: string; hits: number; days: number; lift: number }[];
 }
 
 export interface EmojiView {
   emoji: string;
   hits: number;
+  /** 排在后面的那几个 */
+  more: { emoji: string; hits: number }[];
 }
 
 /**
@@ -273,7 +295,19 @@ export function catchphraseFor(
     .get();
 
   if (!row || !row.phrase) return null;
-  return { phrase: row.phrase, hits: row.hits, days: row.days, lift: row.lift };
+  return {
+    phrase: row.phrase,
+    hits: row.hits,
+    days: row.days,
+    lift: row.lift,
+    /*
+     * 后面那几个。站长：「常说的词怎么还有一个，3～5 个左右」。
+     *
+     * 一个词说不出一个人的样子 ——「卧槽」只说明他会惊讶；
+     * 「卧槽 / 确实 / 笑死 / 没绷住」放在一起才是一种人。
+     */
+    more: row.morePhrases ?? [],
+  };
 }
 
 /**
@@ -297,7 +331,7 @@ export function topEmojiFor(
     .get();
 
   if (!row?.emoji || !row.emojiHits) return null;
-  return { emoji: row.emoji, hits: row.emojiHits };
+  return { emoji: row.emoji, hits: row.emojiHits, more: row.moreEmoji ?? [] };
 }
 
 

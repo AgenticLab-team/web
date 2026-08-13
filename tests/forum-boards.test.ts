@@ -239,3 +239,60 @@ describe("路由不打架", () => {
     }
   });
 });
+
+describe("**长文占的地方不超过三分之一**", () => {
+  /*
+   * 站长：「这个论坛现在给长文太大铺面了，最多留三分之一，
+   * 不然其他的文章也没人读了」。
+   *
+   * 这一条按**面积**算，不按条数 —— 一张卡片大约等于时间线上两行
+   * （卡片有标题、两行摘要、署名行，行只有标题和一行附注）。
+   *
+   * 上一版是 1 张通栏头条 + 2×2 四张 = 5 张 ≈ 10 行，
+   * 而时间线 15 行 —— 四成。手机上更糟：`sm:grid-cols-2` 塌成单列之后
+   * 五张整宽卡片一路堵在时间线前面。
+   */
+  const page = readCode("app/(app)/forum/page.tsx");
+
+  /*
+   * 用正则**字面量**，不用 `new RegExp(模板字符串)`。
+   *
+   * 后者要写四层反斜杠（源码里 `\\\\s` → 字符串 `\\s` → 正则 `\s`），
+   * 我第一版就多写了一层，结果正则在找「反斜杠后面跟个 s」，
+   * 永远匹配不上 —— 而报错是「找不到那次查询」，看起来像页面改了结构。
+   */
+  const limitOf = (re: RegExp, what: string): number => {
+    const m = page.match(re);
+    assert.ok(m, `找不到${what}那次查询的 limit —— 页面结构是不是改了`);
+    return Number(m![1]);
+  };
+
+  /** 一张卡片顶时间线上几行 */
+  const CARD_ROWS = 2;
+
+  it("首页上「坐下来读」不超过时间线的三分之一", () => {
+    const deep = limitOf(/sort:\s*"deep"[^)]*?limit:\s*(\d+)/, "「坐下来读」");
+    const recent = limitOf(/sort:\s*"recent"[^)]*?limit:\s*(\d+)/, "「最新讨论」");
+    const share = (deep * CARD_ROWS) / (deep * CARD_ROWS + recent);
+    assert.ok(
+      share <= 1 / 3,
+      `长文占了 ${(share * 100).toFixed(0)}%（${deep} 张卡片 ≈ ${deep * CARD_ROWS} 行，` +
+        `时间线 ${recent} 行）—— 上限是 33%`,
+    );
+  });
+
+  it("**没有通栏头条** —— 一张独大会让另外两张变成陪衬", () => {
+    /*
+     * 去掉头条不只是为了省地方。头条会把「值得读」变成
+     * 「今天这一篇最值得读」，而这一栏要说的是
+     * 「这里有几篇值得坐下来读」。
+     */
+    const list = readCode("components/forum/PostList.tsx");
+    const deep = list.slice(list.indexOf("export function DeepList"));
+    assert.equal(
+      /\blead\b/.test(deep.slice(0, 900)),
+      false,
+      "DeepList 里又出现了 lead —— 头条回来了",
+    );
+  });
+});

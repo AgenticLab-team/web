@@ -38,7 +38,16 @@ export default async function ForumPage() {
    * 取 5 篇：一张通栏的头条 + 两行各两张。取偶数的话最后一行会剩半张，
    * 旁边空一半，看起来像没加载出来。
    */
-  const worthReading = listPosts(viewer, { sort: "deep", longformOnly: true, limit: 5 });
+  /*
+   * 三篇，不是五篇。
+   *
+   * 站长：「这个论坛现在给长文太大铺面了，最多留三分之一」。
+   * 一张卡片大约等于时间线上两行，所以 3 张 ≈ 6 行，
+   * 而下面的时间线是 15 行 —— 约 29%，压在三分之一以下。
+   *
+   * 五张的时候是 40%，而且手机上五张整宽卡片一路堵在时间线前面。
+   */
+  const worthReading = listPosts(viewer, { sort: "deep", longformOnly: true, limit: 3 });
 
   return (
     <>

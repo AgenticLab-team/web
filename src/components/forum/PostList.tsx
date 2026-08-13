@@ -193,16 +193,37 @@ export function PostList({ posts, showBoard = false }: { posts: PostSummary[]; s
  * 不是加一个「长文」小标签就完事 —— 标签是要读了才知道的信息，
  * 而人在列表上根本不读，只是扫。所以差别做在四个不需要阅读的维度上：
  *
- *   · **一条占的面积**。卡片而不是行；第一篇占满整行。
+ *   · **一条占的面积**。卡片而不是行。
  *     面积是唯一一种不用识字就能感觉到的分量。
- *   · **标题的字号**。t-title2 / t-headline，比时间线上的 t-body 大一档。
- *   · **摘要有三行**。时间线上是两行的附注，这里是「先尝一口」。
+ *   · **标题的字号**。t-headline，比时间线上的 t-body 大一档。
+ *   · **摘要两行**，给一口尝的。
  *   · **右上角那个时长**。每张卡片同一个位置都写着「这要花你多久」，
  *     重复出现之后它本身就成了一种视觉标记：这一栏里的东西都要花时间。
  *
  * 克制的地方同样重要：不用彩色底、不加边框、不做悬浮抬升。
  * 这一栏要显得「重」，不是要显得「吵」—— 吵起来就压住了它下面的时间线，
  * 而那条时间线才是这个站每天真正在发生的事。
+ *
+ * ═════════════════════════════════════════
+ * 2026-08：收掉了，因为上一版真的压住了
+ * ═════════════════════════════════════════
+ *
+ * 站长：「这个论坛现在给长文太大铺面了，最多留三分之一，
+ * 不然其他的文章也没人读了」。
+ *
+ * 上一版是 **1 张通栏头条（t-title2 + 三行摘要）+ 2×2 四张**。
+ * 桌面上还好，**手机上是灾难**：`sm:grid-cols-2` 在窄屏塌成单列，
+ * 于是五张整宽卡片一路堵在时间线前面，第一张还是最大号的。
+ * 按面积估约占首屏之后两屏的四成 —— 而时间线才是每天真正在发生的事。
+ *
+ * 现在：**三张同样大小的卡片，没有头条**。
+ *
+ * 去掉头条不只是为了省地方 —— 头条那一张会把「值得读」变成
+ * 「今天这一篇最值得读」，而这一栏本来要说的是「这里有几篇值得坐下来读」。
+ * 一张独大还会让第二第三张显得像陪衬，于是它们也没人点。
+ *
+ * 「三分之一」这条线由 tests/forum-boards.test.ts 按**面积**盯着，
+ * 不是按条数 —— 一张卡片大约等于时间线上两行。
  */
 export function DeepList({ posts }: { posts: PostSummary[] }) {
   if (posts.length === 0) {
@@ -214,18 +235,18 @@ export function DeepList({ posts }: { posts: PostSummary[] }) {
     );
   }
 
-  const [lead, ...rest] = posts;
-
   return (
-    <div className="stagger grid gap-2.5 sm:grid-cols-2">
-      <DeepCard post={lead} lead index={0} className="sm:col-span-2" />
-      {rest.map((post, i) => (
+    <div className="stagger grid gap-2.5 sm:grid-cols-3">
+      {posts.map((post, i) => (
         <DeepCard
           key={post.id}
           post={post}
-          index={i + 1}
-          /* 只剩一张的话让它铺满 —— 半张卡片旁边空一半，看起来像没加载出来 */
-          className={rest.length === 1 ? "sm:col-span-2" : ""}
+          index={i}
+          /*
+           * 不足三张时铺满剩下的格子 —— 半张卡片旁边空着一大块，
+           * 看起来像没加载出来。
+           */
+          className={posts.length < 3 ? "sm:col-span-3" : ""}
         />
       ))}
     </div>
@@ -235,12 +256,10 @@ export function DeepList({ posts }: { posts: PostSummary[] }) {
 function DeepCard({
   post,
   index,
-  lead = false,
   className = "",
 }: {
   post: PostSummary;
   index: number;
-  lead?: boolean;
   className?: string;
 }) {
   return (
@@ -274,13 +293,11 @@ function DeepCard({
         * 也就是说这一栏里最小的一张卡片，标题也已经比水帖粗一档
         * （t-headline 是 600 字重），而头条整整大出一个台阶。
         */}
-      <h3 className={`${lead ? "t-title2" : "t-headline"} mt-2 leading-snug`}>{post.title}</h3>
+      <h3 className="t-headline mt-2 leading-snug">{post.title}</h3>
 
       {post.excerpt && (
         <p
-          className={`t-footnote mt-1.5 leading-relaxed text-[var(--ink-secondary)] ${
-            lead ? "line-clamp-3" : "line-clamp-2"
-          }`}
+          className="t-footnote mt-1.5 line-clamp-2 leading-relaxed text-[var(--ink-secondary)]"
         >
           {post.excerpt}
         </p>

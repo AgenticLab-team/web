@@ -72,6 +72,23 @@ export const personPhrases = sqliteTable(
     /** 排名分数，跨群挑最高的那个 */
     score: real("score").notNull(),
     /**
+     * 排在后面的那几个（第 2～5 名），JSON 数组。
+     *
+     * ─────────────────────────────────────────
+     * 为什么冠军仍然单独占几列
+     * ─────────────────────────────────────────
+     *
+     * 站长要 3～5 个，而不是一个。但成员列表那一页是**很多人各一个词**
+     * （`catchphrasesFor`），它只要冠军 —— 让那条查询去解一个 JSON
+     * 数组再取第一个，是为了一个不需要的通用性付常数代价。
+     *
+     * 所以：冠军留在列上（查得快、能排序），其余的放进 JSON。
+     * 两边的排名口径是同一次计算的产物，不会分叉。
+     */
+    morePhrases: text("more_phrases", { mode: "json" }).$type<
+      { phrase: string; hits: number; days: number; lift: number }[]
+    >(),
+    /**
      * 他在这个群里点得最多的微信表情（`[旺柴]` 里的那个词）。
      *
      * 和口头禅分开存，因为它**不是他说的话** —— 混在一起的话，
@@ -80,6 +97,8 @@ export const personPhrases = sqliteTable(
      */
     emoji: text("emoji"),
     emojiHits: integer("emoji_hits"),
+    /** 同理：排在后面的那几个表情 */
+    moreEmoji: text("more_emoji", { mode: "json" }).$type<{ emoji: string; hits: number }[]>(),
     computedAt: integer("computed_at").notNull(),
   },
   (t) => [primaryKey({ columns: [t.wxId, t.convId] })],

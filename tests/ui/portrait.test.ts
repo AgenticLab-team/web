@@ -18,8 +18,8 @@ const render = async (node: unknown): Promise<string> => {
   return renderToStaticMarkup(node as never);
 };
 
-const CATCH = { phrase: "卧槽", hits: 129, days: 12, lift: 5.9 };
-const EMOJI = { emoji: "旺柴", hits: 52 };
+const CATCH = { phrase: "卧槽", hits: 129, days: 12, lift: 5.9 , more: [] };
+const EMOJI = { emoji: "旺柴", hits: 52 , more: [] };
 const PARTNER = { wxId: "wx_bob", name: "小明", count: 31 };
 const HOURS = {
   bars: Array.from({ length: 24 }, (_, h) => (h >= 21 || h <= 1 ? 1 : 0.1)),
@@ -225,5 +225,96 @@ describe("一般什么时候说话", () => {
       hours: { ...HOURS, bars: HOURS.bars.map((_, h) => (h === 3 ? 1 : 0)) },
     });
     assert.equal(/height:\s*0%/.test(html), false, "有条子高度是 0");
+  });
+});
+
+describe("**常挂在嘴边给 3～5 个，不是一个**", () => {
+  /*
+   * 站长：「常说的词怎么还有一个，3～5 个左右」「现在没有艺术效果」。
+   *
+   * 一个词说不出一个人的样子 ——「卧槽」只说明他会惊讶；
+   * 「卧槽 / 确实 / 笑死 / 没绷住」放在一起才是一种人。
+   */
+  const many = {
+    phrase: "卧槽",
+    hits: 40,
+    days: 12,
+    lift: 8,
+    more: [
+      { phrase: "确实", hits: 30, days: 10, lift: 5 },
+      { phrase: "笑死", hits: 20, days: 8, lift: 4 },
+      { phrase: "没绷住", hits: 12, days: 6, lift: 9 },
+    ],
+  };
+
+  it("后面那几个都渲染出来了", async () => {
+    const html = await portrait({ catchphrase: many });
+    for (const p of ["卧槽", "确实", "笑死", "没绷住"]) {
+      assert.ok(html.includes(p), `少了「${p}」`);
+    }
+  });
+
+  it("**字号按排名递减** —— 排版本身在传信息", async () => {
+    /*
+     * 排成一行等大的词是一张列表；按分数缩放之后，一眼就能看出
+     * 哪个才是他。这也是为什么不做真正的词云：词云为了填满形状
+     * 会把小词放大、把位置打乱，那时候大小就不再意味着任何东西。
+     */
+    const html = await portrait({ catchphrase: many });
+    const sizes = [...html.matchAll(/font-size:\s*([\d.]+)rem/g)].map((m) => Number(m[1]));
+    assert.ok(sizes.length >= 4, `只找到 ${sizes.length} 个字号`);
+    for (let i = 1; i < 4; i++) {
+      assert.ok(sizes[i] < sizes[i - 1], `第 ${i + 1} 个没有比前一个小`);
+    }
+    // 最小的也不能小到像噪点 —— 它们每一个都够格出现在这里
+    assert.ok(Math.min(...sizes.slice(0, 4)) >= 0.72);
+  });
+
+  it("依据只给排第一的那个 —— 五行数字会把这块变成表格", async () => {
+    /*
+     * 数的是**可见的那一行**（带「横跨 N 天」的完整依据）。
+     *
+     * 每个词的 `title` 上也挂着「说过 N 次」，那是悬停才出现的，
+     * 不占版面 —— 想知道的人查得到，不想知道的人看不见。
+     * 所以不能光数「说过」出现几次，那会把提示也算进去。
+     */
+    const html = await portrait({ catchphrase: many });
+
+    /*
+     * 认「是同群其他人的 N 倍」这半句 —— 只有可见那一行有它。
+     *
+     * 不能认「说过 N 次 · 横跨 M 天」：悬停提示用的是同一个形状，
+     * 于是数出来是 5 而不是 1（我第一版就这么写的，红得对）。
+     */
+    assert.equal((html.match(/是同群其他人的/g) ?? []).length, 1);
+
+    // 其余几个的数字确实挂在 title 上，没有丢
+    assert.ok(html.includes('title="说过 30 次'), "第二个词的依据没挂上去");
+  });
+
+  it("只有一个词时也不炸", async () => {
+    const html = await portrait({
+      catchphrase: { phrase: "确实", hits: 10, days: 5, lift: 3, more: [] },
+    });
+    assert.ok(html.includes("确实"));
+  });
+});
+
+describe("**两种表情不能一起套方括号**", () => {
+  it("微信自带的写成 [旺柴]，真 emoji 原样显示", async () => {
+    /*
+     * 微信自带的同步下来是「旺柴」这种词，写成「[旺柴]」正是它在
+     * 聊天框里的样子；而真的 emoji 是 😭 本身，套上方括号会变成
+     * 「[😭]」—— 看起来像渲染坏了。
+     *
+     * 原来只认前一种。线上量过：Unicode 那半边 1394 个、方括号 1604 个，
+     * 也就是说**一半的表情从来没被统计过**。
+     */
+    const html = await portrait({
+      emoji: { emoji: "旺柴", hits: 50, more: [{ emoji: "😭", hits: 30 }] },
+    });
+    assert.ok(html.includes("[旺柴]"), "微信表情该带方括号");
+    assert.ok(html.includes("😭"), "emoji 该出现");
+    assert.equal(html.includes("[😭]"), false, "emoji 不该被套方括号");
   });
 });
