@@ -156,7 +156,7 @@ export function buildWeeklyDigest(
   const existing = db
     .select()
     .from(digestRuns)
-    .where(eq(digestRuns.weekStart, weekStart))
+    .where(and(eq(digestRuns.kind, "weekly"), eq(digestRuns.weekStart, weekStart)))
     .get();
 
   if (existing && !options.force) {
@@ -211,13 +211,15 @@ export function buildWeeklyDigest(
     // 判定为不发也要留一行 —— 「这周怎么没有精选」要答得上来
     db.insert(digestRuns)
       .values({
+        kind: "weekly",
         weekStart,
         postIds: [],
         itemCount: selection.items.length,
         skipReason: verdict.reason,
       })
       .onConflictDoUpdate({
-        target: digestRuns.weekStart,
+        // 唯一索引现在是 (kind, week_start) —— 日报和周报共用这张表
+        target: [digestRuns.kind, digestRuns.weekStart],
         set: { skipReason: verdict.reason, itemCount: selection.items.length, postIds: [] },
       })
       .run();
@@ -254,13 +256,15 @@ export function buildWeeklyDigest(
 
   db.insert(digestRuns)
     .values({
+      kind: "weekly",
       weekStart,
       postIds: selection.items.map((i) => i.id),
       itemCount: selection.items.length,
       broadcastId: broadcast.id,
     })
     .onConflictDoUpdate({
-      target: digestRuns.weekStart,
+      // 同上：日报和周报共用这张表，冲突键要带上 kind
+      target: [digestRuns.kind, digestRuns.weekStart],
       set: {
         postIds: selection.items.map((i) => i.id),
         itemCount: selection.items.length,

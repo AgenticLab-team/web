@@ -31,7 +31,8 @@
     "deploy": "bash scripts/deploy.sh",
     "grant-title": "tsx --conditions=react-server --env-file=.env.local scripts/grant-title.ts",
     "enrich-links": "tsx --conditions=react-server scripts/enrich-links.ts",
-    "embed-messages": "tsx --conditions=react-server --env-file=.env.local scripts/embed-messages.ts"
+    "embed-messages": "tsx --conditions=react-server --env-file=.env.local scripts/embed-messages.ts",
+    "daily-digest": "tsx --conditions=react-server --env-file=.env.local scripts/daily-digest.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

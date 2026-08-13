@@ -591,6 +591,26 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
     label: "模块：每周精选",
     description: "关掉后不再挑稿、不再备草稿。它只备草稿 —— 发送始终走群发那一套复核流程",
   },
+  {
+    key: "module.digest_daily.enabled",
+    /*
+     * ⚠️ 这一条默认**关着**，和别的模块相反。
+     *
+     * 别的模块默认开，理由是「默认关掉的功能等于没做」。
+     * 这一条不适用，因为它是全站唯一一个**没有人复核就往一千六百人
+     * 的群里发消息**的东西。
+     *
+     * 「默认关掉等于没做」成立的前提是：打开它的人知道自己在打开什么。
+     * 对这一条来说，那次知情本身就是它该有的那道闸 ——
+     * 站长亲手打开一次，比一段注释管用。
+     */
+    value: "false",
+    type: "bool",
+    category: "digest",
+    label: "模块：每天晚上的推送",
+    description:
+      "每天 20:00 挑 3 条最近值得读的，**直接发进所有群，没有人复核**。关掉后定时任务照常跑但不发，周报不受影响",
+  },
   { key: "digest.top_n", value: "5", type: "int", category: "digest", label: "每期推送帖子数" },
   {
     key: "digest.max_per_author",

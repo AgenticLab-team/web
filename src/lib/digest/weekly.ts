@@ -99,8 +99,15 @@ export function reasonFor(post: DigestCandidate): string {
 }
 
 export interface SelectOptions {
-  /** 已经进过往期精选的帖子 id */
-  alreadySent?: Set<string>;
+  /**
+   * 已经推送过的帖子 id。
+   *
+   * **日报和周报共用同一份** —— 分两份的话，周一早上刚推过的文章
+   * 周一晚上会被日报再推一次，而那是让人开始忽略这个消息的第一步。
+   *
+   * 只读：这个函数从不往里加东西，收窄成 Set 会逼调用方交出可变引用。
+   */
+  alreadySent?: ReadonlySet<string>;
   max?: number;
   minEngagement?: number;
   /** 同一个作者最多占几条 —— 0 或负数表示不限 */

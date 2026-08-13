@@ -44,6 +44,21 @@ export interface ModuleSpec {
   /** 有些东西不该能被关掉 */
   lockedOn?: boolean;
   lockReason?: string;
+  /**
+   * 默认**关着**的理由。
+   *
+   * ─────────────────────────────────────────
+   * 不填就不许默认关
+   * ─────────────────────────────────────────
+   *
+   * 站里的规矩是模块一律默认开（「默认关掉的功能等于没做」），
+   * 而这条规矩有一个真实的例外：一个**没有人复核就往一千六百人
+   * 的群里发消息**的东西，默认开等于替站长做了一个他没做过的决定。
+   *
+   * 但例外必须写下理由 —— 否则下一个人只要把 value 改成 "false"
+   * 就能绕过那条规矩，而没有任何地方会问他为什么。
+   */
+  defaultOff?: string;
 }
 
 export const MODULES: ModuleSpec[] = [
@@ -129,6 +144,30 @@ export const MODULES: ModuleSpec[] = [
     settingKey: "module.digest.enabled",
     dependsOn: ["broadcast"],
     enforcedIn: ["src/lib/digest/build.ts"],
+  },
+  {
+    key: "digest_daily",
+    name: "每天晚上的推送",
+    summary: "每天 20:00 把最近值得读的挑 3 条，**直接发进所有群**",
+    /*
+     * ⚠️ 和「每周精选」不一样：**这个会自己发出去**，没有人复核。
+     *
+     * 名字和 summary 里都把这件事说死了 —— 上一次这块出问题，
+     * 正是因为开关的名字在暗示一件代码没做的事（那次是反过来：
+     * 名字暗示会发，实际只备草稿）。一个名字骗人的开关，
+     * 比没有开关更危险。
+     *
+     * 它单独成一个开关而不是并进 `digest`：站长要停掉「自动发」时
+     * 不该被迫连周报一起停，而周报只备草稿、本来没有停的理由。
+     * 一个开关管两件危险程度差一个量级的事，最后一定是没人敢动它。
+     */
+    whenOff: "定时任务照常跑，但不挑稿也不发。周报不受影响",
+    defaultOff:
+      "全站唯一一个没有人复核就往所有群发消息的东西 —— 默认开等于替站长" +
+      "做了一个他没做过的决定。站长亲手打开一次，本身就是那道闸",
+    settingKey: "module.digest_daily.enabled",
+    dependsOn: ["broadcast"],
+    enforcedIn: ["src/lib/digest/build-daily.ts"],
   },
   {
     key: "alerts",

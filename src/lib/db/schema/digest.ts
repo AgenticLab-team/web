@@ -17,7 +17,21 @@ export const digestRuns = sqliteTable(
   "digest_runs",
   {
     id: ulidPk(),
-    /** 周一那天的 YYYY-MM-DD */
+    /**
+     * 哪一种：`weekly`（每周精选）还是 `daily`（每天晚上那条）。
+     *
+     * ─────────────────────────────────────────
+     * 两种共用一张表，是**故意的**
+     * ─────────────────────────────────────────
+     *
+     * 这张表真正的价值不是「记录生成过什么」，是
+     * 「**哪几篇已经推给群里了**」—— 而那件事只能有一份。
+     *
+     * 分两张表的话，周一早上周报推过的文章，周一晚上日报会再推一次。
+     * 那是让人开始忽略这个消息的第一步，而且没有任何地方会报错。
+     */
+    kind: text("kind").notNull().default("weekly"),
+    /** 周报是周一那天的 YYYY-MM-DD；日报是当天 */
     weekStart: text("week_start").notNull(),
 
     /** 入选的帖子 id，JSON 数组 */
@@ -32,7 +46,8 @@ export const digestRuns = sqliteTable(
     createdAt: now("created_at"),
   },
   (t) => [
-    uniqueIndex("digest_runs_week_idx").on(t.weekStart),
+    // 同一种、同一天只跑一次 —— 带上 kind，否则日报会被周报那行挡住
+    uniqueIndex("digest_runs_kind_period_idx").on(t.kind, t.weekStart),
     index("digest_runs_created_idx").on(t.createdAt),
   ],
 );

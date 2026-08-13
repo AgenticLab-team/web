@@ -92,6 +92,23 @@ describe("**开关必须真的关得掉某样东西**", () => {
     const byKey = new Map(DEFAULT_SETTINGS.map((s) => [s.key, s]));
     for (const spec of MODULES) {
       if (spec.lockedOn) continue;
+      /*
+       * 默认关是允许的，但**必须写下理由**（`defaultOff`）。
+       *
+       * 不要求理由的话，下一个人只要把 value 改成 "false" 就绕过了
+       * 这条规矩，而没有任何地方会问他为什么。
+       * 现在的唯一一条例外是「每天晚上的推送」—— 它是全站唯一
+       * 没有人复核就往所有群发消息的东西。
+       */
+      if (spec.defaultOff) {
+        assert.equal(
+          byKey.get(spec.settingKey)?.value,
+          "false",
+          `${spec.key} 写了 defaultOff 却默认开着 —— 两边对不上`,
+        );
+        assert.ok(spec.defaultOff.length > 15, `${spec.key} 的 defaultOff 理由太空泛`);
+        continue;
+      }
       assert.equal(byKey.get(spec.settingKey)?.value, "true", `${spec.key} 默认是关的`);
     }
   });
