@@ -134,3 +134,50 @@ export function sanitizePinned(raw: unknown, owned: RepoFact[], limit = MAX_SHOW
   }
   return out;
 }
+
+/**
+ * 自荐语的长度上限。
+ *
+ * ─────────────────────────────────────────
+ * 140 是**故意短**的
+ * ─────────────────────────────────────────
+ *
+ * 它要放在目录里每一行的第一句，而这一页的价值是**能扫**：
+ * 二十个项目一屏看完，看到感兴趣的再点进去。
+ * 允许写一段的话，前三个项目就占满一屏，第四个开始没人看得见 ——
+ * 于是这个功能会奖励「谁先写、谁写得长」，而不是「谁做得好」。
+ *
+ * 短还有第二个好处：一句话逼人回答「这是什么、给谁用」，
+ * 而一段话会滑向项目背景介绍 —— 那个 README 里已经有了。
+ */
+export const MAX_PITCH_CHARS = 140;
+
+export interface PitchVerdict {
+  ok: boolean;
+  text: string;
+  error: string | null;
+}
+
+/**
+ * 洗一遍自荐语。
+ *
+ * 按**码点**数而不是 `.length` —— emoji 会被算成两个，
+ * 而这个上限是给人看的「大概一句话」，不是给存储用的。
+ */
+export function validatePitch(raw: unknown): PitchVerdict {
+  if (typeof raw !== "string") return { ok: false, text: "", error: "推荐语得是一段文字" };
+
+  /*
+   * 换行折成空格。
+   *
+   * 它渲染在列表行里，多行会把那一行撑高、把别人的项目挤下去 ——
+   * 一个人多写两个回车就能占掉别人的位置，那是不该存在的杠杆。
+   */
+  const text = raw.replace(/\s+/g, " ").trim();
+
+  if (!text) return { ok: true, text: "", error: null }; // 空 = 撤掉自荐
+  if ([...text].length > MAX_PITCH_CHARS) {
+    return { ok: false, text: "", error: `最多 ${MAX_PITCH_CHARS} 个字 —— 一句话说清楚它是什么` };
+  }
+  return { ok: true, text, error: null };
+}

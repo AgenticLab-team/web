@@ -4,7 +4,10 @@ import { redirect } from "next/navigation";
 
 import { ProjectList } from "@/components/github/ProjectList";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Empty, PageNote, Pill, PillRow, Section } from "@/components/ui/primitives";
+import Link from "next/link";
+
+import { buttonClass, Callout, Empty, PageNote, Pill, PillRow, Section } from "@/components/ui/primitives";
+import { connectionOf } from "@/lib/github/link";
 import { getCurrentUser } from "@/lib/auth/session";
 import { githubEnabled } from "@/lib/github/secret";
 import { resolveProjectSort } from "@/lib/github/project-rules";
@@ -70,6 +73,33 @@ export default async function ProjectsPage({
   return (
     <>
       <PageHeader title="项目" subtitle="社区成员自己在做的东西" />
+
+      {/*
+        * 没绑的人在这一页上要能一步接上。
+        *
+        * 这是全站**最该出现这个入口**的地方：他正在看别人的项目，
+        * 「我的怎么不在这儿」是此刻自然会冒出来的问题 ——
+        * 而以前的答案要他自己走到「我的 → 安全」里去找。
+        *
+        * 用 Callout 而不是空状态：这一页对他不是空的，
+        * 他是来看别人的东西的，这条只是顺带告诉他还能做一件事。
+        */}
+      {githubEnabled() && user && !connectionOf(user.id) && (
+        <Callout tone="accent" className="mb-4">
+          <p className="t-subhead font-medium">你的项目还没有在这里</p>
+          <p className="t-caption mt-0.5 leading-relaxed text-[var(--ink-secondary)]">
+            接上 GitHub，你的公开项目会自动出现在这一页和你的个人主页。
+            申请的权限是<strong>空的</strong> —— 只读公开信息，碰不到私有仓库，
+            也发不了任何东西。
+          </p>
+          <Link
+            href="/api/auth/github/start?return=/projects"
+            className={`${buttonClass("primary", "sm")} mt-2`}
+          >
+            连接 GitHub
+          </Link>
+        </Callout>
+      )}
 
       {/*
         * 站里没配 GitHub 的时候要说清楚是**站的**问题，不是「没人做项目」。

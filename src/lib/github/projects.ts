@@ -77,6 +77,21 @@ export interface ProjectEntry {
    * 会长成同一个样子。
    */
   builder: Builder;
+  /**
+   * 作者自己写的一句推荐语。没写就是 null。
+   *
+   * ─────────────────────────────────────────
+   * 目录里缺的不是数据，是**人话**
+   * ─────────────────────────────────────────
+   *
+   * 每一行现在都是 GitHub 给的：名字、description、语言、star。
+   * 那些是**写给陌生人看的**，而这一页的读者是同一个群里的人 ——
+   * 他们想知道的是「这跟我有什么关系」「你为什么做它」「现在能用了吗」，
+   * 而 README 第一句回答不了这些。
+   *
+   * 它排在 description **前面**：那是这个人对这个社区说的话。
+   */
+  pitch: string | null;
 }
 
 export interface Builder {
@@ -104,12 +119,20 @@ export interface Builder {
 }
 
 /** 一个人 → 一批仓库。已经过完三道门 */
-function consentedRepos(): { builder: Builder; repos: RepoFact[] }[] {
+function consentedRepos(): {
+  builder: Builder;
+  repos: RepoFact[];
+  /** 作者自荐语，以及它挂在哪个仓库上（小写 key） */
+  pitch: string | null;
+  pitchRepo: string | null;
+}[] {
   const conns = db
     .select({
       userId: githubConnections.userId,
       login: githubConnections.login,
       htmlUrl: githubConnections.htmlUrl,
+      pitch: githubConnections.pitch,
+      pitchRepo: githubConnections.pitchRepo,
     })
     .from(githubConnections)
     // ① 展示开关。绑定不等于同意公开
@@ -154,7 +177,7 @@ function consentedRepos(): { builder: Builder; repos: RepoFact[] }[] {
   );
 
   const byId = new Map(accounts.map((a) => [a.id, a]));
-  const out: { builder: Builder; repos: RepoFact[] }[] = [];
+  const out: ReturnType<typeof consentedRepos> = [];
 
   for (const conn of conns) {
     const account = byId.get(conn.userId);
@@ -183,17 +206,30 @@ function consentedRepos(): { builder: Builder; repos: RepoFact[] }[] {
         githubUrl: conn.htmlUrl,
       },
       repos: caches.get(conn.userId) ?? [],
+      /*
+       * 自荐是**挂在某一个仓库上**的，不是挂在人身上 ——
+       * 一个人可能有二十个仓库，那句话只对其中一个成立。
+       * 归一到小写来比：GitHub 那边大小写不是身份。
+       */
+      pitch: conn.pitch?.trim() || null,
+      pitchRepo: conn.pitchRepo?.trim().toLowerCase() || null,
     });
   }
   return out;
 }
 
-function toEntry(repo: RepoFact, builder: Builder): ProjectEntry | null {
+function toEntry(
+  repo: RepoFact,
+  builder: Builder,
+  pitch?: { text: string | null; repo: string | null },
+): ProjectEntry | null {
   const parsed = parseRepoRef(repo.fullName);
   // 认不出来的名字不进目录 —— 它会被拼进项目页的地址
   if (!parsed) return null;
   return {
     key: repoRefKey(parsed),
+    // 只有自荐的**那一个**仓库拿得到这句话
+    pitch: pitch?.repo && pitch.repo === repoRefKey(parsed) ? pitch.text : null,
     fullName: repo.fullName,
     name: repo.name,
     description: repo.description,
@@ -232,11 +268,11 @@ export function projectDirectory(
   const seen = new Set<string>();
   let builders = 0;
 
-  for (const { builder, repos } of consentedRepos()) {
+  for (const { builder, repos, pitch, pitchRepo } of consentedRepos()) {
     let any = false;
     for (const repo of repos) {
       if (!isShowcaseWorthy(repo)) continue;
-      const entry = toEntry(repo, builder);
+      const entry = toEntry(repo, builder, { text: pitch, repo: pitchRepo });
       if (!entry) continue;
       /*
        * 同一个仓库两个人都列着（一个是 owner，一个 fork 之后改了名
@@ -299,13 +335,13 @@ export function projectHeader(rawOwner: string, rawRepo: string): ProjectHeader 
 
   const builders: Builder[] = [];
   let entry: ProjectEntry | null = null;
-  for (const { builder, repos } of consentedRepos()) {
+  for (const { builder, repos, pitch, pitchRepo } of consentedRepos()) {
     for (const repo of repos) {
       const ref = parseRepoRef(repo.fullName);
       if (!ref || repoRefKey(ref) !== key) continue;
       builders.push(builder);
       // 第一个拿到的快照当表头 —— 同一个仓库两份快照的内容是一样的
-      entry ??= toEntry(repo, builder);
+      entry ??= toEntry(repo, builder, { text: pitch, repo: pitchRepo });
       break;
     }
   }

@@ -30,6 +30,7 @@ import { readCode, readSource } from "./_source";
 
 const base: NudgeInputs = {
   passkeyEligible: false,
+  githubEligible: false,
   canInstall: false,
   installed: false,
   canPush: false,
@@ -179,10 +180,18 @@ describe("接线", () => {
      * 想关掉它的人反而被推着往前走了一步。
      */
     /*
-     * 只看 <button> 里面 —— 卡片左上角那个图标底托也是 h-8 w-8，
-     * 但它不接受点击，不在这条规矩管的范围里。
+     * 只看那一份**共用的 class 串** —— 卡片左上角那个图标底托
+     * 也是 h-8 w-8，但它不接受点击，不在这条规矩管的范围里。
+     *
+     * 以前是从 `<button` 切到 `</button>` 读的。后来「去连接 GitHub」
+     * 那一项要渲染成 `<a>`（它会跳去 github.com，用 router 走不通、
+     * 用 window.location 会被 lint 拦），于是 class 抽成了两个元素
+     * 共用的一个常量 —— 从 `<button` 开始切就再也读不到它了。
+     *
+     * 改读那个常量之后这条其实**更严**：`<a>` 和 `<button>` 现在
+     * 不可能长得不一样，而原来那种写法只管得住其中一个。
      */
-    const buttons = card.slice(card.indexOf("<button"), card.indexOf("</button>"));
+    const buttons = card.slice(card.indexOf("const cls ="), card.indexOf("const style ="));
     assert.match(buttons, /min-h-11/);
     // min- 是下限，不是写死；写死的是 `h-8` / `w-8` 那种
     assert.equal(/(?<!min-)\bh-\d/.test(buttons), false, "按钮上又出现了写死的高度");

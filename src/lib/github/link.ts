@@ -44,6 +44,9 @@ export interface GithubConnection {
   htmlUrl: string;
   scope: string;
   showOnProfile: boolean;
+  /** 作者自荐语，以及它挂在哪个仓库（小写 `owner/repo`）。没自荐过就是 null */
+  pitch: string | null;
+  pitchRepo: string | null;
   pinnedRepos: string[];
   promptEnabled: boolean;
   connectedAt: number;
@@ -62,6 +65,8 @@ function toConnection(row: typeof githubConnections.$inferSelect): GithubConnect
     htmlUrl: row.htmlUrl,
     scope: row.scope,
     showOnProfile: row.showOnProfile,
+    pitch: row.pitch,
+    pitchRepo: row.pitchRepo,
     pinnedRepos: Array.isArray(row.pinnedRepos) ? (row.pinnedRepos as string[]) : [],
     promptEnabled: row.promptEnabled,
     connectedAt: row.connectedAt,
@@ -243,6 +248,45 @@ export function setPromptEnabled(userId: string, enabled: boolean): boolean {
     .set({ promptEnabled: enabled, updatedAt: Date.now() })
     .where(eq(githubConnections.userId, userId))
     .run();
+  return true;
+}
+
+/**
+ * 写下（或撤掉）自荐语。
+ *
+ * `repoKey` 传 null = 撤掉自荐。自荐是**挂在某一个仓库上**的：
+ * 一个人可能有二十个仓库，那句话只对其中一个成立 ——
+ * 挂在人身上的话，他换了主力项目之后那句话会跟着挂到新项目上，
+ * 而它说的还是旧项目的事。
+ *
+ * 留审计：这是一条会出现在**公共目录**上的、由用户自己写的文字。
+ */
+export function setPitch(userId: string, repoKey: string | null, text: string): boolean {
+  const before = connectionOf(userId);
+  if (!before) return false;
+
+  const clearing = !repoKey || !text;
+  db.update(githubConnections)
+    .set({
+      pitch: clearing ? null : text,
+      pitchRepo: clearing ? null : repoKey.toLowerCase(),
+      pitchAt: clearing ? null : Date.now(),
+      updatedAt: Date.now(),
+    })
+    .where(eq(githubConnections.userId, userId))
+    .run();
+
+  audit(
+    { actorId: userId },
+    {
+      action: "user.github.pitch",
+      targetType: "user",
+      targetId: userId,
+      before: { pitchRepo: before.pitchRepo, pitch: before.pitch },
+      after: clearing ? { pitchRepo: null } : { pitchRepo: repoKey.toLowerCase(), pitch: text },
+      reason: clearing ? "撤掉项目自荐" : "写下项目自荐",
+    },
+  );
   return true;
 }
 

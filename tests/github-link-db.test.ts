@@ -179,19 +179,36 @@ describe("**token 落库是密文**", () => {
   });
 });
 
-describe("**绑定 ≠ 同意展示**", () => {
-  it("刚绑上时展示开关是关的", () => {
+describe("**展示开关**", () => {
+  it("刚绑上时是开着的", () => {
+    /*
+     * ── 2026-08 口径变了 ──────────────────────
+     *
+     * 原来默认是**关**的，理由是「绑定 ≠ 同意展示」：有人绑定只是想要
+     * 那个「有新项目要不要发帖」的提醒。那个顾虑本身没错。
+     *
+     * 但站长定了另一个口径：这是技术社区，绑 GitHub 的人绝大多数
+     * 就是想让人看见，而默认关着的结果是绑完主页上什么都没有，
+     * 他会以为绑失败了 —— 一个功能最糟的失败方式。
+     *
+     * 保住那个顾虑的做法不是默认关，是**绑定时当场说清楚** +
+     * 开关就在旁边一键可关。知情且可退出 > 默认关闭但没人找得到。
+     */
     link.linkGithub("user_a", viewer("111", "me"), token, KEY);
-    assert.equal(link.connectionOf("user_a")?.showOnProfile, false);
+    assert.equal(link.connectionOf("user_a")?.showOnProfile, true);
   });
 
-  it("没打开展示开关时，publicConnectionOf 当作没有绑定", () => {
+  it("**关掉之后 publicConnectionOf 当作没有绑定**", () => {
     /*
+     * 默认变了，但这条没变，而且它现在更重要 ——
+     * 它是那个「一键可关」真的有效的唯一保证。
+     *
      * 主页那一栏只认 publicConnectionOf。判定收在这一个函数里，
      * 页面那边只管「拿到 null 就整块不渲染」——
      * 让每个页面自己判断的话，两个页面早晚会判断出两套结果。
      */
     link.linkGithub("user_a", viewer("111", "me"), token, KEY);
+    link.setShowOnProfile("user_a", false);
     assert.equal(link.publicConnectionOf("user_a"), null);
 
     link.setShowOnProfile("user_a", true);

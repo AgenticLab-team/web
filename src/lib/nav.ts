@@ -166,14 +166,10 @@ export const NAV: NavSection[] = [
         href: "/projects",
         label: "项目",
         /*
-         * ⚠ 用 `link` 是**将就**，不是选择。
-         *
-         * 图标名到组件的映射表在 `components/shell/icons.tsx` 里，
-         * 而认不出来的名字曾经会**静默退回 Home** —— 侧栏上出现
-         * 第二个小房子，没有任何地方报错。
-         *
-         * 现在 tests/nav-icons.test.ts 会把「用了但表里没有」的名字
-         * 全部列出来，所以这里可以放心写真正想要的那个。
+         * 图标名认不出来的话会**静默退回 Home** —— 侧栏上出现第二个
+         * 小房子，没有任何地方报错。tests/nav.test.ts 那条守卫盯着
+         * 「用了但表里没注册」的名字（它自己的正则原来漏了数字，
+         * 所以 `folder-git-2` 一度被误报成没注册）。
          */
         icon: "folder-git-2",
         requiresAuth: true,

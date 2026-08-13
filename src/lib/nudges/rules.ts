@@ -37,7 +37,7 @@
  * 整个提示位安静 `QUIET_AFTER_ACTION_MS`，下次再说。
  */
 
-export type NudgeKind = "passkey" | "install" | "push";
+export type NudgeKind = "passkey" | "install" | "push" | "github";
 
 /** 表过态之后，整个提示位安静多久 */
 export const QUIET_AFTER_ACTION_MS = 3 * 86_400_000;
@@ -45,6 +45,12 @@ export const QUIET_AFTER_ACTION_MS = 3 * 86_400_000;
 export interface NudgeInputs {
   /** 服务端算好的：这个账号该不该提示加 Passkey */
   passkeyEligible: boolean;
+  /**
+   * 服务端算好的：这个账号该不该提示绑 GitHub。
+   *
+   * （站点配了 GitHub OAuth **且**这个人还没绑。没配的话整件事不存在。）
+   */
+  githubEligible: boolean;
   /** 这台设备能装吗（有 beforeinstallprompt，或是 iOS Safari 且还没装） */
   canInstall: boolean;
   /** 已经装到桌面/主屏了 */
@@ -102,6 +108,19 @@ export function pickNudge(input: NudgeInputs): NudgeKind | null {
    *    所以排在最后。已经能收推送的人也还是可以装。
    */
   if (input.canInstall && !input.installed && !off.has("install")) return "install";
+
+  /*
+   * ⑤ 绑 GitHub —— **排在最后**。
+   *
+   * 前面四件都是「这台设备上还差一步」：不做的话会丢账号、
+   * 收不到通知。绑 GitHub 一件都不属于，它是纯粹的锦上添花。
+   *
+   * 排最后还有一个更实际的理由：它是这几件里**唯一一件
+   * 会把人送出站**的（跳去 github.com 授权）。一个刚打开首页的人
+   * 被推去第三方网站，回来时已经忘了本来要干什么。
+   * 所以让它等到别的都处理完、这块区域反正也要空着的时候再出现。
+   */
+  if (input.githubEligible && !off.has("github")) return "github";
 
   return null;
 }

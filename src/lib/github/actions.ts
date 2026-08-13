@@ -7,13 +7,14 @@ import { assertNotPreviewing, getCurrentUser } from "@/lib/auth/session";
 import {
   connectionOf,
   setPinnedRepos,
+  setPitch,
   setPromptEnabled,
   setShowOnProfile,
   unlinkGithub,
 } from "./link";
 import { dismissPrompt, markPromptShared } from "./prompts";
 import { cachedRepos, refreshGithubData } from "./repos";
-import { sanitizePinned } from "./repo-rules";
+import { sanitizePinned, validatePitch } from "./repo-rules";
 import { githubEnabled } from "./secret";
 
 /**
@@ -169,4 +170,45 @@ export async function refreshGithubAction(): Promise<ActionResult> {
   if (!outcome.attempted) return { ok: true, message: "刚刚才刷过，稍后再试" };
   if (!outcome.ok) return fail("没能连上 GitHub，稍后再试一次");
   return { ok: true, message: `已更新 ${outcome.repoCount} 个仓库` };
+}
+
+
+/**
+ * 写下自荐语。
+ *
+ * 自己取当前用户 —— 这个文件是 "use server"，每个导出的 async 函数
+ * 客户端都能直接调，收 userId 当参数就是替别人写。
+ */
+export async function setPitchAction(
+  repoKey: string,
+  text: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await assertNotPreviewing();
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "先登录" };
+  if (!githubEnabled()) return { ok: false, error: "GitHub 绑定没开" };
+
+  const conn = connectionOf(user.id);
+  if (!conn) return { ok: false, error: "先绑定 GitHub" };
+
+  const verdict = validatePitch(text);
+  if (!verdict.ok) return { ok: false, error: verdict.error ?? "写得不对" };
+
+  /*
+   * 只能自荐**自己名下**的仓库。
+   *
+   * 不查的话，任何人都能把一句话挂到别人的项目上 ——
+   * 而那句话会显示在公共目录里，署的是项目作者的名。
+   */
+  const owned = cachedRepos(user.id).repos.some(
+    (r: { fullName: string }) => r.fullName.toLowerCase() === repoKey.trim().toLowerCase(),
+  );
+  if (verdict.text && !owned) {
+    return { ok: false, error: "只能自荐自己的仓库" };
+  }
+
+  setPitch(user.id, verdict.text ? repoKey : null, verdict.text);
+  revalidatePath("/projects");
+  revalidatePath("/me/security");
+  return { ok: true };
 }

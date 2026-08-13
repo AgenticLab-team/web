@@ -1,6 +1,6 @@
 "use client";
 
-import { BellRing, Fingerprint, MonitorSmartphone, Share } from "lucide-react";
+import { BellRing, Fingerprint, FolderGit2, MonitorSmartphone, Share } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -48,10 +48,13 @@ function readOff(): NudgeKind[] {
 
 export function HomeNudge({
   passkeyEligible,
+  githubEligible = false,
   pushConfigured,
 }: {
   /** 服务端算好的：这个账号该不该提示加 Passkey */
   passkeyEligible: boolean;
+  /** 服务端算好的：站点配了 GitHub OAuth 且这个人还没绑 */
+  githubEligible?: boolean;
   /** 站点配了推送吗 —— 没配就别提，那会是一个做不到的按钮 */
   pushConfigured: boolean;
 }) {
@@ -128,6 +131,7 @@ export function HomeNudge({
 
       const kind = pickNudge({
         passkeyEligible,
+      githubEligible,
         canInstall: needsIosInstall || installRef.current !== null,
         installed: standalone,
         canPush: pushConfigured && hasPushApi && !denied,
@@ -145,7 +149,7 @@ export function HomeNudge({
       cancelled = true;
       window.removeEventListener("beforeinstallprompt", onPrompt);
     };
-  }, [passkeyEligible, pushConfigured, tick]);
+  }, [passkeyEligible, githubEligible, pushConfigured, tick]);
 
   /** 表过态：记下时间（整块安静几天），并收起当前这张 */
   const act = useCallback((off?: NudgeKind) => {
@@ -164,6 +168,43 @@ export function HomeNudge({
   const iosInstall = view?.iosInstall ?? false;
 
   if (kind === null) return null;
+
+  if (kind === "github") {
+    return (
+      <NudgeCard
+        icon={<FolderGit2 className="h-4 w-4" strokeWidth={2.2} aria-hidden />}
+        title="把你的 GitHub 接上来"
+        body={
+          <>
+            接上之后，你的公开项目会出现在个人主页和<strong>项目目录</strong>里，
+            群里的人能看见你在做什么。
+            <br />
+            {/*
+              * 把「申请了什么权限」写在按钮上面，不写在授权之后。
+              *
+              * 这是整张卡片最要紧的一句：它会把人送去 github.com 点「授权」，
+              * 而绝大多数人在那一页上是不看的。scope 为空这件事
+              * 要在他离开这个站之前就知道 —— 事后再说等于没说。
+              */}
+            申请的权限是<strong>空的</strong> —— 只读公开信息，
+            碰不到私有仓库，也发不了任何东西。
+          </>
+        }
+        actions={[
+          {
+            label: "去连接",
+            primary: true,
+            // 带上 return：授权完回到首页，而不是把人扔在设置页
+            href: "/api/auth/github/start?return=/",
+            // 记一下「表过态了」，导航由那个 href 负责
+            onClick: () => act(),
+          },
+          { label: "以后再说", onClick: () => act() },
+          { label: "不用了", onClick: () => act("github") },
+        ]}
+      />
+    );
+  }
 
   if (kind === "passkey") {
     return (

@@ -40,12 +40,19 @@ export function ProjectList({ projects }: { projects: ProjectEntry[] }) {
               {p.fullName}
             </Link>
             <span className="tabular t-caption2 flex shrink-0 items-center gap-2 text-[var(--ink-quaternary)]">
-              {p.stars > 0 && (
-                <span className="flex items-center gap-0.5">
-                  <Star className="h-3 w-3" strokeWidth={2} aria-hidden />
-                  {p.stars}
-                </span>
-              )}
+              {/*
+                * star **一律显示，包括 0**。
+                *
+                * 别处（个人主页那一栏）是 `> 0` 才显示，那里对：
+                * 挂一个 0 只是让人难堪。但这一页不一样 —— star 是
+                * 这里的排序键之一，而**缺省和 0 长得一样**：
+                * 一整列里有的有数字有的没有，读的人分不清「这个 0」
+                * 和「这个没取到」。可比性在这一页比省一行重要。
+                */}
+              <span className="flex items-center gap-0.5">
+                <Star className="h-3 w-3" strokeWidth={2} aria-hidden />
+                {p.stars}
+              </span>
               {p.isFork && <GitFork className="h-3 w-3" strokeWidth={2} aria-label="fork 来的" />}
               {/*
                 * 归档了是这一行最要紧的一件事：它不再更新了。
@@ -55,6 +62,20 @@ export function ProjectList({ projects }: { projects: ProjectEntry[] }) {
               {p.archived && <Archive className="h-3 w-3" strokeWidth={2} aria-label="已归档" />}
             </span>
           </p>
+
+          {/*
+            * 作者自己写的那句排在 GitHub 的 description **前面**。
+            *
+            * description 是写给陌生人看的；这句是这个人对**这个社区**
+            * 说的话 —— 「这跟你有什么关系」，而那正是这一页的读者
+            * 真正想知道的。用引号和主色标出来，让它一眼看得出
+            * 不是抓来的数据，是有人写的。
+            */}
+          {p.pitch && (
+            <p className="t-footnote mt-1 break-words leading-relaxed text-[var(--accent)]">
+              「{p.pitch}」
+            </p>
+          )}
 
           {p.description && (
             <p className="t-caption mt-0.5 line-clamp-2 break-words leading-relaxed text-[var(--ink-secondary)]">

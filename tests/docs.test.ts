@@ -37,7 +37,17 @@ describe("**每一份都要说清楚：读者是谁、是打算还是现状、�
   for (const f of docs) {
     if (FOR_AI.has(f)) continue;
     it(`${f} 有头`, () => {
-      const head = read(f).split("\n").slice(0, 12).join("\n");
+      /*
+       * README 允许把这三行写进 HTML 注释里。
+       *
+       * 它是仓库门面，内部元信息摆在正文最上面很难看 ——
+       * 但**仍然要有**：一份不知道什么时候核过的现状描述，
+       * 读者只能当它是对的。所以放行的是「位置」，不是「有没有」。
+       *
+       * 前 12 行放宽到 18 行也是为它：注释本身占了几行。
+       */
+      const lines = f === "README.md" ? 18 : 12;
+      const head = read(f).split("\n").slice(0, lines).join("\n");
       assert.match(head, /\*\*读者\*\*/, `${f} 没写给谁看`);
       assert.match(head, /\*\*性质\*\*/, `${f} 没说是「打算」还是「现状」`);
       assert.match(head, /\*\*最后核对\*\*/, `${f} 没写核对日期 —— 一份不知道什么时候核过的现状描述，读者只能当它是对的`);

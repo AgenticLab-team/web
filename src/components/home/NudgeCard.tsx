@@ -32,6 +32,23 @@
 export interface NudgeAction {
   label: string;
   onClick: () => void;
+  /**
+   * 有它就渲染成 `<a>` 而不是 `<button>`。
+   *
+   * ─────────────────────────────────────────
+   * 为什么需要这一项
+   * ─────────────────────────────────────────
+   *
+   * 「去连接 GitHub」指向 `/api/auth/github/start`，那条路由会
+   * **307 跳去 github.com**。用 `router.push` 走不通（它是 API 路由，
+   * 不是页面），而用 `window.location.href` 会被仓库那条
+   * 「站内跳转要用 router」的 lint 规则拦下 —— 规则没错，
+   * 错的是把一个**会离站**的跳转伪装成按钮点击。
+   *
+   * 渲染成真链接顺带把中键新开、右键复制地址也带回来了。
+   * `onClick` 仍然会跑（用来记「表过态了」），只是不再负责导航。
+   */
+  href?: string;
   /** 主操作：带一层淡色底。一张卡里最多一个 */
   primary?: boolean;
   disabled?: boolean;
@@ -70,26 +87,37 @@ export function NudgeCard({
             而不是各自压窄到点不准。
           */}
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            {actions.map((action) => (
+            {actions.map((action) => {
+              const cls = `t-footnote inline-flex min-h-11 items-center rounded-[var(--radius-pill)] px-3.5 transition active:opacity-60 disabled:opacity-45 ${
+                action.primary ? "font-medium text-[var(--accent)]" : "text-[var(--ink-secondary)]"
+              }`;
+              const style = action.primary
+                ? { background: "color-mix(in srgb, var(--accent) 12%, transparent)" }
+                : undefined;
+
+              return action.href ? (
+                <a
+                  key={action.label}
+                  href={action.href}
+                  onClick={action.onClick}
+                  className={cls}
+                  style={style}
+                >
+                  {action.label}
+                </a>
+              ) : (
               <button
                 key={action.label}
                 type="button"
                 disabled={action.disabled}
                 onClick={action.onClick}
-                className={`t-footnote inline-flex min-h-11 items-center rounded-[var(--radius-pill)] px-3.5 transition active:opacity-60 disabled:opacity-45 ${
-                  action.primary
-                    ? "font-medium text-[var(--accent)]"
-                    : "text-[var(--ink-secondary)]"
-                }`}
-                style={
-                  action.primary
-                    ? { background: "color-mix(in srgb, var(--accent) 12%, transparent)" }
-                    : undefined
-                }
+                className={cls}
+                style={style}
               >
                 {action.label}
               </button>
-            ))}
+              );
+            })}
           </div>
 
           {error && (

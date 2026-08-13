@@ -1,4 +1,6 @@
 import { and, inArray, sql } from "drizzle-orm";
+import { connectionOf } from "@/lib/github/link";
+import { githubEnabled } from "@/lib/github/secret";
 import Link from "next/link";
 
 import { LeaderboardList } from "@/components/LeaderboardList";
@@ -152,7 +154,17 @@ export default async function HomePage() {
             装没装、能不能推送是**这台设备**的事，只有客户端知道。
           */}
           {user && (
-            <HomeNudge passkeyEligible={nudge !== null} pushConfigured={pushConfigured} />
+            <HomeNudge
+              passkeyEligible={nudge !== null}
+              /*
+               * 站点配了 GitHub **且**他还没绑。
+               *
+               * 两个条件都要：没配的话整件事不存在（提了也是一个
+               * 404 的按钮）；绑过的人再提就是纯粹的骚扰。
+               */
+              githubEligible={githubEnabled() && !connectionOf(user.id)}
+              pushConfigured={pushConfigured}
+            />
           )}
 
           {user && (
