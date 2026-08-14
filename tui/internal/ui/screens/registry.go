@@ -274,6 +274,30 @@ func init() {
 		},
 	}))
 	Register("me/bookmarks", genericFactory(spec{title: "收藏夹", path: "/api/v1/me/bookmarks"}))
+	/*
+	 * 一次性邮箱拆成两屏，而网页上它是一页。
+	 *
+	 * 网页上一页能同时铺开「我有哪几个箱子」和「这个箱子收到的信」，
+	 * 终端里那是两种翻页节奏：前者是一张短表，后者要能一直往下读。
+	 * 挤进一屏的话，信的正文只剩四五行 —— 而人来这儿就是为了读那封信。
+	 */
+	Register("me/mail", genericFactory(spec{
+		title: "一次性邮箱", path: "/api/v1/mail/burners",
+		hint: "这里只列**这把令牌自己开的**箱子 —— 你在网页上开的它看不见",
+		actions: []action{
+			{key: "n", label: "开一个新箱子", method: "POST", path: "/api/v1/mail/burners",
+				scope: "mail:burner",
+				fields: []kit.Field{
+					{Name: "local_part", Label: "自选前缀（留空 = 随机，最常用）", Type: "string"},
+				}},
+			{key: "d", label: "提前销毁这个箱子", method: "DELETE", path: "/api/v1/mail/burners/{id}",
+				scope: "mail:burner", danger: 1},
+		},
+	}))
+	Register("me/mail/box", genericFactory(spec{
+		title: "这个箱子收到的信", path: "/api/v1/mail/burners/{id}/messages",
+		hint: "`otp_code` 是已经抽好的验证码 —— 抽不出来时是空的，宁可不抽也不猜错",
+	}))
 	Register("me/drafts", genericFactory(spec{
 		title: "草稿箱", path: "/api/v1/me/drafts",
 		actions: []action{
@@ -403,6 +427,10 @@ func init() {
 // **搜这个文件里的字符串**做跨语言核对的，循环生成的话它一个都看不见。
 var adminScreenIDs = []string{
 	"admin/dashboard",
+	// 这两个是两个功能分支合进来时补的 —— 后台屏全是同一个实现，
+	// 具体读什么由服务端 /api/v1/admin/sections 说了算，所以只要多一行 id
+	"admin/mail",
+	"admin/oauth",
 	"admin/health",
 	"admin/storage",
 	"admin/backup",

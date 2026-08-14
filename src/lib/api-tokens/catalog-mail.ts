@@ -66,4 +66,3 @@ export const MAIL_ENDPOINTS: readonly Endpoint[] = [
       "`?since=<毫秒时间戳>` 做增量拉取",
   },
 ];
-];

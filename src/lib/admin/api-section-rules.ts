@@ -63,6 +63,17 @@ export const ADMIN_SECTION_META: readonly AdminSectionMeta[] = [
   { key: "modules", label: "模块", description: "可插拔的玩法。关掉之后连后台任务都不跑", permission: "module.toggle" },
   { key: "api", label: "开放 API 管理", description: "逐群代发授权、代发日志、SSH 网关令牌", permission: "system.settings" },
   { key: "llm", label: "LLM", description: "配没配、通不通、链接摘要跑到哪了", permission: "system.dashboard" },
+  /*
+   * 下面两条是两个功能分支合进来时补的。
+   *
+   * 它们本来各自都是绿的：邮件那边网页全做完了，终端那边所有守卫也全绿 ——
+   * 因为**它压根不知道有邮件这一页**。两边一合，
+   * `tests/tui-parity.test.ts` 当场红了四条。
+   *
+   * 这正是那张表存在的理由：一个没人想过的缺口不会有任何症状。
+   */
+  { key: "mail", label: "邮箱与域名池", description: "域名、箱子、拦下来的信", permission: "mail.domain.read" },
+  { key: "oauth", label: "OAuth 应用", description: "谁能拿站里的账号去登录别的地方", permission: "system.settings" },
 ];
 
 export const ADMIN_SECTION_KEYS: readonly string[] = ADMIN_SECTION_META.map((s) => s.key);

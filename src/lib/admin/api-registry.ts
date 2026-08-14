@@ -88,6 +88,8 @@ export type AdminSection = AdminSectionMeta & AdminSectionImpl;
 /* ── 读：全部走网页那边同一批查询函数 ─────────────────── */
 
 import { allGrants, revokeAllSshTokens, sendLog } from "@/lib/api-tokens/store";
+import { domainSummary, listBoxes, listDomains, recentRejections } from "@/lib/mail/admin-queries";
+import { listApps } from "@/lib/oauth/store";
 import { listAlerts } from "@/lib/alerts/dispatch";
 import { domainExportCounts } from "@/lib/activities/export";
 import { listModules as listActivityModules } from "@/lib/activities/registry";
@@ -827,6 +829,34 @@ const IMPLS: readonly ({ key: string } & AdminSectionImpl)[] = [
         run: async (b) => setFlagEnabled(str(b, "key"), bool(b, "enabled")),
       },
     ],
+  },
+  {
+    key: "mail",
+    /*
+     * 读的是网页那一页同一批查询函数（`lib/mail/admin-queries.ts`）——
+     * 这一整张注册表的规矩就是这个：终端和网页看到的是同一份数字，
+     * 不然「哪个是对的」会变成一个没人答得上来的问题。
+     */
+    read: ({ limit }) => {
+      const domains = listDomains();
+      return {
+        domains,
+        summary: domainSummary(domains),
+        boxes: listBoxes({ limit }),
+        rejected: recentRejections(limit),
+      };
+    },
+    /*
+     * 没有 actions。域名上下架、封禁词增删都还只在网页上 ——
+     * 而**空数组是一句话**：终端里这一屏是只读的，不是漏写了。
+     */
+    actions: [],
+  },
+  {
+    key: "oauth",
+    /* 只列应用，不列任何密钥 —— `listApps` 返回的是 hasSecret 而不是密钥本身 */
+    read: () => ({ apps: listApps() }),
+    actions: [],
   },
   {
     key: "modules",

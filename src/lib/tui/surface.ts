@@ -985,6 +985,73 @@ export const SURFACES: readonly Surface[] = [
     api: ["GET /api/v1/admin/{section}", "POST /api/v1/admin/{section}"],
     scopes: ["admin:all"],
   },
+  {
+    key: "admin.mail",
+    label: "邮箱与域名池",
+    board: "admin",
+    web: "/admin/mail",
+    tui: "admin/mail",
+    adminSection: "mail",
+    api: ["GET /api/v1/admin/{section}"],
+    scopes: ["admin:all"],
+  },
+  {
+    key: "admin.oauth",
+    label: "OAuth 应用",
+    board: "admin",
+    web: "/admin/oauth",
+    tui: "admin/oauth",
+    adminSection: "oauth",
+    api: ["GET /api/v1/admin/{section}"],
+    scopes: ["admin:all"],
+  },
+
+  /* ── 两个功能分支合进来时补的 ─────────────────────── */
+  {
+    key: "me.mail",
+    label: "一次性邮箱",
+    board: "me",
+    web: "/mail/burner",
+    tui: "me/mail",
+    api: ["GET /api/v1/mail/burners", "POST /api/v1/mail/burners", "DELETE /api/v1/mail/burners/{id}"],
+    scopes: ["mail:burner"],
+  },
+  {
+    key: "me.mail.box",
+    label: "这个箱子收到的信",
+    board: "me",
+    /*
+     * ═════════════════════════════════════════
+     * 网页上没有单独一页，所以是 `null`
+     * ═════════════════════════════════════════
+     *
+     * 网页那一页能同时铺开「我有哪几个箱子」和「这个箱子收到的信」；
+     * 终端里那是两种翻页节奏 —— 前者是一张短表，后者要一直往下读。
+     * 挤进一屏的话信的正文只剩四五行，而人来这儿就是为了读那封信。
+     *
+     * 一个网页页面对两个终端屏，是这张表允许的：`web` 那一栏
+     * 回答的是「网页上有没有独立的一页」，不是「有没有对应物」。
+     */
+    web: null,
+    tui: "me/mail/box",
+    api: ["GET /api/v1/mail/burners/{id}", "GET /api/v1/mail/burners/{id}/messages"],
+    scopes: ["mail:burner"],
+  },
+  {
+    key: "oauth.consent",
+    label: "授权确认",
+    board: "me",
+    web: "/oauth/authorize",
+    /*
+     * 和设备码那个批准页同一条理由，而且更硬：
+     * 同意页是这整套流程**唯一**的安全边界 —— 它要人看着那几项权限
+     * 按下去。终端里也能按的话，就成了程序自己批准自己。
+     */
+    tui: null,
+    why: "同意页是 OAuth 唯一的那道人的判断：终端里也能按的话，就成了程序自己批准自己",
+    api: [],
+    scopes: [],
+  },
 ];
 
 /*
