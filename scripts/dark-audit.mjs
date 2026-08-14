@@ -127,7 +127,7 @@ function capture(url, dark, clicks) {
       url,
       join(tmp, "shot.png"),
       "--size", SIZE,
-      "--wait", "13000",
+      "--hydrated",
       ...(process.env.AUDIT_COOKIE ? ["--cookie", process.env.AUDIT_COOKIE] : []),
       ...(dark ? ["--dark"] : []),
       ...clicks.flatMap((c) => ["--click", c]),
@@ -241,6 +241,13 @@ for (const spec of paths) {
    * 藏起来的话下一个人会以为对比度全站都过了。
    */
   const both = [];
+  /*
+   * 数一下有多少元素在浅色那份里找不到对照。
+   *
+   * 静默跳过是今晚栽过好几次的形状 —— 它长得和「全都对」一模一样。
+   * 这个数大了就说明两次加载差得多，那一页的结论要打折扣。
+   */
+  let noPair = 0;
   for (const t of dark.text) {
     if (t.ratio >= t.need) continue;
     /*
@@ -251,7 +258,19 @@ for (const spec of paths) {
      * 混在一起报的话，真正的深色回归会被淹在几十条设计取舍里。
      */
     const l = lightByKey.get(t.key);
-    if (l && l.ratio < l.need) { both.push({ ...t, lightRatio: l.ratio }); continue; }
+    /*
+     * ⚠️ 浅色那边**没有对照**的，一律跳过，不算深色回归。
+     *
+     * 位置当 key，而有些页面两次加载长得不完全一样（`/admin/llm` 上有个
+     * 实时延迟「891 ms」，数字一变整行就挪位），于是那些元素在浅色那份里
+     * 找不到同一个 key。
+     *
+     * 原来的写法是「找不到对照就当它只在深色下不够」——
+     * 于是 `/admin/llm` 报了 9 条，每条都写着「浅色下 ?」。
+     * 那个问号就是证据：**我在拿一个不存在的对照下结论。**
+     */
+    if (!l) { noPair++; continue; }
+    if (l.ratio < l.need) { both.push({ ...t, lightRatio: l.ratio }); continue; }
     if (seenText.has(t.cls + t.ratio)) continue;
     seenText.add(t.cls + t.ratio);
     lowContrast.push(
@@ -262,7 +281,9 @@ for (const spec of paths) {
 
   const hits = [...unthemed, ...lowContrast];
   bad += hits.length;
-  const note = both.length ? `　（另有 ${both.length} 处两套配色下都不够，不算深色回归）` : "";
+  const note =
+    (both.length ? `　（另有 ${both.length} 处两套配色下都不够，不算深色回归）` : "") +
+    (noPair ? `　（${noPair} 处在浅色那份里找不到对照，没法比）` : "");
   console.log(`${hits.length === 0 ? "✅" : "❌"} ${spec}${hits.length ? `（${hits.length} 处）` : ""}${note}`);
   for (const h of hits) console.log(h);
   if (process.env.AUDIT_SHOW_BOTH && both.length) {

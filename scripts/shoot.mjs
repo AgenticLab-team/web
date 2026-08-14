@@ -25,7 +25,7 @@
 // 一模一样。
 import { readFileSync, writeFileSync } from "node:fs";
 
-import { evaluate, launch, setViewport, sleep } from "./lib/cdp.mjs";
+import { evaluate, launch, setViewport, sleep, waitForHydration } from "./lib/cdp.mjs";
 
 const args = process.argv.slice(2);
 const [url, out] = args;
@@ -106,7 +106,16 @@ try {
 
   await cdp.send("Page.enable");
   await cdp.send("Page.navigate", { url });
-  await sleep(waitMs);
+  /*
+   * `--hydrated`：等到页面真的水合了就走，不再死等一个固定秒数。
+   *
+   * 那个固定值原来是 13 秒，纯拍脑袋 —— 而实测同一页在 1.5 秒和 13 秒
+   * 量到的元素数、可点数、文字长度**一模一样**。
+   * 批量跑的时候这笔账很吓人：深色审计每页要开两次浏览器，
+   * 66 条路由就是半小时的纯等待。
+   */
+  if (args.includes("--hydrated")) await waitForHydration(cdp);
+  else await sleep(waitMs);
 
   for (const selector of clicks) {
     /*
