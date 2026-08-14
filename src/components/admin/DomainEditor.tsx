@@ -11,7 +11,7 @@ import {
 } from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import { updateDomain } from "@/lib/mail/admin-actions";
-import { MAIL_DOMAIN_KINDS, MAIL_DOMAIN_TIERS } from "@/lib/mail/kinds";
+import { MAIL_DOMAIN_KINDS, MAIL_DOMAIN_KIND_LABEL, MAIL_DOMAIN_TIERS } from "@/lib/mail/kinds";
 import type { MailDomainKind, MailDomainTier } from "@/lib/mail/kinds";
 
 /**
@@ -42,13 +42,6 @@ import type { MailDomainKind, MailDomainTier } from "@/lib/mail/kinds";
  * 而选错 `blocked` 的后果是我们对那个商标域名上的钓鱼尝试一无所知。
  */
 
-const KIND_LABEL: Record<MailDomainKind, string> = {
-  owned: "有主域名",
-  temp: "一次性箱池",
-  reserved: "靓号池",
-  admin: "只有管理员能开",
-  blocked: "封禁（连 MX 都不配）",
-};
 
 const KIND_HINT: Record<MailDomainKind, string> = {
   owned: "归某个人所有，他可以在上面开自己的别名。要在下面指定主人",
@@ -150,7 +143,7 @@ export function DomainEditor({ domain, candidates, onDone }: DomainEditorProps) 
         >
           {MAIL_DOMAIN_KINDS.map((k) => (
             <option key={k} value={k}>
-              {KIND_LABEL[k]}
+              {MAIL_DOMAIN_KIND_LABEL[k]}
             </option>
           ))}
         </select>

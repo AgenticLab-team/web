@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { AdminNote, AdminRow, AdminTag } from "@/components/admin/ui";
 import { DomainRow } from "@/components/admin/DomainRow";
+import { MAIL_DOMAIN_KIND_LABEL } from "@/lib/mail/kinds";
 import type { MailDomainKind, MailDomainTier } from "@/lib/mail/kinds";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -49,13 +50,9 @@ export default async function AdminMailPage() {
   const rejections = canReadBoxes ? recentRejections(30) : [];
   const banwords = canBanword ? listBanwords() : [];
 
-  const kindLabel: Record<string, string> = {
-    owned: "有主",
-    temp: "一次性池",
-    reserved: "靓号池",
-    admin: "管理员专用",
-    blocked: "封禁",
-  };
+  // 中文名收在 `lib/mail/kinds.ts` —— 这一页和域名编辑器引同一份，
+  // 否则同一页上同一个类型会出现两个叫法
+  const kindLabel: Record<string, string> = MAIL_DOMAIN_KIND_LABEL;
 
   return (
     <>

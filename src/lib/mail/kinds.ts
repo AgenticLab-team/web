@@ -32,6 +32,24 @@
 export const MAIL_DOMAIN_KINDS = ["owned", "temp", "reserved", "admin", "blocked"] as const;
 export type MailDomainKind = (typeof MAIL_DOMAIN_KINDS)[number];
 
+/**
+ * 五个类型的中文名。**只有这一份。**
+ *
+ * 原来后台列表和域名编辑器各写了一份，而且措辞还不一样
+ * （「有主」对「有主域名」、「一次性池」对「一次性箱池」）——
+ * 同一页上同一个东西两个叫法，读的人会以为那是两种不同的类型。
+ *
+ * 放在词汇表里而不是某个组件里：这个文件**没有任何依赖**，
+ * 所以服务端组件、客户端组件、纯逻辑层都引得动它。
+ */
+export const MAIL_DOMAIN_KIND_LABEL: Record<MailDomainKind, string> = {
+  owned: "有主域名",
+  temp: "一次性箱池",
+  reserved: "靓号池",
+  admin: "只有管理员能开",
+  blocked: "封禁",
+};
+
 /** 靓号档位，决定年租价。手工标，不做算法 —— 「哪个域名算好」是审美判断 */
 export const MAIL_DOMAIN_TIERS = ["s", "a", "b"] as const;
 export type MailDomainTier = (typeof MAIL_DOMAIN_TIERS)[number];

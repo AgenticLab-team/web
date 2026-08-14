@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { MAIL_DOMAIN_KINDS } from "@/lib/mail/kinds";
+import { MAIL_DOMAIN_KIND_LABEL, MAIL_DOMAIN_KINDS } from "@/lib/mail/kinds";
 
 import { readCode } from "./_source";
 
@@ -88,15 +88,33 @@ describe("**五个类型每一个都要有一句人话**", () => {
    * 只写类型名的话没有人分得清，于是这两个会被随手选错 ——
    * 而选错 `blocked` 的后果是我们对那个商标域名上的钓鱼尝试一无所知。
    */
-  it("KIND_LABEL 和 KIND_HINT 都覆盖了全部五个", () => {
+  it("中文名和说明都覆盖了全部五个", () => {
     for (const kind of MAIL_DOMAIN_KINDS) {
-      const label = new RegExp(`\\b${kind}:\\s*"`);
-      assert.equal(
-        (editor.match(label) ?? []).length >= 1,
-        true,
-        `${kind} 没有标签或说明 —— 下拉框里会出现一个光秃秃的英文单词`,
+      assert.ok(
+        MAIL_DOMAIN_KIND_LABEL[kind],
+        `${kind} 没有中文名 —— 下拉框里会出现一个光秃秃的英文单词`,
+      );
+      assert.match(
+        editor,
+        new RegExp(`\\b${kind}:\\s*"`),
+        `${kind} 在 KIND_HINT 里没有说明`,
       );
     }
+  });
+
+  it("**中文名只有一份** —— 后台列表和编辑器不许各写各的", () => {
+    /*
+     * 原来两处各一份，措辞还不一样（「有主」对「有主域名」、
+     * 「一次性池」对「一次性箱池」）—— 同一页上同一个东西两个叫法，
+     * 读的人会以为那是两种不同的类型。
+     */
+    const page = readCode("app/(app)/admin/mail/page.tsx");
+    assert.match(page, /MAIL_DOMAIN_KIND_LABEL/, "后台列表又自己写了一份中文名");
+    assert.equal(
+      /owned:\s*"/.test(page),
+      false,
+      "后台列表里还留着写死的类型名",
+    );
   });
 
   it("**admin 和 blocked 的说明要说出「收不收信」这个差别**", () => {
