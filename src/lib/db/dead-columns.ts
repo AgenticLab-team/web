@@ -68,14 +68,9 @@ export interface DeadColumn {
 export const DEAD_COLUMNS: readonly DeadColumn[] = [
   /* ── 隐私 ────────────────────────────────────────────────── */
   {
-    column: "users.email_verified_at",
-    disposition: "planned",
-    why: "站内没有邮箱验证流程 —— 登录靠微信绑定码和 Passkey。邮件群发做了之后才用得上（那时候要能区分「填过」和「验过」）",
-  },
-  {
     column: "users.phone_verified_at",
     disposition: "planned",
-    why: "同 users.email_verified_at。手机号目前只是资料字段 —— 全站唯一一次出现是解绑时把它清成 null，从来没写进过值",
+    why: "手机号目前只是资料字段 —— 全站唯一一次出现是解绑时把它清成 null，从来没写进过值。（邮箱那一列已经接上了：转发到私人邮箱靠它判「验证过没有」）",
   },
   {
     column: "bind_codes.attempts",

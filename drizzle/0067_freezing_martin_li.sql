@@ -1,0 +1,1 @@
+ALTER TABLE `mail_boxes` ADD `forward_enabled` integer DEFAULT false NOT NULL;

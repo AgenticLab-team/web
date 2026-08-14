@@ -18,6 +18,7 @@ import { splitAddress } from "./address-rules";
 import { mailConfig, retentionDaysFor } from "./config";
 import { extractOtp } from "./otp";
 import { shouldStore } from "./attachment-rules";
+import { forwardMessage } from "./forward";
 import type { MailIngressVerdict } from "./kinds";
 
 /**
@@ -283,6 +284,21 @@ export function ingestMessage(input: InboundMessage): IngestResult {
         detail: { from: input.envelopeFrom, size: input.size, otp: Boolean(otp.code) },
       })
       .run();
+
+    /*
+     * 转发**不等它**。
+     *
+     * 收信是同步的：网关在等我们的响应，而它那头连着一个正在等 250
+     * 的发信服务器。转发要调一次外部 HTTPS 接口，慢的时候几秒 ——
+     * await 它的结果是发信方超时重投，而每一次重投我们都要再转一次。
+     */
+    forwardMessage({
+      boxId: box.id,
+      from: input.from ?? input.envelopeFrom,
+      fromName: input.fromName ?? null,
+      subject: input.subject ?? null,
+      bodyText: input.text ?? null,
+    });
 
     return record({ verdict: "accepted", reason: "收下了", boxId: box.id, messageId: message.id });
   } catch (error) {
