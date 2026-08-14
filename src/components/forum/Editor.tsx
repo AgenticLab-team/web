@@ -1,9 +1,10 @@
 "use client";
 
 import { Bold, Code, Eye, ImagePlus, Italic, Link2, List, Pencil, Quote } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { previewMarkdown } from "@/lib/forum/preview";
+import { modKey, showsShortcuts } from "@/lib/ui/platform";
 
 import { readLocalDraft, writeLocalDraft } from "./local-draft";
 import { filesFromDrop, filesFromPaste, useUpload } from "./use-upload";
@@ -75,6 +76,28 @@ export function Editor({
   restoreValue = null,
 }: EditorProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  /*
+   * 那句提示里的快捷键，**水合之后才落地**。
+   *
+   * 服务端拿不到平台（没有 navigator），所以首屏一律先不提快捷键；
+   * 到了浏览器再补上「⌘↵ / Ctrl↵」，或者在触摸设备上就此不提。
+   *
+   * 直接在渲染里读 navigator 的话，服务端和客户端会给出两句不同的话，
+   * React 报水合不一致 —— 而那个报错指向的是整棵子树，
+   * 没有一个字提到快捷键。
+   *
+   * 用 `useSyncExternalStore` 而不是 `useEffect + setState`：
+   * 后者被 lint 拦（「effect 里同步 setState 会引起级联渲染」，
+   * 规则是对的），而这个 hook 的第三个参数**就是**为
+   * 「服务端给什么」准备的 —— 它是这件事的正解，不是绕路。
+   */
+  const hint = useSyncExternalStore(
+    // 平台不会变，所以订阅是空的
+    () => () => {},
+    () => (showsShortcuts() ? `${modKey()}↵ 发布` : null),
+    () => null,
+  );
+
   const [value, setValueRaw] = useState(defaultValue);
 
   const setValue = useCallback(
@@ -427,7 +450,11 @@ export function Editor({
           ) : restored ? (
             <span className="text-[var(--success)]">已恢复上次的草稿</span>
           ) : (
-            "支持 Markdown · 可以直接粘贴或拖入图片 · ⌘↵ 发布"
+            /*
+             * 手机上那半句整个不出现 —— 那儿没有物理键盘，
+             * 一条讲键盘的提示只是在占这一行唯一的位置。
+             */
+            `支持 Markdown · 可以直接粘贴或拖入图片${hint ? ` · ${hint}` : ""}`
           )}
         </span>
         <span className="tabular">{value.length}</span>

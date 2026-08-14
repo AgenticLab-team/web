@@ -165,6 +165,21 @@ try {
     mobile: width < 700,
   });
 
+  /*
+   * ⚠️ `mobile: true` **不会**让 `navigator.maxTouchPoints` 变成非零。
+   *
+   * 那两件事在 CDP 里是分开的，而站里有代码按 `maxTouchPoints` 判
+   * 「要不要提键盘快捷键」—— 只设 mobile 的话，那条分支永远测不到：
+   * 视口是手机的宽度，而设备还说自己没有触摸屏。
+   *
+   * 踩过一次：手机档截出来的图上照样写着「Ctrl↵ 发布」，
+   * 而那一行本该整个不出现。
+   */
+  await cdp.send("Emulation.setTouchEmulationEnabled", {
+    enabled: width < 700,
+    maxTouchPoints: width < 700 ? 5 : 0,
+  });
+
   await cdp.send("Page.enable");
   await cdp.send("Page.navigate", { url });
   await sleep(waitMs);
