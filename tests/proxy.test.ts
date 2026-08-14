@@ -287,3 +287,54 @@ describe("导航与门禁不能各说各的", () => {
     }
   });
 });
+
+describe("**改写到安装脚本时，基址必须是这次请求本身**", () => {
+  /*
+   * ═════════════════════════════════════════
+   * 症状是「浏览器全好，只有 curl 404」
+   * ═════════════════════════════════════════
+   *
+   * 首页对 `curl` 会被改写去取安装脚本。第一版把改写目标写成了
+   * `new URL("/install.sh", env.site.url)` —— 基址是**公网域名**。
+   *
+   * 而请求未必是从公网进来的：部署自检、健康探针、nginx 回源
+   * 走的都是 `127.0.0.1:3000`。跨源改写 Next 不认，直接 404。
+   *
+   * 刁钻的地方在于只有 `curl` 会走进这个分支，所以：
+   * 浏览器打开一切正常、每一次人工检查都是绿的，而
+   * `curl -Ls agenticlab.sh | bash` 拿到的是一个 404 页面 ——
+   * **一整页 HTML 灌进 bash**。
+   *
+   * 上线时是部署脚本那道自检拦下来的（它恰好用 curl 探首页），
+   * 而「恰好」不是一种保障。所以有了这一条。
+   */
+  const source = readFileSync(new URL("../src/proxy.ts", import.meta.url), "utf8");
+  const code = stripComments(source);
+
+  it("用 request.url 作基址", () => {
+    assert.match(
+      code,
+      /rewrite\(new URL\("\/install\.sh",\s*request\.url\)\)/,
+      "改写安装脚本时基址不是 request.url",
+    );
+  });
+
+  it("**不许用 env.site.url 作改写基址** —— 那是跨源，Next 直接 404", () => {
+    /*
+     * 反方向也钉住。只断言正向的话，有人再写一条改写、
+     * 顺手用了 `env.site.url`，上面那条仍然是绿的。
+     *
+     * 注意 `redirect` 用 `env.site.url` 是**对的**（登录跳转要去公网地址），
+     * 所以这里只管 `rewrite`。
+     */
+    const rewrites = [...code.matchAll(/rewrite\(new URL\([^)]*\)\)/g)].map((m) => m[0]);
+    assert.ok(rewrites.length > 0, "一条 rewrite 都没有了？那上面那条断言在断言空气");
+    for (const r of rewrites) {
+      assert.equal(
+        r.includes("env.site.url"),
+        false,
+        `这条 rewrite 用了公网域名作基址，从 127.0.0.1 进来的请求会 404：${r}`,
+      );
+    }
+  });
+});

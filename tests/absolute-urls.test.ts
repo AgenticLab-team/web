@@ -107,12 +107,40 @@ describe("**Route Handler 不拿 request.url 拼绝对地址**", () => {
 describe("**门禁那一层也一样**", () => {
   const proxy = strip(readFileSync(join(root, "src/proxy.ts"), "utf8"));
 
-  it("不拿 request.url 拼登录地址", () => {
+  it("不拿 request.url 拼**跳转**地址", () => {
     /*
      * 这一条是改名改出来的：edge 时代它是对的，换成 nodejs 就错了。
      * 同一行代码，换个运行时就开始把人送去 localhost。
+     *
+     * ═════════════════════════════════════════
+     * 但这条禁令只管 redirect，**不管 rewrite** —— 两者方向相反
+     * ═════════════════════════════════════════
+     *
+     * 原来它是「proxy.ts 里不许出现 request.url」一刀切的。
+     * 加了「首页对 curl 改写去 /install.sh」之后，那一刀切就错了：
+     *
+     *   · `redirect` 的 Location **浏览器要跟**，所以必须是公网地址；
+     *     用 request.url 会把人送去他自己的 localhost
+     *   · `rewrite` 是**服务端内部**换一个路径，必须同源；
+     *     用公网域名就成了跨源改写，Next 直接 404
+     *
+     * 一刀切的后果是逼着人把 rewrite 也写成 env.site.url ——
+     * 而那一条的症状是「浏览器全好，只有 curl 404」，
+     * 也就是 `curl -Ls agenticlab.sh | bash` 拿到一整页 HTML。
+     * （已经发生过一次，被部署自检拦下来的，见 tests/proxy.test.ts。）
+     *
+     * 所以：先把合法的那种（rewrite 同源）整段抠掉，
+     * 剩下的部分里再出现 request.url 就是真的错了。
      */
-    assert.equal(proxy.includes("request.url"), false);
+    const withoutRewrites = proxy.replace(
+      /rewrite\(\s*new URL\([^)]*,\s*request\.url\s*\)\s*\)/g,
+      "",
+    );
+    assert.equal(
+      withoutRewrites.includes("request.url"),
+      false,
+      "proxy 里 request.url 只能用作 rewrite 的同源基址，别的地方一律用 env.site.url",
+    );
   });
 
   it("**用 env.site.url，不是相对地址** —— 这一层和 Route Handler 正相反", () => {

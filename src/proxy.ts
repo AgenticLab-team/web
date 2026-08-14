@@ -67,6 +67,20 @@ export function proxy(request: NextRequest) {
    *
    * 用 rewrite 而不是 redirect：`curl` 不加 `-L` 就不跟跳转，
    * 而群里贴出来的命令迟早有人抄掉那个 `-L`。
+   *
+   * ⚠️ **基址必须是 `request.url`，不能是 `env.site.url`。**
+   *
+   * 写成后者的话，改写目标就成了公网域名 —— 而请求可能是从
+   * `127.0.0.1:3000` 进来的（部署自检、健康探针、nginx 回源都是）。
+   * 跨源改写 Next 不认，直接 404。
+   *
+   * 症状极其刁钻：**浏览器一切正常，只有 curl 拿到 404** ——
+   * 因为只有 curl 会走进这个分支。也就是说
+   * `curl -Ls agenticlab.sh | bash` 会把一个 404 页面灌进 bash，
+   * 而任何一次用浏览器做的检查都是绿的。
+   *
+   * 这一条是被部署脚本那道自检拦下来的（它用 curl 探首页），
+   * 而它拦下来纯属走运 —— 所以下面补了测试，别再靠运气。
    */
   if (
     pathname === "/" &&
@@ -75,7 +89,7 @@ export function proxy(request: NextRequest) {
       accept: request.headers.get("accept"),
     })
   ) {
-    return NextResponse.rewrite(new URL("/install.sh", env.site.url));
+    return NextResponse.rewrite(new URL("/install.sh", request.url));
   }
 
   const loggedIn = request.cookies.has(SESSION_COOKIE);
