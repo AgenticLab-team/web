@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 
 import { ENDPOINTS, NOT_POSSIBLE } from "@/lib/api-tokens/catalog";
 import { SCOPE_KEYS } from "@/lib/api-tokens/rules";
-import { readCode } from "./_source";
+import { readCode, stripComments } from "./_source";
 
 /**
  * 开放 API 的面。
@@ -33,9 +33,94 @@ function routeFiles(dir = routeDir): string[] {
   return out;
 }
 
+/**
+ * 不过 `authenticate()` 的路由 —— **列名放行，不许靠模式匹配**。
+ *
+ * ═════════════════════════════════════════
+ * 为什么是一张写死的名单
+ * ═════════════════════════════════════════
+ *
+ * 设备码登录那两条确实不能鉴权：它们的目的就是拿到令牌，
+ * 要求先有令牌是循环的。
+ *
+ * 但「有一类路由不鉴权」这件事一旦变成一条规则（比如
+ * 「`/auth/` 下面的都放行」），下一个人在那个目录里加路由时
+ * 就不会被任何东西提醒 —— 而这份守卫存在的全部意义
+ * 正是逼人在开一个不鉴权的口子时停下来想一想。
+ *
+ * 所以是名单。加第三条要来改这里，改的时候会看到这段话。
+ */
+const NO_AUTH_ROUTES = new Set([
+  "/api/v1/auth/device/start/route.ts",
+  "/api/v1/auth/device/poll/route.ts",
+  /*
+   * 发布清单。一个**还没登录的人**要先能把客户端装上，
+   * 而装的第一步就是问这里。要令牌的话 `curl | bash` 那条路走不通。
+   *
+   * 它泄露的只有「最新版是几」和几个下载地址 ——
+   * 那些本来就要在安装脚本里明文写出来。
+   */
+  "/api/v1/release/route.ts",
+]);
+
+/**
+ * 目录里的路径 → 路由文件所在目录。
+ *
+ * ─────────────────────────────────────────
+ * 占位符要**通配**，不能一个一个列
+ * ─────────────────────────────────────────
+ *
+ * 原来这里写死了 `{conv_id}` 和 `{id}` 两种。加第三种占位符
+ * （`{wx_id}`、`{owner}`、`{board}`……）的时候，这条守卫不会报错，
+ * 它会**报一个找不到的文件名** —— 而人的第一反应是去改路由目录名，
+ * 不是来怀疑这个映射。
+ *
+ * 蛇形转驼峰是因为 Next 的动态段用驼峰（`[convId]`），
+ * 而对外的路径用蛇形（`{conv_id}`）—— 两边的命名习惯不同，
+ * 而那是对的：URL 里出现驼峰很少见。
+ */
+function pathToRouteFile(apiPath: string): string {
+  return apiPath.replace(/\{(\w+)\}/g, (_, name: string) => {
+    const camel = name.replace(/_([a-z])/g, (_m, c: string) => c.toUpperCase());
+    return `[${camel}]`;
+  });
+}
+
 describe("**每个端点都先鉴权**", () => {
+  it("放行名单里的每一条都真的存在 —— 名单本身不能烂掉", () => {
+    /*
+     * 路由改名或删掉之后，名单里那一行会静静地留着，
+     * 而它随时可能碰巧匹配上一条新加的、本该鉴权的路由。
+     */
+    const files = new Set(routeFiles().map((f) => f.slice(f.indexOf("/api/v1/"))));
+    for (const allowed of NO_AUTH_ROUTES) {
+      assert.ok(files.has(allowed), `放行名单里的 ${allowed} 已经不存在了`);
+    }
+  });
+
   for (const file of routeFiles()) {
     const short = file.slice(file.indexOf("/api/v1/"));
+    if (NO_AUTH_ROUTES.has(short)) {
+      it(`${short}（列名放行：它就是用来换令牌的）`, () => {
+        /*
+         * 读**剥掉注释**的版本。
+         *
+         * 那两个路由文件的注释里必然写着「这条路径上没有 createSession」——
+         * 按原文搜的话，第一个红的是那句解释本身。
+         * 这个仓库在这一节里已经踩到过第三次了（见 `tests/_source.ts`）。
+         */
+        const body = stripComments(readFileSync(file, "utf8"));
+        /*
+         * 放行不等于不管。这两条里**绝不许出现发会话或建账号** ——
+         * 那正是 `docs/OAUTH-PROVIDER.md` 第二节第①条钉的东西：
+         * 「只有群成员能登录」如果在这里被绕过去，
+         * 等于把整个站对全世界开放，而且没有任何外部症状。
+         */
+        assert.equal(body.includes("createSession"), false, "登录入口里发会话了");
+        assert.equal(/insert\(\s*users\s*\)/.test(body), false, "登录入口里建账号了");
+      });
+      continue;
+    }
     it(short, () => {
       const body = readFileSync(file, "utf8");
       assert.match(body, /await authenticate\(request,/, "没有过 authenticate");
@@ -129,27 +214,19 @@ describe("文档和实现对得上", () => {
      */
     const files = routeFiles().map((f) => f.slice(f.indexOf("/api/v1/")));
     for (const e of ENDPOINTS) {
-      const expected =
-        e.path.replace("/api/v1/", "").replace(/\{conv_id\}/g, "[convId]").replace(/\{id\}/g, "[id]") +
-        "/route.ts";
+      const expected = `${pathToRouteFile(e.path)}/route.ts`;
       assert.ok(
-        files.some((f) => f === `/api/v1/${expected}`),
+        files.some((f) => f === expected),
         `${e.path} 在文档里，但找不到 ${expected}`,
       );
     }
   });
 
   it("**每个路由文件也都在文档里** —— 藏着的端点没有人能审", () => {
+    const declared = new Set(ENDPOINTS.map((e) => pathToRouteFile(e.path)));
     for (const file of routeFiles()) {
-      const short = file
-        .slice(file.indexOf("/api/v1/"))
-        .replace("/route.ts", "")
-        .replace(/\[convId\]/g, "{conv_id}")
-        .replace(/\[id\]/g, "{id}");
-      assert.ok(
-        ENDPOINTS.some((e) => e.path === short),
-        `${short} 有实现但没进文档`,
-      );
+      const short = file.slice(file.indexOf("/api/v1/")).replace("/route.ts", "");
+      assert.ok(declared.has(short), `${short} 有实现但没进文档`);
     }
   });
 });

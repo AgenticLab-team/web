@@ -32,13 +32,35 @@ export async function GET(
   }
 
   const url = new URL(request.url);
+  /*
+   * ─────────────────────────────────────────
+   * `offset` 是「往上翻」的全部机制
+   * ─────────────────────────────────────────
+   *
+   * 网页那边翻历史走的是「按天回看」——它按日期切片，
+   * 因为一页 HTML 装不下四万条。
+   *
+   * 而终端里的群聊是一个**常驻窗口**：人会往上滚，
+   * 期望的是「再往前一屏」，不是「跳到某一天」。
+   * 没有这一个参数的话，终端里永远只看得到最近的那几十条，
+   * 而那和「聊天软件」的差距不是少一个功能，是它不成立。
+   *
+   * 上限仍然按 200 封顶 —— 一个 `?limit=100000`
+   * 长得和正常请求一模一样，而它能把一台小服务器的内存吃掉。
+   */
+  const num = (key: string, fallback: number) => {
+    const raw = Number(url.searchParams.get(key));
+    return Number.isFinite(raw) && raw >= 0 ? raw : fallback;
+  };
+
   const result = searchMessages(auth.caller.user, {
     // 空查询 = 不按关键词筛，按时间倒序给最近的
     query: url.searchParams.get("q") ?? "",
     convId,
     from: url.searchParams.get("from") ?? undefined,
     to: url.searchParams.get("to") ?? undefined,
-    limit: Math.min(Number(url.searchParams.get("limit") ?? 50) || 50, 200),
+    limit: Math.min(num("limit", 50) || 50, 200),
+    offset: Math.floor(num("offset", 0)),
   });
 
   return NextResponse.json({

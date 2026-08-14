@@ -414,6 +414,13 @@
       "when": 1786635462672,
       "tag": "0061_ancient_kat_farrell",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "6",
+      "when": 1786646856204,
+      "tag": "0062_supreme_masque",
+      "breakpoints": true
     }
   ]
 }

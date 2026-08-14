@@ -24,6 +24,7 @@
     "links": "tsx --conditions=react-server --env-file=.env.local scripts/links.ts",
     "digest": "tsx --conditions=react-server --env-file=.env.local scripts/digest.ts",
     "recount-boards": "tsx --conditions=react-server --env-file=.env.local scripts/recount-boards.ts",
+    "tui:gen": "tsx --conditions=react-server scripts/tui-gen.ts",
     "test": "npm run test:server && npm run test:ui",
     "test:server": "tsx --conditions=react-server --test tests/*.test.ts",
     "test:ui": "tsx --test tests/ui/*.test.ts",

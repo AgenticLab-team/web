@@ -42,6 +42,15 @@ export function createToken(input: {
   name: string;
   scopes: readonly ScopeKey[];
   expiresAt?: number | null;
+  /**
+   * 怎么来的。默认 `manual`（人在网页上自己建的）。
+   *
+   * 设备码登录换来的填 `device` / `ssh` —— 后者的明文躺在
+   * SSH 网关那台机器上，而「一次性撤掉那台机器上的全部令牌」
+   * 这个动作只能靠这一列来做。见 `db/schema/api.ts` 上那段。
+   */
+  source?: "manual" | "device" | "ssh";
+  deviceLabel?: string | null;
 }): CreatedToken {
   const { plaintext, visible } = formatToken(randomBytes(32));
   const id = crypto.randomUUID().replace(/-/g, "");
@@ -54,9 +63,52 @@ export function createToken(input: {
       hash: hashToken(plaintext),
       scopes: normalizeScopes([...input.scopes]),
       expiresAt: input.expiresAt ?? null,
+      source: input.source ?? "manual",
+      deviceLabel: input.deviceLabel ?? null,
     })
     .run();
   return { id, plaintext, visible };
+}
+
+/**
+ * 把 SSH 网关签出的令牌**全部**作废。
+ *
+ * ─────────────────────────────────────────
+ * 它是网关被怀疑失守时第一个要按的按钮
+ * ─────────────────────────────────────────
+ *
+ * 网关那台机器上放着一批别人的令牌明文（`TUI.md` 第四节）。
+ * 怀疑它失守的时候，逐个去找「哪些是那台机器上的」是做不到的 ——
+ * 令牌名字是人起的，而且那批令牌散在几十个人名下。
+ *
+ * 所以按 `source` 一刀切。代价是所有 SSH 用户要重新登录一次，
+ * 而那正是这个动作应有的代价。
+ */
+export function revokeAllSshTokens(reason: string): number {
+  const result = db
+    .update(apiTokens)
+    .set({ revokedAt: Date.now(), revokedReason: reason.slice(0, 200) })
+    .where(and(eq(apiTokens.source, "ssh"), isNull(apiTokens.revokedAt)))
+    .run();
+  return result.changes;
+}
+
+/**
+ * 同上，但只撤**一个人自己的**。
+ *
+ * 两个函数而不是一个带可选参数的，理由是那个可选参数一旦漏传，
+ * 一次「撤销我自己在网关上的令牌」就会变成**把所有人踢下线**。
+ * 而它不会报错。
+ */
+export function revokeAllSshTokensOf(userId: string, reason: string): number {
+  const result = db
+    .update(apiTokens)
+    .set({ revokedAt: Date.now(), revokedReason: reason.slice(0, 200) })
+    .where(
+      and(eq(apiTokens.userId, userId), eq(apiTokens.source, "ssh"), isNull(apiTokens.revokedAt)),
+    )
+    .run();
+  return result.changes;
 }
 
 export interface TokenIdentity {

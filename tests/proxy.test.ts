@@ -4,11 +4,13 @@ import { describe, it } from "node:test";
 
 import {
   CONDITIONAL_PREFIXES,
+  MATCHER_EXTRAS,
   PROTECTED_PREFIXES,
   isProtectedPath,
   safeRedirect,
 } from "@/lib/auth/routes";
 import { NAV } from "@/lib/nav";
+import { stripComments } from "./_source";
 
 /**
  * 登录门禁与回跳地址的安全性。
@@ -116,9 +118,31 @@ describe("matcher 与前缀表不能脱节", () => {
    * 跑偏的后果是中间件根本不被调用，isProtectedPath 写得再对也没用。
    */
   const source = readFileSync(new URL("../src/proxy.ts", import.meta.url), "utf8");
-  const matcher = [...source.matchAll(/"(\/[^"]*)"/g)]
-    .map((m) => m[1])
-    .filter((p) => p !== "/login");
+
+  /*
+   * ─────────────────────────────────────────
+   * 只读 `matcher: [...]` 那个数组，不是扫全文
+   * ─────────────────────────────────────────
+   *
+   * 原来这里用一个正则把**整个文件**里所有 `"/..."` 都当成 matcher 条目，
+   * 然后特判掉 `/login`（那是函数体里跳转用的地址）。
+   *
+   * 那个写法的问题不是不准，是**它会随着 proxy 里多一条路径而误报**：
+   * 加了「按 UA 改写去 /install.sh」之后，那个地址就被当成了
+   * 一条没有理由的 matcher 条目。而人的第一反应是去 matcher 里
+   * 删一条不存在的东西。
+   *
+   * 现在只截 `matcher: [` 到对应的 `]` 之间那一段。
+   */
+  /*
+   * 先剥注释：数组里的注释在解释「为什么写成 / 而不是 /:path*」，
+   * 而那句话里那两个带引号的路径会被当成两条真的 matcher 条目。
+   * 这个仓库在别处已经踩过同一个坑（见 tests/_source.ts）。
+   */
+  const block = stripComments(source.slice(source.indexOf("matcher: [")));
+  const matcher = [...block.slice(0, block.indexOf("],")).matchAll(/"(\/[^"]*)"/g)].map(
+    (m) => m[1],
+  );
 
   it("每个受保护前缀都在 matcher 里", () => {
     for (const prefix of PROTECTED_PREFIXES) {
@@ -155,16 +179,35 @@ describe("matcher 与前缀表不能脱节", () => {
   });
 
   it("matcher 里没有多余的路径", () => {
+    /*
+     * matcher 每多覆盖一条无关路径，就多一次「某个请求经过了
+     * 登录判定但判错了」的机会。所以这里要求每一条都说得出理由。
+     *
+     * 理由有三种，第三种是**逐条列名**的（`MATCHER_EXTRAS`）——
+     * 把这条守卫改成「允许有例外」等于把它废掉。
+     */
     const known = [
       ...PROTECTED_PREFIXES,
       ...CONDITIONAL_PREFIXES.map((c) => c.prefix),
     ] as readonly string[];
+    const extras = new Set<string>(MATCHER_EXTRAS.map((e) => e.path));
     for (const entry of matcher) {
       const prefix = entry.replace("/:path*", "");
       assert.ok(
-        known.includes(prefix) || known.some((k) => prefix.startsWith(`${k}/`)),
-        `matcher 里的 ${entry} 既不在受保护前缀表里，也不在有条件保护表里`,
+        extras.has(entry) || known.includes(prefix) || known.some((k) => prefix.startsWith(`${k}/`)),
+        `matcher 里的 ${entry} 既不在受保护前缀表里、不在有条件保护表里，也不在 MATCHER_EXTRAS 里`,
       );
+    }
+  });
+
+  it("**MATCHER_EXTRAS 里的每一条都真的在 matcher 里，而且写了理由**", () => {
+    /*
+     * 反方向：这张表是「例外」，而一条没有对应 matcher 条目的例外
+     * 只会让下一个人以为某个路径被覆盖着，其实没有。
+     */
+    for (const e of MATCHER_EXTRAS) {
+      assert.ok(matcher.includes(e.path), `MATCHER_EXTRAS 里的 ${e.path} 不在 matcher 里`);
+      assert.ok(e.why.length > 10, `${e.path} 没说清楚为什么要进 matcher`);
     }
   });
 

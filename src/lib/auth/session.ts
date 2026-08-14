@@ -5,6 +5,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { cookies } from "next/headers";
 
+import { currentApiCaller } from "@/lib/api-tokens/as-caller";
 import { db } from "@/lib/db";
 import { sessions, users } from "@/lib/db/schema";
 import { resolvePreview, type ActivePreview } from "@/lib/rbac/preview";
@@ -156,20 +157,57 @@ export function resolveSession(token: string | undefined): CurrentUser | null {
  * 都用那个，永远记在真人头上。
  */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
+  /*
+   * 开放 API 的调用先在这里认出来。
+   *
+   * ─────────────────────────────────────────
+   * 它**不读 cookie**，所以 `auth.ts` 那条红线仍然成立
+   * ─────────────────────────────────────────
+   *
+   * 那条红线是「令牌不进网页这条路，cookie 不进 API 那条路」。
+   * 这里是后半句的实现细节：一次 API 调用**根本不去看 cookie**，
+   * 而不是「看了但优先用令牌」。
+   *
+   * 反方向也没被打开：这个存储只在 `src/app/api/v1/**` 里被设上
+   * （有守卫盯着，见 `lib/api-tokens/as-caller.ts`），
+   * 浏览器发起的请求永远看到空存储。
+   *
+   * 这么做换来的是：打卡、收藏、报名、下单、后台那一百来个管理动作
+   * 一个字都不用改，就能被令牌调用 —— 而它们的权限判定、审计、
+   * 限流逐字还是网页那一套。另写一份「API 版」的话，
+   * 两份规则迟早分叉，而分叉的方向永远是 API 那份更宽松。
+   */
+  const caller = currentApiCaller();
+  if (caller) return caller.user;
+
   const store = await cookies();
   const preview = resolvePreview(store.get(PREVIEW_COOKIE)?.value);
   if (preview) return preview.subject;
   return resolveSession(store.get(SESSION_COOKIE)?.value);
 }
 
-/** 当前是不是在预览态；不是则返回 null */
+/**
+ * 当前是不是在预览态；不是则返回 null。
+ *
+ * **API 调用永远不是预览态** —— 预览是一个 cookie，而令牌那条路
+ * 不读 cookie。写在这里而不是靠「反正它读不到」：
+ * 后者是一个碰巧成立的事实，前者是一条判定。
+ */
 export async function currentPreview(): Promise<ActivePreview | null> {
+  if (currentApiCaller()) return null;
   const store = await cookies();
   return resolvePreview(store.get(PREVIEW_COOKIE)?.value);
 }
 
 /** 真实登录的那个人 —— 预览态下也是他，不受影响 */
 export async function getRealUser(): Promise<CurrentUser | null> {
+  /*
+   * API 调用下，「当前的人」和「真实的人」是同一个：
+   * 令牌属于一个具体的账号，中间没有预览这一层可以偏移。
+   */
+  const caller = currentApiCaller();
+  if (caller) return caller.user;
+
   const store = await cookies();
   return resolveSession(store.get(SESSION_COOKIE)?.value);
 }

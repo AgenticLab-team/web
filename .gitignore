@@ -71,3 +71,7 @@ next-env.d.ts
 # 源站地址。站点躲在 Cloudflare 后面，源站只对 CF 网段开 80/443，
 # 而这套防护的前提就是没人知道它 —— 绝不进仓库（何况这个项目要开源）。
 .deploy-host
+
+# 终端客户端的交叉编译产物。`bash scripts/tui-release.sh` 生成，
+# 一次四个平台六十来兆 —— 它们该去对象存储，不该进 git
+tui/dist/

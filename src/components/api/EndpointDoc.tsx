@@ -39,12 +39,23 @@ import type { Endpoint } from "@/lib/api-tokens/catalog";
  * （发帖、发消息、顶掉群公告）。扫一眼就能把「读」和「写」分开，
  * 比读完每一行的摘要快得多。
  */
+const WRITE_BADGE = {
+  background: "color-mix(in srgb, var(--warning) 16%, transparent)",
+  color: "var(--warning)",
+} as const;
+
 const METHOD_STYLE = {
   GET: { background: "var(--fill)", color: "var(--ink-secondary)" },
-  POST: {
-    background: "color-mix(in srgb, var(--warning) 16%, transparent)",
-    color: "var(--warning)",
-  },
+  POST: WRITE_BADGE,
+  PATCH: WRITE_BADGE,
+  /*
+   * DELETE 也用警示色而不是危险红。
+   *
+   * 这一栏里 DELETE 的对象是令牌、会话、草稿、雷达关键词 ——
+   * 都是可以再建一个的东西。把它染成和封禁同一个红，
+   * 会让真正不可逆的那些失去分量。
+   */
+  DELETE: WRITE_BADGE,
 } as const;
 
 export function EndpointDoc({

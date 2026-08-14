@@ -132,6 +132,7 @@ npx tsx --conditions=react-server --test tests/github-oauth.test.ts
 | 线上长什么样、出事怎么办 | `DEPLOY.md` |
 | 积分、赛季、商店为什么这么设计 | `ECONOMY.md`（讲「为什么」的范本） |
 | 论坛的可见性与管理动作 | `FORUM.md` |
+| 终端客户端（`curl \| bash` 与 SSH 入口） | `TUI.md` |
 | 权限判定链 | `PERMISSIONS.md` |
 | 活动与模块 | `MODULES.md` |
 | 数据建模的决定 | `SCHEMA.md` |
