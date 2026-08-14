@@ -15,6 +15,33 @@ const nextConfig: NextConfig = {
    */
   distDir: process.env.NEXT_DIST_DIR || ".next",
 
+  /*
+   * 开发时允许从哪些 host 取 dev 资源。**只影响 next dev，不影响线上。**
+   *
+   * ─────────────────────────────────────────
+   * 症状是「页面出来了，但什么都点不动」
+   * ─────────────────────────────────────────
+   *
+   * Next 16 默认只放行 localhost 取 `/_next/static/...`。用局域网地址
+   * （`http://192.168.x.x:3000`）打开的话，chunk 全部被拦掉 ——
+   * 服务端渲染的 HTML 照常显示，但**客户端一行都没水合**：
+   * 所有 onClick 都是死的，登录按钮、主题切换、验证码轮询一起失灵。
+   *
+   * 而这个站有一半以上的人在微信里用手机看，「拿手机连局域网试一下」
+   * 是这个项目最常见的一次自测 —— 撞上它的人只会以为自己把界面改坏了。
+   * 浏览器控制台里也看不出所以然，那条提示只出现在 dev server 的终端里。
+   *
+   * 写成环境变量而不是把 IP 写死在仓库里：局域网地址每个人都不一样，
+   * 而且它换一个 Wi-Fi 就变。
+   *
+   *   NEXT_DEV_ORIGINS=192.168.8.4 npm run dev
+   *   NEXT_DEV_ORIGINS=192.168.8.4,10.0.0.7 npm run dev   # 多个用逗号分开
+   */
+  allowedDevOrigins: (process.env.NEXT_DEV_ORIGINS ?? "")
+    .split(",")
+    .map((host) => host.trim())
+    .filter(Boolean),
+
   // 不指定的话 Turbopack 会往上找到 /home/jmr 并把家目录当作项目根
   turbopack: {
     root: __dirname,

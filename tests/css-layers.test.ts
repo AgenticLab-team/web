@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { readSource } from "./_source";
+import { readSource, stripComments } from "./_source";
 
 /**
  * 层叠顺序。
@@ -22,30 +22,72 @@ import { readSource } from "./_source";
  * GitHub 提及卡片里那段也是。
  */
 
-const CSS = readSource("app/globals.css");
+const RAW_CSS = readSource("app/globals.css");
+
+/*
+ * 先剥注释再判断。
+ *
+ * globals.css 里解释「为什么必须在层里」的那几段长注释**引用了类名本身**
+ * （`.t-group-label` 的 16 处调用……），而那些注释在层块外面。
+ * 不剥的话，一句讲清楚为什么的说明会把这条测试判红 ——
+ * 于是下一个人删的是注释，不是 bug。
+ */
+const CSS = stripComments(RAW_CSS);
+
+/*
+ * 把所有 `@layer components { … }` 块整个抠掉，剩下的就是**层外**的部分。
+ *
+ * ─────────────────────────────────────────
+ * 为什么不能再用 indexOf 比大小
+ * ─────────────────────────────────────────
+ *
+ * 原来这两条断言是「`.prose-forum` 的下标大于 `@layer components {` 的下标」。
+ * 那在全文件只有一个层块时凑合能用，但现在有两个 —— `indexOf` 只会找到
+ * 第一个，于是**哪怕 `.prose-forum` 被搬回层外，它的下标依然大于第一个层块的
+ * 开头，断言照样是绿的**。一条永远为真的断言比没有断言更糟。
+ *
+ * 层块以行首的 `}` 收尾（里面的嵌套规则都是缩进的），所以直接按这个切。
+ */
+const OUTSIDE_LAYERS = CSS.replace(/@layer components \{[\s\S]*?\n\}/g, "");
+
+/** 这些类身上都有「会被工具类覆盖」的声明，必须在层里 */
+const MUST_BE_LAYERED = [
+  // 正文块：外面常套一个 t-caption2 / text-sm 调小，而那正是它压掉的东西
+  ".prose-forum {",
+  // 只搬一半更糟：字号能改、标题不能改，看起来「有时候管用」，最难查
+  ".prose-forum-compact",
+  // 排版阶梯：每个都声明 font-weight，压掉全站约 190 处 font-medium
+  ".t-large-title",
+  ".t-title1",
+  ".t-title2",
+  ".t-title3",
+  ".t-headline",
+  ".t-body",
+  ".t-callout",
+  ".t-subhead",
+  ".t-footnote",
+  ".t-caption ",
+  ".t-caption2",
+  ".t-group-label",
+  ".tabular {",
+];
 
 describe("会被工具类覆盖的设计类要放进层里", () => {
-  it("**.prose-forum 在 @layer components 里**", () => {
-    /*
-     * 它是确凿有受害者的那一个：正文块常常要在外面套一个
-     * `t-caption2` / `text-sm` 调小，而那正是它压掉的东西。
-     */
-    const layerAt = CSS.indexOf("@layer components {");
-    const ruleAt = CSS.indexOf(".prose-forum {");
-    assert.ok(layerAt >= 0, "globals.css 里没有 @layer components");
-    assert.ok(ruleAt > layerAt, ".prose-forum 又跑到层外面去了");
+  it("globals.css 里确实有 @layer components", () => {
+    assert.ok(CSS.includes("@layer components {"), "globals.css 里没有 @layer components");
+    assert.notEqual(OUTSIDE_LAYERS, CSS, "抠层块的正则没匹配上任何东西 —— 这条测试在空转");
   });
 
-  it("整块都在层里 —— 只搬一半更糟", () => {
-    /*
-     * 搬一半的话，`.prose-forum` 能被覆盖而 `.prose-forum h2` 不能，
-     * 于是同一个块里字号能改、标题不能改 —— 那种不一致比全都不能改
-     * 更难查，因为它看起来「有时候管用」。
-     */
-    const start = CSS.indexOf("@layer components {");
-    const compactAt = CSS.indexOf(".prose-forum-compact");
-    assert.ok(compactAt > start, ".prose-forum-compact 落在层外了");
-  });
+  for (const sel of MUST_BE_LAYERED) {
+    it(`**${sel.trim()} 在层里**`, () => {
+      assert.ok(CSS.includes(sel), `globals.css 里已经没有 ${sel} 了 —— 改名了就把这条一起改`);
+      assert.equal(
+        OUTSIDE_LAYERS.includes(sel),
+        false,
+        `${sel} 跑到 @layer 外面去了 —— 层外的样式会悄悄吃掉工具类`,
+      );
+    });
+  }
 });
 
 describe("浮出来的返回按钮", () => {

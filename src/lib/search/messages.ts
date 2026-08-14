@@ -51,6 +51,23 @@ export interface SearchOptions {
   msgType?: string;
   limit?: number;
   offset?: number;
+  /**
+   * 没给关键词时**列出最近的**，而不是返回空。
+   *
+   * ─────────────────────────────────────────
+   * 为什么是显式开关，不是「空查询自动列出」
+   * ─────────────────────────────────────────
+   *
+   * 开放 API 的 `GET /groups/<id>/messages` 要的是「读这个群的聊天记录」，
+   * 关键词是可选的筛选条件 —— 不给就该给最近的那些。
+   *
+   * 而网页的 `/search` 是无条件调用这个函数的（还没输入时也调一次）。
+   * 让空查询自动变成「列出全部」的话，那一页一打开就会显示
+   * 「共 45000 条结果」并铺满整个群的聊天记录 —— 那不是搜索页该有的样子。
+   *
+   * 两个调用方要的东西相反，所以由调用方自己声明，不猜。
+   */
+  listWhenEmpty?: boolean;
 }
 
 export interface SearchResult {
@@ -65,7 +82,7 @@ export function searchMessages(user: CurrentUser | null, options: SearchOptions)
   if (allowed.length === 0) return { hits: [], total: 0, noAccess: true };
 
   const expr = buildMatchExpression(options.query);
-  if (!expr) return { hits: [], total: 0, noAccess: false };
+  if (!expr && !options.listWhenEmpty) return { hits: [], total: 0, noAccess: false };
 
   // 指定的群必须在可见范围内；越权指定等于没搜到，不报错也不泄露该群存在
   const scope = options.convId
@@ -75,11 +92,42 @@ export function searchMessages(user: CurrentUser | null, options: SearchOptions)
     : allowed;
   if (scope.length === 0) return { hits: [], total: 0, noAccess: false };
 
-  const limit = Math.min(options.limit ?? 30, 100);
-  const offset = options.offset ?? 0;
+  /*
+   * ─────────────────────────────────────────
+   * 上下界都要夹
+   * ─────────────────────────────────────────
+   *
+   * 原来只夹了上界（`Math.min(limit, 100)`）。**SQLite 里负数 LIMIT 等于不限**，
+   * 于是 `?limit=-1` 一路穿到 SQL，一次响应把整个群的消息全给出去 ——
+   * 而开放 API 那条路上没有 offset 参数，那也是唯一能拿到最新一页以外内容的办法：
+   * 它移掉的不是「一次返回多少」，是批量抽取的天花板。
+   *
+   * 夹在这里而不是只夹在路由上：这是所有调用方的最后一道关口。
+   */
+  const rawLimit = Number(options.limit);
+  const limit = Math.min(Math.max(1, Number.isFinite(rawLimit) ? Math.trunc(rawLimit) : 30), 100);
+  const rawOffset = Number(options.offset);
+  const offset = Math.max(0, Number.isFinite(rawOffset) ? Math.trunc(rawOffset) : 0);
+
+  /*
+   * 有关键词就走 FTS，没有就直接扫 messages。
+   *
+   * FTS5 **没有「匹配全部」的写法**，所以这不能靠让 buildMatchExpression
+   * 返回一个万能表达式来解决，只能是两条不同的 FROM。
+   * 其余部分（可见性、隐私开关、日期、类型筛选）两条路完全共用 ——
+   * 它们全都写在 `m.` 上，一个字都不用改。
+   */
+  const keyworded = expr !== null;
+  const source = keyworded ? "messages_fts f JOIN messages m ON m.id = f.msg_id" : "messages m";
+  const match = keyworded ? "f.messages_fts MATCH ?" : "1 = 1";
+  // 没有关键词就没有「命中的片段」—— 给空串，别拿正文冒充高亮
+  const snippetCol = keyworded
+    ? "snippet(messages_fts, 3, '<mark>', '</mark>', '…', 24) AS snip"
+    : "'' AS snip";
 
   const filters: string[] = [];
-  const params: (string | number)[] = [expr];
+  // 直接写 expr !== null 而不是复用上面的 keyworded —— 这里要靠它把类型收窄成 string
+  const params: (string | number)[] = expr !== null ? [expr] : [];
 
   filters.push(`m.conv_id IN (${scope.map(() => "?").join(",")})`);
   params.push(...scope);
@@ -125,9 +173,8 @@ export function searchMessages(user: CurrentUser | null, options: SearchOptions)
     sqlite
       .prepare(
         `SELECT count(*) AS n
-         FROM messages_fts f
-         JOIN messages m ON m.id = f.msg_id
-         WHERE f.messages_fts MATCH ? ${where}`,
+         FROM ${source}
+         WHERE ${match} ${where}`,
       )
       .get(...params) as { n: number }
   ).n;
@@ -140,10 +187,9 @@ export function searchMessages(user: CurrentUser | null, options: SearchOptions)
   const rows = sqlite
     .prepare(
       `SELECT m.id, m.conv_id, m.sender_wx_id, m.sender_name, m.content, m.type, m.ts,
-              snippet(messages_fts, 3, '<mark>', '</mark>', '…', 24) AS snip
-       FROM messages_fts f
-       JOIN messages m ON m.id = f.msg_id
-       WHERE f.messages_fts MATCH ? ${where}
+              ${snippetCol}
+       FROM ${source}
+       WHERE ${match} ${where}
        ORDER BY m.ts DESC
        LIMIT ? OFFSET ?`,
     )

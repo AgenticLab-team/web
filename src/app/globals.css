@@ -293,38 +293,109 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* ── 排版阶梯（iOS 数值）──────────────────────────────── */
-.t-large-title { font-size: 2.125rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.022em; }
-.t-title1      { font-size: 1.75rem;  line-height: 1.21; font-weight: 700; letter-spacing: -0.02em; }
-.t-title2      { font-size: 1.375rem; line-height: 1.27; font-weight: 600; letter-spacing: -0.016em; }
-.t-title3      { font-size: 1.25rem;  line-height: 1.25; font-weight: 600; letter-spacing: -0.012em; }
-.t-headline    { font-size: 1.0625rem;line-height: 1.29; font-weight: 600; letter-spacing: -0.008em; }
-.t-body        { font-size: 1.0625rem;line-height: 1.47; font-weight: 400; letter-spacing: -0.004em; }
-.t-callout     { font-size: 1rem;     line-height: 1.375;font-weight: 400; }
-.t-subhead     { font-size: 0.9375rem;line-height: 1.33; font-weight: 400; }
-.t-footnote    { font-size: 0.8125rem;line-height: 1.38; font-weight: 400; }
-.t-caption     { font-size: 0.75rem;  line-height: 1.33; font-weight: 400; }
-.t-caption2    { font-size: 0.6875rem;line-height: 1.27; font-weight: 400; }
+/* ── 排版阶梯（iOS 数值）────────────────────────────────
+ *
+ * ═════════════════════════════════════════
+ * 这一整块**必须待在 @layer components 里**
+ * ═════════════════════════════════════════
+ *
+ * 理由和下面 `.prose-forum` 那段完全一样，但这里的受害者多得多。
+ *
+ * 每个 `.t-*` 都声明了 `font-weight`。放在层外的话，它压过
+ * Tailwind `utilities` 层里的所有字重工具类 —— 于是
+ *
+ *   className="t-subhead font-medium"
+ *
+ * 里那个 `font-medium` **什么也不做**。没有报错、没有警告，
+ * 屏幕上就是 400。全站有约 190 处这样写，**包括共享按钮**：
+ * `buttonClass()` 返回的是 `… t-subhead … font-medium …`，
+ * 所以 primary / neutral / danger / dangerSoft 四种按钮的文字
+ * 一直按 400 而不是设计的 500 在渲染。药丸标签、配色开关、
+ * 榜单的升降数字同理。
+ *
+ * ─────────────────────────────────────────
+ * 搬进来会改变什么（搬之前数过一遍）
+ * ─────────────────────────────────────────
+ *
+ * 只会**变重**，不会变轻，也不改字号、行距、颜色和间距 ——
+ * 所以不会引起重排，只是笔画回到该有的粗细：
+ *
+ *   · 标题档（600/700）里只有 2 处同时写了字重工具类，
+ *     而且都是 `t-title3 font-semibold` —— 600 对 600，纹丝不动；
+ *     `t-headline` 的 18 处一处都没带字重工具类。
+ *     也就是说「工具类比 t-* 更轻、搬进来反而变细」这种情况**一处都没有**。
+ *   · 其余全是正文档（400）配 `font-medium` / `font-semibold`，
+ *     搬进来之后它们开始生效 —— 而那正是每一处的作者亲手写下的意图。
+ *   · `.t-group-label` 的 16 处调用只额外带了 margin / padding，
+ *     它声明的字号、字重、颜色没有任何一处被工具类碰过。
+ *
+ * 由 tests/css-layers.test.ts 盯着别再退回去。
+ */
+@layer components {
+  .t-large-title { font-size: 2.125rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.022em; }
+  .t-title1      { font-size: 1.75rem;  line-height: 1.21; font-weight: 700; letter-spacing: -0.02em; }
+  .t-title2      { font-size: 1.375rem; line-height: 1.27; font-weight: 600; letter-spacing: -0.016em; }
+  .t-title3      { font-size: 1.25rem;  line-height: 1.25; font-weight: 600; letter-spacing: -0.012em; }
+  .t-headline    { font-size: 1.0625rem;line-height: 1.29; font-weight: 600; letter-spacing: -0.008em; }
+  .t-body        { font-size: 1.0625rem;line-height: 1.47; font-weight: 400; letter-spacing: -0.004em; }
+  .t-callout     { font-size: 1rem;     line-height: 1.375;font-weight: 400; }
+  .t-subhead     { font-size: 0.9375rem;line-height: 1.33; font-weight: 400; }
+  .t-footnote    { font-size: 0.8125rem;line-height: 1.38; font-weight: 400; }
+  .t-caption     { font-size: 0.75rem;  line-height: 1.33; font-weight: 400; }
+  .t-caption2    { font-size: 0.6875rem;line-height: 1.27; font-weight: 400; }
 
-/* 分组标题：全大写 + 字距，iOS 设置页那种 */
-.t-group-label {
-  font-size: 0.8125rem;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-tertiary);
-}
+  /* 分组标题：全大写 + 字距，iOS 设置页那种 */
+  .t-group-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-tertiary);
+  }
 
-.tabular {
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
 }
 
 /* ── 材质 ─────────────────────────────────────────────── */
-.inset-group {
+/*
+ * ── 成组的卡片 ────────────────────────────────────────────
+ *
+ * 底色和圆角写在一起（下面两个选择器共用一份，别复制成两份 ——
+ * 复制的那天起它们就会开始分叉）。**溢出行为分两档**：
+ *
+ * ─────────────────────────────────────────
+ * 为什么要有 -scroll 这一档
+ * ─────────────────────────────────────────
+ *
+ * `.inset-group` 设的是 `overflow` 简写，而它在**层外**
+ * （这个文件里七十来个设计类都还在层外，理由见下面 prose-forum 那段）。
+ * CSS 的层叠规则是「层外的一律赢过有层的」，Tailwind 的工具类全在
+ * `utilities` 层 —— 所以 `class="inset-group overflow-x-auto"`
+ * **算出来是 hidden**，写的人以为自己开了横滚，实际是把内容裁了。
+ *
+ * 权限矩阵就是这么被裁的：表宽 36rem，在 360px 的手机上两百多像素
+ * 被切掉，既没有滚动条也划不动，后面几个身份组的列永远够不到。
+ * 而这不会有人来报 —— 看不见的列看起来就像「不存在」。
+ *
+ * 所以给它一个正经的去处，而不是让每个人在调用点上和层叠打架。
+ */
+.inset-group,
+.inset-group-scroll {
   background: var(--surface);
   border-radius: var(--radius-card);
+}
+
+.inset-group {
   overflow: hidden;
+}
+
+/* 横着能滑，竖着照旧裁掉。圆角仍然会裁剪内容 —— 只要 overflow 不是 visible */
+.inset-group-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .inset-row + .inset-row {
@@ -939,7 +1010,28 @@ body {
 
    不支持 :has() 的浏览器会保持窄栏 —— 那是可用的，只是没那么宽敞。
 */
-main:has([data-dense]) {
+/*
+ * ─────────────────────────────────────────
+ * 默认值必须和覆盖写在一起
+ * ─────────────────────────────────────────
+ *
+ * 默认栏宽原来写在 AppShell 的 `style={{ maxWidth: ... }}` 上。
+ * **内联样式赢过任何普通样式表规则** —— 于是下面这条 :has() 覆盖
+ * 从来没有生效过一次：三十个后台页面全部被压在 52rem 里，
+ * 减掉 13rem 的后台目录之后正文只剩 590px，而屏幕有 1900px。
+ *
+ * 这正是上面那段注释描述的症状，也就是说这条规则写下来是为了修它，
+ * 却因为默认值在另一个文件、另一种优先级上，一天都没修成。
+ * tests/ui-chrome.test.ts 只分别字符串匹配了两半，所以一直是绿的。
+ *
+ * 现在两条挨着写，靠特异性分胜负（后者多一个 :has()），
+ * 一眼看得出谁覆盖谁。
+ */
+main#main {
+  max-width: var(--content-max);
+}
+
+main#main:has([data-dense]) {
   max-width: var(--content-max-wide);
 }
 

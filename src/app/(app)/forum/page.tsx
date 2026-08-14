@@ -20,7 +20,6 @@ export default async function ForumPage() {
   requireFeature("forum", user);
   const viewer = buildViewerContext(user);
   const boards = listBoards(viewer);
-  const recent = listPosts(viewer, { sort: "recent", limit: 15 });
   /*
    * 「坐下来读」。
    *
@@ -48,6 +47,34 @@ export default async function ForumPage() {
    * 五张的时候是 40%，而且手机上五张整宽卡片一路堵在时间线前面。
    */
   const worthReading = listPosts(viewer, { sort: "deep", longformOnly: true, limit: 3 });
+
+  /*
+   * ═════════════════════════════════════════
+   * 时间线里去掉上面已经露过面的那几篇
+   * ═════════════════════════════════════════
+   *
+   * 不去重的话，同一篇会在半屏之内出现两次 —— 上面一张卡片，
+   * 紧接着「最新讨论」的第一行又是它，中间只隔一行小标题。
+   * 「坐下来读」挑的是长文与精华，而精华通常也刚发不久，
+   * 所以这不是偶发，**是常态**：只要有一篇新的精华长文就会撞上。
+   *
+   * 读者看到的不是「这篇很重要」，是「这个列表渲染坏了」。
+   *
+   * 多取几条再切回 15 —— 直接 filter 的话，撞上三篇时时间线会
+   * 悄悄少三行，而那三行本来是别人的帖子。
+   *
+   * `/forum/deep` 早就是这么做的（那一页用 `seen` 去重），
+   * 这里只是把同一条规矩补上。
+   *
+   * ⚠ `limit:` 后面**必须先写那个字面量 15**。tests/forum-boards.test.ts
+   * 的「三分之一」守卫是拿正则从这一行里抠数字的（`limit:\s*(\d+)`），
+   * 抠到的要是时间线真正显示的行数。把它提成常量的话，守卫会报
+   * 「找不到那次查询的 limit」，而那句报错听起来像页面结构改了。
+   */
+  const shownAbove = new Set(worthReading.map((post) => post.id));
+  const recent = listPosts(viewer, { sort: "recent", limit: 15 + shownAbove.size })
+    .filter((post) => !shownAbove.has(post.id))
+    .slice(0, 15);
 
   return (
     <>
