@@ -135,4 +135,55 @@ export const DEAD_COLUMNS: readonly DeadColumn[] = [
     disposition: "planned",
     why: "「这次申请是上次被拒之后重投的」。重投链路没做，撤回后重填走的是改同一行",
   },
+
+  /* ── 邮箱 ─────────────────────────────────────────────────
+   *
+   * P0 只做了一次性箱和域名池。下面这些是 P1–P3 的列 ——
+   * **明知没接就先标出来**，而不是等这条测试来发现。
+   *
+   * 这里有个取舍：本可以等到做那一期时再加列。但 `mail_boxes`
+   * 是收信路径上每封信都要查的表，SQLite 的 ALTER TABLE 加列虽然便宜，
+   * 而**分四次改一张热表**要写四次迁移、四次对齐生产。一次建好、
+   * 逐条标明实情，代价是这张名单长几行 —— 那正是这张名单存在的意义。
+   */
+  {
+    column: "mail_domains.registrar",
+    disposition: "planned",
+    why: "域名在哪家注册的。100 个域名现在全在 DNSPod，这一列要等到跨注册商之后才有意义（续费和改 NS 的入口不一样）",
+  },
+  {
+    column: "mail_domains.registered_at",
+    disposition: "planned",
+    why: "注册日期。真正管事的是 domain_expires_at（它有告警），注册日只是对账时好看",
+  },
+  {
+    column: "mail_domains.dns_detail",
+    disposition: "planned",
+    why: "DNS 体检的原始记录（查到的 MX/SPF/DMARC 原文）。体检任务本身在 P1 —— 现在三个灯全是 null，界面上显示成「还没体检过」",
+  },
+  {
+    column: "mail_boxes.grace_until",
+    disposition: "planned",
+    why: "长期箱到期后的 30 天宽限期。P3 的东西 —— 一次性箱到期直接销毁，没有宽限期这回事",
+  },
+  {
+    column: "mail_boxes.renewed_at",
+    disposition: "planned",
+    why: "上次续期时间。续期是长期箱（P3）才有的动作",
+  },
+  {
+    column: "mail_boxes.renew_count",
+    disposition: "planned",
+    why: "续过几次。同 renewed_at",
+  },
+  {
+    column: "mail_boxes.slot_id",
+    disposition: "planned",
+    why: "占用的槽位。**一次性箱不占槽位**（它必须零摩擦），所以这一列要等临时箱和长期箱做了才写得进值 —— P2",
+  },
+  {
+    column: "mail_messages.body_html_path",
+    disposition: "planned",
+    why: "HTML 正文落文件的路径。P0 只存纯文本：宁可少存也不把库撑大，而验证码抽取本来就只看纯文本",
+  },
 ];

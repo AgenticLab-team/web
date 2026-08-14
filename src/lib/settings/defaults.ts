@@ -675,6 +675,154 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
     category: "site",
     label: "论坛允许未登录浏览",
   },
+
+  // ── 邮箱 ────────────────────────────────────────────────────
+  {
+    key: "mail.burner.ttl_hours",
+    value: "24",
+    type: "int",
+    category: "mail",
+    label: "一次性箱存活小时数",
+    description: "到点直接销毁，没有宽限期 —— 一次性就是一次性",
+    min: 1,
+    max: 168,
+  },
+  {
+    key: "mail.burner.concurrent_limit",
+    value: "3",
+    type: "int",
+    category: "mail",
+    label: "一次性箱同时在手上限",
+    description:
+      "★ 网页和 API 共用这一个额度。分开算的话，「网页 3 个 + 每把令牌 3 个 + 令牌能建很多把」等于没有上限",
+    min: 1,
+    max: 20,
+  },
+  {
+    key: "mail.burner.custom_min_length",
+    value: "10",
+    type: "int",
+    category: "mail",
+    label: "一次性箱自选前缀的最短长度",
+    description:
+      "防的不是滥用，是抢地址：一次性池同时也能被申领，不设下限就有人用一次性箱反复占着好前缀",
+    min: 3,
+    max: 32,
+  },
+  {
+    key: "mail.burner.per_hour",
+    value: "5",
+    type: "int",
+    category: "mail",
+    label: "每小时最多开几个一次性箱",
+    description: "卡开箱不卡读信 —— 开箱消耗的是池域名的命名空间和声誉，读信只消耗我们的 CPU",
+    min: 1,
+    max: 100,
+  },
+  {
+    key: "mail.burner.per_day",
+    value: "20",
+    type: "int",
+    category: "mail",
+    label: "每天最多开几个一次性箱",
+    min: 1,
+    max: 500,
+  },
+  {
+    key: "mail.box.max_bytes",
+    value: "5242880",
+    type: "int",
+    category: "mail",
+    label: "单个箱子的存储上限（字节）",
+    description: "超了拒收并通知，不静默丢 —— 静默丢会让人以为对方没发",
+    min: 65536,
+  },
+  {
+    key: "mail.message.max_bytes",
+    value: "2097152",
+    type: "int",
+    category: "mail",
+    label: "单封邮件最大字节数",
+    min: 65536,
+  },
+  {
+    key: "mail.box.per_hour_receive_cap",
+    value: "100",
+    type: "int",
+    category: "mail",
+    label: "单个箱子每小时最多收几封",
+    description: "超了自动暂停并通知。临时箱最常见的滥用是被拿去当转发靶子",
+    min: 10,
+    max: 10000,
+  },
+  {
+    key: "mail.domain.per_hour_receive_cap",
+    value: "2000",
+    type: "int",
+    category: "mail",
+    label: "单个域名每小时最多收几封",
+    description: "开了 catch-all 的自有域名尤其需要 —— 字典式扫描能一晚上塞进几万封",
+    min: 100,
+    max: 100000,
+  },
+  {
+    key: "mail.retention_days",
+    value: "30",
+    type: "int",
+    category: "mail",
+    label: "正文保留天数",
+    description: "磁盘是这套东西里最贵的资源，所以它挂在等级上而不是积分上（L3+ 翻倍）",
+    min: 1,
+    max: 365,
+  },
+  {
+    key: "mail.retention_days_high_level",
+    value: "60",
+    type: "int",
+    category: "mail",
+    label: "L3 以上的正文保留天数",
+    min: 1,
+    max: 365,
+  },
+  {
+    key: "mail.mx_host",
+    /*
+     * 线上实际用的是 `publicmx`，不是 `mx`。
+     *
+     * 8-14 核对 DNS 时发现的：一百个域名的 MX 全指向
+     * `publicmx.agenticlab.sh`，而这里写着 `mx.agenticlab.sh` ——
+     * **DNS 体检会拿这个值去比对**，对不上就会把一百行全判成红灯，
+     * 而真正的问题是这个默认值本身。
+     *
+     * 这类「代码里的常量和线上事实分叉」不会报错，只会让检查说谎。
+     */
+    value: "publicmx.agenticlab.sh",
+    type: "string",
+    category: "mail",
+    label: "MX 主机名",
+    description:
+      "DNS 体检拿它比对每个域名的 MX 记录，填错会让一百行全判成红灯。⚠ 它会出现在所有域名的 MX 上 —— 也就是说这批域名是一家的这件事是公开的",
+  },
+  {
+    key: "mail.dmarc_rua",
+    /*
+     * **默认空**。
+     *
+     * 跨域报告（`_dmarc.某个.icu` 的 rua 指向 agenticlab.sh）要两个条件：
+     * 收件那一侧发布授权记录，而且那个信箱真的能收信。
+     * 两条缺一，报告就**静默地不来**，而 DNS 上明明写着它 ——
+     * 一个写着却收不到的报告地址，比不写更容易让人以为已经在看了。
+     *
+     * 这批域名一封信都不发，所以报告的价值本来就接近零：
+     * 它唯一能告诉你的是「有人在伪造你的域名」。想要的话见 DNS.md。
+     */
+    value: "",
+    type: "string",
+    category: "mail",
+    label: "DMARC 报告收件地址",
+    description:
+      "留空就不在 DMARC 记录里写 rua。要填的话，那个信箱必须真的能收信，而且收件域名要发布跨域授权记录 —— 见 ops/mail-gateway/DNS.md",
+  },
 ];
 
 /** 功能开关：出问题时先关模块，而不是回滚整站 */
@@ -699,6 +847,6 @@ export const DEFAULT_FLAGS: readonly {
   { key: "keyword_radar", enabled: true, description: "关键词雷达订阅" },
   { key: "shop", enabled: true, description: "积分商店" },
   { key: "events", enabled: true, description: "活动系统" },
-  { key: "temp_mailbox", enabled: false, description: "临时邮箱" },
+  { key: "temp_mailbox", enabled: true, description: "一次性邮箱（/mail/burner 与 mail:burner 那套 API）" },
   { key: "rag_qa", enabled: true, description: "群聊问答（搜索页的「问一句」）" },
 ];

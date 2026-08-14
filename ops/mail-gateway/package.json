@@ -1,0 +1,17 @@
+{
+  "name": "agenticlab-mail-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SMTP 收信网关。跑在一台独立的机器上 —— 源站 IP 不能出现在 MX 记录里",
+  "scripts": {
+    "start": "node gateway.mjs"
+  },
+  "dependencies": {
+    "mailparser": "^3.7.4",
+    "smtp-server": "^3.13.6"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

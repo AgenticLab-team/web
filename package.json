@@ -24,6 +24,7 @@
     "prune": "tsx --conditions=react-server --env-file=.env.local scripts/prune.ts",
     "offsite": "tsx --conditions=react-server --env-file=.env.local scripts/offsite.ts",
     "links": "tsx --conditions=react-server --env-file=.env.local scripts/links.ts",
+    "mail-dns": "tsx --conditions=react-server --env-file=.env.local scripts/mail-dns.ts",
     "digest": "tsx --conditions=react-server --env-file=.env.local scripts/digest.ts",
     "recount-boards": "tsx --conditions=react-server --env-file=.env.local scripts/recount-boards.ts",
     "test": "npm run test:server && npm run test:ui",

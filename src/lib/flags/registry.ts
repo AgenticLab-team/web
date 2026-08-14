@@ -108,9 +108,21 @@ export const FLAGS: readonly FlagSpec[] = [
   },
   {
     key: "temp_mailbox",
-    label: "临时邮箱",
-    effect: "功能还没做，开关现在不管任何事",
-    status: "planned",
+    label: "一次性邮箱",
+    /*
+     * 2026-08-13：从 planned 转正。
+     *
+     * 它是这份清单顶上那段骂的那个病的最后一个样本 ——
+     * 一个显示成「开」、按下去什么都不会发生的开关。
+     * 现在 `/mail/burner` 第一行就调 requireFeature，关掉是干净的 404。
+     *
+     * 关掉**不影响已经收到的信**，也不销毁地址：那是回收任务在管的事。
+     * 一个开关顺手把用户数据删掉的话，没有人敢按它 ——
+     * 而它存在的意义正是「出事时敢按」。
+     */
+    effect: "关掉后一次性邮箱页面 404，开不出新地址 —— 已经开的地址和收到的信不受影响",
+    status: "wired",
+    navKeys: ["mail"],
   },
   {
     key: "external_users",

@@ -19,7 +19,14 @@ import type { ScopeKey } from "./rules";
  */
 
 export interface Endpoint {
-  method: "GET" | "POST";
+  /**
+   * DELETE 是随一次性邮箱一起加进来的。
+   *
+   * 「用完就扔」的那个**扔**，是这个功能语义的一半 ——
+   * 用 `POST /destroy` 之类表达它的话，在线控制台和 curl 例子
+   * 都要多解释一句「为什么删东西要用 POST」。
+   */
+  method: "GET" | "POST" | "DELETE";
   path: string;
   summary: string;
   /** 要哪些 scope 才调得动；空数组 = 任何有效令牌都行 */
@@ -172,6 +179,57 @@ export const ENDPOINTS: readonly Endpoint[] = [
       "消息由机器人账号发出，不署名的话群里没有人知道是谁说的。" +
       "另外：只能发到**站长授权过、而且你确实在其中**的群",
     sampleBody: { text: "大家好" },
+  },
+
+  // ── 一次性邮箱 ──────────────────────────────────────────────
+  {
+    method: "POST",
+    path: "/api/v1/mail/burners",
+    summary: "开一个一次性邮箱（24 小时后销毁）",
+    scopes: ["mail:burner"],
+    example: `curl -X POST -H "Authorization: Bearer $TOKEN" https://agenticlab.sh/api/v1/mail/burners`,
+    note:
+      "**不填 local_part 就给你一个随机地址**，这是最常见的用法。" +
+      "自选前缀有最短长度限制（默认 10 个字符）—— 短前缀留给正式申领，" +
+      "否则有人会用一次性箱反复占着好地址。" +
+      "同时在手的箱子数**和你在网页上开的共用一个额度**",
+    sampleBody: {},
+  },
+  {
+    method: "GET",
+    path: "/api/v1/mail/burners",
+    summary: "列出这把令牌开的、还活着的一次性邮箱",
+    scopes: ["mail:burner"],
+    example: `curl -H "Authorization: Bearer $TOKEN" https://agenticlab.sh/api/v1/mail/burners`,
+    note:
+      "★ 只列**这把令牌自己开的** —— 你在网页上开的箱子它看不见。" +
+      "这样一把令牌泄漏的爆炸半径，就是它自己造出来的那几个地址",
+  },
+  {
+    method: "GET",
+    path: "/api/v1/mail/burners/{id}",
+    summary: "这个箱子的状态与用量",
+    scopes: ["mail:burner"],
+    example: `curl -H "Authorization: Bearer $TOKEN" https://agenticlab.sh/api/v1/mail/burners/<id>`,
+  },
+  {
+    method: "DELETE",
+    path: "/api/v1/mail/burners/{id}",
+    summary: "提前销毁 ——「用完就扔」的那个扔",
+    scopes: ["mail:burner"],
+    example: `curl -X DELETE -H "Authorization: Bearer $TOKEN" https://agenticlab.sh/api/v1/mail/burners/<id>`,
+    note: "**不可逆**：正文一起清掉，地址立刻可以被别人拿去用",
+  },
+  {
+    method: "GET",
+    path: "/api/v1/mail/burners/{id}/messages",
+    summary: "这个箱子收到的信，带抽好的验证码",
+    scopes: ["mail:burner"],
+    example: `curl -H "Authorization: Bearer $TOKEN" "https://agenticlab.sh/api/v1/mail/burners/<id>/messages?since=0"`,
+    note:
+      "返回体里的 `otp_code` 是**已经抽好的验证码**，不用自己写正则解 HTML 邮件；" +
+      "抽不出来时是 null（宁可不抽也不猜错）。" +
+      "`?since=<毫秒时间戳>` 做增量拉取",
   },
 ];
 

@@ -176,6 +176,67 @@ export const DELETION_PLAN: readonly TablePlan[] = [
   { table: "activity_applications", disposition: "purge", why: "活动报名。人不在了，名额该退回去" },
   { table: "user_notes", disposition: "purge", why: "管理员给他写的备注。对象没了，备注只剩下一个孤立的人物评价挂在库里" },
 
+  /* ── 邮箱 ────────────────────────────────────────────
+   *
+   * 这一组比别处急：邮箱里躺着的是**验证码和找回密码的链接**。
+   * 一个注销过的账号，如果它的地址还活着、还在收信，
+   * 那些信会一直落在一个没有主人的箱子里。
+   */
+  {
+    table: "mail_boxes",
+    disposition: "purge",
+    why: "他的邮箱地址。删掉之后地址回到池子里可以重新发出去 —— 留着的话，那个地址会一直收信而没有任何人看得到",
+  },
+  /*
+   * ⚠ **深的先删**。执行器按登记表里的顺序走挂靠表，
+   * 附件挂在邮件下面 —— 邮件先被删掉的话，
+   * `WHERE message_id IN (SELECT id FROM mail_messages …)` 查出来是空的，
+   * 附件成了永远清不掉的孤儿，而且不报错。
+   * （`keyword_hits` 那一条的注释里记着同一个坑，那次是订阅先删。）
+   */
+  {
+    table: "mail_attachments",
+    disposition: "purge",
+    why: "附件元信息与落盘的文件，跟着邮件走",
+    via: { table: "mail_messages", column: "message_id" },
+  },
+  {
+    table: "mail_messages",
+    disposition: "purge",
+    why: "收到的信。里面是验证码和找回密码的链接，注销之后一秒都不该多留",
+    via: { table: "mail_boxes", column: "box_id" },
+  },
+  {
+    table: "mail_slots",
+    disposition: "purge",
+    why: "他的邮箱槽位。人不在了，额度该收回去",
+  },
+  {
+    table: "mail_domains",
+    disposition: "keep",
+    /*
+     * 域名不删，只把 owner_user_id 清空 —— 域名是站里买的资产，
+     * 不是这个账号的东西。删掉的话，那 100 个域名会因为
+     * 一个人注销而少一个，而没有任何地方看得出来它去哪了。
+     */
+    why: "域名本身是站里买的资产，不跟着账号走。注销时把 owner_user_id 清空，域名回到未分配状态",
+  },
+  {
+    table: "mail_events",
+    disposition: "keep",
+    why: "「这个地址是谁开的、什么时候被收回的」—— 和审计日志同一个道理：它的价值恰恰在于不能被当事人抹掉",
+  },
+  {
+    table: "mail_banwords",
+    disposition: "keep",
+    why: "它只带 created_by（是哪个管理员加的），不是这个人的数据。删掉的话，禁用词会随着某个管理员注销而消失 —— 那正是它要挡的东西重新可用的时刻",
+  },
+  {
+    table: "mail_blocks",
+    disposition: "keep",
+    why: "发件人黑名单，同 mail_banwords —— created_by 是操作者不是所有者",
+  },
+
   /* ── 内容留下，作者抹掉 ───────────────────────────── */
   {
     table: "forum_posts",

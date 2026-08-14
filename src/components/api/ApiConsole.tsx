@@ -42,7 +42,7 @@ import { ActionButton, CONTROL, CONTROL_MONO, Field } from "@/components/api/fie
  */
 
 interface Endpoint {
-  method: "GET" | "POST";
+  method: "GET" | "POST" | "DELETE";
   path: string;
   summary: string;
   scopes: string[];
@@ -112,6 +112,7 @@ export function ApiConsole({ endpoints }: { endpoints: Endpoint[] }) {
 
   const endpoint = endpoints.find((e) => keyOf(e) === chosen);
   const needed = endpoint ? placeholdersOf(endpoint.path) : [];
+  // 只有 POST 要请求体；DELETE 也是写操作，但它的目标全在路径里
   const isWrite = endpoint?.method === "POST";
 
   /* 有占位符没填就别让他发 —— 发出去只会拿到一句看不懂的 404 */

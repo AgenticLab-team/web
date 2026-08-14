@@ -249,6 +249,16 @@ export const ADMIN_NAV: AdminNavSection[] = [
         ready: true,
       },
       {
+        key: "mail",
+        href: "/admin/mail",
+        label: "邮箱与域名池",
+        icon: "mail",
+        permission: "mail.domain.read",
+        alsoAllows: ["mail.domain.write", "mail.box.read", "mail.box.write", "mail.banword"],
+        description: "100 个域名的归属、到期与 DNS 体检",
+        ready: true,
+      },
+      {
         key: "broadcast",
         href: "/admin/broadcast",
         label: "公告与群发",

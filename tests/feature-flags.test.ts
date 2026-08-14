@@ -182,9 +182,16 @@ describe("**清单要说清楚每个开关管着什么**", () => {
     const planned = FLAGS.filter((f) => f.status === "planned").map((f) => f.key);
     /*
      * `rag_qa` 从这张表里下来了 —— 功能做了（搜索页的「问一句」），
-     * 所以它现在是 wired、默认开着。剩下这两个确实还没做。
+     * 所以它现在是 wired、默认开着。
+     *
+     * `temp_mailbox` 也下来了（2026-08-13）：一次性邮箱做了，
+     * `/mail/burner` 第一行就调 requireFeature，关掉是干净的 404。
+     * 它是这份清单顶上那段骂的那个病的最后一个样本。
+     *
+     * 只剩 external_users 一个 —— 而它是**真的不打算做**的那一类：
+     * 「只有群成员能登录」是 ARCHITECTURE.md 里写着的不能破的线之一。
      */
-    for (const k of ["temp_mailbox", "external_users"]) {
+    for (const k of ["external_users"]) {
       assert.ok(planned.includes(k), `${k} 该标成 planned`);
     }
   });
@@ -432,10 +439,20 @@ describe("**status 必须说实话**", () => {
     assert.deepEqual(stale, [], `这些已经接上了，标记该改成 wired：${stale.join(", ")}`);
   });
 
-  it("planned 清单就是这三个 —— 新增要有人过一眼", () => {
+  it("planned 清单只剩一个 —— 新增要有人过一眼", () => {
+    /*
+     * `temp_mailbox` 2026-08-13 转正：一次性邮箱做了，
+     * `/mail/burner` 第一行调 requireFeature，关掉是干净的 404。
+     *
+     * 只剩 `external_users`，而它和别的 planned 不是一类 ——
+     * 它是**明确不打算做**的：「只有群成员能登录」写在
+     * ARCHITECTURE.md 的「不能破的线」里。
+     * 严格说它该退役而不是 planned，但那要站长拍板，
+     * 所以先留着，别让它悄悄变成一个看起来能拨的旋钮。
+     */
     assert.deepEqual(
       FLAGS.filter((f) => f.status === "planned").map((f) => f.key).sort(),
-      ["external_users", "temp_mailbox"],
+      ["external_users"],
     );
   });
 

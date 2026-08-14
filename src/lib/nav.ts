@@ -204,6 +204,15 @@ export const NAV: NavSection[] = [
         requiresAuth: true,
         ready: true,
       },
+      {
+        key: "mail",
+        flag: "temp_mailbox",
+        href: "/mail/burner",
+        label: "一次性邮箱",
+        icon: "mail",
+        requiresAuth: true,
+        ready: true,
+      },
     ],
   },
   {

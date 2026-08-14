@@ -17,6 +17,7 @@ import { BUILTIN_ROLES, resolveRolePermissions } from "@/lib/rbac/roles";
 import { seedBoards } from "@/lib/forum/seed-boards";
 import { seedTitles } from "@/lib/titles/seed-titles";
 import { seedShopItems } from "@/lib/shop/seed-items";
+import { seedMailDomains } from "@/lib/mail/seed-domains";
 import { DEFAULT_FLAGS, DEFAULT_SETTINGS, RETIRED_SETTINGS } from "@/lib/settings/defaults";
 
 export interface SeedReport {
@@ -36,6 +37,14 @@ export interface SeedReport {
   boards: number;
   titles: number;
   shopItems: number;
+  /** 邮箱域名池：新写入 / 认到人头上 / punycode 出问题的 */
+  mailDomains: number;
+  mailClaimed: number;
+  mailBanwords: number;
+  mailPunycodeProblems: string[];
+  /** 这次靠匹配认出来的域名归属 —— 「凭什么是他的」写在 why 里 */
+  mailMatched: { domain: string; userId: string; why: string }[];
+  mailExpiryFilled: number;
 }
 
 /**
@@ -56,6 +65,12 @@ export function seedDatabase(): SeedReport {
     boards: 0,
     titles: 0,
     shopItems: 0,
+    mailDomains: 0,
+    mailClaimed: 0,
+    mailBanwords: 0,
+    mailPunycodeProblems: [],
+    mailMatched: [],
+    mailExpiryFilled: 0,
   };
 
   db.transaction((tx) => {
@@ -229,6 +244,14 @@ export function seedDatabase(): SeedReport {
   report.boards = seedBoards();
   report.titles = seedTitles();
   report.shopItems = seedShopItems();
+
+  const mail = seedMailDomains();
+  report.mailDomains = mail.domains;
+  report.mailClaimed = mail.claimed;
+  report.mailBanwords = mail.banwords;
+  report.mailPunycodeProblems = mail.punycodeProblems;
+  report.mailMatched = mail.matched;
+  report.mailExpiryFilled = mail.expiryFilled;
 
   return report;
 }

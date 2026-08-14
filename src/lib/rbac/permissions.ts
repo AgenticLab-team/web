@@ -139,6 +139,55 @@ export const PERMISSIONS = [
   { key: "module.install", category: "module", label: "安装 / 卸载模块", dangerLevel: 3, status: "planned" },
   { key: "module.config", category: "module", label: "配置模块", dangerLevel: 2, status: "planned" },
 
+  // ── 邮箱 ────────────────────────────────────────────────────
+  {
+    key: "mail.domain.read",
+    category: "mail",
+    label: "查看域名池",
+    description: "域名、归属、到期日、DNS 体检、用量",
+  },
+  {
+    key: "mail.domain.write",
+    category: "mail",
+    label: "管理域名池",
+    description: "加域名、改类别与档位、指定归属、开停。改归属等于把一个域名从一个人手里转给另一个人",
+    dangerLevel: 1,
+  },
+  {
+    key: "mail.box.read",
+    category: "mail",
+    label: "查看任何人的地址",
+    description: "只有元数据：地址、主人、到期、收了多少封、发件人。看不到主题和正文",
+    dangerLevel: 1,
+  },
+  {
+    key: "mail.box.write",
+    category: "mail",
+    label: "替人开箱 / 改到期 / 收回申领",
+    description: "站长在这里不受最短长度、禁用词、池归属的限制。收回别人的地址要填理由，理由会发给他",
+    dangerLevel: 2,
+  },
+  { key: "mail.banword", category: "mail", label: "管理前缀禁用词", dangerLevel: 1 },
+  {
+    key: "mail.content.read",
+    category: "mail",
+    /*
+     * 单独一级，而且是最高的一级。理由见 MAIL.md 11.4：
+     *
+     * 这个站的邮箱会被拿去收**验证码和找回密码的链接**。一个能静默读
+     * 任意用户邮件正文的后台，等于一把能登录他们所有第三方账号的万能钥匙。
+     * 风险不在于站长会用它 —— 在于**他的账号被盗时它一起被盗**，
+     * 而那一刻没有任何东西会发出声音。
+     *
+     * 所以它走双人复核，而且每次都通知当事人。
+     */
+    label: "查看别人邮件的主题与正文",
+    description:
+      "验证码和找回密码链接都在正文里 —— 这一项等于能登录对方的第三方账号。每次都要填理由、进审计，并且通知当事人",
+    dangerLevel: 3,
+    status: "planned",
+  },
+
   // ── 商店 ────────────────────────────────────────────────────
   { key: "shop.manage", category: "shop", label: "管理商品", dangerLevel: 1 },
   { key: "shop.order.handle", category: "shop", label: "处理兑换订单", dangerLevel: 1 },

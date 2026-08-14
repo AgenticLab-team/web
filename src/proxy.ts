@@ -114,6 +114,7 @@ export const config = {
     "/projects/:path*",
     "/projects",
     "/shop/:path*",
+    "/mail/:path*",
     "/search/:path*",
     "/archive/:path*",
     /*

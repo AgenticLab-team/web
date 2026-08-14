@@ -11,6 +11,7 @@ import {
   FolderGit2,
   Home,
   Link as LinkIcon,
+  Mail,
   MessageCircle,
   MessagesSquare,
   Radar,
@@ -48,6 +49,7 @@ const ICONS: Record<string, LucideIcon> = {
   "user-plus": UserPlus,
   "file-text": FileText,
   "key-round": KeyRound,
+  mail: Mail,
 };
 
 export function NavIcon({

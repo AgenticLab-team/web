@@ -126,7 +126,7 @@ describe("**planned 里只该剩「功能真没做」的**", () => {
    * 所以现在这张表该只剩第一类。写死在这里：新增一个 planned
    * 要动这一行，也就要有人过一眼它属于哪一类。
    */
-  it("清单就是这 6 个，全是功能没做", () => {
+  it("清单就是这 7 个，全是功能没做", () => {
     const planned = PERMISSION_LIST.filter((p) => p.status === "planned").map((p) => p.key);
     assert.deepEqual(
       [...planned].sort(),
@@ -145,8 +145,23 @@ describe("**planned 里只该剩「功能真没做」的**", () => {
        * `user.delete` 从这里下来了 —— **接上了**，不是退役。
        * 自助注销在「登录与安全」页，后台删号走 admin/user-actions。
        */
+      /*
+       * `mail.content.read` 是新加的，属于第一类（功能没做）——
+       * 它管的是「看别人邮件的主题与正文」，而**那条通道本身还没建**：
+       * P0 的后台只给元数据（地址、主人、到期、收了多少封、发件人），
+       * 正文和主题一行代码都读不到。
+       *
+       * 它不属于第二类（被更粗的权限管着）—— 没有任何别的权限点
+       * 今天能读到正文，包括站长的 mail.box.write。
+       *
+       * 它先注册着而不是等做的时候再加，是因为**这条线要先划出来**：
+       * 邮箱里有验证码和找回密码链接，一个能静默读正文的后台
+       * 等于一把能登录所有人第三方账号的万能钥匙。等到要做时才想起来
+       * 分级，多半会顺手挂在已有的 mail.box.write 上。
+       */
       [
         "broadcast.email",
+        "mail.content.read",
         "module.config",
         "module.install",
         "permission.override",
