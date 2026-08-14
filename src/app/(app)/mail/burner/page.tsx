@@ -12,6 +12,9 @@ import { burnerDomains } from "@/lib/mail/queries";
 import type { BurnerMessageView } from "@/lib/mail/burner";
 import { AliasSection } from "@/components/mail/AliasSection";
 import { listAliases, ownedDomains } from "@/lib/mail/alias";
+import { ClaimSection } from "@/components/mail/ClaimSection";
+import { claimableDomains } from "@/lib/mail/claim-queries";
+import { slotStatus } from "@/lib/mail/claim";
 
 export const metadata: Metadata = { title: "一次性邮箱" };
 export const dynamic = "force-dynamic";
@@ -53,8 +56,16 @@ export default async function BurnerPage() {
   const owned = ownedDomains(user.id);
   const aliases = owned.length > 0 ? listAliases(user.id) : [];
 
+  // 申领那一块：没有任何可申领的域名时它自己不渲染（见组件里那句 return null）
+  const claimable = claimableDomains();
+  const slots = slotStatus(user.id);
+
   return (
     <>
+      <div className="mb-3">
+        <ClaimSection slots={slots} domains={claimable} />
+      </div>
+
       {owned.length > 0 && (
         <div className="mb-3">
           <AliasSection aliases={aliases} domains={owned.map((d) => ({ domain: d.domain }))} />

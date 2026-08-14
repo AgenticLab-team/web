@@ -52,6 +52,17 @@ const PAYOUTS: Record<string, { key: string; safeAfterDelete: boolean; why: stri
     safeAfterDelete: true,
     why: "user_titles 会被清，但续期只对已有的称号发生，重绑的新账号一个称号都没有",
   },
+  "lib/mail/claim.ts": {
+    key: "mail.claim:<userId>:<address>:<天>",
+    safeAfterDelete: true,
+    why:
+      "这一处是**扣分**不是发分，所以「重复」的方向是多收一次而不是多发一次。" +
+      "mail_boxes 是 purge 档：注销时箱子连行一起清掉，地址回到池子 —— " +
+      "重绑之后再申领同一个地址是一次全新的占用，照价收费才是对的。" +
+      "键里带天是为了另一件事：只写「用户:地址」的话，它会变成" +
+      "「这个人对这个地址一辈子只扣一次」，于是到期放回池子后重新申领是免费的，" +
+      "而年租是这套东西里唯一的周期性回收口",
+  },
   "lib/points/checkin.ts": {
     key: "checkin:<user.id>:<today>",
     safeAfterDelete: false,

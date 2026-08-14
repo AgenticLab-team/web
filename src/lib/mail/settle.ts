@@ -3,14 +3,15 @@ import "server-only";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { mailDomains } from "@/lib/db/schema";
+import { mailBoxes, mailDomains, mailEvents, mailMessages } from "@/lib/db/schema";
 import { notify } from "@/lib/forum/notify";
 import { roles, userRoles } from "@/lib/db/schema";
-import { and, isNull } from "drizzle-orm";
+import { and, isNotNull, isNull, lt } from "drizzle-orm";
 
 import { domainsNeedingExpiryNotice } from "./admin-queries";
 import { reclaimExpiredBurners } from "./burner";
 import { expiryLabel, expiryStage } from "./expiry-rules";
+import { GRACE_DAYS } from "./slot-rules";
 
 /**
  * 邮箱这一块在 health 那一轮里要做的事。
@@ -29,7 +30,111 @@ import { expiryLabel, expiryStage } from "./expiry-rules";
  * 100 个域名分散在不同的注册时间上，靠人记是记不住的。
  */
 
+/**
+ * 长期箱到期 → 进宽限期 → 宽限期满 → 真的放回池子。
+ *
+ * ═════════════════════════════════════════
+ * 邮箱的宽限期是**必需的**，不是体贴
+ * ═════════════════════════════════════════
+ *
+ * 称号到期只是不能佩戴；而邮箱到期被别人抢走的话，
+ * **别人会开始收到本该给你的邮件**。那不是「失去一个装饰」，
+ * 是一条还在被使用的身份线被接管 —— 而当事人可能是因为忙了两周
+ * 没上站，或者只是没看见那条提醒。
+ *
+ * 所以到期只做一件事：改状态、记下宽限期到哪天。地址仍然是他的、
+ * 信照收，只是别人抢不走。30 天内补交年租原样恢复
+ * （`renewClaim` 会把状态改回 active）。
+ */
+function settleLongTermBoxes(now: number): { grace: number; released: number } {
+  /*
+   * ① 到期的进宽限期。
+   *
+   * 只挑 `active` 的：已经在宽限期里的不该被重新计一次，
+   * 否则它的宽限期会每天往后延一天 —— 永远不会真正到期。
+   */
+  const expiring = db
+    .select({ id: mailBoxes.id, domain: mailBoxes.domain, userId: mailBoxes.userId })
+    .from(mailBoxes)
+    .where(
+      and(
+        eq(mailBoxes.kind, "temp"),
+        eq(mailBoxes.status, "active"),
+        isNotNull(mailBoxes.expiresAt),
+        lt(mailBoxes.expiresAt, now),
+      ),
+    )
+    .all();
+
+  for (const box of expiring) {
+    db.update(mailBoxes)
+      .set({ status: "grace", graceUntil: now + GRACE_DAYS * 86_400_000, updatedAt: now })
+      .where(eq(mailBoxes.id, box.id))
+      .run();
+
+    db.insert(mailEvents)
+      .values({
+        boxId: box.id,
+        domain: box.domain,
+        event: "grace_started",
+        actorKind: "system",
+        detail: { until: now + GRACE_DAYS * 86_400_000 },
+      })
+      .run();
+
+    /*
+     * 提醒本人。**这是整条链路上唯一一次他能自己救回来的机会** ——
+     * 不提醒的话，他会在 30 天后发现地址没了，而那时候已经晚了。
+     */
+    notify({
+      userId: box.userId,
+      type: "system",
+      groupKey: `mail:grace:${box.id}`,
+      title: "你的长期邮箱到期了",
+      body: `${GRACE_DAYS} 天内续费的话地址原样保留，信也照收。过了就会放回池子，别人可以申领 —— 而那之后寄给这个地址的信会进别人的箱子。`,
+      link: "/mail/burner",
+    });
+  }
+
+  /*
+   * ② 宽限期满的真正放回池子。
+   *
+   * **删行**，不是改状态：地址的唯一性靠 `mail_boxes.address` 上那个
+   * 唯一索引保证，留着行的话别人根本申领不了 —— 而「放回池子」
+   * 这句话的全部意思就是别人能拿到它。
+   *
+   * 信跟着一起删。留着的话，一个已经不属于任何人的地址下面
+   * 挂着一堆别人的旧邮件，而下一个申领者会看到它们。
+   */
+  const dead = db
+    .select({ id: mailBoxes.id, domain: mailBoxes.domain })
+    .from(mailBoxes)
+    .where(
+      and(
+        eq(mailBoxes.kind, "temp"),
+        eq(mailBoxes.status, "grace"),
+        isNotNull(mailBoxes.graceUntil),
+        lt(mailBoxes.graceUntil, now),
+      ),
+    )
+    .all();
+
+  for (const box of dead) {
+    db.delete(mailMessages).where(eq(mailMessages.boxId, box.id)).run();
+    db.delete(mailBoxes).where(eq(mailBoxes.id, box.id)).run();
+    db.insert(mailEvents)
+      .values({ boxId: box.id, domain: box.domain, event: "released", actorKind: "system" })
+      .run();
+  }
+
+  return { grace: expiring.length, released: dead.length };
+}
+
 export interface MailSettleResult {
+  /** 这一轮有几个长期箱进了宽限期 */
+  grace?: number;
+  /** 有几个宽限期满、真的放回池子了 */
+  released?: number;
   /** 回收掉的一次性箱 */
   reclaimed: number;
   /** 这一轮报出去的到期告警 */
@@ -40,9 +145,10 @@ export interface MailSettleResult {
 
 export function settleMail(now = Date.now()): MailSettleResult {
   const reclaimed = reclaimExpiredBurners(now);
+  const longTerm = settleLongTermBoxes(now);
   const due = domainsNeedingExpiryNotice(now);
 
-  if (due.length === 0) return { reclaimed, notified: 0, domains: [] };
+  if (due.length === 0) return { reclaimed, notified: 0, domains: [], ...longTerm };
 
   /*
    * 报给谁：站长和管理员。

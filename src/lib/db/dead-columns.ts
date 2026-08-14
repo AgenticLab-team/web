@@ -162,21 +162,6 @@ export const DEAD_COLUMNS: readonly DeadColumn[] = [
     why: "DNS 体检的原始记录（查到的 MX/SPF/DMARC 原文）。体检任务本身在 P1 —— 现在三个灯全是 null，界面上显示成「还没体检过」",
   },
   {
-    column: "mail_boxes.grace_until",
-    disposition: "planned",
-    why: "长期箱到期后的 30 天宽限期。P3 的东西 —— 一次性箱到期直接销毁，没有宽限期这回事",
-  },
-  {
-    column: "mail_boxes.renewed_at",
-    disposition: "planned",
-    why: "上次续期时间。续期是长期箱（P3）才有的动作",
-  },
-  {
-    column: "mail_boxes.renew_count",
-    disposition: "planned",
-    why: "续过几次。同 renewed_at",
-  },
-  {
     column: "mail_boxes.slot_id",
     disposition: "planned",
     why: "占用的槽位。**一次性箱不占槽位**（它必须零摩擦），所以这一列要等临时箱和长期箱做了才写得进值 —— P2",

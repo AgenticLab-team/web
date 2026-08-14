@@ -436,3 +436,308 @@ describe("**自有域名上的长期地址**", () => {
     assert.equal(got.length, 1, "长期地址没收到信");
   });
 });
+
+describe("**申领：三道闸各防各的**", () => {
+  /*
+   * ═════════════════════════════════════════
+   * 等级防「新号扫光靓号池」，槽位防「一个人囤一堆」，
+   * 年租防「买完再也不用而地址永远占着」
+   * ═════════════════════════════════════════
+   *
+   * 少任何一道，剩下两道都拦不住那件事 —— 所以这一组一道一道验。
+   */
+  let claim: typeof import("@/lib/mail/claim");
+  let ledger: typeof import("@/lib/points/ledger");
+
+  before(async () => {
+    claim = await import("@/lib/mail/claim");
+    ledger = await import("@/lib/points/ledger");
+  });
+
+  /** 开一个可申领的域名，并给这个人一笔分 */
+  const setup = (opts: { tier?: "b" | "a" | "s"; points?: number } = {}) => {
+    scene();
+    dbm.db
+      .insert(schema.mailDomains)
+      .values({
+        domain: "good.icu",
+        punycode: "good.icu",
+        kind: "reserved",
+        tier: opts.tier ?? "b",
+        status: "active",
+        enabled: true,
+        allowClaim: true,
+        allowBurner: false,
+      })
+      .onConflictDoUpdate({
+        target: schema.mailDomains.domain,
+        set: { tier: opts.tier ?? "b", allowClaim: true, status: "active" },
+      })
+      .run();
+    if (opts.points) {
+      ledger.grantPoints({ userId: ME, delta: opts.points, reason: "测试铺底" });
+    }
+    return "good.icu";
+  };
+
+  it("样样都够就申领得到，而且**扣了年租、给了一年**", () => {
+    const d = setup({ tier: "b", points: 5000 });
+    const before = dbm.db.select().from(schema.users).where(eq(schema.users.id, ME)).get()!.points;
+
+    const r = claim.claimAddress({ userId: ME, domain: d, localPart: "hello" });
+    assert.ok(r.ok, r.ok ? "" : r.error);
+
+    const after = dbm.db.select().from(schema.users).where(eq(schema.users.id, ME)).get()!.points;
+    assert.equal(before - after, r.paid, "扣的分和说的不一样");
+
+    const box = dbm.db.select().from(schema.mailBoxes).where(eq(schema.mailBoxes.id, r.boxId)).get()!;
+    assert.equal(box.kind, "temp", "申领来的该是长期箱，不是一次性箱");
+    assert.ok(box.expiresAt && box.expiresAt > Date.now(), "没给到期时间");
+    assert.equal(box.muted, false, "长期地址不该静音");
+  });
+
+  it("**分不够就申领不到，而且一分都不扣**", () => {
+    /*
+     * 最要紧的是后半句。扣了分又没给地址，是这套东西里最容易
+     * 让人失去信任的一种失败。
+     */
+    const d = setup({ tier: "s", points: 10 });
+    const before = dbm.db.select().from(schema.users).where(eq(schema.users.id, ME)).get()!.points;
+    const r = claim.claimAddress({ userId: ME, domain: d, localPart: "hello" });
+    assert.equal(r.ok, false);
+    const after = dbm.db.select().from(schema.users).where(eq(schema.users.id, ME)).get()!.points;
+    assert.equal(after, before, "申领失败还扣了分");
+  });
+
+  it("**等级不够时说的是等级**，不是分不够", () => {
+    /*
+     * S 档要 L4。给足分但等级不够 —— 拒绝理由必须指向等级，
+     * 否则他会去攒分，攒够了再撞一次同一堵墙。
+     */
+    const d = setup({ tier: "s", points: 100 });   // 分不够 400，等级也不够
+    const r = claim.claimAddress({ userId: ME, domain: d, localPart: "hello" });
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.match(r.error, /L\d/, `说的不是等级：${r.error}`);
+  });
+
+  it("不接受申领的域名申领不了", () => {
+    const d = setup({ points: 5000 });
+    dbm.db
+      .update(schema.mailDomains)
+      .set({ allowClaim: false })
+      .where(eq(schema.mailDomains.domain, d))
+      .run();
+    assert.equal(claim.claimAddress({ userId: ME, domain: d, localPart: "hello" }).ok, false);
+  });
+
+  it("**同一个地址不会被两个人拿到**", () => {
+    const d = setup({ points: 5000 });
+    ledger.grantPoints({ userId: OTHER, delta: 5000, reason: "测试铺底" });
+    assert.ok(claim.claimAddress({ userId: ME, domain: d, localPart: "hello" }).ok);
+    const second = claim.claimAddress({ userId: OTHER, domain: d, localPart: "hello" });
+    assert.equal(second.ok, false, "同一个地址被开了两次");
+  });
+
+  it("**一次性箱不占槽位** —— 那两件事之间没有任何关系", () => {
+    /*
+     * 算进来的话，一个人开三个一次性箱就会发现自己申领不了，
+     * 而他完全想不明白为什么。
+     */
+    const d = setup({ points: 5000 });
+    const before = claim.slotStatus(ME).used;
+
+    /*
+     * ⚠️ 要开到**比槽位总数还多**，否则算进来也看不出差别。
+     * 第一版只开了两个，而槽位有好几个 —— 那条断言两种实现下都绿。
+     * （是变异测试发现的：把 kind 改成 ["temp","burner"] 没有红。）
+     */
+    const total = claim.slotStatus(ME).total;
+    for (let i = 0; i < total + 2; i++) burner.openBurner({ userId: ME, bypassLimits: true });
+
+    assert.equal(claim.slotStatus(ME).used, before, "一次性箱占了槽位");
+    assert.ok(
+      claim.claimAddress({ userId: ME, domain: d, localPart: "hello" }).ok,
+      "开了一堆一次性箱之后就申领不了了 —— 那两件事之间没有任何关系",
+    );
+  });
+
+  it("**槽位用完就申领不了** —— 而理由要指向槽位", () => {
+    const d = setup({ points: 99999 });
+    // 一路开到槽位用完
+    let last: ReturnType<typeof claim.claimAddress> | null = null;
+    for (let i = 0; i < 12; i++) {
+      last = claim.claimAddress({ userId: ME, domain: d, localPart: `addr${i}${i}` });
+      if (!last.ok) break;
+    }
+    assert.ok(last && !last.ok, "开了十二个都没撞到槽位上限");
+    if (last && !last.ok) assert.match(last.error, /槽位/, `说的不是槽位：${last.error}`);
+  });
+
+  it("**先扣分再建箱** —— 顺序反了的话，扣分失败时地址已经发出去了", () => {
+    /*
+     * 地址是唯一命名的：回滚意味着把一个已经显示给用户看过的地址收回去。
+     * 而扣了分建箱失败好办得多 —— 冲正那一笔，账面上什么都没发生。
+     *
+     * 这一条读源码而不是构造失败：要在真库上让 insert 失败又不让
+     * 前面那些检查先拦下来，得挖一个很假的场景，而那种测试
+     * 保护的是那个场景本身，不是这条顺序。
+     */
+    const code = readCode("lib/mail/claim.ts");
+    const paidAt = code.indexOf("const paid = grantPoints(");
+    const insertAt = code.indexOf(".insert(mailBoxes)");
+    assert.notEqual(paidAt, -1, "找不到扣分那一步");
+    assert.notEqual(insertAt, -1, "找不到建箱那一步");
+    assert.ok(paidAt < insertAt, "建箱排在扣分前面了");
+    // 而且扣分失败必须当场返回，不能往下走
+    assert.match(code, /if \(!paid\.ok\) return/, "扣分失败之后还往下走了");
+  });
+
+  it("申领之后槽位用量涨了一个", () => {
+    const d = setup({ points: 5000 });
+    const before = claim.slotStatus(ME).used;
+    assert.ok(claim.claimAddress({ userId: ME, domain: d, localPart: "hello" }).ok);
+    assert.equal(claim.slotStatus(ME).used, before + 1);
+  });
+});
+
+describe("**到期 → 宽限期 → 放回池子**", () => {
+  /*
+   * ═════════════════════════════════════════
+   * 邮箱的宽限期是必需的，不是体贴
+   * ═════════════════════════════════════════
+   *
+   * 称号到期只是不能佩戴；而邮箱到期被别人抢走的话，
+   * **别人会开始收到本该给你的邮件** —— 那不是失去一个装饰，
+   * 是一条还在被使用的身份线被接管。
+   */
+  let claim: typeof import("@/lib/mail/claim");
+  let settle: typeof import("@/lib/mail/settle");
+  let ledger: typeof import("@/lib/points/ledger");
+  let rules: typeof import("@/lib/mail/slot-rules");
+
+  before(async () => {
+    claim = await import("@/lib/mail/claim");
+    settle = await import("@/lib/mail/settle");
+    ledger = await import("@/lib/points/ledger");
+    rules = await import("@/lib/mail/slot-rules");
+  });
+
+  const DAY = 86_400_000;
+
+  /** 申领一个，并把它的到期日推到过去 */
+  const expired = () => {
+    scene();
+    dbm.db
+      .insert(schema.mailDomains)
+      .values({
+        domain: "good.icu",
+        punycode: "good.icu",
+        kind: "reserved",
+        tier: "b",
+        status: "active",
+        enabled: true,
+        allowClaim: true,
+      })
+      .onConflictDoUpdate({ target: schema.mailDomains.domain, set: { allowClaim: true } })
+      .run();
+    ledger.grantPoints({ userId: ME, delta: 5000, reason: "测试铺底" });
+    const r = claim.claimAddress({ userId: ME, domain: "good.icu", localPart: "hello" });
+    assert.ok(r.ok, r.ok ? "" : r.error);
+    dbm.db
+      .update(schema.mailBoxes)
+      .set({ expiresAt: Date.now() - DAY })
+      .where(eq(schema.mailBoxes.id, r.boxId))
+      .run();
+    return r.boxId;
+  };
+
+  const boxOf = (id: string) =>
+    dbm.db.select().from(schema.mailBoxes).where(eq(schema.mailBoxes.id, id)).get();
+
+  it("到期先进宽限期，**地址还在、信照收**", () => {
+    const id = expired();
+    settle.settleMail();
+    const b = boxOf(id);
+    assert.ok(b, "到期就把箱子删了 —— 别人会开始收到本该给他的邮件");
+    assert.equal(b.status, "grace");
+    assert.ok(b.graceUntil && b.graceUntil > Date.now(), "没记宽限期到哪天");
+  });
+
+  it("**宽限期不会每天往后延** —— 只挑 active 的进", () => {
+    /*
+     * 已经在宽限期里的又被计一次的话，它的宽限期会每天延一天，
+     * 于是永远不会真正到期 —— 一个「放不回池子」的池子。
+     */
+    const id = expired();
+    settle.settleMail();
+    const first = boxOf(id)!.graceUntil;
+    settle.settleMail();
+    assert.equal(boxOf(id)!.graceUntil, first, "宽限期被延后了");
+  });
+
+  it("宽限期里续上就原样恢复", () => {
+    const id = expired();
+    settle.settleMail();
+    assert.equal(boxOf(id)!.status, "grace");
+
+    const r = claim.renewClaim({ userId: ME, boxId: id });
+    assert.ok(r.ok, r.ok ? "" : r.error);
+    const b = boxOf(id)!;
+    assert.equal(b.status, "active", "续上了还是一副快没了的样子");
+    assert.equal(b.graceUntil, null);
+    assert.ok(b.expiresAt! > Date.now());
+    assert.equal(b.renewCount, 1);
+  });
+
+  it("**续期从原到期日顺延** —— 提前续费不吃亏", () => {
+    scene();
+    const now = 1_000 * DAY;
+    const future = now + 100 * DAY;
+    assert.equal(rules.renewedExpiry(future, now), future + rules.RENT_DAYS * DAY);
+  });
+
+  it("**宽限期满才真的放回池子，而且信一起删**", () => {
+    /*
+     * 留着行的话别人根本申领不了（address 上有唯一索引），
+     * 而「放回池子」这句话的全部意思就是别人能拿到它。
+     * 信也要删：一个已经不属于任何人的地址下面挂着别人的旧邮件，
+     * 下一个申领者会看到它们。
+     */
+    const id = expired();
+    settle.settleMail();
+    dbm.db
+      .update(schema.mailBoxes)
+      .set({ graceUntil: Date.now() - DAY })
+      .where(eq(schema.mailBoxes.id, id))
+      .run();
+    ingest.ingestMessage({
+      envelopeFrom: "x@example.com",
+      envelopeTo: "hello@good.icu",
+      rfcMessageId: "<grace@example.com>",
+      subject: "宽限期里收到的",
+      text: "还收得到",
+      size: 10,
+    });
+
+    settle.settleMail();
+    assert.equal(boxOf(id), undefined, "宽限期满了还占着地址");
+    const left = dbm.db
+      .select()
+      .from(schema.mailMessages)
+      .where(eq(schema.mailMessages.boxId, id))
+      .all();
+    assert.equal(left.length, 0, "地址放回池子了，旧信还留着 —— 下一个人会看到");
+  });
+
+  it("**续期不查等级也不查槽位** —— 掉级就续不了费是最糟的结果", () => {
+    /*
+     * 那两道闸防的是「拿到新地址」。这个地址已经是他的了 ——
+     * 因为掉了一级就续不了、然后被别人抢走，是这套规则能造出的
+     * 最糟的一种结果。
+     */
+    const code = readCode("lib/mail/claim.ts");
+    const fn = code.slice(code.indexOf("export function renewClaim"));
+    assert.equal(/canClaim\(/.test(fn), false, "续期也去查三道闸了");
+    assert.equal(/slotStatus\(/.test(fn), false, "续期也去查槽位了");
+  });
+});
