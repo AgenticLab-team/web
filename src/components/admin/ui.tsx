@@ -223,7 +223,25 @@ export function AdminChip({
       type="button"
       aria-pressed={active}
       {...rest}
-      className={`tap-target t-footnote inline-flex min-h-8 shrink-0 items-center gap-1 rounded-[var(--radius-pill)] px-3 font-medium transition-colors disabled:opacity-40 ${
+      /*
+        * `max-w-full` + `truncate`：标签的长度**不受控**。
+        *
+        * 群发那一页拿它列群名，而群名里有「把群名起得很长的那个群 ·
+        * 二零二六年秋季 · 仅限内部讨论」这种 —— 加上 `shrink-0`，
+        * 一颗药丸就把整页顶到 435px 宽（视口 390），
+        * 连固定的顶栏和底部导航都跟着被拽出去。
+        *
+        * ⚠️ **不能用 `truncate`。**
+        *
+        * 第一版加了它，页面确实不横滚了，而命中区从 44 掉回 32 ——
+        * `truncate` 带着 `overflow: hidden`，而 `.tap-target` 靠一个
+        * 往外撑的伪元素扩大可点范围，正好被它剪掉。
+        * 一个修 A 的改动顺手废掉了 B，两边都在同一个 className 里。
+        *
+        * 所以只给宽度上限，让长标签在药丸里换行 —— 高一点没关系，
+        * 顶出视口才有关系。
+        */
+      className={`tap-target t-footnote inline-flex min-h-8 max-w-full shrink-0 items-center gap-1 rounded-[var(--radius-pill)] px-3 font-medium transition-colors disabled:opacity-40 ${
         active
           ? "bg-[var(--ink)] text-[var(--canvas)]"
           : "bg-[var(--fill)] text-[var(--ink-secondary)] hover:bg-[var(--fill-strong)]"

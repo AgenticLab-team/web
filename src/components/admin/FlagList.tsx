@@ -14,6 +14,7 @@ import {
 } from "@/components/admin/ui";
 import { setFlagEnabled, setFlagRollout } from "@/lib/flags/actions";
 import type { Rollout } from "@/lib/flags/registry";
+import { Switch } from "@/components/ui/Switch";
 
 /**
  * 功能开关列表。
@@ -145,22 +146,7 @@ function Row({ flag }: { flag: FlagView }) {
           * 尺寸从 24×40 提到 31×51 —— 和站里其它开关一致，
           * 也正好过 44px 那条线（宽度够，高度靠行高兜）。
           */}
-        <button
-          type="button"
-          role="switch"
-          aria-checked={flag.enabled}
-          aria-label={`${flag.label}：${flag.enabled ? "已开启" : "已关闭"}`}
-          disabled={pending}
-          onClick={() => run(() => setFlagEnabled(flag.key, !flag.enabled))}
-          className={`relative h-[31px] w-[51px] shrink-0 rounded-full transition-colors disabled:opacity-50 ${
-            flag.enabled ? "bg-[var(--accent)]" : "bg-[var(--fill-strong)]"
-          }`}
-        >
-          <span
-            className="switch-knob absolute left-[2px] top-[2px] h-[27px] w-[27px] rounded-full bg-[var(--surface)] shadow-sm"
-            style={{ transform: flag.enabled ? "translateX(20px)" : "translateX(0)" }}
-          />
-        </button>
+        <Switch on={flag.enabled} onToggle={() => run(() => setFlagEnabled(flag.key, !flag.enabled))} label={`${flag.label}：${flag.enabled ? "已开启" : "已关闭"}`} disabled={pending} />
       </div>
 
       {flag.enabled && !planned && (

@@ -1,5 +1,6 @@
 "use client";
 
+import { Switch } from "@/components/ui/Switch";
 import { useState, useTransition } from "react";
 
 import { AdminActions, AdminButton, adminFieldClass } from "@/components/admin/ui";
@@ -63,26 +64,15 @@ export function ModuleToggle({
 
   return (
     <>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={on}
-        aria-label={name}
-        disabled={pending}
-        onClick={() => {
+      <Switch
+        on={on}
+        onToggle={() => {
           if (on) setConfirming(true);
           else commit(true, "恢复开启");
         }}
-        className="relative h-[31px] w-[51px] shrink-0 rounded-full transition disabled:opacity-45"
-        style={{ background: on ? "var(--success)" : "var(--fill-strong, var(--fill))" }}
-      >
-        {/* 位移走 translateX 不走 left —— 理由见 globals.css 的 .switch-knob */}
-        {/* 滑块用 --surface 而不是纯白 —— 暗色下白滑块亮得像颗灯泡 */}
-        <span
-          className="switch-knob absolute left-[2px] top-[2px] h-[27px] w-[27px] rounded-full bg-[var(--surface)] shadow-sm"
-          style={{ transform: on ? "translateX(20px)" : "translateX(0)" }}
-        />
-      </button>
+        label={name}
+        disabled={pending}
+      />
 
       {confirming && (
         <div

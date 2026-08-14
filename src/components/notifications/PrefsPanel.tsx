@@ -1,5 +1,6 @@
 "use client";
 
+import { Switch } from "@/components/ui/Switch";
 import { Check, Lock } from "lucide-react";
 import { useState, useTransition } from "react";
 
@@ -99,44 +100,25 @@ export function PrefsPanel({ initial, showPush = false }: { initial: PrefsMap; s
                     </p>
                     {showPush && on && (
                       <label className="mt-1.5 flex w-fit items-center gap-2">
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={pushOn}
-                          aria-label={`${meta.label} · 推送到设备`}
+                        <Switch
+                          on={pushOn}
+                          onToggle={() => toggle(meta.type, "push")}
+                          label={`${meta.label} · 推送到设备`}
                           disabled={pending}
-                          onClick={() => toggle(meta.type, "push")}
-                          className="relative h-[22px] w-[38px] shrink-0 rounded-full transition disabled:opacity-45"
-                          style={{
-                            background: pushOn ? "var(--accent)" : "var(--fill-strong, var(--fill))",
-                          }}
-                        >
-                          {/* 位移走 translateX 不走 left —— 理由见 globals.css 的 .switch-knob */}
-                          <span
-                            className="switch-knob absolute left-[2px] top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow-sm"
-                            style={{ transform: pushOn ? "translateX(16px)" : "translateX(0)" }}
-                          />
-                        </button>
+                          size="sm"
+                        />
                         <span className="t-caption text-[var(--ink-tertiary)]">推送到设备</span>
                       </label>
                     )}
                   </div>
 
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={on}
-                    aria-label={meta.label}
-                    disabled={locked || pending}
-                    onClick={() => toggle(meta.type)}
-                    className="relative mt-0.5 h-[31px] w-[51px] shrink-0 rounded-full transition disabled:opacity-45"
-                    style={{ background: on ? "var(--success)" : "var(--fill-strong, var(--fill))" }}
-                  >
-                    <span
-                      className="switch-knob absolute left-[2px] top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-sm"
-                      style={{ transform: on ? "translateX(20px)" : "translateX(0)" }}
-                    />
-                  </button>
+                  <Switch
+                    on={on}
+                    onToggle={() => toggle(meta.type, "site")}
+                    label={meta.label}
+                    disabled={pending}
+                    className="mt-0.5"
+                  />
                 </div>
               );
             })}

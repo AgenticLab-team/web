@@ -10,6 +10,7 @@ import { setAutoRenew } from "@/lib/titles/renew-actions";
 import type { OwnedTitle } from "@/lib/titles/queries";
 import { rarityColor, rarityLabel } from "@/lib/titles/rules";
 import { TitleIcon } from "./TitleIcon";
+import { Switch } from "@/components/ui/Switch";
 
 /**
  * 称号架。
@@ -130,24 +131,7 @@ export function TitleShelf({ titles }: { titles: OwnedTitle[] }) {
                 </p>
               </div>
 
-              <button
-                type="button"
-                role="switch"
-                aria-checked={title.autoRenew}
-                aria-label={`${title.name} 自动续费`}
-                disabled={pending || title.renewPrice === null}
-                onClick={() => flipRenew(title)}
-                className="relative mt-0.5 h-[31px] w-[51px] shrink-0 rounded-full transition disabled:opacity-40"
-                style={{
-                  background: title.autoRenew ? "var(--success)" : "var(--fill-strong, var(--fill))",
-                }}
-              >
-                {/* 位移走 translateX 不走 left —— 理由见 globals.css 的 .switch-knob */}
-                <span
-                  className="switch-knob absolute left-[2px] top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-sm"
-                  style={{ transform: title.autoRenew ? "translateX(20px)" : "translateX(0)" }}
-                />
-              </button>
+              <Switch on={title.autoRenew} onToggle={() => flipRenew(title)} label={`${title.name} 自动续费`} disabled={pending || title.renewPrice === null} />
             </div>
           ))}
         </div>

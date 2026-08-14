@@ -163,7 +163,7 @@ export function BroadcastComposer({
 
       {channel === "site" ? (
         <div className="space-y-2">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-x-1.5 gap-y-3.5">
           {DISPLAYS.map(({ key, label }) => (
             <AdminChip key={key} active={display === key} onClick={() => setDisplay(key)}>
               {label}
@@ -177,7 +177,7 @@ export function BroadcastComposer({
           {DISPLAYS.find((d) => d.key === display)?.detail}
         </p>
 
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-3.5">
           <span className="t-caption2 text-[var(--ink-quaternary)]">发给</span>
           <AdminChip active={targetRole === null} onClick={() => setTargetRole(null)}>
             全体
@@ -204,7 +204,7 @@ export function BroadcastComposer({
           */}
         {siteGroups.length > 0 && (
           <div className="space-y-1.5 pt-1">
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-3.5">
               <span className="t-caption2 text-[var(--ink-quaternary)]">限定到群</span>
               <AdminChip active={targets.size === 0} onClick={() => setTargets(new Set())}>
                 不限

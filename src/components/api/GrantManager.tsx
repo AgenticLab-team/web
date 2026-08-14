@@ -161,7 +161,20 @@ export function GrantManager({
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,23rem)_minmax(0,1fr)] lg:items-start lg:gap-6">
       {/* ── 左：发一条新授权 ─────────────────────────── */}
-      <div className="lg:sticky lg:top-16">
+      {/*
+        * `min-w-0` 是**正确性**，不是样式（和 `StatTile` 上那段注释同一回事）。
+        *
+        * 这个 div 是外面那个 grid 的直接子项，而 grid item 默认
+        * `min-width: auto` —— 放不下时它不收缩，而是把自己那一列顶宽。
+        * 里面是一串人名和群名（长度不受控），min-content 算出来 510px，
+        * 于是 358px 的容器里长出一根 510px 的列：
+        * 整页 `scrollWidth` 527 > 视口 390，**手机上整个后台横着滑**，
+        * 连固定的顶栏和底部导航都被拽出去。
+        *
+        * `me/api/page.tsx` 里那个同类容器早就带着 `min-w-0` ——
+        * 有人踩过、在自己那一处修好了，而这一处没跟上。
+        */}
+      <div className="min-w-0 lg:sticky lg:top-16">
         <Panel title="给一个人发送权限">
           {/* ① 给谁 */}
           <Field label="授权给谁">
@@ -198,7 +211,20 @@ export function GrantManager({
               onChange={(e) => setUserId(e.target.value)}
               size={Math.min(6, matched.length)}
               aria-label="从搜索结果里选人"
-              className="t-body mt-1.5 w-full rounded-[var(--radius-control)] bg-[var(--surface-sunken)] p-1.5 outline-none"
+              /*
+                * `min-w-0` 是**正确性**，不是样式。
+                *
+                * `<select>` 的最小宽度由**最长的那个选项**决定，而 `w-full`
+                * （`width: 100%`）压不过 `min-width: auto`。这里列的是人名，
+                * 长度不受控 —— 种子数据里那个「一个把自己的群昵称写得非常非常
+                * 长的人你看它会不会撑破卡片」把这个 select 撑到 479px，
+                * 于是整页 `scrollWidth` 527 > 视口 390：**手机上整个后台横着滑**，
+                * 连固定的顶栏和底部导航都被拽出去了。
+                *
+                * 同一页另一个 select 早就带着 `min-w-0`（172px，规规矩矩）——
+                * 修法一直就在旁边，只是没传过来。
+                */
+              className="t-body mt-1.5 w-full min-w-0 rounded-[var(--radius-control)] bg-[var(--surface-sunken)] p-1.5 outline-none"
             >
               {matched.map((p) => (
                 <option key={p.id} value={p.id} className="rounded-[var(--radius-chip)] px-2 py-1">
@@ -234,7 +260,7 @@ export function GrantManager({
                 onClick={() =>
                   setPicked(allPicked ? new Set() : new Set(groups.map((g) => g.convId)))
                 }
-                className="t-caption font-medium text-[var(--accent)] transition active:opacity-60"
+                className="tap-target t-caption font-medium text-[var(--accent)] transition active:opacity-60"
               >
                 {allPicked ? "全不选" : "全选"}
               </button>

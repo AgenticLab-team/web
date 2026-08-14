@@ -2,6 +2,7 @@
 
 import { Download, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { Switch } from "@/components/ui/Switch";
 
 /**
  * 「下载我的全部数据」的按钮与状态。
@@ -77,23 +78,7 @@ export function DataExportPanel({ willTruncate }: { willTruncate: boolean }) {
               这样的代号）。关掉就只导你自己发的。
             </p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={withContext}
-            aria-label="包含上下文"
-            disabled={working}
-            onClick={() => setWithContext(!withContext)}
-            className="relative mt-0.5 h-[31px] w-[51px] shrink-0 rounded-full transition disabled:opacity-45"
-            style={{
-              background: withContext ? "var(--success)" : "var(--fill-strong, var(--fill))",
-            }}
-          >
-            <span
-              className="switch-knob absolute left-[2px] top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-sm"
-              style={{ transform: withContext ? "translateX(20px)" : "translateX(0)" }}
-            />
-          </button>
+          <Switch on={withContext} onToggle={() => setWithContext(!withContext)} label="包含上下文" disabled={working} />
         </div>
       </div>
 

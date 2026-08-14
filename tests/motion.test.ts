@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
+import { srcRoot, stripComments, walkSource } from "./_source";
+
 /**
  * 动效系统。
  *
@@ -158,18 +160,30 @@ describe("铁律二：只动合成器属性（微信 webview 里的低端机才�
      * left 固定为 2px，位移交给 transform。
      */
     assert.match(cssCode, /\.switch-knob\s*\{\s*transition:\s*transform var\(--motion-shift\)/);
-    const knobs = [
-      "components/admin/ModuleToggle.tsx",
-      "components/notifications/PrefsPanel.tsx",
-      "components/titles/TitleShelf.tsx",
-      // 隐私开关那三个走的是同一个组件 —— 隐身也并进去了
-      "components/me/PrivacyToggle.tsx",
-    ];
-    for (const f of knobs) {
-      const code = src(f);
-      assert.match(code, /switch-knob/, `${f} 的滑块没用 .switch-knob`);
-      assert.doesNotMatch(code, /style=\{\{\s*left:/, `${f} 又在用 left 做动画`);
+    /*
+     * 原来这里是挨个文件检查 —— 而那正好是问题本身：
+     * 同一个开关被手写了**七遍**，测试也就跟着写了一份名单。
+     *
+     * 七份已经漂开了：五份滑块是 `bg-white`，两份是 `bg-[var(--surface)]`，
+     * 而后者旁边留着一句「暗色下白滑块亮得像颗灯泡」——
+     * 有人发现了、在自己那一处修好了，另外五处至今还亮着。
+     * **修复不会传播，只有 bug 会。**
+     *
+     * 现在只有一个 `components/ui/Switch.tsx`，所以这条改成两句：
+     * 那一个要用 translateX，而**别人不许再手写一个**。
+     */
+    const shared = src("components/ui/Switch.tsx");
+    assert.match(shared, /switch-knob/, "共用的 Switch 没用 .switch-knob");
+    assert.doesNotMatch(shared, /style=\{\{\s*left:/, "共用的 Switch 又在用 left 做动画");
+
+    const rogue: string[] = [];
+    for (const file of walkSource(srcRoot())) {
+      if (file.endsWith("/components/ui/Switch.tsx")) continue;
+      if (/role=["\']switch["\']/.test(stripComments(readFileSync(file, "utf8")))) {
+        rogue.push(file.slice(file.indexOf("/src/") + 1));
+      }
     }
+    assert.deepEqual(rogue, [], "这些地方又手写了开关，用 components/ui/Switch");
   });
 
   it("进度条走 .progress-fill（translateX），不再 transition-[width]", () => {

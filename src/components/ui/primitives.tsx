@@ -426,7 +426,8 @@ export function BackLink({ href, children }: { href: string; children: React.Rea
     <>
       <Link
         href={href}
-        className="t-subhead -ml-1 mt-6 inline-flex items-center gap-0.5 text-[var(--accent)] transition active:opacity-60"
+        /* 每个子页顶上都有它，而它只有 20px 高 —— 手写过 12 次的东西，改一处管一片 */
+        className="tap-target t-subhead -ml-1 mt-6 inline-flex items-center gap-0.5 text-[var(--accent)] transition active:opacity-60"
       >
         <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
         {children}

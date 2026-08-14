@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 
 import { setPrivacySwitch } from "@/lib/privacy/actions";
 import type { PrivacyKey } from "@/lib/privacy/rules";
+import { Switch } from "@/components/ui/Switch";
 
 /**
  * 一个隐私开关。
@@ -63,22 +64,7 @@ export function PrivacyToggle({
           <p className="t-body">{label}</p>
           <p className="t-caption mt-0.5 leading-relaxed text-[var(--ink-tertiary)]">{detail}</p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={on}
-          aria-label={label}
-          disabled={pending}
-          onClick={toggle}
-          className="relative mt-0.5 h-[31px] w-[51px] shrink-0 rounded-full transition disabled:opacity-45"
-          style={{ background: on ? "var(--success)" : "var(--fill-strong, var(--fill))" }}
-        >
-          {/* 位移走 translateX 不走 left —— 理由见 globals.css 的 .switch-knob */}
-          <span
-            className="switch-knob absolute left-[2px] top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-sm"
-            style={{ transform: on ? "translateX(20px)" : "translateX(0)" }}
-          />
-        </button>
+        <Switch on={on} onToggle={toggle} label={label} disabled={pending} className="mt-0.5" />
       </div>
 
       {/*

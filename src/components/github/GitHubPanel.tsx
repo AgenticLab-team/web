@@ -1,5 +1,6 @@
 "use client";
 
+import { Switch } from "@/components/ui/Switch";
 import { FolderGit2, RefreshCw } from "lucide-react";
 import { useState, useTransition } from "react";
 
@@ -206,33 +207,3 @@ export function GitHubPanel(props: GithubPanelProps) {
   );
 }
 
-/** 和成员目录那个开关同一套样式与无障碍属性 —— 两页各写一套就会长得不一样 */
-function Switch({
-  label,
-  on,
-  disabled,
-  onToggle,
-}: {
-  label: string;
-  on: boolean;
-  disabled: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onToggle}
-      className="relative mt-0.5 h-[31px] w-[51px] shrink-0 rounded-full transition disabled:opacity-45"
-      style={{ background: on ? "var(--success)" : "var(--fill-strong, var(--fill))" }}
-    >
-      <span
-        className="switch-knob absolute left-[2px] top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-sm"
-        style={{ transform: on ? "translateX(20px)" : "translateX(0)" }}
-      />
-    </button>
-  );
-}
