@@ -2,14 +2,25 @@
 #
 # 装 SMTP 收信网关。**同机和分机都用这一个脚本** —— 差别只在 SITE_URL。
 #
-#   同机（现在）：SITE_URL=http://127.0.0.1:3000 bash install.sh
-#   分机（以后）：SITE_URL=https://agenticlab.sh bash install.sh
+#   SITE_URL=https://agenticlab.sh bash install.sh
+#
+# ⚠ **同机也用公网地址，别写 `http://127.0.0.1:3000`。**
+#
+# 站点是蓝绿部署的：两份构建轮流在 3000 和 3001 上跑，
+# 每次 `npm run deploy` 换一边。写死端口的话，网关在下一次部署之后
+# 就开始往一个已经停掉的端口投递 —— 而症状是「隔一次部署收不到信」，
+# 没有人会往部署上想。
+#
+# 走公网多一跳（nginx → CDN → 回源），换来的是它永远指向活着的那一边。
 #
 # 幂等，可以反复跑。
 set -euo pipefail
 
-HOME_DIR=/home/mailgw/mail-gateway
-SITE_URL="${SITE_URL:-http://127.0.0.1:3000}"
+# 装在 /opt 而不是 mailgw 的家目录：服务单元里开着 ProtectHome=true，
+# 它会让 /home 整个不可见 —— 装在家里的话 systemd 连 chdir 都做不到，
+# 而报错是「Permission denied」，指向一个根本没问题的目录权限。
+HOME_DIR=/opt/agenticlab-mail
+SITE_URL="${SITE_URL:-https://agenticlab.sh}"
 SECRET="${MAIL_INGRESS_SECRET:-}"
 
 if [[ -z "$SECRET" ]]; then
@@ -24,7 +35,7 @@ fi
 # 不用站点那个账号跑：网关是**唯一一个直接暴露在公网上的进程**
 # （25 端口对全世界开着）。它被打穿的时候，不该顺手拿到数据库。
 id -u mailgw >/dev/null 2>&1 || sudo useradd -m -s /usr/sbin/nologin mailgw
-sudo -u mailgw mkdir -p "$HOME_DIR"
+sudo mkdir -p "$HOME_DIR" && sudo chown mailgw:mailgw "$HOME_DIR"
 
 sudo cp gateway.mjs package.json "$HOME_DIR/"
 sudo chown -R mailgw:mailgw "$HOME_DIR"
@@ -37,7 +48,14 @@ SITE_URL=$SITE_URL
 EOF
 sudo chmod 600 "$HOME_DIR/.env"
 
-sudo cp agenticlab-mail.service /etc/systemd/system/
+# node 的绝对路径按这台机器实际的来填。
+#
+# systemd 不读 PATH，ExecStart 必须是绝对路径；而 node 的位置
+# 因装法而异（apt 装在 /usr/bin，官方 tarball 装在 /usr/local/bin）。
+# 写死一个的后果是 `status=203/EXEC` —— 那个错误码不会提到 node。
+NODE_BIN="$(command -v node)"
+[[ -n "$NODE_BIN" ]] || { echo "找不到 node"; exit 1; }
+sed "s|__NODE__|$NODE_BIN|" agenticlab-mail.service | sudo tee /etc/systemd/system/agenticlab-mail.service >/dev/null
 sudo systemctl daemon-reload
 sudo systemctl enable --now agenticlab-mail
 

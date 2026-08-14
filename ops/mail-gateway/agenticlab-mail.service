@@ -6,9 +6,15 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=mailgw
-WorkingDirectory=/home/mailgw/mail-gateway
-EnvironmentFile=/home/mailgw/mail-gateway/.env
-ExecStart=/usr/bin/node gateway.mjs
+WorkingDirectory=/opt/agenticlab-mail
+EnvironmentFile=/opt/agenticlab-mail/.env
+# ⚠ 路径由 install.sh 在装的时候按 `command -v node` 填进来。
+#
+# 这里原来写死 `/usr/bin/node`，而源站上 node 装在
+# `/usr/local/bin/node`（nodesource 的官方 tarball 就装那儿）——
+# systemd 起不来，报的是 `status=203/EXEC`，
+# 一个不提「找不到 node」的错误码。
+ExecStart=__NODE__ gateway.mjs
 Restart=always
 RestartSec=5
 
@@ -21,8 +27,19 @@ NoNewPrivileges=true
 # 这台机器上没有别的东西，锁死也不影响什么
 PrivateTmp=true
 ProtectSystem=strict
+
+# ⚠ `ProtectHome=true` 让 **/home 整个不可见** —— 包括 mailgw 自己的家。
+#
+# 装的地方原来是 `/home/mailgw/mail-gateway`，于是这两条直接打架：
+# 硬化把家目录藏了，而 WorkingDirectory 指在里面。
+# systemd 报的是 `status=200/CHDIR`「Permission denied」，
+# 而目录权限本身完全正常 —— `sudo -u mailgw cd` 进得去。
+# 也就是说**照着报错去查权限，查不出任何问题**。
+#
+# 所以搬到 /opt（和 ops/ash-sshd.service 同一个位置口径）：
+# 那儿不受 ProtectHome 影响，硬化一条都不用松。
 ProtectHome=true
-ReadWritePaths=/home/mailgw/mail-gateway
+ReadWritePaths=/opt/agenticlab-mail
 ProtectKernelTunables=true
 ProtectControlGroups=true
 RestrictAddressFamilies=AF_INET AF_INET6
