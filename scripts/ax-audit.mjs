@@ -21,7 +21,7 @@
 //   node scripts/ax-audit.mjs <基址> <路径…>
 //
 // `AUDIT_COOKIE` 给会话，`AUDIT_SIZE` 换视口。
-import { launch, setViewport, sleep } from "./lib/cdp.mjs";
+import { assertHydrated, launch, setViewport, sleep } from "./lib/cdp.mjs";
 
 const [base, ...paths] = process.argv.slice(2);
 if (!base || paths.length === 0) {
@@ -70,6 +70,40 @@ async function describe(cdp, backendNodeId) {
   }
 }
 
+/**
+ * 这个节点是不是长在 Next 的开发覆盖层里。
+ *
+ * `<nextjs-portal>` 是 dev 专有的错误提示 / 指示器，线上根本不存在，
+ * 而它里面有个**没有名字的 40×40 logo**，会被稳稳报成一条无障碍问题。
+ *
+ * 它还藏在影子 DOM 里 —— `document.querySelectorAll` 穿不过去，
+ * 所以我第一次照着报告去页面上找那个 svg，找不到。
+ * 而无障碍树是穿得过去的：读屏看得见影子里的东西。
+ *
+ * 往上走时要 `parentNode || host`：影子根的 parentNode 是 null，
+ * 只有 host 能跨回宿主那一侧。
+ */
+async function inDevOverlay(cdp, backendNodeId) {
+  try {
+    const { object } = await cdp.send("DOM.resolveNode", { backendNodeId });
+    const { result } = await cdp.send("Runtime.callFunctionOn", {
+      objectId: object.objectId,
+      returnByValue: true,
+      functionDeclaration: `function () {
+        let n = this;
+        while (n) {
+          if (n.tagName && n.tagName.toLowerCase() === "nextjs-portal") return true;
+          n = n.parentNode || n.host;
+        }
+        return false;
+      }`,
+    });
+    return Boolean(result.value);
+  } catch {
+    return false;
+  }
+}
+
 let problems = 0;
 for (const path of paths) {
   const url = base.replace(/\/$/, "") + path;
@@ -84,6 +118,8 @@ for (const path of paths) {
     await cdp.send("Accessibility.enable");
     await cdp.send("Page.navigate", { url });
     await sleep(13_000);
+
+    await assertHydrated(cdp, path);
 
     const { nodes } = await cdp.send("Accessibility.getFullAXTree");
     if (!nodes || nodes.length < 20) {
@@ -151,6 +187,7 @@ for (const path of paths) {
     const out = [];
     for (const l of lines) {
       if (l.kind === "noname") {
+        if (await inDevOverlay(cdp, l.backendNodeId)) continue;   // dev 覆盖层，线上没有
         out.push(`    没有名字的 ${l.role}：${await describe(cdp, l.backendNodeId)}`);
       } else if (l.kind === "main") {
         out.push(`    这一页有 ${l.count} 个 main 地标（要正好 1 个）`);

@@ -25,7 +25,7 @@
 //   node scripts/focus-audit.mjs <基址> <路径…>
 //
 // `AUDIT_COOKIE` 给会话，`AUDIT_DARK=1` 查深色，`AUDIT_SIZE=390,1600` 查手机档。
-import { evaluate, launch, setViewport, sleep } from "./lib/cdp.mjs";
+import { assertHydrated, evaluate, launch, setViewport, sleep } from "./lib/cdp.mjs";
 
 const [base, ...paths] = process.argv.slice(2);
 if (!base || paths.length === 0) {
@@ -66,9 +66,19 @@ const baselineJs = `(() => {
   return out;
 })()`;
 
+/*
+ * `<nextjs-portal>` 要跳过 —— 那是 Next **开发期**的错误覆盖层，
+ * 线上根本不存在。它可聚焦、又量不出尺寸，于是每一页都会被报一条。
+ *
+ * 这一条是页面**真的水合之后**才冒出来的：在没水合的页面上
+ * 那个覆盖层还没挂载，于是它一直藏着。
+ */
+const DEV_ONLY = "nextjs-portal";
+
 const focusedJs = `(() => {
   const el = document.activeElement;
   if (!el || el === document.body || el === document.documentElement) return null;
+  if (el.tagName.toLowerCase() === "${DEV_ONLY}" || el.closest("${DEV_ONLY}")) return null;
   const s = getComputedStyle(el);
   const r = el.getBoundingClientRect();
   return {
@@ -112,6 +122,8 @@ for (const path of paths) {
     await cdp.send("Page.enable");
     await cdp.send("Page.navigate", { url });
     await sleep(13_000);
+
+    await assertHydrated(cdp, path);
 
     const baseline = await evaluate(cdp, baselineJs);
     if (!baseline || baseline.length < 3) {

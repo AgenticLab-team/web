@@ -66,9 +66,21 @@ export async function launch({ width = 1440, height = 1600 } = {}) {
 
   const ws = new WebSocket(wsUrl);
   const pending = new Map();
+  /*
+   * 事件订阅。
+   *
+   * 有些东西**只以事件的形式出现，问是问不到的** ——
+   * 页面在控制台里喊的话、抛出来的异常、失败的请求。
+   * 等页面加载完再去查，那些消息早就过去了。
+   */
+  const listeners = new Map();
   let id = 0;
   ws.addEventListener("message", (e) => {
     const msg = JSON.parse(e.data);
+    if (msg.method) {
+      for (const fn of listeners.get(msg.method) ?? []) fn(msg.params);
+      return;
+    }
     const p = pending.get(msg.id);
     if (!p) return;
     pending.delete(msg.id);
@@ -97,7 +109,13 @@ export async function launch({ width = 1440, height = 1600 } = {}) {
     rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   };
 
-  return { send, close };
+  /** 订阅一个协议事件。要在触发它的动作**之前**订阅 */
+  const on = (method, fn) => {
+    if (!listeners.has(method)) listeners.set(method, []);
+    listeners.get(method).push(fn);
+  };
+
+  return { send, on, close };
 }
 
 /**
@@ -142,5 +160,42 @@ export async function setViewport(cdp, { width, height }) {
   });
   if (width < 700) {
     await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+  }
+}
+
+/*
+ * ═════════════════════════════════════════
+ * 页面**水合了没有** —— 这一晚上最贵的一课
+ * ═════════════════════════════════════════
+ *
+ * 我这一整晚的浏览器审计都跑在 `127.0.0.1:3051` 上，而 Next 16 的
+ * 开发期跨源保护默认只认启动时那个 hostname（`localhost`）——
+ * 于是 `/_next/static/chunks/*` 全被 403 掉。
+ *
+ * 服务端渲染的 HTML 照常显示，页面看着**完全正常**：
+ * 配色对、布局对、文字对、截图跟真的一样。而客户端一行都没跑。
+ * 实测：同一页在 127.0.0.1 下 15 个按钮**没有一个**挂上 React，
+ * 换成 localhost 15 个全挂上。
+ *
+ * 也就是说，「Tab 走一圈焦点都看得见」这类结论，
+ * 有可能是在一个没有任何交互的静态页面上得出来的。
+ *
+ * 所以每个工具跑之前都硬卡一道：没水合就直接报错，别出结论。
+ * 这类失败必须吵，因为它的样子和「一切正常」一模一样。
+ */
+export const HYDRATION_EXPR = `(() => {
+  const els = [...document.querySelectorAll("button, a[href], input")];
+  const live = els.filter((el) => Object.keys(el).some((k) => k.startsWith("__reactFiber$")));
+  return { total: els.length, live: live.length };
+})()`;
+
+export async function assertHydrated(cdp, where) {
+  const r = await evaluate(cdp, HYDRATION_EXPR);
+  if (!r || r.total === 0) throw new Error(`${where}：一个可交互元素都没有，抓到的不像是真页面`);
+  if (r.live === 0) {
+    throw new Error(
+      `${where}：${r.total} 个可交互元素**一个都没挂上 React** —— 页面没水合，量出来的东西不算数。\n` +
+      "  最常见的原因：用 127.0.0.1 访问 next dev，chunk 被跨源保护 403 掉了。改用 localhost。",
+    );
   }
 }

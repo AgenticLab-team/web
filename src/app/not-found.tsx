@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { NotFoundBody } from "@/components/NotFoundBody";
 
 /**
  * 404。
@@ -31,43 +31,19 @@ import Link from "next/link";
  * 而 404 可能发生在任何路径上，包括访客访问的路径 ——
  * 在这里渲染一整套导航，等于把还没资格看到的入口摆出来。
  * 所以这一页自带出口，只放**所有人都能去**的那几个。
+ *
+ * ⚠️ 上面这段**只对「敲错地址」那条路径成立**。
+ *
+ * 一个存在的路由里调 `notFound()`（被功能开关关掉的 `/shop`、
+ * `/radar`）走的是 `(app)/not-found.tsx`，**外壳照常渲染** ——
+ * 实测 `/shop` 上侧栏和底部导航一个不少。
+ * 那一份不自带 `<main>`，因为外壳已经给了一个；
+ * 原来两条路径共用这一份，于是那边出现了两个 main 地标。
  */
 export default function NotFound() {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[26rem] flex-col justify-center px-6 py-12">
-      <p className="t-subhead text-[var(--ink-tertiary)]">404</p>
-      <h1 className="t-title1 mt-1">这个地址没有东西</h1>
-      <p className="t-body mt-3 leading-relaxed text-[var(--ink-secondary)]">
-        可能是地址敲错了，也可能是这条链接指向的内容已经被删掉或者转成了仅成员可见。
-      </p>
-
-      <nav className="mt-8 flex flex-col gap-2">
-        <Exit href="/" title="回首页" hint="社区脉搏、榜单、我在的群" />
-        <Exit href="/forum" title="去论坛" hint="看看大家最近在聊什么" />
-        <Exit href="/search" title="搜一下" hint="记得关键词的话，直接搜比翻更快" />
-      </nav>
-
-      <p className="t-caption mt-8 text-[var(--ink-tertiary)]">
-        如果你是从别人分享的链接点进来的，可以回去问一句 ——
-        有些内容只对群成员开放。
-      </p>
+      <NotFoundBody />
     </main>
-  );
-}
-
-function Exit({ href, title, hint }: { href: string; title: string; hint: string }) {
-  return (
-    <Link
-      href={href}
-      className="inset-row flex items-center justify-between gap-3 rounded-[var(--radius-card)] bg-[var(--surface)] px-4 py-3 transition-colors hover:bg-[var(--fill)]"
-    >
-      <span className="min-w-0">
-        <span className="t-subhead block font-medium">{title}</span>
-        <span className="t-caption block text-[var(--ink-tertiary)]">{hint}</span>
-      </span>
-      <span className="t-body shrink-0 text-[var(--ink-quaternary)]" aria-hidden>
-        ›
-      </span>
-    </Link>
   );
 }

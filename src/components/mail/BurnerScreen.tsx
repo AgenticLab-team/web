@@ -443,6 +443,26 @@ function CopyButton({ value, label }: { value: string; label: string }) {
  * 于是每秒钟整行都会左右抖一下 —— 而这一行就在地址底下，
  * 抖起来会把注意力从地址上拽走。
  */
+/*
+ * ═════════════════════════════════════════
+ * 渲染期读 `Date.now()` 会把整棵子树炸掉重建
+ * ═════════════════════════════════════════
+ *
+ * 服务端渲染时算一次「还剩多久」，浏览器水合时**再算一次** ——
+ * 中间隔着网络和解析，两个数必然不同。React 发现服务端给的文字
+ * 和客户端算出来的对不上，就会把这一整棵子树丢掉重建。
+ *
+ * 报错原文：「Hydration failed because the server rendered text
+ * didn't match the client. As a result this tree will be regenerated
+ * on the client.」而页面看上去**一切正常** —— 它只在控制台里说一句。
+ *
+ * `suppressHydrationWarning` 是 React 专门给时间戳留的口子：
+ * 保留服务端那一版文字、不重建，随后由下面的 interval 接管。
+ *
+ * 不在 effect 里立刻校准一次：那会同步 setState、触发一次级联渲染
+ * （eslint 有规则专门拦它），而换来的只是**最多一秒**的新鲜度。
+ * 服务端那一版本来就是刚刚算出来的。
+ */
 function Countdown({ expiresAt }: { expiresAt: number }) {
   const [left, setLeft] = useState(() => expiresAt - Date.now());
 
@@ -464,7 +484,9 @@ function Countdown({ expiresAt }: { expiresAt: number }) {
   const text = `${pad(Math.floor(total / 3600))}:${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`;
 
   return (
-    <p className="t-caption tabular mt-1 text-[var(--ink-tertiary)]">{text} 后销毁</p>
+    <p className="t-caption tabular mt-1 text-[var(--ink-tertiary)]" suppressHydrationWarning>
+      {text} 后销毁
+    </p>
   );
 }
 
@@ -476,9 +498,13 @@ function RelativeTime({ at }: { at: number }) {
   }, []);
 
   const s = Math.max(0, Math.floor((now - at) / 1000));
-  if (s < 60) return <>{s} 秒前</>;
-  if (s < 3600) return <>{Math.floor(s / 60)} 分钟前</>;
-  return <>{Math.floor(s / 3600)} 小时前</>;
+  const text = s < 60 ? `${s} 秒前` : s < 3600 ? `${Math.floor(s / 60)} 分钟前` : `${Math.floor(s / 3600)} 小时前`;
+  /*
+   * 要一个真元素包着，`suppressHydrationWarning` 才有地方挂 ——
+   * 它是元素上的属性，而原来这里返回的是个 Fragment。
+   * 「X 秒前」每一秒都在变，服务端和客户端必然对不上。
+   */
+  return <span suppressHydrationWarning>{text}</span>;
 }
 
 /**

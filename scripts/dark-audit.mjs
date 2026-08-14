@@ -160,7 +160,17 @@ const probe = `(() => {
       bg: "rgb(" + Math.round(bg[0]) + ", " + Math.round(bg[1]) + ", " + Math.round(bg[2]) + ")",
     });
   }
-  return { surfaces, text };
+  /*
+   * 顺手数一下有多少可交互元素**挂上了 React**。
+   *
+   * 没水合的页面在配色上和水合过的一模一样（HTML 是服务端渲染的），
+   * 于是这一整份颜色报告照样会全绿 —— 而客户端渲染的那部分界面
+   * 一个都没出现在里面。那是最像成功的一种失败。
+   */
+  const inter = [...document.querySelectorAll("button, a[href], input")];
+  const live = inter.filter((el) => Object.keys(el).some((k) => k.startsWith("__reactFiber$"))).length;
+
+  return { surfaces, text, inter: inter.length, live };
 })()`;
 const probeFile = join(tmp, "probe.js");
 writeFileSync(probeFile, probe);
@@ -255,6 +265,21 @@ function capture(url, dark, clicks) {
    */
   if (Object.keys(parsed.surfaces).length < 15) {
     throw new Error(`${url} 只量到 ${Object.keys(parsed.surfaces).length} 个元素 —— 抓到的不像是真页面`);
+  }
+  /*
+   * ⚠️ 没水合就别出结论。
+   *
+   * 我这一整晚的审计都跑在 `127.0.0.1` 上，而 Next 16 的开发期
+   * 跨源保护默认只认 `localhost` —— chunk 全被 403 掉。
+   * 服务端渲染的 HTML 照常显示，页面看着完全正常、截图跟真的一样，
+   * 而客户端一行都没跑（实测同一页：127.0.0.1 下 15 个按钮
+   * 一个都没挂上 React，localhost 下 15 个全挂上）。
+   */
+  if (parsed.inter > 0 && parsed.live === 0) {
+    throw new Error(
+      `${url}：${parsed.inter} 个可交互元素一个都没挂上 React —— 页面没水合，量出来的不算数。\n` +
+      "  最常见的原因：用 127.0.0.1 访问 next dev，chunk 被跨源保护 403 掉了。改用 localhost。",
+    );
   }
   return parsed;
 }

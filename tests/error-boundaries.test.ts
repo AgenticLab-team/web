@@ -98,7 +98,21 @@ describe("**帖子找不到那一页不能泄露存在性**", () => {
 });
 
 describe("404 页", () => {
-  const src = readSource("app/not-found.tsx");
+  /*
+   * 文案在 `NotFoundBody` 里，因为**同一个 404 有两条路径**：
+   *
+   *   · 敲错地址 → `app/not-found.tsx`（根布局下，不带导航外壳）
+   *   · 存在的路由里调 notFound() → `app/(app)/not-found.tsx`
+   *     （被功能开关关掉的 /shop、/radar 走这条，**外壳照常渲染**）
+   *
+   * 原来只有一份、自带 `<main>`，于是第二条路径上出现两个 main 地标。
+   * 是 `scripts/ax-audit.mjs` 把无障碍树拉出来才看见的。
+   */
+  const src = readSource("components/NotFoundBody.tsx");
+  const rootBoundary = readSource("app/not-found.tsx");
+  // 用 readCode（去注释）：那份文件的注释里就写着 <main>，
+  // 而这条断言问的是**代码里**有没有
+  const appBoundary = readCode("app/(app)/not-found.tsx");
 
   it("**是中文的**", () => {
     assert.match(src, /这个地址没有东西/);
@@ -114,6 +128,19 @@ describe("404 页", () => {
     }
     assert.match(src, /href="\/"/);
     assert.match(src, /href="\/forum"/);
+  });
+
+  it("★ 两条边界都在，而且**只有根那一份自带 main**", () => {
+    /*
+     * `(app)` 里那份不能有 `<main>` —— 外壳已经给了一个。
+     * 两个 main 地标意味着读屏用户的「跳到正文」变成一次猜，
+     * 而页面上一点都看不出来（两个 main 长得像一个）。
+     */
+    assert.match(rootBoundary, /<main/, "根那一份要自带 main（它没有外壳）");
+    assert.doesNotMatch(appBoundary, /<main/, "(app) 那一份不能再套一个 main —— 外壳已经有了");
+    for (const b of [rootBoundary, appBoundary]) {
+      assert.match(b, /NotFoundBody/, "两条边界要用同一份文案，别各写一遍");
+    }
   });
 
   it("**不放「返回上一页」** —— 来的人多半是从站外点进来的", () => {
