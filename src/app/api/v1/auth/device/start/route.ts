@@ -32,7 +32,7 @@ export const dynamic = "force-dynamic";
  * 真正决定身份的是网页那一侧一个**已经登录的人**按下的同意。
  */
 export async function POST(request: Request) {
-  const ip = clientIp(request) ?? null;
+  const ip = clientIp(request);
 
   /*
    * 限流按 IP。

@@ -5,6 +5,7 @@ import { IDENTIFIER_LABEL } from "@/lib/auth/login-name";
 import { loginWithPassword } from "@/lib/auth/password-login";
 import { tooManyLoginAttempts } from "@/lib/auth/ratelimit";
 import { createSession, setSessionCookie } from "@/lib/auth/session";
+import { clientIp } from "@/lib/request";
 
 /**
  * 密码登录。
@@ -18,8 +19,14 @@ import { createSession, setSessionCookie } from "@/lib/auth/session";
 export async function POST(request: Request) {
   const ctx = auditContextFrom(request, null);
 
-  // IP 限流先过一道 —— 与绑定码共用同一套阈值
-  const limited = tooManyLoginAttempts(ctx.actorIp);
+  /*
+   * IP 限流先过一道 —— 与绑定码共用同一套阈值。
+   *
+   * 直接问 `clientIp(request)`，不走 `ctx.actorIp`：审计上下文那个字段
+   * 是可选的（有些构造路径不填），而限流的入参不能是可选的 ——
+   * 一旦是 undefined，这道闸就静悄悄地不存在了。
+   */
+  const limited = tooManyLoginAttempts(clientIp(request));
   if (limited) {
     return NextResponse.json(
       { error: limited.message },

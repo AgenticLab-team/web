@@ -2,16 +2,14 @@ import { NextResponse } from "next/server";
 
 import { RateLimitError, startBind } from "@/lib/auth/bind";
 import { getSettingBool } from "@/lib/settings/store";
+import { clientIp } from "@/lib/request";
 
 export async function POST(request: Request) {
   if (!getSettingBool("site.registration_open", true)) {
     return NextResponse.json({ error: "暂未开放绑定" }, { status: 403 });
   }
 
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    undefined;
+  const ip = clientIp(request);
 
   /*
    * 带着上一次的 nonce 来的话，优先把那次绑定接回来（微信内置浏览器

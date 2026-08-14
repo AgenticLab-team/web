@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
+import { UNKNOWN_IP } from "@/lib/request";
 
 /**
  * Passkey 的安全规则测试。
@@ -171,8 +172,23 @@ describe("设备识别", () => {
 });
 
 describe("登录限流", () => {
-  it("没有 IP 时不限流", () => {
-    assert.equal(rate.tooManyLoginAttempts(undefined), null);
+  it("**拿不到 IP 时照样限流** —— 失效方向必须是误伤，不是没闸", () => {
+    /*
+     * 这条原来断言的是相反的（「没有 IP 时不限流」）。
+     * 那是个失效开着的口子：哪天前面换个反向代理、或者有人
+     * 直连 node 的端口，全站按 IP 的限流会一起消失，
+     * 而没有任何地方会报错。
+     *
+     * 现在 `clientIp()` 保证有值，拿不到时是 `UNKNOWN_IP` 哨兵，
+     * 这类请求挤在同一个桶里 —— 会互相挤，但不会没有闸。
+     */
+    for (let i = 0; i < 25; i++) {
+      dbm.db
+        .insert(schema.loginAttempts)
+        .values({ method: "passkey", success: false, ip: UNKNOWN_IP })
+        .run();
+    }
+    assert.ok(rate.tooManyLoginAttempts(UNKNOWN_IP), "哨兵桶没有被限流");
   });
 
   it("失败次数未到阈值不限流", () => {

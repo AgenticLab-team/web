@@ -1,13 +1,67 @@
 /**
  * 取客户端 IP。
  *
- * 前面只有我们自己的 nginx，它会把真实 IP 放进 X-Forwarded-For 的第一段。
- * 这个值理论上可伪造，所以只用于限流与审计展示，不用于任何鉴权判定。
+ * ═════════════════════════════════════════
+ * 优先 `X-Real-IP`，**不是** `X-Forwarded-For`
+ * ═════════════════════════════════════════
+ *
+ * 两个头都是我们自己的 nginx 设的，但可信程度差一整个量级：
+ *
+ *   · `X-Real-IP $remote_addr` —— `proxy_set_header` **覆盖**掉客户端
+ *     发来的同名头，值来自 TCP 对端。客户端伪造不了。
+ *   · `X-Forwarded-For $proxy_add_x_forwarded_for` —— 这个是**追加**：
+ *     客户端自己发的那一串留在前面，nginx 把对端接在后面。
+ *     也就是说这个头的**第一段是客户端写的**。
+ *
+ * 而按惯例读 XFF 就是读第一段。所以原来的顺序
+ * （先 XFF、拿不到再 X-Real-IP）等于优先相信客户端自己填的那个值。
+ *
+ * ─────────────────────────────────────────
+ * 为什么现在才要紧
+ * ─────────────────────────────────────────
+ *
+ * 一直以来 Cloudflare 在最前面，它会覆写 XFF，所以伪造进不来 ——
+ * 实测过：经 CDN、绕过 CDN 直连、从服务器本机打，三条路上伪造值
+ * 都没落地。
+ *
+ * 但 2026-08-14 按站长要求撤掉了「80/443 只许 CF 访问」那道防火墙
+ * （见 `scripts/open-http.sh`）。现在源站直接暴露在公网上，
+ * 而**「谁在 nginx 前面」不再是这段代码能假设的事**。
+ *
+ * 它现在没被利用，靠的是上游某个环节兜着。这次改动不修复一个
+ * 正在发生的漏洞，它去掉的是那个**假设**：换成只信我们自己写的那个头，
+ * 前面站着谁都不影响结论。
+ *
+ * ─────────────────────────────────────────
+ * 拿不到时返回哨兵值，而不是 undefined
+ * ─────────────────────────────────────────
+ *
+ * 两个限流器原来都写着 `if (!ip) return null` —— 拿不到 IP 就**不限流**。
+ * 失效的方向是开着的：只要有一天这两个头都没有（换个反向代理、
+ * 加一层网关、本地直连 node 端口），全站的按 IP 限流一起消失，
+ * 而没有任何地方会报错。
+ *
+ * 归一到一个哨兵桶之后，那种情况下所有请求挤在同一个配额里 ——
+ * 会互相挤，但**不会没有闸**。宁可误伤也不能失效，这是限流唯一
+ * 站得住的失效方向。
+ *
+ * 归一放在这里而不是各限流器里：记账和计数必须用同一个值，
+ * 分开写的话，记的是 null、数的是 "unknown"，计数永远是 0 ——
+ * 一个看起来在工作、实际永远不触发的限流器。
+ *
+ * 这个值只用于限流与审计展示，**不用于任何鉴权判定**。
  */
-export function clientIp(request: Request): string | undefined {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    undefined
-  );
+
+/** 两个头都没有时用它。所有这类请求共用一个配额桶 */
+export const UNKNOWN_IP = "unknown";
+
+export function clientIp(request: Request): string {
+  const real = request.headers.get("x-real-ip")?.trim();
+  if (real) return real;
+
+  // 退回 XFF 的第一段。它是客户端可写的，所以只在没有 X-Real-IP 时才用
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  if (forwarded) return forwarded;
+
+  return UNKNOWN_IP;
 }

@@ -46,8 +46,14 @@ export interface DeviceRateVerdict {
   retryAfterSeconds: number;
 }
 
-export function tooManyDeviceStarts(ip: string | null, now = Date.now()): DeviceRateVerdict | null {
-  if (!ip) return null;
+export function tooManyDeviceStarts(ip: string, now = Date.now()): DeviceRateVerdict | null {
+  /*
+   * 这里原来有一句 `if (!ip) return null`。见 `lib/auth/ratelimit.ts`
+   * 里同一处的说明：限流失效的方向必须是「误伤」，不能是「没闸」。
+   *
+   * 这个接口尤其不能失效 —— 它是全站唯一一个**未鉴权就能写库**的
+   * 公网端点（设备码流程本来就从没有凭证开始），而限流是它唯一的闸。
+   */
 
   const max = getSettingInt("tui.device.max_starts_per_hour", 60);
   const recent =

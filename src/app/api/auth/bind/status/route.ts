@@ -5,6 +5,7 @@ import { createSession, setSessionCookie } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { loginAttempts } from "@/lib/db/schema";
 import { NekoBotError } from "@/lib/nekobot/client";
+import { clientIp } from "@/lib/request";
 
 export async function GET(request: Request) {
   const nonce = request.headers
@@ -25,10 +26,7 @@ export async function GET(request: Request) {
       return NextResponse.json(status);
     }
 
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      request.headers.get("x-real-ip") ??
-      undefined;
+    const ip = clientIp(request);
 
     const userAgent = request.headers.get("user-agent") ?? undefined;
 

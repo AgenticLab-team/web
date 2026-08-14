@@ -18,8 +18,17 @@ export interface RateLimitVerdict {
  * 国内运营商大量用 NAT，一个出口后面可能有几十个群友。
  * 只统计**失败**的尝试：成功登录不该消耗别人的配额。
  */
-export function tooManyLoginAttempts(ip?: string): RateLimitVerdict | null {
-  if (!ip) return null;
+export function tooManyLoginAttempts(ip: string): RateLimitVerdict | null {
+  /*
+   * 这里原来有一句 `if (!ip) return null` —— **拿不到 IP 就不限流**。
+   *
+   * 失效方向是开着的：哪天前面换个反向代理、或者有人直连 node 的端口，
+   * 全站按 IP 的限流会一起消失，而没有任何地方会报错。
+   *
+   * 现在 `clientIp()` 保证有值（拿不到时是 `UNKNOWN_IP` 哨兵），
+   * 那种情况下所有请求挤在同一个桶里 —— 会互相挤，但不会没有闸。
+   * 宁可误伤也不能失效，这是限流唯一站得住的失效方向。
+   */
 
   const max = getSettingInt("auth.login.max_attempts_per_hour", 20);
   const failures =

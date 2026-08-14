@@ -3,6 +3,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { auditLogs } from "@/lib/db/schema";
 import { dangerLevelOf } from "@/lib/rbac/permissions";
+import { clientIp } from "@/lib/request";
 
 /**
  * 审计日志。**每一个后台写操作都要经过这里，没有例外。**
@@ -67,10 +68,15 @@ export function audited<T>(ctx: AuditContext, entry: AuditEntry, fn: () => T): T
 export function auditContextFrom(request: Request, actorId: string | null): AuditContext {
   return {
     actorId,
-    actorIp:
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      request.headers.get("x-real-ip") ??
-      undefined,
+    /*
+     * 走 `clientIp()`，不在这儿再抄一份。
+     *
+     * 这里原来有一份自己的实现，而且和那边一样把可伪造的
+     * `X-Forwarded-For` 排在不可伪造的 `X-Real-IP` 前面 ——
+     * 两份同样的错，改一份不改另一份的话，**限流按真 IP 算、
+     * 审计日志记的是伪造值**，而那种不一致谁也看不出来。
+     */
+    actorIp: clientIp(request),
     actorUa: request.headers.get("user-agent") ?? undefined,
   };
 }
