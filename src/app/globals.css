@@ -334,6 +334,58 @@ body {
 @layer components {
   .t-large-title { font-size: 2.125rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.022em; }
   .t-title1      { font-size: 1.75rem;  line-height: 1.21; font-weight: 700; letter-spacing: -0.02em; }
+
+  /*
+   * 统计格子里那个大数字。**只有它是随宽度变的。**
+   *
+   * ─────────────────────────────────────────
+   * 为什么不能直接用 t-title1
+   * ─────────────────────────────────────────
+   *
+   * 首页「社区脉搏」在窄屏上是 `grid-cols-3`，390px 的手机上每格
+   * 算下来约 112px，去掉内边距只剩 88px。而 `60,137` 在 28px 的
+   * 等宽数字下要 90 出头 —— 差那么两三个像素。
+   *
+   * 而 grid item 默认 `min-width: auto`：撑不下的时候它不换行、
+   * 也不裁剪，**它把自己那一列顶宽**，于是整个 grid 超出容器，
+   * 第三张卡被视口切掉一半。屏幕上看起来像「卡片设计成这样」，
+   * 没有任何一处会报错。
+   *
+   * ─────────────────────────────────────────
+   * 为什么是 clamp 而不是又一个断点
+   * ─────────────────────────────────────────
+   *
+   * 因为放不放得下**是连续的**：三栏等分时每张卡的宽度就是
+   * `(视口 - 页边距 - 两道间隙) / 3`，它随视口线性变化。
+   * 用断点的话，断点那一侧永远有一段「刚好差几个像素」的宽度，
+   * 而那正是这个 bug 本来的样子。
+   *
+   * 截图实测（Linux 回退字体，比真机的苹方宽，是**保守**的一侧）：
+   *
+   *     视口    卡片宽    22px 下的「60,225」
+   *     320px    66px          81px   ← 溢出 15px
+   *     390px    90px          80px   ← 放得下，余 3px
+   *
+   * 也就是说固定 22px 在 390 上只剩三个像素余量，320 上直接出界。
+   * `5.2vw` 让字号跟着卡片一起缩：320px 上算出 16.6px、
+   * 390px 上 20.3px，两头都留得下。
+   *
+   * 上界 1.375rem 是为了别在平板竖屏上把它撑得比标题还大；
+   * 下界 1rem 是「再小就不是一个大数字了」——
+   * 真到了那个宽度，该改的是三栏这个布局本身。
+   *
+   * 字重保持 700 而不是跟着 title2 降到 600 —— 这一档要的是
+   * 「大数字」那个声音，换行不换声音。
+   *
+   * ⚠️ 这一条**必须写在 CSS 里**，不能在组件上写 `sm:t-title1`：
+   * 排版阶梯是 @layer components 里的普通类，不是 `@utility`，
+   * Tailwind 生不出带断点前缀的变体 —— 写了也不会有任何样式，
+   * 而且不报错。全仓库没有一处这么写过，别从这里开头。
+   */
+  .t-stat        { font-size: clamp(1rem, 5.2vw, 1.375rem); line-height: 1.21; font-weight: 700; letter-spacing: -0.016em; }
+  @media (min-width: 40rem) {
+    .t-stat      { font-size: 1.75rem;  letter-spacing: -0.02em; }
+  }
   .t-title2      { font-size: 1.375rem; line-height: 1.27; font-weight: 600; letter-spacing: -0.016em; }
   .t-title3      { font-size: 1.25rem;  line-height: 1.25; font-weight: 600; letter-spacing: -0.012em; }
   .t-headline    { font-size: 1.0625rem;line-height: 1.29; font-weight: 600; letter-spacing: -0.008em; }

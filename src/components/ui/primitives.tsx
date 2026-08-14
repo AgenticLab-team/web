@@ -89,7 +89,7 @@ export function StatTile({
 
   const body = (
     <>
-      <p className="tabular t-title1 leading-none" style={toneColor ? { color: toneColor } : undefined}>
+      <p className="tabular t-stat leading-none" style={toneColor ? { color: toneColor } : undefined}>
         {typeof value === "number" ? value.toLocaleString("zh-CN") : value}
       </p>
       <p
@@ -107,7 +107,18 @@ export function StatTile({
     </>
   );
 
-  const surface = `rounded-[var(--radius-card)] p-4 ${
+  /*
+   * `min-w-0` 是**正确性**，不是样式。
+   *
+   * 这个格子基本都摆在 grid 里，而 grid item 默认 `min-width: auto`：
+   * 内容撑不下时它不换行也不裁剪，而是把自己那一列顶宽，
+   * 于是整个 grid 超出容器 —— 坏掉的不是这一格，是整行。
+   * 首页三个数字在 390px 上就是这么把第三张卡挤出视口的。
+   *
+   * 加上它之后，「放不下」的后果重新回到这一格自己身上（裁剪），
+   * 而那是看得见、也改得动的；顶宽整行是看不出来的。
+   */
+  const surface = `min-w-0 rounded-[var(--radius-card)] p-4 ${
     accent ? "bg-[var(--accent)] text-[var(--accent-ink)]" : "bg-[var(--surface)]"
   }`;
 
