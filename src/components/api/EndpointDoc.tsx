@@ -39,9 +39,20 @@ import type { Endpoint } from "@/lib/api-tokens/catalog";
  * （发帖、发消息、顶掉群公告）。扫一眼就能把「读」和「写」分开，
  * 比读完每一行的摘要快得多。
  */
+/*
+ * 读用中性色，写用警示色。
+ *
+ * DELETE 和 POST 同色而不是再挑一个新颜色 —— 这一栏要回答的问题
+ * 只有一个：**按下去会不会改东西**。分成三种颜色的话，
+ * 眼睛得先学一遍配色才能读懂它，而那一栏只有 44px 宽。
+ */
 const METHOD_STYLE = {
   GET: { background: "var(--fill)", color: "var(--ink-secondary)" },
   POST: {
+    background: "color-mix(in srgb, var(--warning) 16%, transparent)",
+    color: "var(--warning)",
+  },
+  DELETE: {
     background: "color-mix(in srgb, var(--warning) 16%, transparent)",
     color: "var(--warning)",
   },

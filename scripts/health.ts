@@ -28,6 +28,7 @@ import { runSteps, summarize, tickFailureReport, tickHealth } from "@/lib/ops/ti
 import { settleDueSeasons } from "@/lib/seasons/settle";
 import { autoPruneIfNeeded } from "@/lib/storage/auto";
 import { computePersonPhrases } from "@/lib/members/phrases";
+import { settleMail } from "@/lib/mail/settle";
 import { settleAll } from "@/lib/titles/settle";
 
 async function main() {
@@ -123,6 +124,22 @@ async function main() {
       describe: (r: ReturnType<typeof settleAll>) =>
         r.granted || r.expired || r.renewed || r.reminded
           ? `授予 ${r.granted} · 到期 ${r.expired} · 续费 ${r.renewed}（失败 ${r.renewFailed}）· 提醒 ${r.reminded}`
+          : "无变化",
+    },
+    {
+      /*
+       * 邮箱：回收到期的一次性箱 + 域名到期告警。
+       *
+       * 告警那一半比回收那一半急得多。域名过期是这套东西里
+       * **唯一无声的故障** —— 挂在它上面的所有邮箱会同时消失，
+       * 而表现只是「邮件不再来了」：没有报错、没有 5xx，
+       * 用户只会以为最近没人给他发信。
+       */
+      name: "邮箱结算",
+      run: () => settleMail(),
+      describe: (r: ReturnType<typeof settleMail>) =>
+        r.reclaimed || r.notified
+          ? `回收 ${r.reclaimed} 个一次性箱${r.notified ? ` · 域名到期告警 ${r.domains.join("、")}` : ""}`
           : "无变化",
     },
     {

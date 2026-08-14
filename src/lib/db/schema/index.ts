@@ -29,3 +29,4 @@ export * from "./exports";
 export * from "./github";
 export * from "./uploads";
 export * from "./announcements";
+export * from "./mail";

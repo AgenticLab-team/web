@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, CloudUpload, Coins, Eye, FileText, Filter, Flag, Gauge, Gift, HardDrive, LayoutList, Megaphone, MessageSquare, Puzzle, Receipt, Scale, ScrollText, Shield, ShieldCheck, ShoppingBag, Sliders, Sparkles, Ticket, ToggleLeft, TrendingUp, UserRoundPlus, Users, type LucideIcon } from "lucide-react";
+import { Activity, CloudUpload, Coins, Eye, FileText, Filter, Flag, Gauge, Gift, HardDrive, LayoutList, Mail, Megaphone, MessageSquare, Puzzle, Receipt, Scale, ScrollText, Shield, ShieldCheck, ShoppingBag, Sliders, Sparkles, Ticket, ToggleLeft, TrendingUp, UserRoundPlus, Users, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -35,6 +35,7 @@ const ICONS: Record<string, LucideIcon> = {
   activity: Activity,
   "hard-drive": HardDrive,
   "cloud-upload": CloudUpload,
+  mail: Mail,
 };
 
 /**

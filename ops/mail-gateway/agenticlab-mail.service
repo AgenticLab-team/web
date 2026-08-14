@@ -1,0 +1,31 @@
+[Unit]
+Description=Agentic Lab SMTP 收信网关
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mailgw
+WorkingDirectory=/home/mailgw/mail-gateway
+EnvironmentFile=/home/mailgw/mail-gateway/.env
+ExecStart=/usr/bin/node gateway.mjs
+Restart=always
+RestartSec=5
+
+# 25 是特权端口，而这个进程不该以 root 跑。
+# 给能力而不是给 root：它只需要「绑定低端口」这一件事。
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+
+# 这台机器上没有别的东西，锁死也不影响什么
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/mailgw/mail-gateway
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

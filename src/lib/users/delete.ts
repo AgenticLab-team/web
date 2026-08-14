@@ -43,11 +43,51 @@ export const DELETED_LABEL = "已注销";
  *
  * 不显式写出来的话只能猜列名，而猜错的表现是**这张表根本没被清**，
  * 且不报错 —— 注销跑完了，痕迹还在。
+ *
+ * 导出是给 `tests/account-delete.test.ts` 用的：那条测试要逐张跑一遍
+ * DELETE 看列名对不对。它原来自己抄了一份
+ * （`plan.table === "keyword_hits" ? "sub_id" : "user_id"`），
+ * 于是**新加一张挂靠表时，测试会先于代码报错** —— 而它本该反过来。
  */
-const OWNER_COLUMN: Record<string, string> = {
+export const OWNER_COLUMN: Record<string, string> = {
   // 雷达命中挂在订阅下面，没有直接的 user_id
   keyword_hits: "sub_id",
+  // 邮件挂在箱子下面，附件又挂在邮件下面 —— 见下面那段
+  mail_messages: "box_id",
+  mail_attachments: "message_id",
 };
+
+/**
+ * 挂靠链：一张挂靠表的**上一层**是谁，靠哪一列挂上去。
+ *
+ * ─────────────────────────────────────────
+ * 一层不够了
+ * ─────────────────────────────────────────
+ *
+ * 原来只支持一层（`keyword_hits → keyword_subs.user_id`）。
+ * 邮件是两层：`mail_attachments → mail_messages → mail_boxes.user_id`，
+ * 而 `mail_messages` **自己没有 user_id**。
+ *
+ * 照一层那套拼出来的 SQL 会去查 `mail_messages.user_id` ——
+ * 那一列不存在，SQLite 直接抛错、整个注销事务回滚。
+ * **注销会当场失败**，而不是安静地漏删，这一点还算幸运。
+ *
+ * 只写那些自己也没有 `user_id` 的表 —— 走到一张有的就停。
+ * 链的定义放在这里而不是登记表上：登记表回答「删不删」，这里回答「怎么删」。
+ */
+const PARENT: Record<string, { parent: string; column: string }> = {
+  // mail_messages 自己没有 user_id，要顺着箱子才问得出主人
+  mail_messages: { parent: "mail_boxes", column: "box_id" },
+};
+
+/** 「属于这个人的 `table` 的 id 们」，需要几层就套几层 */
+function idsOwnedBy(table: string, userId: string): ReturnType<typeof sql> {
+  const up = PARENT[table];
+  return up
+    ? sql`SELECT id FROM ${sql.identifier(table)}
+          WHERE ${sql.identifier(up.column)} IN (${idsOwnedBy(up.parent, userId)})`
+    : sql`SELECT id FROM ${sql.identifier(table)} WHERE user_id = ${userId}`;
+}
 
 export function deleteAccount(
   userId: string,
@@ -85,7 +125,7 @@ export function deleteAccount(
           ? tx.run(
               sql`DELETE FROM ${sql.identifier(plan.table)}
                   WHERE ${sql.identifier(column)} IN (
-                    SELECT id FROM ${sql.identifier(plan.via.table)} WHERE user_id = ${userId}
+                    ${idsOwnedBy(plan.via.table, userId)}
                   )`,
             ).changes
           : tx.run(
@@ -111,6 +151,19 @@ export function deleteAccount(
       ).changes,
     };
     tx.run(sql`UPDATE forum_tips SET from_user_id = '' WHERE from_user_id = ${userId}`);
+
+    /*
+     * 域名回到未分配状态，而不是跟着账号删掉。
+     *
+     * 域名是站里花钱买的资产，不是这个账号的东西 ——
+     * 删掉的话，那一百个域名会因为一个人注销而少一个，
+     * 而**没有任何地方看得出来它去哪了**。
+     * 清空归属之后它照常躺在后台的域名表里，可以再发给别人。
+     */
+    tx.run(
+      sql`UPDATE mail_domains SET owner_user_id = NULL, catch_all = 0
+          WHERE owner_user_id = ${userId}`,
+    );
 
     /*
      * 账号本身：留壳、抹内容。
