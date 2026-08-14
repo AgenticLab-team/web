@@ -47,6 +47,20 @@ export interface SettingCategory {
   items: SettingRow[];
 }
 
+/*
+ * ⚠️ **少一条的后果是一个英文小写单词出现在后台标题上。**
+ *
+ * 下面 `listSettings` 里那句 `?? category` 是个悄悄降级的兜底：
+ * 认不出的分类不会报错、不会空白，它显示原始 key ——
+ * 而一个写着「mail」的分组标题，看起来就像是本来就这么设计的。
+ *
+ * 一次截图普查时发现有四个分类是这样：`mail`（13 项）、`module`（9）、
+ * `digest`（4）、`site`（2）—— 78 项设置里有 28 项顶着英文标题，
+ * 而其中三个比邮件功能早得多，也就是说它一直是这样，从没有人报过。
+ *
+ * `tests/admin-labels.test.ts` 现在对着**库里真实存在的分类**核这张表，
+ * 少一条就红 —— 把「悄悄降级」换成「当场知道」。
+ */
 const CATEGORY_LABELS: Record<string, string> = {
   auth: "登录与绑定",
   sync: "同步与判定",
@@ -55,6 +69,18 @@ const CATEGORY_LABELS: Record<string, string> = {
   antifraud: "反作弊",
   storage: "存储",
   general: "通用",
+  /** 一次性邮箱：地址额度、箱子与信件的大小上限、收信频率 */
+  mail: "邮箱",
+  /** 可插拔玩法的总开关。注意它和「功能开关」是两页，那边管的是整块功能 */
+  module: "模块开关",
+  /** 每周精选和每天那一条 —— 挑几篇、一个人最多占几条 */
+  digest: "精选推送",
+  /** 站点级的开放程度：论坛给不给游客看、还收不收新人 */
+  site: "站点开放",
+  /** 邀请码：请进来一个人给多少分 */
+  invite: "邀请",
+  /** 上游（NekoBot）：调用记录留多久 */
+  upstream: "上游接入",
 };
 
 export function listSettings(): SettingCategory[] {

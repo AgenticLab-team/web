@@ -43,6 +43,12 @@ export interface PermissionMatrix {
   cells: Map<string, Map<string, MatrixState>>;
 }
 
+/*
+ * ⚠️ 和 `lib/admin/settings.ts` 里那张表同一个毛病、同一条守卫：
+ * 下面 `?? category` 认不出时显示原始 key，而权限矩阵那一排
+ * 分组标签全是中文，混一个英文小写的 `mail` 进去看着像个 bug，
+ * 却又不像 bug 到会有人去报。
+ */
 const CATEGORY_LABELS: Record<string, string> = {
   forum: "论坛",
   group: "群与消息",
@@ -55,6 +61,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   shop: "商店",
   broadcast: "公告推送",
   system: "系统",
+  /** 一次性邮箱：域名池、箱子、前缀禁用词 */
+  mail: "邮箱",
 };
 
 export function categoryLabel(category: string): string {
