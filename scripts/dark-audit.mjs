@@ -28,6 +28,20 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+/*
+ * 视口宽度。默认桌面，`AUDIT_SIZE=390,1600` 换手机档。
+ *
+ * ─────────────────────────────────────────
+ * 手机端不是「同一套东西窄一点」
+ * ─────────────────────────────────────────
+ *
+ * 窄视口下换的是另一批组件：底部导航、抽屉、折叠起来的侧栏，
+ * 还有一整条按 `maxTouchPoints` 走的分支（要不要提键盘快捷键）。
+ * 那些东西在 1440 宽下**根本不渲染** —— 桌面档全绿，
+ * 说明的是桌面那一套没问题，而不是这一页没问题。
+ */
+const SIZE = process.env.AUDIT_SIZE ?? "1440,1600";
+
 const [base, ...paths] = process.argv.slice(2);
 if (!base || paths.length === 0) {
   console.error("用法：node scripts/dark-audit.mjs <基址> <路径…>");
@@ -205,17 +219,18 @@ async function assertRealPage(url) {
   }
 }
 
-function capture(url, dark) {
+function capture(url, dark, clicks) {
   const out = execFileSync(
     "node",
     [
       "scripts/shoot.mjs",
       url,
       join(tmp, "shot.png"),
-      "--size", "1440,1600",
+      "--size", SIZE,
       "--wait", "13000",
       ...(process.env.AUDIT_COOKIE ? ["--cookie", process.env.AUDIT_COOKIE] : []),
       ...(dark ? ["--dark"] : []),
+      ...clicks.flatMap((c) => ["--click", c]),
       "--eval-file", probeFile,
     ],
     { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
@@ -243,11 +258,44 @@ function capture(url, dark) {
 }
 
 let bad = 0;
-for (const path of paths) {
+for (const spec of paths) {
+  /*
+   * `路径::选择器::选择器` —— 点开之后再量。
+   *
+   * ─────────────────────────────────────────
+   * 只量「刚打开的样子」等于没量展开态
+   * ─────────────────────────────────────────
+   *
+   * 信的详情、域名编辑器、可折叠的后台行 —— 那些状态在客户端，
+   * URL 里没有。而它们恰恰是这个站里最容易出错的地方
+   * （今晚三个线上真 bug 全在展开之后）。
+   *
+   * 点不到的话 `shoot.mjs` 会直接报错退出，这里就跟着炸 ——
+   * 静默继续的话量的是没展开的那一页，而它和「展开了但没变化」
+   * 长得一模一样。
+   */
+  const [path, ...clicks] = spec.split("::");
   const url = base.replace(/\/$/, "") + path;
   await assertRealPage(url);
-  const light = capture(url, false);
-  const dark = capture(url, true);
+  const light = capture(url, false, clicks);
+  const dark = capture(url, true, clicks);
+
+  /*
+   * 两次加载得对得上，否则「相同」这个判据无从谈起。
+   *
+   * 位置当 key，而只要有一点渲染差异（动画没停、时间戳变了一个字、
+   * 随机排序），两边的 key 就整片对不上 —— 表现是
+   * 「一条都不报」，和「全都对」一模一样。踩过一次错误页，
+   * 不想再踩第二次同形状的。
+   */
+  const overlap = Object.keys(dark.surfaces).filter((k) => k in light.surfaces).length;
+  const cover = overlap / Object.keys(dark.surfaces).length;
+  if (cover < 0.6) {
+    throw new Error(
+      `${spec}：两次加载只有 ${Math.round(cover * 100)}% 的元素对得上（${overlap}/${Object.keys(dark.surfaces).length}）—— ` +
+      "布局在两次之间动了，这一页的结果不能信",
+    );
+  }
 
   /* ── 判据一：两边一模一样的浅色表面 ── */
   const seenSurface = new Set();
@@ -298,7 +346,7 @@ for (const path of paths) {
   const hits = [...unthemed, ...lowContrast];
   bad += hits.length;
   const note = both.length ? `　（另有 ${both.length} 处两套配色下都不够，不算深色回归）` : "";
-  console.log(`${hits.length === 0 ? "✅" : "❌"} ${path}${hits.length ? `（${hits.length} 处）` : ""}${note}`);
+  console.log(`${hits.length === 0 ? "✅" : "❌"} ${spec}${hits.length ? `（${hits.length} 处）` : ""}${note}`);
   for (const h of hits) console.log(h);
   if (process.env.AUDIT_SHOW_BOTH && both.length) {
     const seenBoth = new Set();
