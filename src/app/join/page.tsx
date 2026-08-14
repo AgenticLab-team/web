@@ -60,7 +60,7 @@ export default function JoinPage() {
 
       <Link
         href="/"
-        className="t-subhead mt-10 inline-block text-[var(--accent)] transition active:opacity-60"
+        className="tap-target t-subhead mt-10 inline-block text-[var(--accent)] transition active:opacity-60"
       >
         先随便看看
       </Link>

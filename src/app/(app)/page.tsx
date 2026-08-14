@@ -133,7 +133,7 @@ export default async function HomePage() {
           user ? null : (
             <Link
               href="/login"
-              className="inline-flex items-center t-subhead shrink-0 rounded-[var(--radius-control)] bg-[var(--accent)] px-3.5 py-2 font-medium text-[var(--accent-ink)] transition active:scale-[0.97]"
+              className="inline-flex min-h-11 items-center t-subhead shrink-0 rounded-[var(--radius-control)] bg-[var(--accent)] px-3.5 py-2 font-medium text-[var(--accent-ink)] transition active:scale-[0.97]"
             >
               登录
             </Link>
@@ -297,7 +297,7 @@ export default async function HomePage() {
                   <>
                     <EmptyAction href="/login">用微信身份登录</EmptyAction>
                     {/* 还不是成员的人也要有条路 —— 否则这一页对他是死胡同 */}
-                    <Link href="/join" className="t-caption mt-3 block text-[var(--accent)]">
+                    <Link href="/join" className="tap-target t-caption mt-3 block text-[var(--accent)]">
                       还不在群里？申请加入
                     </Link>
                   </>

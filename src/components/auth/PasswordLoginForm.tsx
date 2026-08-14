@@ -57,7 +57,7 @@ export function PasswordLoginForm({ next }: { next: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="t-caption w-full text-center text-[var(--ink-tertiary)] underline-offset-4 transition hover:underline"
+        className="t-caption min-h-11 w-full text-center text-[var(--ink-tertiary)] underline-offset-4 transition hover:underline"
       >
         用密码登录
       </button>
