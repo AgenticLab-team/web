@@ -280,15 +280,33 @@ export function PillRow({
    *
    * 所以纵向 `py-[7px]` 把地方让出来，再用负 margin 抵掉它对排版的影响 ——
    * 一个像素都没动，而命中区回到 44。
-   * （`mb` 用 5px 而不是 -my：`-my-*` 会和 `mb-3` 抢同一条属性。）
+   * （`mb` 用 7px 而不是 -my：`-my-*` 会和 `mb-*` 抢同一条属性。
+   *   7+9=16，和换行那一档的 `mb-4` 对齐 —— 两档给出来的
+   *   「下面还剩多少地方」必须一样，否则两个 PillRow 叠在一起时
+   *   下面那个的命中区又会被上面那个吃掉。）
    *
-   * 换行那一档不横滚，但**上下两行的药丸会互相压**：
-   * gap 只有 6px，而两颗都想往外探 7px。所以纵向 gap 给到 14px。
+   * 换行那一档不横滚，但**上下两行的药丸会互相压** —— 而这一条
+   * 是探出来的：往下探 20px 打到的已经是下面那颗药丸了。
+   *
+   * 两颗药丸各 30 高、各自要撑到 44，也就是各往外探 7px；
+   * 中间只让 6px 的话它们直接抢。行间 gap 给到 16px。
+   *
+   * ⚠️ 而真正卡住的不是行间 gap，是 `mb`。
+   *
+   * 我先把 gap 从 14 提到 16，一点没变 —— 因为那两颗药丸
+   * **根本不在同一个容器里**：它们是上下两个 PillRow，
+   * 中间隔的是这个 `mb`（原来 12px）。量出来
+   * 上面那颗中心 136、下面那颗中心 178，只差 42，
+   * 而两个 44 的命中框要占满 44 —— 于是在中间重叠 2px，
+   * 后画的那个赢。
+   *
+   * 「同一个容器」这件事我一直默认成立，探到 `同一个容器: false`
+   * 才发现自己在调一个根本不相干的数。
    */
   const base = wrap
-    ? "mb-3 flex flex-wrap gap-x-1.5 gap-y-3.5"
+    ? "mb-4 flex flex-wrap gap-x-1.5 gap-y-4"
     // no-scrollbar：一排 30px 高的药丸底下压一条横条，看起来就是根下划线
-    : "no-scrollbar -mx-4 -mt-[9px] mb-[3px] flex gap-1.5 overflow-x-auto px-4 py-[9px] sm:mx-0 sm:px-0";
+    : "no-scrollbar -mx-4 -mt-[9px] mb-[7px] flex gap-1.5 overflow-x-auto px-4 py-[9px] sm:mx-0 sm:px-0";
   return (
     <div className={`${base} ${className}`}>
       {Children.map(children, (child) =>
