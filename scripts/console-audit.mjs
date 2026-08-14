@@ -20,7 +20,7 @@
 //   node scripts/console-audit.mjs <基址> <路径…>
 //
 // `AUDIT_COOKIE` 给会话，`AUDIT_SIZE` 换视口。
-import { assertHydrated, launch, setViewport, sleep } from "./lib/cdp.mjs";
+import { assertHydrated, waitForHydration, launch, setViewport } from "./lib/cdp.mjs";
 
 const [base, ...paths] = process.argv.slice(2);
 if (!base || paths.length === 0) {
@@ -111,7 +111,7 @@ for (const path of paths) {
     }
 
     await cdp.send("Page.navigate", { url });
-    await sleep(14_000);
+    await waitForHydration(cdp);
 
     /*
      * 「一条消息都没有」必须是**跑起来了才没有**。

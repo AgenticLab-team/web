@@ -18,7 +18,7 @@
 // `AUDIT_COOKIE` 给会话，`AUDIT_SIZE` 换视口（默认 390,1600）。
 import { readFileSync } from "node:fs";
 
-import { assertHydrated, evaluate, launch, setViewport, sleep } from "./lib/cdp.mjs";
+import { assertHydrated, waitForHydration, evaluate, launch, setViewport } from "./lib/cdp.mjs";
 
 const [base, ...paths] = process.argv.slice(2);
 if (!base || paths.length === 0) {
@@ -53,7 +53,7 @@ for (const path of paths) {
     }
     await cdp.send("Page.enable");
     await cdp.send("Page.navigate", { url });
-    await sleep(13_000);
+    await waitForHydration(cdp);
 
     await assertHydrated(cdp, path);
 

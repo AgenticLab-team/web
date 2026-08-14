@@ -25,7 +25,7 @@
 //   node scripts/focus-audit.mjs <基址> <路径…>
 //
 // `AUDIT_COOKIE` 给会话，`AUDIT_DARK=1` 查深色，`AUDIT_SIZE=390,1600` 查手机档。
-import { assertHydrated, evaluate, launch, setViewport, sleep } from "./lib/cdp.mjs";
+import { assertHydrated, waitForHydration, evaluate, launch, setViewport, sleep } from "./lib/cdp.mjs";
 
 const [base, ...paths] = process.argv.slice(2);
 if (!base || paths.length === 0) {
@@ -121,7 +121,7 @@ for (const path of paths) {
     }
     await cdp.send("Page.enable");
     await cdp.send("Page.navigate", { url });
-    await sleep(13_000);
+    await waitForHydration(cdp);
 
     await assertHydrated(cdp, path);
 

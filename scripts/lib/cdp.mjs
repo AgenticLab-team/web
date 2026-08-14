@@ -189,6 +189,36 @@ export const HYDRATION_EXPR = `(() => {
   return { total: els.length, live: live.length };
 })()`;
 
+/**
+ * 等到页面**真的水合了**再往下走，而不是死等一个固定秒数。
+ *
+ * ─────────────────────────────────────────
+ * 13 秒是拍脑袋定的，而它是整个审计最大的一笔开销
+ * ─────────────────────────────────────────
+ *
+ * 每页 13 秒，八页就是快两分钟纯等待 —— 加上启动和探测，
+ * 一批八页会顶到十分钟的命令上限，而我第一次撞上时
+ * 以为是某一页卡死了，逐页跑了三轮才发现每页都正常，是**累计**。
+ *
+ * 改成轮询之后，等待时间由页面自己决定：快的几百毫秒就走。
+ * 上限还在（默认 15 秒），但那是兜底，不是常态。
+ *
+ * 水合完再多给一小段安顿时间 —— 有些东西是 effect 里才挂上的
+ * （倒计时、相对时间、抽屉），紧接着就量会量到中间态。
+ */
+export async function waitForHydration(cdp, { timeout = 15_000, settle = 700 } = {}) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const r = await evaluate(cdp, HYDRATION_EXPR).catch(() => null);
+    if (r && r.live > 0) {
+      await sleep(settle);
+      return true;
+    }
+    await sleep(300);
+  }
+  return false;   // 交给 assertHydrated 去给出那条更长的错误信息
+}
+
 export async function assertHydrated(cdp, where) {
   const r = await evaluate(cdp, HYDRATION_EXPR);
   if (!r || r.total === 0) throw new Error(`${where}：一个可交互元素都没有，抓到的不像是真页面`);
