@@ -14,7 +14,8 @@ import { AliasSection } from "@/components/mail/AliasSection";
 import { listAliases, ownedDomains } from "@/lib/mail/alias";
 import { ClaimSection } from "@/components/mail/ClaimSection";
 import { claimableDomains } from "@/lib/mail/claim-queries";
-import { slotStatus } from "@/lib/mail/claim";
+import { listClaimed, slotStatus } from "@/lib/mail/claim";
+import { ClaimedSection } from "@/components/mail/ClaimedSection";
 
 export const metadata: Metadata = { title: "一次性邮箱" };
 export const dynamic = "force-dynamic";
@@ -59,9 +60,18 @@ export default async function BurnerPage() {
   // 申领那一块：没有任何可申领的域名时它自己不渲染（见组件里那句 return null）
   const claimable = claimableDomains();
   const slots = slotStatus(user.id);
+  // 申领来的（kind=temp）—— 在这之前它一处都不显示：花了分，然后地址消失了
+  const claimed = listClaimed(user.id);
 
   return (
     <>
+      {/* 已经有的排在前面 —— 「我的东西」比「能买什么」要紧 */}
+      {claimed.length > 0 && (
+        <div className="mb-3">
+          <ClaimedSection boxes={claimed} />
+        </div>
+      )}
+
       <div className="mb-3">
         <ClaimSection slots={slots} domains={claimable} />
       </div>

@@ -364,3 +364,78 @@ export function renewClaim(input: {
 
   return { ok: true, expiresAt, paid: rent };
 }
+
+export interface ClaimedView {
+  id: string;
+  address: string;
+  domain: string;
+  tier: string;
+  /** 续一年要多少分 —— 跟着地址一起给，不让界面自己按档位查价 */
+  rent: number;
+  expiresAt: number | null;
+  /**
+   * 还剩几天到期。**在服务端算好**，不让组件自己减。
+   *
+   * 组件里 `Date.now()` 会被 lint 拦（规则是对的：渲染期读时钟意味着
+   * 同一次渲染的两处可能拿到不同的「现在」），而更实际的问题是
+   * 一个客户端组件里的「今天」跟着用户的机器走 ——
+   * 他把系统时间调快一天，页面上就会显示地址明天到期。
+   */
+  daysLeft: number | null;
+  /** 在宽限期里时它到哪天。null = 不在宽限期 */
+  graceUntil: number | null;
+  /** 宽限期还剩几天。同上，服务端算 */
+  graceDaysLeft: number | null;
+  status: string;
+  messageCount: number;
+  unreadCount: number;
+}
+
+/**
+ * 我申领来的长期地址。
+ *
+ * ─────────────────────────────────────────
+ * 它以前根本没有列表
+ * ─────────────────────────────────────────
+ *
+ * `listAliases` 只查 `alias`（自有域名那种），`listBurners` 只查
+ * `burner` —— 而申领来的是 `temp`。也就是说申领成功之后，
+ * **那个地址在界面上一处都不出现**：花了 400 分，然后它消失了。
+ *
+ * 快到期的排在前面：这一栏唯一会让人后悔的事就是错过续期。
+ */
+export function listClaimed(userId: string, now = Date.now()): ClaimedView[] {
+  const rows = db
+    .select({ b: mailBoxes, tier: mailDomains.tier })
+    .from(mailBoxes)
+    .leftJoin(mailDomains, eq(mailDomains.domain, mailBoxes.domain))
+    .where(
+      and(
+        eq(mailBoxes.userId, userId),
+        eq(mailBoxes.kind, "temp"),
+        inArray(mailBoxes.status, ["active", "full", "grace"]),
+      ),
+    )
+    .all();
+
+  return rows
+    .map(({ b, tier }) => {
+      const t = (tier ?? "b") as MailDomainTier;
+      return {
+        id: b.id,
+        address: `${b.localPart}@${b.domain}`,
+        domain: b.domain,
+        tier: t,
+        rent: TIER_RENT[t],
+        expiresAt: b.expiresAt,
+        daysLeft: b.expiresAt === null ? null : Math.ceil((b.expiresAt - now) / 86_400_000),
+        graceUntil: b.graceUntil,
+        graceDaysLeft:
+          b.graceUntil === null ? null : Math.max(0, Math.ceil((b.graceUntil - now) / 86_400_000)),
+        status: b.status,
+        messageCount: b.messageCount,
+        unreadCount: b.unreadCount,
+      };
+    })
+    .sort((a, b) => (a.expiresAt ?? Infinity) - (b.expiresAt ?? Infinity));
+}

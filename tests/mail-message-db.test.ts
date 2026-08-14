@@ -741,3 +741,84 @@ describe("**到期 → 宽限期 → 放回池子**", () => {
     assert.equal(/slotStatus\(/.test(fn), false, "续期也去查槽位了");
   });
 });
+
+describe("**申领来的地址要能被看见**", () => {
+  /*
+   * ═════════════════════════════════════════
+   * 它以前一处都不显示
+   * ═════════════════════════════════════════
+   *
+   * `listAliases` 只查 `alias`、`listBurners` 只查 `burner`，
+   * 而申领来的是 `temp` —— 也就是说申领成功之后，那个地址
+   * **在界面上一处都不出现**：花了 400 分，然后它消失了。
+   *
+   * 这一组盯的是「三种箱子各有各的列表，而且合起来不漏」。
+   */
+  let claim: typeof import("@/lib/mail/claim");
+  let alias: typeof import("@/lib/mail/alias");
+  let ledger: typeof import("@/lib/points/ledger");
+
+  before(async () => {
+    claim = await import("@/lib/mail/claim");
+    alias = await import("@/lib/mail/alias");
+    ledger = await import("@/lib/points/ledger");
+  });
+
+  const claimOne = () => {
+    scene();
+    dbm.db
+      .insert(schema.mailDomains)
+      .values({
+        domain: "good.icu",
+        punycode: "good.icu",
+        kind: "reserved",
+        tier: "b",
+        status: "active",
+        enabled: true,
+        allowClaim: true,
+      })
+      .onConflictDoUpdate({ target: schema.mailDomains.domain, set: { allowClaim: true } })
+      .run();
+    ledger.grantPoints({ userId: ME, delta: 5000, reason: "测试铺底" });
+    const r = claim.claimAddress({ userId: ME, domain: "good.icu", localPart: "hello" });
+    assert.ok(r.ok, r.ok ? "" : r.error);
+    return r;
+  };
+
+  it("申领完就在 listClaimed 里，带着到期日和价格", () => {
+    const r = claimOne();
+    const list = claim.listClaimed(ME);
+    assert.equal(list.length, 1, "申领来的地址一处都不显示");
+    assert.equal(list[0].address, r.address);
+    assert.ok(list[0].expiresAt, "没有到期日");
+    assert.ok(list[0].rent > 0, "没带续期价格 —— 界面就得自己按档位查价，那是第二份价目表");
+    assert.ok(list[0].daysLeft && list[0].daysLeft > 300, "剩余天数不对");
+  });
+
+  it("**三种箱子各归各的列表，互不串**", () => {
+    /*
+     * 串了的话最容易出的错是「一次性箱出现在长期地址那一栏、
+     * 带着一个续期按钮」—— 而一次性箱是不能续期的。
+     */
+    claimOne();
+    burner.openBurner({ userId: ME });
+    assert.equal(claim.listClaimed(ME).length, 1);
+    assert.equal(alias.listAliases(ME).length, 0, "自有域名那一栏混进了别的");
+    assert.equal(burner.listBurners({ userId: ME }).length, 1);
+  });
+
+  it("**别人的申领地址看不到**", () => {
+    claimOne();
+    assert.equal(claim.listClaimed(OTHER).length, 0);
+  });
+
+  it("**天数在服务端算** —— 客户端算的话跟着用户的机器时间走", () => {
+    /*
+     * 他把系统时间调快一天，页面上就显示地址明天到期。
+     * 而这一栏唯一会让人后悔的事就是错过续期。
+     */
+    const code = readCode("components/mail/ClaimedSection.tsx");
+    assert.equal(/Date\.now\(\)/.test(code), false, "组件里又自己读时钟了");
+    assert.match(code, /box\.daysLeft/, "没用服务端算好的天数");
+  });
+});
