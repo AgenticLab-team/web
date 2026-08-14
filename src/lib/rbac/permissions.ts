@@ -163,7 +163,7 @@ export const PERMISSIONS = [
   {
     key: "mail.box.write",
     category: "mail",
-    label: "替人开箱 / 改到期 / 收回申领",
+    label: "代管别人的邮箱",
     description: "站长在这里不受最短长度、禁用词、池归属的限制。收回别人的地址要填理由，理由会发给他",
     dangerLevel: 2,
   },

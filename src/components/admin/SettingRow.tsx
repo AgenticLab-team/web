@@ -56,7 +56,27 @@ export function SettingItem({ row }: { row: Row }) {
       <div className="flex w-full items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className="t-body flex flex-wrap items-center gap-1.5">
-            <span className="truncate">{row.label ?? row.key}</span>
+            {/*
+              * **不截断。** 这一行就是这条设置的全部意思。
+              *
+              * 原来这里是 `truncate` —— 不换行、超出打省略号。桌面上它
+              * 从来不触发（栏够宽），所以看不出问题；390px 的手机上，
+              * 右边的值和「修改」按钮占掉固定宽度之后，18 字的标题会被
+              * 截成「短窗口内同一 IP 可生成验证码…」——
+              * **丢掉的恰好是「次数」**，也就是这条设置到底在设什么。
+              *
+              * 而丢掉的那一半没有任何补救：值那一栏只有一个数字，
+              * 下面那行是 key（`auth.bind_code.burst_limit`），
+              * 描述里写的是「防爆刷」——三处都不说它是个次数。
+              *
+              * 换行的代价是这一行可能变成两行。库里 78 条设置，
+              * 最长 21 字、中位数 10 字，也就是最多两行。
+              * 而这一行本来就是多行的（下面还有描述和 key）。
+              *
+              * 一个截断了的标题看起来像排版，不像信息丢失 ——
+              * 这是这轮截图普查里第三个同一形状的问题。
+              */}
+            <span>{row.label ?? row.key}</span>
             {row.modified && <AdminTag>已改</AdminTag>}
             {row.dangerous && <AdminTag color="var(--danger)">危险项</AdminTag>}
           </p>
