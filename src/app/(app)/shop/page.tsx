@@ -22,7 +22,10 @@ export const dynamic = "force-dynamic";
  */
 export default async function ShopPage() {
   const user = await getCurrentUser();
-  // 功能开关：关掉之后这一页 404 —— 只藏导航的话，地址栏敲一下照样进得去
+  /*
+   * 功能开关：关掉之后这一页给 404 —— 只藏导航的话，地址栏敲一下照样进得去。
+   * （给的是 404 那一页，而状态码实测是 200；原因写在 `requireFeature` 上面。）
+   */
   requireFeature("shop", user);
 
   const items = listItems();

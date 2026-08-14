@@ -98,6 +98,28 @@ export function featureEnabled(key: string, user?: CurrentUser | null): boolean 
  * 意味着关掉之后站长自己看到的仍然是正常的，
  * 而他没法确认这一关到底生效没有。真要验，就该看到和别人一样的东西。
  */
+/**
+ * 开关关着就当这一页不存在。
+ *
+ * ⚠️ **它给出的是 404 那一页，但 HTTP 状态码是 200。**
+ *
+ * 这不是这里写错了，是渲染顺序决定的：`(app)` 分组下有
+ * `loading.tsx`，于是每个页面外面都套着一个 Suspense 边界。
+ * 外壳和骨架**先流出去**（此时状态行已经发出，200），
+ * 页面再抛 `notFound()` 时已经改不动了。
+ *
+ * 实测（dev 和 `next build` + `next start` 两边一致）：
+ *
+ *     /zzz-真的不存在        404   ← 路由层就没匹配上，还没开始渲染
+ *     /shop（开关关着）      200   ← 走到这里，外壳已经流出去了
+ *     /forum/p/999999        200   ← 同上，所有 notFound() 都是这样
+ *     (app) 分组外面调 notFound()   404   ← 没有那层 Suspense
+ *
+ * 对这个站影响不大：内容基本都要登录才看得见，没什么爬虫会来
+ * 把它当成一个真页面收录。但**别照着这行注释以为能拿 404 判断**——
+ * 想要真的 404，得把 `loading.tsx` 拿掉（那会牺牲掉整套骨架屏），
+ * 或者在渲染开始之前就挡住（proxy 那一层）。
+ */
 export function requireFeature(key: string, user?: CurrentUser | null): void {
   if (!featureEnabled(key, user)) notFound();
 }
