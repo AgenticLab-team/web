@@ -158,7 +158,25 @@ export function Empty({
     <div className="inset-group px-6 py-10 text-center">
       <p className="t-callout text-[var(--ink-secondary)]">{title}</p>
       {hint && <p className="t-footnote mx-auto mt-1.5 max-w-sm text-[var(--ink-tertiary)]">{hint}</p>}
-      {action && <div className="mt-5 flex justify-center">{action}</div>}
+      {/*
+        * ⚠️ **纵向**，不是横向。
+        *
+        * 这里原来是 `flex justify-center` —— 一个横排的 flex 行。
+        * 传一个孩子进来时看不出问题，而首页那张游客卡传的是两个：
+        * 「用微信身份登录」按钮 + 下面一行「还不在群里？申请加入」。
+        *
+        * 于是它们并排了，而且**链接的左半边被按钮压在下面**。
+        * 调用点明明写了 `block mt-3`，但 `display: block` 在 flex 容器里
+        * 是不生效的 —— 那个孩子是 flex item，不是块。
+        * 也就是说调用方按正常直觉写出来的代码，被这一行悄悄推翻了。
+        *
+        * 这是这个站**未登录时的第一屏**，而空态槽位存在的全部意义
+        * 就是「各页不用自己拼登录块」。它拼错了一种最常见的组合。
+        *
+        * 不给 gap：单孩子的调用点（另外 5 处）要保持一模一样，
+        * 而第二个孩子自己带 `mt-*` —— 那是它自己的事。
+        */}
+      {action && <div className="mt-5 flex flex-col items-center">{action}</div>}
     </div>
   );
 }
