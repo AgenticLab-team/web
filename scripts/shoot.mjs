@@ -60,6 +60,14 @@ const expects = all("--expect");
  * 靠盯像素分辨这三者很慢，而它们在文字上一眼就分得开。
  */
 const prints = all("--print");
+/*
+ * 跑一段表达式并打印结果。
+ *
+ * `--print` 给的是文字，而排查布局要的是**数字** ——
+ * 「这一页是不是比视口宽」这种问题，看图看不出来（浏览器会把
+ * 溢出的部分直接切掉，切得和「本来就这么短」一模一样）。
+ */
+const evals = all("--eval");
 const cookies = all("--cookie");
 
 const CHROME =
@@ -137,6 +145,26 @@ try {
     });
   }
 
+  /*
+   * ⚠️ **视口用 `Emulation.setDeviceMetricsOverride` 定，不能靠 `--window-size`。**
+   *
+   * `--window-size=390,1200` 在 headless=new 下**不生效** ——
+   * 实测 `innerWidth` 是 500（那是它的最小窗口宽）。
+   *
+   * 而这个错的表现极其误导：截回来的图是 500 宽，我按 390 去裁，
+   * 于是右边 110px 被我自己切掉 —— 看起来就像**正文横向溢出**。
+   * 我照着那张图查了半天布局，而布局根本没问题。
+   *
+   * 是这个脚本自己的 `--eval` 把它戳穿的（`innerWidth` 打出来是 500）。
+   */
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width,
+    height,
+    deviceScaleFactor: 1,
+    // 窄视口时按移动设备算 —— 否则 hover 态和触摸目标都不是真实的样子
+    mobile: width < 700,
+  });
+
   await cdp.send("Page.enable");
   await cdp.send("Page.navigate", { url });
   await sleep(waitMs);
@@ -195,6 +223,14 @@ try {
       returnByValue: true,
     });
     console.log(`【${selector}】\n${result.value}`);
+  }
+
+  for (const expr of evals) {
+    const { result } = await cdp.send("Runtime.evaluate", {
+      expression: expr,
+      returnByValue: true,
+    });
+    console.log(`【${expr}】 ${JSON.stringify(result.value)}`);
   }
 
   const shot = await cdp.send("Page.captureScreenshot", { format: "png" });
