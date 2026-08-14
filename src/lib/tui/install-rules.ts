@@ -167,7 +167,7 @@ ${cases}
   need curl
   need shasum_or_sha256sum
 
-  say "正在安装 Agentic Lab 终端客户端 $version（$platform）"
+  say "正在安装 Agentic Lab 终端客户端 \${version}（\${platform}）"
 
   # ── 二、下载 ────────────────────────────────────────
   #
@@ -187,7 +187,7 @@ ${cases}
   # 就等于一条远程执行。
   got="$(hashof "$tmp/ash")"
   if [ "$got" != "$want" ]; then
-    die "校验和对不上，装不了。期望 $want，实际 $got —— 别跑这个文件，把这行贴给站长"
+    die "校验和对不上，装不了。期望 \${want}，实际 \${got} —— 别跑这个文件，把这行贴给站长"
   fi
 
   # ── 四、装进 PATH ───────────────────────────────────

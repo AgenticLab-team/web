@@ -163,6 +163,66 @@ describe("**生成出来的那段 shell 真的能被 bash 解析**", () => {
     }
   });
 
+  it("**`$var` 后面不许紧跟中文** —— macOS 的 bash 3.2 会把它读成变量名的一部分", () => {
+    /*
+     * ═════════════════════════════════════════
+     * `bash -n` 救不了这一条，因为它**语法完全合法**
+     * ═════════════════════════════════════════
+     *
+     * 线上真实发生过：
+     *
+     *     say "正在安装 Agentic Lab 终端客户端 $version（$platform）"
+     *
+     * 一个 Mac 用户跑 `curl -Ls agenticlab.sh | bash`，拿到的是
+     *
+     *     bash: line 39: version␦: unbound variable
+     *
+     * bash 5 在第一个非 ASCII 字节处就停止读变量名，所以在开发机上
+     * 一切正常。而 **macOS 自带的是 bash 3.2**，它把全角括号那三个
+     * 高位字节一并当成标识符，于是去找一个根本不存在的变量 ——
+     * 配上 `set -u`，脚本当场死在第 39 行。
+     *
+     * 更糟的是第二处：它在**校验和对不上**那条路上。也就是说
+     * 最需要把话说清楚的那一刻，脚本会先炸在报错语句本身。
+     *
+     * 写成 `${version}` 就没有歧义 —— 花括号在哪个 bash 里都是边界。
+     *
+     * 这条扫的是渲染后的成品，不是模板：模板里拼出来的东西
+     * （版本号、平台名）也可能带出同样的形状。
+     */
+    for (const [label, script] of [
+      ["已发布", renderInstallScript(fakeManifest, "https://agenticlab.sh")],
+      ["未发布", renderInstallScript(null, "https://agenticlab.sh")],
+    ] as const) {
+      // `$name` 后面紧跟一个非 ASCII 字节。`${name}` 不算 —— 它有边界
+      const bad = [...script.matchAll(/\$[A-Za-z_][A-Za-z0-9_]*(?=[^\x00-\x7F])/g)];
+      assert.deepEqual(
+        bad.map((m) => m[0]),
+        [],
+        `${label}的脚本里这些变量后面紧跟着非 ASCII 字符，` +
+          `macOS 的 bash 3.2 会连着读成变量名 —— 写成 \${...} 加个边界`,
+      );
+    }
+  });
+
+  it("**\`$var\` 后面紧跟 ASCII 字母数字也不行** —— 同一个道理，只是这个哪个 bash 都错", () => {
+    /*
+     * 顺带把同族的那一种也钉住：`$version1` 会被读成变量 `version1`。
+     * 这一种在任何 bash 上都错，所以更容易在开发时暴露 ——
+     * 但既然扫都扫了，多这一行不花什么。
+     */
+    const script = renderInstallScript(fakeManifest, "https://agenticlab.sh");
+    const known = ["version", "bindir", "os", "arch", "platform", "url", "want", "tmp", "got"];
+    for (const name of known) {
+      const glued = new RegExp(`\\$${name}[A-Za-z0-9_]`, "g");
+      assert.deepEqual(
+        [...script.matchAll(glued)].map((m) => m[0]),
+        [],
+        `$${name} 后面紧跟了别的字母数字，会被读成另一个变量名`,
+      );
+    }
+  });
+
   it("**没有对应平台的分支要报错，而不是往下走**", () => {
     /*
      * 漏了这一条的话，一个 FreeBSD 用户会拿到一个 `url` 为空的
