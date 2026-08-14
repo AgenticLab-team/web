@@ -10,6 +10,8 @@ import { listBurnerMessages, listBurners } from "@/lib/mail/burner";
 import { mailConfig } from "@/lib/mail/config";
 import { burnerDomains } from "@/lib/mail/queries";
 import type { BurnerMessageView } from "@/lib/mail/burner";
+import { AliasSection } from "@/components/mail/AliasSection";
+import { listAliases, ownedDomains } from "@/lib/mail/alias";
 
 export const metadata: Metadata = { title: "一次性邮箱" };
 export const dynamic = "force-dynamic";
@@ -41,8 +43,24 @@ export default async function BurnerPage() {
   const messages: Record<string, BurnerMessageView[]> = {};
   for (const box of boxes) messages[box.id] = listBurnerMessages(box.id);
 
+  /*
+   * 自有域名上的长期地址。
+   *
+   * `owned` 为空时**整块不渲染** —— 绝大多数人没有自己的域名，
+   * 给他们看一个「你没有可用的域名」的空块，只是在告诉他们
+   * 有个功能他们用不上。
+   */
+  const owned = ownedDomains(user.id);
+  const aliases = owned.length > 0 ? listAliases(user.id) : [];
+
   return (
     <>
+      {owned.length > 0 && (
+        <div className="mb-3">
+          <AliasSection aliases={aliases} domains={owned.map((d) => ({ domain: d.domain }))} />
+        </div>
+      )}
+
       <PageHeader
         title="一次性邮箱"
         subtitle={`${config.burnerTtlHours} 小时后自动销毁 · 同时最多 ${config.burnerConcurrentLimit} 个`}

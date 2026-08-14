@@ -307,3 +307,132 @@ describe("**额度：普通人受限，能管邮箱的人不受限**", () => {
     assert.ok(after > before, "绕过额度的那次没有留下事件");
   });
 });
+
+describe("**自有域名上的长期地址**", () => {
+  /*
+   * ═════════════════════════════════════════
+   * 唯一的判据是「这域名是不是你的」
+   * ═════════════════════════════════════════
+   *
+   * 公共池上的长期地址是**申领**，那要先有槽位、积分、价格
+   * （`mail_slots` 那张表就是为它准备的，现在还零读零写）——
+   * 那一整套是另一件事。
+   *
+   * 而「我自己的域名」不需要任何经济设计：域名是他的，
+   * 上面开几个地址是他自己的事。所以这条路只有一个判据，
+   * 而这一组就是在从各个方向问那一个判据。
+   */
+  let alias: typeof import("@/lib/mail/alias");
+
+  const giveDomain = (to: string | null, domain = "mine.icu") => {
+    dbm.db
+      .insert(schema.mailDomains)
+      .values({
+        domain,
+        punycode: domain,
+        kind: "owned",
+        status: "active",
+        enabled: true,
+        ownerUserId: to,
+      })
+      .onConflictDoUpdate({ target: schema.mailDomains.domain, set: { ownerUserId: to } })
+      .run();
+    return domain;
+  };
+
+  before(async () => {
+    alias = await import("@/lib/mail/alias");
+  });
+
+  it("自己的域名上开得出来，而且**不过期**", () => {
+    scene();
+    const d = giveDomain(ME);
+    const r = alias.openAlias({ userId: ME, domain: d, localPart: "hello" });
+    assert.ok(r.ok, r.ok ? "" : r.error);
+
+    const row = dbm.db
+      .select()
+      .from(schema.mailBoxes)
+      .where(eq(schema.mailBoxes.id, r.box.id))
+      .get()!;
+    assert.equal(row.kind, "alias");
+    assert.equal(row.expiresAt, null, "长期地址不该有到期时间");
+    assert.equal(row.muted, false, "长期地址不该静音 —— 别人随时可能给你写信");
+  });
+
+  it("**别人的域名上开不出来**", () => {
+    scene();
+    const d = giveDomain(OTHER);
+    const r = alias.openAlias({ userId: ME, domain: d, localPart: "hello" });
+    assert.equal(r.ok, false);
+  });
+
+  it("**没有主人的域名也开不出来** —— 公共池要走申领那条路", () => {
+    scene();
+    const d = giveDomain(null);
+    assert.equal(alias.openAlias({ userId: ME, domain: d, localPart: "hello" }).ok, false);
+  });
+
+  it("**「不是你的」和「没有这个域名」给同一句话** —— 否则它是个归属探针", () => {
+    /*
+     * 域名列表本身不公开（后台才看得到主人）。分开说的话，
+     * 拿一串域名挨个试，靠错误文案就能问出「这个域名有没有主」。
+     */
+    scene();
+    const d = giveDomain(OTHER);
+    const a = alias.openAlias({ userId: ME, domain: d, localPart: "hello" });
+    const b = alias.openAlias({ userId: ME, domain: "根本没有.icu", localPart: "hello" });
+    assert.equal(a.ok, false);
+    assert.equal(b.ok, false);
+    if (!a.ok && !b.ok) assert.equal(a.error, b.error, "两种情况的说法不一样");
+  });
+
+  it("同一个地址开不出第二次", () => {
+    scene();
+    const d = giveDomain(ME);
+    assert.ok(alias.openAlias({ userId: ME, domain: d, localPart: "hello" }).ok);
+    assert.equal(alias.openAlias({ userId: ME, domain: d, localPart: "hello" }).ok, false);
+  });
+
+  it("**停用的域名开不出来** —— 开了也收不到信", () => {
+    scene();
+    const d = giveDomain(ME);
+    dbm.db
+      .update(schema.mailDomains)
+      .set({ enabled: false })
+      .where(eq(schema.mailDomains.domain, d))
+      .run();
+    assert.equal(alias.openAlias({ userId: ME, domain: d, localPart: "hello" }).ok, false);
+  });
+
+  it("`ownedDomains` 只列自己的、且启用着的", () => {
+    scene();
+    giveDomain(ME, "mine.icu");
+    giveDomain(OTHER, "theirs.icu");
+    const mine = alias.ownedDomains(ME).map((d) => d.domain);
+    assert.deepEqual(mine, ["mine.icu"]);
+  });
+
+  it("**长期地址收得到信** —— 建了个收不到信的地址等于没建", () => {
+    scene();
+    const d = giveDomain(ME);
+    const r = alias.openAlias({ userId: ME, domain: d, localPart: "hello" });
+    assert.ok(r.ok);
+
+    ingest.ingestMessage({
+      envelopeFrom: "someone@example.com",
+      envelopeTo: `hello@${d}`,
+      rfcMessageId: "<alias-test@example.com>",
+      subject: "写给长期地址",
+      text: "你好",
+      size: 100,
+    });
+
+    const got = dbm.db
+      .select()
+      .from(schema.mailMessages)
+      .where(eq(schema.mailMessages.boxId, r.box.id))
+      .all();
+    assert.equal(got.length, 1, "长期地址没收到信");
+  });
+});
