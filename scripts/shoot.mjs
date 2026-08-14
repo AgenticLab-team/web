@@ -148,10 +148,20 @@ try {
      * 静默继续的话，截回来的是一张没展开的图 —— 而它长得和
      * 「展开了但什么都没变」一模一样，于是我会对着它得出错误结论。
      */
+    /*
+     * 支持 `选择器>>3` 挑第几个。
+     *
+     * CSS 的 `:nth-of-type` 是「在**各自父元素里**排第几」——
+     * 而一串同类元素常常各有各的父（每个域名一行、每行一个 div），
+     * 于是它们全都是「第 1 个」。踩过一次：想点第三个域名行，
+     * `:nth-of-type(1)` 点中的是别的东西。
+     */
+    const [sel, nth] = selector.split(">>");
     const { result } = await cdp.send("Runtime.evaluate", {
       expression: `(() => {
-        const el = document.querySelector(${JSON.stringify(selector)});
-        if (!el) return "找不到";
+        const list = [...document.querySelectorAll(${JSON.stringify(sel)})];
+        const el = list[${Number(nth ?? 0)}];
+        if (!el) return "找不到（一共 " + list.length + " 个）";
         el.click();
         return "ok";
       })()`,

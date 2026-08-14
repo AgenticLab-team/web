@@ -161,6 +161,30 @@ describe("**UI 文本是给人看的，不是 markdown 源码**", () => {
     }
     assert.deepEqual(offenders, [], "这些地方把 markdown 星号渲染给了用户");
   });
+
+  it("**注释里那个 ★ 也不许进 UI 文案** —— 同一种病、同一个来源", () => {
+    /*
+     * 这个仓库的注释里用 `★` 标「这一条最要紧」。它和 `**` 一样，
+     * 是**写给读代码的人**的记号 —— 而用户看到的是一个来路不明的星星。
+     *
+     * 抓到过一处：域名编辑器里「收所有前缀」那行提示写着
+     * 「★ 开了之后发给任何前缀的信都收」。它已经在后台上显示了。
+     *
+     * 全站就那一处，也就是说这条规矩本来是守着的 ——
+     * 而「本来守着」的东西不写下来，下一次就会被抄进去。
+     * 抄的人不会觉得自己在破坏什么：那一行看起来和周围一模一样。
+     */
+    const offenders: string[] = [];
+    for (const file of allSourceFiles()) {
+      if (!file.endsWith(".tsx")) continue;
+      const code = stripComments(read(file));
+      // 只看字符串字面量里的 —— JSX 文本和 props 都在引号里
+      for (const m of code.matchAll(/["'`][^"'`\n]{0,120}★[^"'`\n]{0,120}["'`]/g)) {
+        offenders.push(`${file.slice(SRC_DIR.length + 1)}: ${m[0].slice(0, 40)}`);
+      }
+    }
+    assert.deepEqual(offenders, [], "这些 UI 文案里带着注释用的 ★");
+  });
 });
 
 describe("**引用的设计变量必须真的存在**", () => {

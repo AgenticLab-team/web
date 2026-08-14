@@ -193,7 +193,7 @@ export function DomainEditor({ domain, candidates, onDone }: DomainEditorProps) 
             [allowClaim, setAllowClaim, "能被申领", "长期地址能落在这个域名上"],
             [allowCustomLocal, setAllowCustomLocal, "能自选前缀", "关掉的话只能拿随机地址"],
             [inRandomRotation, setInRandomRotation, "进随机轮换", "开一次性箱时会不会挑到它"],
-            [catchAll, setCatchAll, "收所有前缀", "★ 开了之后发给任何前缀的信都收 —— 垃圾量会涨一个量级"],
+            [catchAll, setCatchAll, "收所有前缀", "开了之后发给任何前缀的信都收 —— 垃圾量会涨一个量级"],
             [enabled, setEnabled, "启用", "关掉之后这个域名整个不收信"],
           ] as const
         ).map(([value, set, label, hint]) => (
