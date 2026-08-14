@@ -31,3 +31,4 @@ export * from "./uploads";
 export * from "./announcements";
 export * from "./oauth";
 export * from "./mail";
+export * from "./device";

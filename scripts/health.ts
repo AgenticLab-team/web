@@ -25,6 +25,7 @@ import {
   type HealthReport,
 } from "@/lib/health";
 import { runSteps, summarize, tickFailureReport, tickHealth } from "@/lib/ops/tick";
+import { sweepExpiredDeviceCodes } from "@/lib/tui/device";
 import { settleDueSeasons } from "@/lib/seasons/settle";
 import { autoPruneIfNeeded } from "@/lib/storage/auto";
 import { computePersonPhrases } from "@/lib/members/phrases";
@@ -68,6 +69,21 @@ async function main() {
       run: () => autoPruneIfNeeded(diskPct),
       describe: (r: Awaited<ReturnType<typeof autoPruneIfNeeded>>) =>
         r.result ? `改层 ${r.result.retiered} · 退索引 ${r.result.unindexed}` : r.reason,
+    },
+    {
+      /*
+       * 清掉过期的设备登录码。
+       *
+       * 挂在这一轮里而不是自己起一个定时器 —— 和「定时发布」同一个理由：
+       * 多一个定时器就多一处会悄悄停掉、而且没人看得出来的东西。
+       *
+       * 不清的话 `device_codes` 只增不减，而表一大，
+       * 生成用户码时撞车的概率跟着涨 —— 那时候的症状是
+       * **一个毫不相干的人偶尔登录失败**，几乎不可能被查到这儿。
+       */
+      name: "设备码清理",
+      run: () => sweepExpiredDeviceCodes(),
+      describe: (n: number) => (n > 0 ? `清掉 ${n} 条` : "无过期"),
     },
     {
       name: "置顶到期",

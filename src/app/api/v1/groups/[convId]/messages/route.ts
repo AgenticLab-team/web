@@ -33,20 +33,42 @@ export async function GET(
 
   const url = new URL(request.url);
   /*
-   * 上下界都要夹。
+   * 上下界都要夹，而且 `offset` 也要。
    *
-   * 原来只有 `Math.min(..., 200)`，而 **SQLite 里负数 LIMIT 等于不限** ——
-   * `?limit=-1` 一次就能把整个群的消息全拖走。这个接口又没有 offset 参数，
-   * 所以那还是唯一能拿到最新 200 条以外内容的路子：
-   * 它移掉的不是「一次返回多少」，是批量抽取的天花板。
-   * （`searchMessages` 里也夹了一次 —— 这里是 HTTP 边界，那里是所有调用方的兜底。）
+   * ─────────────────────────────────────────
+   * 负数 LIMIT 在 SQLite 里等于不限
+   * ─────────────────────────────────────────
+   *
+   * 原来只有 `Math.min(..., 200)`，于是 `?limit=-1` 一次就能把
+   * 整个群的消息全拖走。它移掉的不是「一次返回多少」，
+   * 是批量抽取的天花板。
+   * （`searchMessages` 里也夹了一次 —— 这里是 HTTP 边界，
+   * 那里是所有调用方的兜底。）
    *
    * 上界是 **100 不是 200**：`searchMessages` 本来就夹在 100，
    * 这边写 200 只是让调用方以为自己能要到 200，然后拿到 100 ——
    * 一个够不着的上限比没有上限更让人费解。两边写同一个数。
+   *
+   * ─────────────────────────────────────────
+   * `offset` 是「往上翻」的全部机制
+   * ─────────────────────────────────────────
+   *
+   * 网页那边翻历史走的是「按天回看」—— 一页 HTML 装不下四万条。
+   * 而终端里的群聊是一个**常驻窗口**：人往上滚，期望的是
+   * 「再往前一屏」，不是「跳到某一天」。没有这个参数的话，
+   * 终端里永远只看得到最近那几十条 —— 那和「聊天软件」的差距
+   * 不是少一个功能，是它不成立。
+   *
+   * 它和 limit 走同一个取数器，所以负数那条口子在两个参数上
+   * 都是堵着的 —— 分开写的话，堵了一个漏一个，而漏的那个
+   * 长得和正常请求一模一样。
    */
-  const rawLimit = Number(url.searchParams.get("limit") ?? 50);
-  const limit = Math.min(Math.max(1, Number.isFinite(rawLimit) ? Math.trunc(rawLimit) : 50), 100);
+  const num = (key: string, fallback: number) => {
+    const raw = Number(url.searchParams.get(key));
+    return Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : fallback;
+  };
+  const limit = Math.min(Math.max(1, num("limit", 50)), 100);
+  const offset = num("offset", 0);
 
   const result = searchMessages(auth.caller.user, {
     query: url.searchParams.get("q") ?? "",
@@ -64,6 +86,7 @@ export async function GET(
     from: url.searchParams.get("from") ?? undefined,
     to: url.searchParams.get("to") ?? undefined,
     limit,
+    offset,
   });
 
   return NextResponse.json({

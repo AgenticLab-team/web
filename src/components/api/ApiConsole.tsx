@@ -1,5 +1,7 @@
 "use client";
 
+import type { Endpoint as CatalogEndpoint } from "@/lib/api-tokens/catalog-types";
+
 import { AlertTriangle, Play, Terminal } from "lucide-react";
 import { useState } from "react";
 
@@ -41,13 +43,18 @@ import { ActionButton, CONTROL, CONTROL_MONO, Field } from "@/components/api/fie
  * （空的时候写着一句占位），位置固定，不会因为有没有结果而跳。
  */
 
-interface Endpoint {
-  method: "GET" | "POST" | "DELETE";
-  path: string;
-  summary: string;
-  scopes: string[];
-  sampleBody?: Record<string, unknown>;
-}
+/*
+ * ─────────────────────────────────────────
+ * 类型从目录里来，不在这儿再定义一份
+ * ─────────────────────────────────────────
+ *
+ * 原来这里有一份自己的 `interface Endpoint`，只写了控制台用得上的
+ * 那几个字段。它在目录还只有 GET/POST 两种方法时一直是对的 ——
+ * 而目录加上 PATCH/DELETE 的那一天，这一份不会报错，
+ * 它只会让那几条端点**从下拉框里消失**（类型不匹配被上游拦下），
+ * 而没有任何地方说得出为什么。
+ */
+type Endpoint = Pick<CatalogEndpoint, "method" | "path" | "summary" | "scopes" | "sampleBody">;
 
 /**
  * 路径里的占位符，比如 `/posts/{id}/replies` → `["id"]`。
@@ -112,7 +119,6 @@ export function ApiConsole({ endpoints }: { endpoints: Endpoint[] }) {
 
   const endpoint = endpoints.find((e) => keyOf(e) === chosen);
   const needed = endpoint ? placeholdersOf(endpoint.path) : [];
-  // 只有 POST 要请求体；DELETE 也是写操作，但它的目标全在路径里
   const isWrite = endpoint?.method === "POST";
 
   /* 有占位符没填就别让他发 —— 发出去只会拿到一句看不懂的 404 */

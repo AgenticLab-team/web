@@ -141,26 +141,61 @@ describe("**每一条读论坛的口子都被管住**", () => {
       forumish,
       [
         "/forum/draft/route.ts",
+        "/v1/forum/boards/route.ts",
+        "/v1/forum/convert/route.ts",
+        "/v1/forum/deep/route.ts",
+        "/v1/forum/search/route.ts",
+        "/v1/posts/[id]/accept/route.ts",
+        "/v1/posts/[id]/bookmark/route.ts",
+        "/v1/posts/[id]/history/route.ts",
+        "/v1/posts/[id]/react/route.ts",
         "/v1/posts/[id]/replies/route.ts",
+        "/v1/posts/[id]/report/route.ts",
         "/v1/posts/[id]/route.ts",
+        "/v1/posts/[id]/tip/route.ts",
+        "/v1/posts/[id]/vote/route.ts",
         "/v1/posts/route.ts",
       ],
       `新的论坛接口要过一遍这个开关：${forumish}`,
     );
   });
 
-  it("**开放 API 那几条论坛接口也判了功能开关**", () => {
+  it("**开放 API 上每一条论坛接口都判了功能开关**", () => {
     /*
      * 网页那边关掉论坛之后 `requireFeature` 会 404。
      * API 这条路不判的话，它就是一个绕过开关的后门 ——
      * 站长以为关掉了，实际上带令牌照样读得到、发得出去。
+     *
+     * ─────────────────────────────────────────
+     * 从「列三个文件」改成「上面那张表里的每一条」
+     * ─────────────────────────────────────────
+     *
+     * 原来这里手写了三个路径。上一条测试已经维护着一张完整的
+     * 论坛接口清单了，而这一条却只查其中三个 ——
+     * 于是新加的十几条接口在这里一条都没被查到，
+     * 而上一条测试是绿的（因为它只数名字，不看内容）。
+     *
+     * 两条测试共用同一张表之后，加一条接口只会在一个地方红。
      */
-    for (const f of [
-      "app/api/v1/posts/route.ts",
-      "app/api/v1/posts/[id]/route.ts",
-      "app/api/v1/posts/[id]/replies/route.ts",
-    ]) {
-      assert.match(strip(src(f)), /featureEnabled\("forum"/, f);
+    const walk2 = (d: string, out: string[] = []): string[] => {
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        const f = join(d, e.name);
+        if (e.isDirectory()) walk2(f, out);
+        else if (e.name === "route.ts") out.push(f.slice(join(root, "src/").length));
+      }
+      return out;
+    };
+    const routes = walk2(join(root, "src/app/api/v1")).filter((p) => /forum|post/.test(p));
+    assert.ok(routes.length >= 14, `只找到 ${routes.length} 条，扫描八成退化了`);
+    for (const f of routes) {
+      /*
+       * 查的是**共用的那个闸口**，不是 `featureEnabled` 本身。
+       *
+       * 查后者的话，一条自己写了 `featureEnabled("forum", …)`
+       * 但判反了的路由照样能通过。共用函数只有一处实现，
+       * 而它有自己的测试。
+       */
+      assert.match(strip(src(f)), /forumGate\(/, f);
     }
   });
 });

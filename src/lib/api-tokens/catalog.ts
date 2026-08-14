@@ -1,5 +1,16 @@
 import type { ScopeKey } from "./rules";
 
+import { ADMIN_ENDPOINTS } from "./catalog-admin";
+import { AUTH_ENDPOINTS } from "./catalog-auth";
+import { COMMUNITY_ENDPOINTS } from "./catalog-community";
+import { FORUM_ENDPOINTS } from "./catalog-forum";
+import { GROUP_ENDPOINTS } from "./catalog-groups";
+import { MAIL_ENDPOINTS } from "./catalog-mail";
+import { ME_ENDPOINTS } from "./catalog-me";
+import type { Endpoint } from "./catalog-types";
+
+export type { Endpoint } from "./catalog-types";
+
 /**
  * 开放 API 的端点目录 —— **文档的唯一真源**。
  *
@@ -16,49 +27,39 @@ import type { ScopeKey } from "./rules";
  *
  * 所以这里既是「有哪些端点」的真源，也是「你能用哪些」的判据：
  * 页面和 `/api/v1/docs` 读同一份，不会有第二种说法。
+ *
+ * ═════════════════════════════════════════
+ * 它现在还是终端客户端的真源
+ * ═════════════════════════════════════════
+ *
+ * `lib/tui/surface.ts` 里每个「面」声明自己靠哪些端点，
+ * 而 `tests/tui-parity.test.ts` 对着这份表逐条核 ——
+ * 写了一个不存在的端点就红。
+ *
+ * 反方向也核：这里有而没有任何面用到的端点，同样是红的。
+ * 一个谁也没用的端点意味着两件事之一 —— 要么它该被删，
+ * 要么**终端漏做了一个面**。两种都值得当场知道。
+ *
+ * ─────────────────────────────────────────
+ * 为什么按域拆成几份
+ * ─────────────────────────────────────────
+ *
+ * 七十多条端点、每条带一段说明，堆在一个文件里是一千多行，
+ * 而人来这里通常只想找某一域的那几条。
+ *
+ * 拆开之后这个文件只剩「有哪几组」和「怎么按权限筛」——
+ * 而它仍然是唯一的导出口：所有调用点 import 的都是这里，
+ * 拆分对它们不可见。
  */
 
-export interface Endpoint {
-  /**
-   * DELETE 是随一次性邮箱一起加进来的。
-   *
-   * 「用完就扔」的那个**扔**，是这个功能语义的一半 ——
-   * 用 `POST /destroy` 之类表达它的话，在线控制台和 curl 例子
-   * 都要多解释一句「为什么删东西要用 POST」。
-   */
-  method: "GET" | "POST" | "DELETE";
-  path: string;
-  summary: string;
-  /** 要哪些 scope 才调得动；空数组 = 任何有效令牌都行 */
-  scopes: ScopeKey[];
-  /** 一句能直接抄去跑的例子 */
-  example: string;
-  /** 额外要注意的事，会原样显示在文档上 */
-  note?: string;
-  /**
-   * 在线测试里预填的请求体。
-   *
-   * ─────────────────────────────────────────
-   * 没有它，POST 那几条在控制台里等于用不了
-   * ─────────────────────────────────────────
-   *
-   * 控制台原来给所有 POST 都填 `{"text":"…"}` —— 对发消息是对的，
-   * 对发帖是错的（要 board / title / content），而人点下去拿到的是
-   * 一句 400。他多半会以为是自己令牌不对，而不是这个框里的内容不对。
-   *
-   * 每条自己带一份能直接按下去的例子，这个问题就不存在了。
-   */
-  sampleBody?: Record<string, unknown>;
-}
-
 export const ENDPOINTS: readonly Endpoint[] = [
-  {
-    method: "GET",
-    path: "/api/v1/me",
-    summary: "我是谁：昵称、等级、积分、称号",
-    scopes: ["me:read"],
-    example: `curl -H "Authorization: Bearer $TOKEN" https://agenticlab.sh/api/v1/me`,
-  },
+  ...AUTH_ENDPOINTS,
+  ...ME_ENDPOINTS,
+  ...FORUM_ENDPOINTS,
+  ...GROUP_ENDPOINTS,
+  ...MAIL_ENDPOINTS,
+  ...COMMUNITY_ENDPOINTS,
+  ...ADMIN_ENDPOINTS,
   {
     method: "GET",
     path: "/api/v1/docs",
@@ -69,167 +70,14 @@ export const ENDPOINTS: readonly Endpoint[] = [
   },
   {
     method: "GET",
-    path: "/api/v1/posts",
-    summary: "帖子列表（只给你看得到的）",
-    scopes: ["forum:read"],
-    example: `curl -H "Authorization: Bearer $TOKEN" "https://agenticlab.sh/api/v1/posts?limit=20"`,
-    note: "可以带 `?board=<版块 key>` 筛版块。按作者筛时永远排除匿名帖 —— 这条写在查询层，没有例外",
-  },
-  {
-    method: "GET",
-    path: "/api/v1/posts/{id}",
-    summary: "一篇帖子和它的回复",
-    scopes: ["forum:read"],
-    example: `curl -H "Authorization: Bearer $TOKEN" https://agenticlab.sh/api/v1/posts/<id>`,
-    note: "看不见的帖子和不存在的帖子给同一个 404 —— 分开说等于把「这个 id 存在」告诉了看不到它的人",
-  },
-  {
-    method: "POST",
-    path: "/api/v1/posts",
-    summary: "发一个帖",
-    scopes: ["forum:write"],
-    example:
-      `curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \\\n` +
-      `  -d '{"board":"general","title":"标题","content":"正文"}' \\\n` +
-      `  https://agenticlab.sh/api/v1/posts`,
+    path: "/api/v1/release",
+    summary: "终端客户端的最新版本与下载地址",
+    scopes: [],
+    auth: "none",
+    example: `curl https://agenticlab.sh/api/v1/release`,
     note:
-      "走的是网页那条同一段实现：版块权限、等级门槛、匿名规则、必填标签、敏感词、" +
-      "发帖频率限制一条都不少。**令牌不是绕开规则的近路**",
-    sampleBody: { board: "general", title: "从 API 发的", content: "正文写这里" },
-  },
-  {
-    method: "POST",
-    path: "/api/v1/posts/{id}/replies",
-    summary: "回一个帖",
-    scopes: ["forum:write"],
-    example:
-      `curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \\\n` +
-      `  -d '{"content":"说得对"}' https://agenticlab.sh/api/v1/posts/<id>/replies`,
-    sampleBody: { content: "说得对" },
-  },
-  {
-    method: "GET",
-    path: "/api/v1/groups",
-    summary: "我在哪些群里（含能不能往那里发）",
-    scopes: ["groups:read"],
-    example: `curl -H "Authorization: Bearer $TOKEN" https://agenticlab.sh/api/v1/groups`,
-    note:
-      "别的群接口都要 conv_id，而这是**唯一**能拿到它的地方。" +
-      "只给你自己在的群 —— 群列表属于隐私，有令牌也看不到别人的",
-  },
-  {
-    method: "GET",
-    path: "/api/v1/groups/{conv_id}/announcement",
-    summary: "读群公告",
-    scopes: ["groups:read"],
-    example:
-      `curl -H "Authorization: Bearer $TOKEN" \\\n` +
-      `  https://agenticlab.sh/api/v1/groups/<conv_id>/announcement`,
-    note: "在群里就能读 —— 群里每个人本来就看得见",
-  },
-  {
-    method: "POST",
-    path: "/api/v1/groups/{conv_id}/announcement",
-    summary: "改群公告",
-    scopes: ["groups:send"],
-    example:
-      `curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \\\n` +
-      `  -d '{"text":"本周六线下"}' \\\n` +
-      `  https://agenticlab.sh/api/v1/groups/<conv_id>/announcement`,
-    note:
-      "⚠️ **整条替换，不是追加** —— 会把群里现在的公告顶掉，返回体里的 previous 就是被顶掉的那段。" +
-      "同样带代发署名，和发消息共用授权与额度",
-    sampleBody: { text: "本周六线下聚会，地点群里说" },
-  },
-  {
-    method: "GET",
-    path: "/api/v1/groups/{conv_id}/stats",
-    summary: "这个群的发言榜和活跃度",
-    scopes: ["groups:read"],
-    example:
-      `curl -H "Authorization: Bearer $TOKEN" \\\n` +
-      `  "https://agenticlab.sh/api/v1/groups/<conv_id>/stats?days=30&limit=20"`,
-    note:
-      "关掉了「出现在榜单上」的成员不会出现在结果里 —— 和站内榜单同一套口径。" +
-      "活跃度是整个群按天汇总的，不分人",
-  },
-  {
-    method: "GET",
-    path: "/api/v1/groups/{conv_id}/messages",
-    summary: "读这个群的聊天记录",
-    scopes: ["groups:read"],
-    example:
-      `curl -H "Authorization: Bearer $TOKEN" \\\n` +
-      `  "https://agenticlab.sh/api/v1/groups/<conv_id>/messages?q=关键词&limit=50"`,
-    note:
-      "只限你自己在的群。关掉了「别人能搜到我的发言」的人不会出现在结果里 —— " +
-      "和站内检索同一套口径",
-  },
-  {
-    method: "POST",
-    path: "/api/v1/groups/{conv_id}/messages",
-    summary: "往一个群发一条文本",
-    scopes: ["groups:send"],
-    example:
-      `curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \\\n` +
-      `  -d '{"text":"大家好"}' \\\n` +
-      `  https://agenticlab.sh/api/v1/groups/<conv_id>/messages`,
-    note:
-      "**发出去的消息一定会带一行代发署名**（「本消息由「你」使用 AgenticLab.sh 代发」）—— " +
-      "消息由机器人账号发出，不署名的话群里没有人知道是谁说的。" +
-      "另外：只能发到**站长授权过、而且你确实在其中**的群",
-    sampleBody: { text: "大家好" },
-  },
-
-  // ── 一次性邮箱 ──────────────────────────────────────────────
-  {
-    method: "POST",
-    path: "/api/v1/mail/burners",
-    summary: "开一个一次性邮箱（24 小时后销毁）",
-    scopes: ["mail:burner"],
-    example: `curl -X POST -H "Authorization: Bearer $TOKEN" https://agenticlab.sh/api/v1/mail/burners`,
-    note:
-      "**不填 local_part 就给你一个随机地址**，这是最常见的用法。" +
-      "自选前缀有最短长度限制（默认 10 个字符）—— 短前缀留给正式申领，" +
-      "否则有人会用一次性箱反复占着好地址。" +
-      "同时在手的箱子数**和你在网页上开的共用一个额度**",
-    sampleBody: {},
-  },
-  {
-    method: "GET",
-    path: "/api/v1/mail/burners",
-    summary: "列出这把令牌开的、还活着的一次性邮箱",
-    scopes: ["mail:burner"],
-    example: `curl -H "Authorization: Bearer $TOKEN" https://agenticlab.sh/api/v1/mail/burners`,
-    note:
-      "★ 只列**这把令牌自己开的** —— 你在网页上开的箱子它看不见。" +
-      "这样一把令牌泄漏的爆炸半径，就是它自己造出来的那几个地址",
-  },
-  {
-    method: "GET",
-    path: "/api/v1/mail/burners/{id}",
-    summary: "这个箱子的状态与用量",
-    scopes: ["mail:burner"],
-    example: `curl -H "Authorization: Bearer $TOKEN" https://agenticlab.sh/api/v1/mail/burners/<id>`,
-  },
-  {
-    method: "DELETE",
-    path: "/api/v1/mail/burners/{id}",
-    summary: "提前销毁 ——「用完就扔」的那个扔",
-    scopes: ["mail:burner"],
-    example: `curl -X DELETE -H "Authorization: Bearer $TOKEN" https://agenticlab.sh/api/v1/mail/burners/<id>`,
-    note: "**不可逆**：正文一起清掉，地址立刻可以被别人拿去用",
-  },
-  {
-    method: "GET",
-    path: "/api/v1/mail/burners/{id}/messages",
-    summary: "这个箱子收到的信，带抽好的验证码",
-    scopes: ["mail:burner"],
-    example: `curl -H "Authorization: Bearer $TOKEN" "https://agenticlab.sh/api/v1/mail/burners/<id>/messages?since=0"`,
-    note:
-      "返回体里的 `otp_code` 是**已经抽好的验证码**，不用自己写正则解 HTML 邮件；" +
-      "抽不出来时是 null（宁可不抽也不猜错）。" +
-      "`?since=<毫秒时间戳>` 做增量拉取",
+      "自更新用。每个平台一条，带 sha256 —— **没有校验和的自更新等于一条远程执行**。" +
+      "不需要令牌：一个还没登录的人也要能装上客户端",
   },
 ];
 
@@ -270,16 +118,30 @@ export const NOT_POSSIBLE: readonly { what: string; why: string }[] = [
       "没有群主和管理员字段（库里那个 is_admin 2041 行全是 0）。" +
       "所以「谁能往哪个群发」由站长逐个授权，不是从群主身份推出来的",
   },
+  {
+    what: "实时收到群消息",
+    why:
+      "上游那 27 个端点里没有 webhook、也没有长连接，只能轮询 —— " +
+      "所以群消息是每 2 分钟同步一次的镜像，终端里收到新消息最多晚 2 分钟。" +
+      "这一条要在界面上直说，不然人会以为是自己网络断了",
+  },
 ];
 
-/** 这把令牌调得动哪几个 */
+/**
+ * 这把令牌调得动哪几个。
+ *
+ * `auth: "none"` 的那几条永远在里面 —— 它们本来就不看令牌，
+ * 把它们排进「你还差某个权限」那一栏会让人去申请一个根本不存在的东西。
+ */
 export function allowedFor(scopes: readonly ScopeKey[]): Endpoint[] {
-  return ENDPOINTS.filter((e) => e.scopes.every((s) => scopes.includes(s)));
+  return ENDPOINTS.filter((e) => e.auth === "none" || e.scopes.every((s) => scopes.includes(s)));
 }
 
 /** 调不动的那几个，连同「缺哪个 scope」一起给出来 */
 export function blockedFor(scopes: readonly ScopeKey[]): { endpoint: Endpoint; missing: ScopeKey[] }[] {
-  return ENDPOINTS.filter((e) => !e.scopes.every((s) => scopes.includes(s))).map((endpoint) => ({
+  return ENDPOINTS.filter(
+    (e) => e.auth !== "none" && !e.scopes.every((s) => scopes.includes(s)),
+  ).map((endpoint) => ({
     endpoint,
     missing: endpoint.scopes.filter((s) => !scopes.includes(s)),
   }));

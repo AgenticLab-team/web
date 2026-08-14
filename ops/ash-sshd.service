@@ -1,0 +1,63 @@
+[Unit]
+# SSH 网关。它**不是**源站 —— 见 TUI.md 第三节。
+#
+# 这台机器上不该有：数据库、.env.local、上游 frp 隧道、.deploy-host。
+# 它只知道一个公网 SITE_URL，调 API 走 HTTPS，
+# 和任何一个第三方客户端没有区别。
+#
+# 被打穿的后果是「一台跑着开源 TUI 的空盒子丢了」，不是「站没了」。
+Description=Agentic Lab SSH 网关
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ash
+Group=ash
+WorkingDirectory=/opt/ash
+
+# 唯一要配的东西
+Environment=ASH_SITE=https://agenticlab.sh
+Environment=ASH_SSHD_ADDR=:22
+Environment=ASH_SSHD_HOST_KEY=/opt/ash/.ssh/ash_ed25519
+Environment=ASH_SSHD_STATE=/opt/ash/state
+
+ExecStart=/opt/ash/ash-sshd
+
+Restart=always
+RestartSec=3
+
+# ── 加固 ────────────────────────────────────────────────
+#
+# 这台机器上放着**别人的令牌**（每个人一个 0600 的文件，
+# 按 SSH 公钥指纹命名）。那是它唯一值得偷的东西，
+# 所以这一段的重点全在「别让别的进程读到那个目录」。
+
+# 22 端口要 root 才绑得上，而进程本身不该是 root
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+
+# 整个文件系统只读，只有状态目录可写
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/ash/state
+PrivateTmp=true
+PrivateDevices=true
+
+# 令牌文件的权限。umask 077 保证新建的是 0600 ——
+# 漏了这一条的话，同机上任何一个用户都读得到所有人的令牌
+UMask=0077
+
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

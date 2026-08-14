@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { apiError, authenticate } from "@/lib/api-tokens/auth";
-import { featureEnabled } from "@/lib/flags/server";
+import { forumGate } from "@/lib/forum/api-gate";
 import { eq } from "drizzle-orm";
 
 import { buildViewerContext } from "@/lib/forum/context";
@@ -31,19 +31,9 @@ export async function GET(request: Request) {
   const auth = await authenticate(request, ["forum:read"]);
   if (!auth.ok) return auth.response;
 
-  /*
-   * 功能开关也要过。
-   *
-   * 论坛模块关掉之后，网页那边 `requireFeature` 会 404 ——
-   * 而 API 这条路如果不判，就成了**一个绕过开关的后门**：
-   * 站长以为关掉了，实际上带令牌照样读得到、发得出去。
-   *
-   * （`canReadForum` 管的是「对访客开不开」，API 这条路上没有访客 ——
-   * 有效令牌背后一定是一个真实账号，所以那一条在这里恒真。）
-   */
-  if (!featureEnabled("forum", auth.caller.user)) {
-    return apiError(404, "not_found", "论坛模块没有开");
-  }
+  /* 功能开关也要过 —— 不判的话令牌就是一条绕过开关的后门，见 forum/api-gate.ts */
+  const gate = forumGate(auth.caller.user);
+  if (gate) return gate;
 
   const url = new URL(request.url);
   /*
@@ -84,19 +74,9 @@ export async function POST(request: Request) {
   const auth = await authenticate(request, ["forum:write"]);
   if (!auth.ok) return auth.response;
 
-  /*
-   * 功能开关也要过。
-   *
-   * 论坛模块关掉之后，网页那边 `requireFeature` 会 404 ——
-   * 而 API 这条路如果不判，就成了**一个绕过开关的后门**：
-   * 站长以为关掉了，实际上带令牌照样读得到、发得出去。
-   *
-   * （`canReadForum` 管的是「对访客开不开」，API 这条路上没有访客 ——
-   * 有效令牌背后一定是一个真实账号，所以那一条在这里恒真。）
-   */
-  if (!featureEnabled("forum", auth.caller.user)) {
-    return apiError(404, "not_found", "论坛模块没有开");
-  }
+  /* 功能开关也要过 —— 不判的话令牌就是一条绕过开关的后门，见 forum/api-gate.ts */
+  const gate = forumGate(auth.caller.user);
+  if (gate) return gate;
 
   let body: { board?: unknown; title?: unknown; content?: unknown; anonymous?: unknown };
   try {

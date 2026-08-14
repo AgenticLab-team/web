@@ -42,20 +42,27 @@ import type { Endpoint } from "@/lib/api-tokens/catalog";
 /*
  * 读用中性色，写用警示色。
  *
- * DELETE 和 POST 同色而不是再挑一个新颜色 —— 这一栏要回答的问题
- * 只有一个：**按下去会不会改东西**。分成三种颜色的话，
- * 眼睛得先学一遍配色才能读懂它，而那一栏只有 44px 宽。
+ * 这一栏要回答的问题只有一个：**按下去会不会改东西**。
+ * 每种方法各挑一个颜色的话，眼睛得先学一遍配色才读得懂它，
+ * 而那一栏只有 44px 宽。所以写的那几种共用一个徽章。
  */
+const WRITE_BADGE = {
+  background: "color-mix(in srgb, var(--warning) 16%, transparent)",
+  color: "var(--warning)",
+} as const;
+
 const METHOD_STYLE = {
   GET: { background: "var(--fill)", color: "var(--ink-secondary)" },
-  POST: {
-    background: "color-mix(in srgb, var(--warning) 16%, transparent)",
-    color: "var(--warning)",
-  },
-  DELETE: {
-    background: "color-mix(in srgb, var(--warning) 16%, transparent)",
-    color: "var(--warning)",
-  },
+  POST: WRITE_BADGE,
+  PATCH: WRITE_BADGE,
+  /*
+   * DELETE 也用警示色而不是危险红。
+   *
+   * 这一栏里 DELETE 的对象是令牌、会话、草稿、雷达关键词 ——
+   * 都是可以再建一个的东西。把它染成和封禁同一个红，
+   * 会让真正不可逆的那些失去分量。
+   */
+  DELETE: WRITE_BADGE,
 } as const;
 
 export function EndpointDoc({

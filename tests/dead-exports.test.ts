@@ -207,6 +207,16 @@ const TEST_ONLY: string[] = [
   "lib/time.ts → hourOf",
   "lib/titles/queries.ts → titleByKey",
   "lib/titles/rules.ts → sourceLabel",
+  /*
+   * 这两条是**给守卫用的**，不是「拆出来为了可测」。
+   *
+   * `tests/tui-parity.test.ts` 靠它们把 `surface.ts` 那张表
+   * 和网页路由、开放 API 目录、Go 那侧的屏幕注册表对起来。
+   * 生产里没有调用方是对的：那张表本身是数据，
+   * 而对齐这件事只发生在测试里。
+   */
+  "lib/tui/surface.ts → declaredEndpoints",
+  "lib/tui/surface.ts → surfaceForWebPath",
   "lib/uploads/queries.ts → myRecentUploads",
   "lib/uploads/queries.ts → uploaderOf",
   "lib/users/deletion-plan.ts → planFor",

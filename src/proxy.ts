@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isProtectedPath } from "@/lib/auth/routes";
 import { env } from "@/lib/env";
 import { forumOpenToGuests } from "@/lib/forum/public-access";
+import { wantsInstallScript } from "@/lib/tui/install-rules";
 
 /**
  * 登录门禁。
@@ -51,6 +52,32 @@ const SESSION_COOKIE = "al_session";
 
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+
+  /*
+   * ─────────────────────────────────────────
+   * 裸域名上同时供两种东西
+   * ─────────────────────────────────────────
+   *
+   * `curl -Ls agenticlab.sh | bash` 要拿到一段 shell，
+   * 浏览器打开同一个地址要拿到网页。判据在
+   * `lib/tui/install-rules.ts` 里（纯函数，有测试）——
+   * 不放在 nginx 配置里的理由写在那个文件顶上：
+   * 那一条判错的后果是**一整页 HTML 被灌进 bash**，
+   * 而 nginx 配置没有测试。
+   *
+   * 用 rewrite 而不是 redirect：`curl` 不加 `-L` 就不跟跳转，
+   * 而群里贴出来的命令迟早有人抄掉那个 `-L`。
+   */
+  if (
+    pathname === "/" &&
+    wantsInstallScript({
+      userAgent: request.headers.get("user-agent"),
+      accept: request.headers.get("accept"),
+    })
+  ) {
+    return NextResponse.rewrite(new URL("/install.sh", env.site.url));
+  }
+
   const loggedIn = request.cookies.has(SESSION_COOKIE);
 
   if (loggedIn) return NextResponse.next();
@@ -131,5 +158,16 @@ export const config = {
     "/forum",
     "/onboarding",
     "/welcome",
+    "/link",
+    /*
+     * 首页也进 matcher —— 但**不是**为了登录门禁（首页对访客开放）。
+     *
+     * 它在这儿只为一件事：让 `curl -Ls agenticlab.sh` 拿到安装脚本
+     * 而不是网页（见 proxy 函数开头）。
+     *
+     * 写成 "/" 而不是 "/:path*"：后者会把整站都拉进这一层，
+     * 而这一层每多覆盖一条路径，就多一次「登录判定被跳过」的机会。
+     */
+    "/",
   ],
 };
