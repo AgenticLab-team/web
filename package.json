@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "audit": "node scripts/audit-all.mjs",
     "bootstrap": "tsx --conditions=react-server --env-file=.env.local scripts/bootstrap.ts",
     "seed-ui": "tsx --conditions=react-server --env-file=.env.local scripts/seed-ui.ts",
     "demo-login": "tsx --conditions=react-server --env-file=.env.local scripts/demo-login.ts",

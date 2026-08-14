@@ -80,3 +80,6 @@ next-env.d.ts
 # 终端客户端的交叉编译产物。`bash scripts/tui-release.sh` 生成，
 # 一次四个平台六十来兆 —— 它们该去对象存储，不该进 git
 tui/dist/
+
+# 审计用的会话令牌 —— 是一把真的钥匙，不进仓库
+.audit-session

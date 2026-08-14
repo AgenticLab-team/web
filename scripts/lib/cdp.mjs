@@ -24,6 +24,31 @@ const CHROME =
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/*
+ * ⚠️ 被打断时也要收拾，而信号处理**只能注册一次**。
+ *
+ * 原来只在正常路径上 `close()` —— 一旦命令超时或者被 Ctrl-C，
+ * 父进程死了而 Chrome **活了下来**，profile 目录也留在 /tmp 里。
+ * 实测攒到 57 个目录、222MB —— 正好是这个文件顶上那句
+ * 「清理写漏了表现是跑几十次之后磁盘满了」。
+ * 我写下那句话的时候，它已经在发生了。
+ *
+ * 而第一版把处理器写进了 `launch()` 里：一次批量跑要开二十个浏览器，
+ * 于是二十份处理器，Node 直接警告「11 个 SIGTERM 监听器，
+ * 可能有内存泄漏」。同一个注释里预言过的第二种错，也照样犯了。
+ *
+ * 所以：一个进程级的集合 + 一次性注册。
+ */
+const live = new Set();
+const killAll = () => {
+  for (const c of live) { try { c.kill(); } catch { /* 已经没了 */ } }
+  live.clear();
+};
+for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+  process.once(sig, () => { killAll(); process.exit(130); });
+}
+process.once("exit", killAll);
+
 /**
  * 起浏览器、连上、把 `{ send, close }` 交出去。
  *
@@ -100,6 +125,7 @@ export async function launch({ width = 1440, height = 1600 } = {}) {
     });
 
   const close = async () => {
+    live.delete(chrome);
     try { ws.close(); } catch { /* 已经断了 */ }
     chrome.kill();
     await new Promise((resolve) => {
@@ -114,6 +140,8 @@ export async function launch({ width = 1440, height = 1600 } = {}) {
     if (!listeners.has(method)) listeners.set(method, []);
     listeners.get(method).push(fn);
   };
+
+  live.add(chrome);
 
   return { send, on, close };
 }
