@@ -19,7 +19,7 @@ import { ClaimedSection } from "@/components/mail/ClaimedSection";
 import { ForwardSection } from "@/components/mail/ForwardSection";
 import { forwardState } from "@/lib/mail/forward-queries";
 
-export const metadata: Metadata = { title: "一次性邮箱" };
+export const metadata: Metadata = { title: "邮箱" };
 export const dynamic = "force-dynamic";
 
 /**
@@ -69,31 +69,28 @@ export default async function BurnerPage() {
 
   return (
     <>
-      {/* 已经有的排在前面 —— 「我的东西」比「能买什么」要紧 */}
-      {/* 转发排在最后：它是设置，不是每天要看的东西 */}
-      {claimed.length > 0 && (
-        <div className="mb-3">
-          <ClaimedSection boxes={claimed} />
-        </div>
-      )}
-
-      <div className="mb-3">
-        <ClaimSection slots={slots} domains={claimable} />
-      </div>
-
-      {owned.length > 0 && (
-        <div className="mb-3">
-          <AliasSection aliases={aliases} domains={owned.map((d) => ({ domain: d.domain }))} />
-        </div>
-      )}
-
-      <div className="mb-3">
-        <ForwardSection state={forward} />
-      </div>
-
+      {/*
+        * ═════════════════════════════════════════
+        * 标题在最上面，一次性箱紧跟着
+        * ═════════════════════════════════════════
+        *
+        * 这一页原来只有一次性箱，后来长出了申领、自有域名、转发四块 ——
+        * 而我把它们全插在了 `PageHeader` **前面**。
+        * 截图之后才看见：人打开这一页，第一眼是一张没有任何上下文的卡片，
+        * 页面标题埋在四张卡片下面。
+        *
+        * 顺序按「多久看一次」排：
+        *   一次性箱   每次要验证码都来 —— 主功能，紧跟标题
+        *   我申领的   偶尔看一眼有没有新信、快不快到期
+        *   申领新的   想起来才做
+        *   自有域名   同上，而且绝大多数人没有
+        *   转发       设置，配一次就不再动
+        *
+        * 而标题本身也改了：这一页早就不只是一次性邮箱了。
+        */}
       <PageHeader
-        title="一次性邮箱"
-        subtitle={`${config.burnerTtlHours} 小时后自动销毁 · 同时最多 ${config.burnerConcurrentLimit} 个`}
+        title="邮箱"
+        subtitle={`一次性地址 ${config.burnerTtlHours} 小时后自动销毁 · 同时最多 ${config.burnerConcurrentLimit} 个`}
       />
 
       <BurnerScreen
@@ -103,6 +100,26 @@ export default async function BurnerPage() {
         customMinLength={config.burnerCustomMinLength}
         domains={burnerDomains()}
       />
+
+      {claimed.length > 0 && (
+        <div className="mt-3">
+          <ClaimedSection boxes={claimed} />
+        </div>
+      )}
+
+      <div className="mt-3">
+        <ClaimSection slots={slots} domains={claimable} />
+      </div>
+
+      {owned.length > 0 && (
+        <div className="mt-3">
+          <AliasSection aliases={aliases} domains={owned.map((d) => ({ domain: d.domain }))} />
+        </div>
+      )}
+
+      <div className="mt-3">
+        <ForwardSection state={forward} />
+      </div>
 
       <PageNote>
         这些地址<strong>只收不发</strong>。收到的邮件正文在箱子销毁时一起清掉，

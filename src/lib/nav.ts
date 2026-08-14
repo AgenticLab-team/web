@@ -207,8 +207,16 @@ export const NAV: NavSection[] = [
       {
         key: "mail",
         flag: "temp_mailbox",
+        /*
+         * 路由还叫 `/mail/burner`，而这一页早就不只是一次性箱了
+         * （申领、自有域名别名、转发都在上面）。
+         *
+         * 没改路由：改了要动导航、书签、测试里那一串路径，
+         * 而换来的只是地址栏好看一点。导航上的**名字**改了就够 ——
+         * 人认的是那个词，不是 URL。
+         */
         href: "/mail/burner",
-        label: "一次性邮箱",
+        label: "邮箱",
         icon: "mail",
         requiresAuth: true,
         ready: true,
