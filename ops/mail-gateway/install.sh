@@ -56,6 +56,17 @@ sudo chmod 600 "$HOME_DIR/.env"
 NODE_BIN="$(command -v node)"
 [[ -n "$NODE_BIN" ]] || { echo "找不到 node"; exit 1; }
 sed "s|__NODE__|$NODE_BIN|" agenticlab-mail.service | sudo tee /etc/systemd/system/agenticlab-mail.service >/dev/null
+# ── 续期钩子 ─────────────────────────────────────────────────
+#
+# 网关是**启动时读一次**证书的，所以 certbot 换了新证书之后
+# 必须有人重启它。没有这一步的话，第 90 天开始发信方会静默降级成
+# 明文、或者干脆拒投 —— 两种都不在我们这边留错误日志。
+if [[ -d /etc/letsencrypt ]]; then
+  sudo mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+  sudo cp renew-hook.sh /etc/letsencrypt/renewal-hooks/deploy/agenticlab-mail.sh
+  sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/agenticlab-mail.sh
+fi
+
 sudo systemctl daemon-reload
 sudo systemctl enable --now agenticlab-mail
 

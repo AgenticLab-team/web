@@ -111,3 +111,48 @@ describe("**同机部署不许把站点地址写成 127.0.0.1:3000**", () => {
     assert.match(def, /^https:\/\//, `默认站点地址应该是 https 的公网地址，实际是 ${def}`);
   });
 });
+
+describe("**证书续期之后要有人重启网关**", () => {
+  /*
+   * ═════════════════════════════════════════
+   * 因为它是**启动时读一次**证书的
+   * ═════════════════════════════════════════
+   *
+   * `gateway.mjs` 里那句 `readFileSync(TLS_KEY)` 只在进程起来时跑一次。
+   * certbot 在第 60 天换好新证书之后，网关手上仍然是旧的那张 ——
+   * 直到有人碰巧重启它。
+   *
+   * 而证书过期在 SMTP 上的症状特别难查：发信方**静默降级成明文**
+   * （投递照常成功），或者干脆拒投，取决于对方策略。
+   * 两种都不会在我们这边留下任何错误日志 ——
+   * 也就是说这件事坏了三个月都不会有人发现。
+   */
+  const hook = readFileSync(join(root, "ops/mail-gateway/renew-hook.sh"), "utf8");
+
+  it("钩子会重启网关", () => {
+    assert.match(hook, /systemctl restart agenticlab-mail/);
+  });
+
+  it("**只在续的是网关那张时才动它** —— 站点证书续期不该掐断投递", () => {
+    /*
+     * 不加这条判断的话，站点证书每次续期也会重启网关一次，
+     * 而重启会掐断当时正在投递的 SMTP 连接。
+     */
+    assert.match(hook, /RENEWED_LINEAGE/);
+  });
+
+  it("install.sh 会把钩子装进 certbot 的 deploy 目录", () => {
+    assert.match(install, /renewal-hooks\/deploy/);
+    assert.match(install, /renew-hook\.sh/);
+  });
+
+  it("**网关确实是启动时读一次** —— 哪天改成每次握手都读，这组就该删掉", () => {
+    /*
+     * 这一组存在的前提就是「读一次」。如果哪天 gateway.mjs 改成
+     * 每次握手都读文件（`SNICallback` 之类），钩子就成了纯粹的多余，
+     * 而一条多余的运维步骤会让人以为它还在解决什么问题。
+     */
+    const gw = readFileSync(join(root, "ops/mail-gateway/gateway.mjs"), "utf8");
+    assert.match(gw, /readFileSync\(TLS_KEY\)/, "网关不再是启动时读证书了，这一组的前提没了");
+  });
+});
