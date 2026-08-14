@@ -982,6 +982,18 @@ var Surfaces = []Surface{
 		AdminSection:   "",
 	},
 	{
+		Key:            "me.mail.attachment",
+		Label:          "下载附件",
+		Board:          "me",
+		Web:            "",
+		Screen:         "",
+		Why:            "往终端里下载文件要先回答「存到哪」——覆盖同名的怎么办、没写权限怎么办，那是一串和读信无关的新问题。端点已经在了，补的时候照着 api 那栏调",
+		API:            []string{"GET /api/v1/mail/attachments/{id}"},
+		Scopes:         []string{"mail:burner"},
+		OptionalScopes: nil,
+		AdminSection:   "",
+	},
+	{
 		Key:            "oauth.consent",
 		Label:          "授权确认",
 		Board:          "me",

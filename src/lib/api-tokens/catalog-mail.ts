@@ -56,6 +56,18 @@ export const MAIL_ENDPOINTS: readonly Endpoint[] = [
   },
   {
     method: "GET",
+    path: "/api/v1/mail/attachments/{id}",
+    summary: "下载一个附件",
+    scopes: ["mail:burner"],
+    example: `curl -H "Authorization: Bearer $TOKEN" -OJ https://agenticlab.sh/api/v1/mail/attachments/<id>`,
+    note:
+      "附件 id 从读信那条里拿（`attachments[].id`），而且只有 `stored` 为真的取得到 —— " +
+      "**附件默认不保存**：要 L4、单个 ≤2M、个人总量 ≤50M，三样缺一就只留文件名和大小。" +
+      "返回一律是 `application/octet-stream` 且强制下载，不照抄发件人写的类型 —— " +
+      "那是一份陌生人发来的文件，让浏览器按他说的类型处理等于把决定权交给他",
+  },
+  {
+    method: "GET",
     path: "/api/v1/mail/burners/{id}/messages/{message_id}",
     summary: "读一封信的全文",
     scopes: ["mail:burner"],

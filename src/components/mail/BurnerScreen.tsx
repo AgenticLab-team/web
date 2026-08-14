@@ -371,9 +371,20 @@ function MessageBody({ detail }: { detail: MailMessageDetail }) {
                 * 而那几种原因里多数他自己能处理。
                 */}
               {a.stored ? (
-                <span className="ml-1.5" style={{ color: "var(--success)" }}>
-                  已保存
-                </span>
+                /*
+                  * 存了就给一条真的能下的链接。
+                  *
+                  * 只显示「已保存」而没有入口的话，那句话等于在
+                  * **描述我们自己的内部状态** —— 而用户要的是那个文件。
+                  */
+                <a
+                  className="ml-1.5"
+                  style={{ color: "var(--accent)" }}
+                  href={`/api/mail/attachments/${a.id}`}
+                  download={a.filename}
+                >
+                  下载
+                </a>
               ) : (
                 <span className="ml-1.5">· {a.skipNote ?? "未保存"}</span>
               )}

@@ -55,6 +55,7 @@ after(() => rmSync(tmp, { recursive: true, force: true }));
 /** 两个人各开一个箱子，各收一封带验证码的信 */
 function scene() {
   for (const t of [
+    schema.mailAttachments,
     schema.mailMessages,
     schema.mailSlots,
     // ⚠️ 流水也要清： 的幂等键是「用户 + 第几个」这种确定性的键，
@@ -1020,3 +1021,66 @@ describe("**买槽位**", () => {
   });
 });
 
+
+describe("**附件下载：只能取自己的**", () => {
+  /*
+   * 附件比正文更要紧：正文里的验证码几分钟就失效了，
+   * 而一个附件可能是一份合同、一张身份证照片。
+   *
+   * ⚠️ 这一组是补出来的 —— 原来只有「代码里走没走 readAttachment」
+   * 那种源码断言，而把归属过滤整条删掉之后它照样绿。
+   * 源码断言管的是「有没有第二份实现」，管不了「那一份对不对」。
+   */
+  let store: typeof import("@/lib/mail/attachment-store");
+
+  before(async () => {
+    store = await import("@/lib/mail/attachment-store");
+  });
+
+  /** 给某个人的箱子塞一封带附件的信，返回附件 id */
+  const withAttachment = (opts: { stored: boolean } = { stored: true }) => {
+    const s = scene();
+    const msgId = s.myMsg;
+    dbm.db
+      .insert(schema.mailAttachments)
+      .values({
+        id: `att_${opts.stored ? "s" : "n"}`,
+        messageId: msgId,
+        filename: "note.txt",
+        mime: "text/plain",
+        size: 5,
+        stored: opts.stored,
+        content: opts.stored ? Buffer.from("hello") : null,
+      })
+      .run();
+    return { id: `att_${opts.stored ? "s" : "n"}`, ...s };
+  };
+
+  it("自己的取得到，内容对得上", () => {
+    const a = withAttachment();
+    const got = store.readAttachment({ userId: ME, attachmentId: a.id });
+    assert.ok(got, "自己的附件取不到");
+    assert.equal(got.filename, "note.txt");
+    assert.equal(got.content.toString(), "hello");
+  });
+
+  it("**别人的取不到**", () => {
+    const a = withAttachment();
+    assert.equal(store.readAttachment({ userId: OTHER, attachmentId: a.id }), null);
+  });
+
+  it("**没存下来的取不到** —— 而不是给一个空文件", () => {
+    /*
+     * 返回一个 0 字节的文件的话，人会以为附件坏了；
+     * 而实际情况是它从来没被保存过（等级不够或者太大）。
+     */
+    const a = withAttachment({ stored: false });
+    assert.equal(store.readAttachment({ userId: ME, attachmentId: a.id }), null);
+  });
+
+  it("**不存在的和别人的给同一个答案**", () => {
+    const a = withAttachment();
+    assert.equal(store.readAttachment({ userId: OTHER, attachmentId: a.id }), null);
+    assert.equal(store.readAttachment({ userId: ME, attachmentId: "根本没有" }), null);
+  });
+});

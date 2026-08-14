@@ -149,3 +149,77 @@ describe("**网关只传够小的**", () => {
     assert.match(gw, /size <= ATTACHMENT_MAX_BYTES/);
   });
 });
+
+describe("**下载：存了就要取得出来，而且不能在我们的域名下执行**", () => {
+  const v1 = readCode("app/api/v1/mail/attachments/[id]/route.ts");
+  const web = readCode("app/api/mail/attachments/[id]/route.ts");
+
+  it("两条路都走同一个 readAttachment —— 归属校验只有一份", () => {
+    /*
+     * 各写一遍的话，漏判的方向永远是「把别人的附件给出去」，
+     * 而附件比正文更糟：正文里的验证码几分钟就失效了，
+     * 而一个附件可能是一份合同、一张身份证照片。
+     */
+    for (const [name, code] of [["v1", v1], ["网页", web]] as const) {
+      assert.match(code, /readAttachment\(/, `${name} 那条没走 readAttachment`);
+      assert.equal(
+        /from\(mailAttachments\)/.test(code),
+        false,
+        `${name} 那条自己查了库 —— 校验就有了第二份`,
+      );
+    }
+  });
+
+  it("**一律强制下载，永远不内联**", () => {
+    /*
+     * 这是一份陌生人发来的文件。让浏览器内联渲染它意味着一个
+     * `text/html` 的附件会**在我们的域名下执行** ——
+     * 那是一个现成的 XSS，而且带着用户的会话 cookie。
+     */
+    for (const [name, code] of [["v1", v1], ["网页", web]] as const) {
+      assert.match(code, /attachment; filename=/, `${name} 没强制下载`);
+      assert.equal(/inline/.test(code), false, `${name} 里出现了 inline`);
+    }
+  });
+
+  it("**不照抄发件人写的 mime**", () => {
+    /*
+     * 信任发件人声明的类型，等于让他决定浏览器怎么处理这个文件。
+     */
+    for (const [name, code] of [["v1", v1], ["网页", web]] as const) {
+      assert.match(code, /application\/octet-stream/, `${name} 没用 octet-stream`);
+      assert.equal(
+        /"Content-Type": file\.mime/.test(code),
+        false,
+        `${name} 照抄了发件人的 mime`,
+      );
+    }
+  });
+
+  it("文件名做了转义 —— 一个带引号的名字能把这个头拆成两半", () => {
+    for (const [name, code] of [["v1", v1], ["网页", web]] as const) {
+      assert.match(code, /file\.filename\.replace\(/, `${name} 没转义文件名`);
+    }
+  });
+
+  it("**不许被缓存** —— 附件是私人内容", () => {
+    for (const [name, code] of [["v1", v1], ["网页", web]] as const) {
+      assert.match(code, /private, no-store/, `${name} 没禁缓存`);
+    }
+  });
+
+  it("`nosniff` 是双保险 —— 即便哪天有人把 disposition 改回 inline", () => {
+    for (const code of [v1, web]) {
+      assert.match(code, /X-Content-Type-Options/);
+    }
+  });
+
+  it("**界面上「已保存」要给得出文件**", () => {
+    /*
+     * 只显示「已保存」而没有入口的话，那句话等于在描述我们自己的
+     * 内部状态 —— 而用户要的是那个文件。
+     */
+    const ui = readCode("components/mail/BurnerScreen.tsx");
+    assert.match(ui, /\/api\/mail\/attachments\//, "界面上没有下载入口");
+  });
+});
