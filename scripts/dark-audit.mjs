@@ -242,6 +242,8 @@ function capture(url, dark, clicks) {
    * 于是「以【开头的那一行」找到的是文件的第一行，而不是结果。
    * 结果跟在最后一个 `】 ` 后面，而 JSON.stringify 不会产生换行。
    */
+  // 把「点中了谁」原样透出来 —— 选错目标全靠这一行看出来
+  for (const line of out.split("\n")) if (line.startsWith("【点了")) console.log("   ", line);
   const at = out.lastIndexOf("】 ");
   if (at === -1) throw new Error(`没拿到样式快照：\n${out.slice(0, 400)}`);
   const parsed = JSON.parse(out.slice(at + 2).split("\n")[0]);

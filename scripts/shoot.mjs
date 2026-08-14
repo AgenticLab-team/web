@@ -23,10 +23,9 @@
 // `--click` 可以给多次，按顺序点。点不到就**报错退出**，不是静默继续 ——
 // 静默继续的话，截回来的是一张没展开的图，而它长得和「展开了但没变化」
 // 一模一样。
-import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readFileSync, writeFileSync } from "node:fs";
+
+import { evaluate, launch, setViewport, sleep } from "./lib/cdp.mjs";
 
 const args = process.argv.slice(2);
 const [url, out] = args;
@@ -57,157 +56,40 @@ const expects = all("--expect");
  *
  * `--expect` 只回答「有没有」，而排查时要的是「那儿现在是什么」——
  * 一个报错？一个 loading？还是真的内容？
- * 靠盯像素分辨这三者很慢，而它们在文字上一眼就分得开。
  */
 const prints = all("--print");
 /*
  * 跑一段表达式并打印结果。
  *
  * `--print` 给的是文字，而排查布局要的是**数字** ——
- * 「这一页是不是比视口宽」这种问题，看图看不出来（浏览器会把
+ * 「这一页是不是比视口宽」这种问题看图看不出来（浏览器会把
  * 溢出的部分直接切掉，切得和「本来就这么短」一模一样）。
  */
 const evals = all("--eval");
 /*
- * 深色模式。
- *
- * 站里的配色是靠 `prefers-color-scheme` 和 `data-theme` 两条路走的，
- * 而**深色那一半从来没被看过** —— 每一张截图都是浅色。
- * 一个只在深色下才不对的对比度问题，在浅色截图里是完全隐形的。
+ * 深色模式。站里的配色是浅深两套，而深色那一半一开始从来没被看过。
+ * 一个只在深色下才不对的对比度问题，在浅色截图里完全隐形。
  */
 const dark = args.includes("--dark");
 /*
  * 从文件读一段要跑的 JS。
  *
- * `--eval` 走命令行，而一段稍微长一点的检查（比如「扫出所有在深色下
- * 仍然是浅色的元素」）经过 shell 的引号、反斜杠、`!` 之后就不是原来那段了 ——
- * 表现是 WebSocket 那头直接崩，而报错里一个字都不提是表达式的问题。
- * 放文件里就没有这一层。
+ * `--eval` 走命令行，而一段稍微长一点的检查经过 shell 的引号、
+ * 反斜杠、`!` 之后就不是原来那段了。放文件里就没有这一层。
  */
 const evalFiles = all("--eval-file");
 const cookies = all("--cookie");
 
-const CHROME =
-  process.env.CHROME_PATH ??
-  ".claude/worktrees/audit-refactor/chrome/linux-152.0.7977.42/chrome-linux64/chrome";
-
-const profile = mkdtempSync(join(tmpdir(), "shoot-"));
-const port = 9222 + Math.floor(Math.random() * 500);
-
-const chrome = spawn(CHROME, [
-  "--headless=new",
-  `--remote-debugging-port=${port}`,
-  `--user-data-dir=${profile}`,
-  "--no-sandbox",
-  "--disable-gpu",
-  "--hide-scrollbars",
-  `--window-size=${width},${height}`,
-  "about:blank",
-], { stdio: "ignore" });
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-/** 等 CDP 起来。它有几百毫秒的启动时间，而失败的样子是 ECONNREFUSED */
-async function endpoint() {
-  for (let i = 0; i < 60; i++) {
-    try {
-      const res = await fetch(`http://127.0.0.1:${port}/json/list`);
-      const tabs = await res.json();
-      const page = tabs.find((t) => t.type === "page");
-      if (page?.webSocketDebuggerUrl) return page.webSocketDebuggerUrl;
-    } catch {
-      // 还没起来
-    }
-    await sleep(200);
-  }
-  throw new Error("Chrome 的调试端口没起来");
-}
-
-let id = 0;
-function connect(wsUrl) {
-  const ws = new WebSocket(wsUrl);
-  const pending = new Map();
-  ws.addEventListener("message", (e) => {
-    const msg = JSON.parse(e.data);
-    const p = pending.get(msg.id);
-    if (!p) return;
-    pending.delete(msg.id);
-    if (msg.error) p.reject(new Error(msg.error.message));
-    else p.resolve(msg.result);
-  });
-  const ready = new Promise((res, rej) => {
-    ws.addEventListener("open", res, { once: true });
-    ws.addEventListener("error", rej, { once: true });
-  });
-  const send = (method, params = {}) =>
-    new Promise((resolve, reject) => {
-      const mid = ++id;
-      pending.set(mid, { resolve, reject });
-      ws.send(JSON.stringify({ id: mid, method, params }));
-    });
-  return { ready, send, close: () => ws.close() };
-}
+const cdp = await launch({ width, height });
 
 try {
-  const cdp = connect(await endpoint());
-  await cdp.ready;
-
   for (const c of cookies) {
     const [name, ...rest] = c.split("=");
-    await cdp.send("Network.setCookie", {
-      name,
-      value: rest.join("="),
-      url,
-      path: "/",
-    });
+    await cdp.send("Network.setCookie", { name, value: rest.join("="), url, path: "/" });
   }
 
-  /*
-   * ⚠️ **视口用 `Emulation.setDeviceMetricsOverride` 定，不能靠 `--window-size`。**
-   *
-   * `--window-size=390,1200` 在 headless=new 下**不生效** ——
-   * 实测 `innerWidth` 是 500（那是它的最小窗口宽）。
-   *
-   * 而这个错的表现极其误导：截回来的图是 500 宽，我按 390 去裁，
-   * 于是右边 110px 被我自己切掉 —— 看起来就像**正文横向溢出**。
-   * 我照着那张图查了半天布局，而布局根本没问题。
-   *
-   * 是这个脚本自己的 `--eval` 把它戳穿的（`innerWidth` 打出来是 500）。
-   */
-  await cdp.send("Emulation.setDeviceMetricsOverride", {
-    width,
-    height,
-    deviceScaleFactor: 1,
-    // 窄视口时按移动设备算 —— 否则 hover 态和触摸目标都不是真实的样子
-    mobile: width < 700,
-  });
-
-  /*
-   * ⚠️ `mobile: true` **不会**让 `navigator.maxTouchPoints` 变成非零。
-   *
-   * 那两件事在 CDP 里是分开的，而站里有代码按 `maxTouchPoints` 判
-   * 「要不要提键盘快捷键」—— 只设 mobile 的话，那条分支永远测不到：
-   * 视口是手机的宽度，而设备还说自己没有触摸屏。
-   *
-   * 踩过一次：手机档截出来的图上照样写着「Ctrl↵ 发布」，
-   * 而那一行本该整个不出现。
-   */
-  /*
-   * ⚠️ `maxTouchPoints` 只接受 **1–16**，关掉时不能传 0。
-   *
-   * 传 0 的报错是「Touch points must be between 1 and 16」，
-   * 而它从 WebSocket 那头抛回来、混在一长串 undici 栈里 ——
-   * 我盯着那串栈以为是**表达式太长把帧写崩了**，
-   * 于是去给工具加了个 `--eval-file` 绕它。
-   * （那个功能本身留着，它确实有用：一段多行的检查经过 shell 的
-   * 引号和反斜杠之后就不是原来那段了。）
-   */
-  if (width < 700) {
-    await cdp.send("Emulation.setTouchEmulationEnabled", {
-      enabled: true,
-      maxTouchPoints: 5,
-    });
-  }
+  // 视口和触摸模拟的那几条坑记在 lib/cdp.mjs 里
+  await setViewport(cdp, { width, height });
 
   if (dark) {
     await cdp.send("Emulation.setEmulatedMedia", {
@@ -235,17 +117,30 @@ try {
      * `:nth-of-type(1)` 点中的是别的东西。
      */
     const [sel, nth] = selector.split(">>");
-    const { result } = await cdp.send("Runtime.evaluate", {
-      expression: `(() => {
+    /*
+     * ⚠️ 点完要**说出点中的是谁**。
+     *
+     * 「点不到就报错」只管有没有匹配，不管匹配对不对 ——
+     * 而一个泛选择器（`button[aria-expanded]`）在这个站里
+     * 第一个匹配到的是**侧栏的「更多」**，不是信。
+     *
+     * 我照着那个结果发过一份「信的详情在深色下没问题」的报告，
+     * 而实际展开的是侧栏菜单。整条链路每一步都「成功」了：
+     * 点到了、展开了、量到了、全绿 —— 只是量的是别的东西。
+     *
+     * 所以现在把点中元素的类名和文字打出来。选错目标不再是静悄悄的。
+     */
+    const value = await evaluate(cdp, `(() => {
         const list = [...document.querySelectorAll(${JSON.stringify(sel)})];
         const el = list[${Number(nth ?? 0)}];
         if (!el) return "找不到（一共 " + list.length + " 个）";
         el.click();
-        return "ok";
-      })()`,
-      returnByValue: true,
-    });
-    if (result.value !== "ok") throw new Error(`点不到 ${selector}：${result.value}`);
+        /* 不用 \" 和 \n —— 它们会被外面那层模板字面量吃掉，页面拿到的是坏 JS */
+        return "点中 <" + el.tagName.toLowerCase() + "> ." + (el.className || "").toString().slice(0, 40) +
+          " ⟨" + (el.innerText || "").split(String.fromCharCode(10)).join("·").trim().slice(0, 30) + "⟩";
+      })()`);
+    if (!value.startsWith("点中")) throw new Error(`点不到 ${selector}：${value}`);
+    console.log(`【点了 ${selector}】 ${value}`);
     await sleep(1200);
   }
 
@@ -256,51 +151,30 @@ try {
      */
     let ok = false;
     for (let i = 0; i < 25; i++) {
-      const { result } = await cdp.send("Runtime.evaluate", {
-        expression: `Boolean(document.querySelector(${JSON.stringify(selector)}))`,
-        returnByValue: true,
-      });
-      if (result.value) { ok = true; break; }
+      if (await evaluate(cdp, `Boolean(document.querySelector(${JSON.stringify(selector)}))`)) {
+        ok = true;
+        break;
+      }
       await sleep(400);
     }
     if (!ok) throw new Error(`点完之后没等到 ${selector} —— 多半是 React 还没水合，加大 --wait`);
   }
 
   for (const selector of prints) {
-    const { result } = await cdp.send("Runtime.evaluate", {
-      expression: `[...document.querySelectorAll(${JSON.stringify(selector)})]
-        .map((e) => e.innerText.trim().slice(0, 300)).join("\\n---\\n") || "（没匹配到）"`,
-      returnByValue: true,
-    });
-    console.log(`【${selector}】\n${result.value}`);
+    const value = await evaluate(cdp, `[...document.querySelectorAll(${JSON.stringify(selector)})]
+        .map((e) => e.innerText.trim().slice(0, 300)).join("\\n---\\n") || "（没匹配到）"`);
+    console.log(`【${selector}】\n${value}`);
   }
 
   for (const file of evalFiles) evals.push(readFileSync(file, "utf8"));
 
   for (const expr of evals) {
-    const { result } = await cdp.send("Runtime.evaluate", {
-      expression: expr,
-      returnByValue: true,
-    });
-    console.log(`【${expr}】 ${JSON.stringify(result.value)}`);
+    console.log(`【${expr}】 ${JSON.stringify(await evaluate(cdp, expr))}`);
   }
 
   const shot = await cdp.send("Page.captureScreenshot", { format: "png" });
   writeFileSync(out, Buffer.from(shot.data, "base64"));
   console.log(`截好了 ${out}（点了 ${clicks.length} 下）`);
-  cdp.close();
 } finally {
-  /*
-   * 等 Chrome 真的退出再删目录。
-   *
-   * 直接删的话会 `ENOTEMPTY` —— 它还在往 profile 里写东西。
-   * 那个报错不影响截图（图已经写好了），但它会让脚本以非零码退出，
-   * 而调用方多半是 `&&` 串起来的一串命令。
-   */
-  chrome.kill();
-  await new Promise((resolve) => {
-    chrome.once("exit", resolve);
-    setTimeout(resolve, 3000);
-  });
-  rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  await cdp.close();
 }
