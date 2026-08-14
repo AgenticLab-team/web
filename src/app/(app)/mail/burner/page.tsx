@@ -16,6 +16,8 @@ import { ClaimSection } from "@/components/mail/ClaimSection";
 import { claimableDomains } from "@/lib/mail/claim-queries";
 import { listClaimed, slotStatus } from "@/lib/mail/claim";
 import { ClaimedSection } from "@/components/mail/ClaimedSection";
+import { ForwardSection } from "@/components/mail/ForwardSection";
+import { forwardState } from "@/lib/mail/forward-queries";
 
 export const metadata: Metadata = { title: "一次性邮箱" };
 export const dynamic = "force-dynamic";
@@ -62,10 +64,13 @@ export default async function BurnerPage() {
   const slots = slotStatus(user.id);
   // 申领来的（kind=temp）—— 在这之前它一处都不显示：花了分，然后地址消失了
   const claimed = listClaimed(user.id);
+  // 转发那一块：站里没配发信服务时它自己不渲染（见组件里那句 return null）
+  const forward = forwardState(user.id);
 
   return (
     <>
       {/* 已经有的排在前面 —— 「我的东西」比「能买什么」要紧 */}
+      {/* 转发排在最后：它是设置，不是每天要看的东西 */}
       {claimed.length > 0 && (
         <div className="mb-3">
           <ClaimedSection boxes={claimed} />
@@ -81,6 +86,10 @@ export default async function BurnerPage() {
           <AliasSection aliases={aliases} domains={owned.map((d) => ({ domain: d.domain }))} />
         </div>
       )}
+
+      <div className="mb-3">
+        <ForwardSection state={forward} />
+      </div>
 
       <PageHeader
         title="一次性邮箱"
