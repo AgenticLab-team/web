@@ -1,16 +1,24 @@
 #!/usr/bin/env node
 //
-// 深色模式体检：**同一个元素在浅色和深色下颜色一模一样**的，就是没跟着主题走。
+// 深色模式体检。两件事：**有没有忘了主题化的表面**、**文字读不读得出来**。
 //
 // ═════════════════════════════════════════
-// 为什么是「两边一样」而不是「深色下底色偏亮」
+// 判据一：两套配色下颜色一模一样 = 没跟着主题走
 // ═════════════════════════════════════════
 //
-// 第一版判据是后者，结果全是误报：反应按钮的珊瑚色、发布按钮的薄荷绿
-// 都是品牌色，它们在深色下**本来就该亮**。
+// 第一版判据是「深色下底色偏亮」，结果全是误报：反应按钮的珊瑚色、
+// 发布按钮的薄荷绿都是品牌色，它们在深色下**本来就该亮**。
 //
 // 而一个忘了主题化的表面有个明确的指纹：它在两套配色下**一个字节都不变**。
 // 那是写死的颜色，或者一个只在 `:root` 里定义过、没在深色块里重定义的变量。
+//
+// ═════════════════════════════════════════
+// 判据二：对比度
+// ═════════════════════════════════════════
+//
+// 判据一查不出最常见的那类深色 bug —— 一段文字**完全跟着主题走了**，
+// 只是走到了一个和背景差不多深的地方。它在浅色下是「低调的次要文字」，
+// 在深色下是「看不见」。颜色变了，所以判据一放它过去。
 //
 //   node scripts/dark-audit.mjs <基址> <路径…>
 //
@@ -29,21 +37,116 @@ if (!base || paths.length === 0) {
 const tmp = mkdtempSync(join(tmpdir(), "dark-audit-"));
 
 /*
- * 用**位置**当 key，不用选择器。
+ * 在页面里跑的那段。
  *
- * 同一棵树在两次加载里结构一样，而 Tailwind 那一长串类名在两边是
- * 同一个字符串 —— 分不出同一个类名的第三个和第五个。
+ * 用**位置**当 key，不用选择器：同一棵树在两次加载里结构一样，
+ * 而 Tailwind 那一长串类名在两边是同一个字符串 ——
+ * 分不出同一个类名的第三个和第五个。
  */
 const probe = `(() => {
-  const out = {};
+  const parse = (c) => {
+    const m = String(c).match(/[\\d.]+/g);
+    if (!m) return null;
+    return [+m[0], +m[1], +m[2], m[3] === undefined ? 1 : +m[3]];
+  };
+  /** 把 fg 叠在 bg 上 —— 半透明的颜色单看没有意义 */
+  const over = (fg, bg) => [
+    fg[0] * fg[3] + bg[0] * (1 - fg[3]),
+    fg[1] * fg[3] + bg[1] * (1 - fg[3]),
+    fg[2] * fg[3] + bg[2] * (1 - fg[3]),
+    1,
+  ];
+  const lum = (c) => {
+    const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+  };
+  const ratio = (a, b) => {
+    const x = lum(a), y = lum(b);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  };
+
+  /*
+   * 有效背景：从元素往上走，把每一层的底色叠起来。
+   *
+   * 直接读 backgroundColor 绝大多数时候拿到的是 rgba(0,0,0,0) ——
+   * 站里的卡片、行、标签几乎都是透明底加一层浅浅的 overlay，
+   * 真正的底色在祖先身上。不往上走的话，几乎每一段文字都会被
+   * 当成「透明底」而算不出对比度。
+   */
+  const effBg = (el) => {
+    const stack = [];
+    let n = el;
+    while (n && n.nodeType === 1) {
+      const c = parse(getComputedStyle(n).backgroundColor);
+      if (c && c[3] > 0) stack.push(c);
+      n = n.parentElement;
+    }
+    const scheme = getComputedStyle(document.documentElement).colorScheme || "";
+    let acc = scheme.indexOf("dark") !== -1 ? [18, 18, 18, 1] : [255, 255, 255, 1];
+    for (let i = stack.length - 1; i >= 0; i--) acc = over(stack[i], acc);
+    return acc;
+  };
+
+  /** 一路乘下来的 opacity —— 半透明的容器会把里面的字一起拉淡 */
+  const cumulativeOpacity = (el) => {
+    let o = 1, n = el;
+    while (n && n.nodeType === 1) {
+      o *= Number(getComputedStyle(n).opacity || 1);
+      n = n.parentElement;
+    }
+    return o;
+  };
+
+  const surfaces = {};
+  const text = [];
+
   for (const el of document.querySelectorAll("body *")) {
     const r = el.getBoundingClientRect();
     if (r.width < 40 || r.height < 12) continue;
     const s = getComputedStyle(el);
-    out[el.tagName + "@" + Math.round(r.x) + "," + Math.round(r.y) + "," + Math.round(r.width)] =
-      s.backgroundColor + "|" + s.color + "|" + (el.className || "").toString().slice(0, 45);
+    if (s.visibility === "hidden") continue;
+
+    const key = el.tagName + "@" + Math.round(r.x) + "," + Math.round(r.y) + "," + Math.round(r.width);
+    const cls = (el.className || "").toString().slice(0, 45);
+    surfaces[key] = s.backgroundColor + "|" + s.color + "|" + cls;
+
+    /*
+     * 只看**自己直接带文字**的元素。
+     *
+     * 不加这一条的话，一段文字会被它的每一层祖先重复报一遍
+     * （color 是继承的），而那些祖先的有效背景还各不相同 ——
+     * 同一句话报出五条互相矛盾的对比度。
+     */
+    let own = "";
+    for (const node of el.childNodes) {
+      if (node.nodeType === 3) own += node.nodeValue;
+    }
+    own = own.trim();
+    if (own.length < 2) continue;
+
+    const fg = parse(s.color);
+    if (!fg) continue;
+    const bg = effBg(el);
+    const alpha = fg[3] * cumulativeOpacity(el);
+    if (alpha <= 0.05) continue;   // 基本是隐藏的，不是对比度问题
+    const composed = over([fg[0], fg[1], fg[2], alpha], bg);
+
+    const size = parseFloat(s.fontSize) || 16;
+    const weight = Number(s.fontWeight) || 400;
+    // WCAG：大字（≥24px，或 ≥18.66px 且加粗）门槛是 3:1，其余 4.5:1
+    const large = size >= 24 || (size >= 18.66 && weight >= 700);
+
+    text.push({
+      key,
+      cls,
+      sample: own.slice(0, 24),
+      ratio: Math.round(ratio(composed, bg) * 100) / 100,
+      need: large ? 3 : 4.5,
+      fg: s.color,
+      bg: "rgb(" + Math.round(bg[0]) + ", " + Math.round(bg[1]) + ", " + Math.round(bg[2]) + ")",
+    });
   }
-  return out;
+  return { surfaces, text };
 })()`;
 const probeFile = join(tmp, "probe.js");
 writeFileSync(probeFile, probe);
@@ -55,44 +158,6 @@ const brightness = (css) => {
   if (m[3] !== undefined && Number(m[3]) < 0.5) return null;
   return 0.2126 * +m[0] + 0.7152 * +m[1] + 0.0722 * +m[2];
 };
-
-function capture(url, dark) {
-  const out = execFileSync(
-    "node",
-    [
-      "scripts/shoot.mjs",
-      url,
-      join(tmp, "shot.png"),
-      "--size", "1440,1600",
-      "--wait", "13000",
-      ...(process.env.AUDIT_COOKIE ? ["--cookie", process.env.AUDIT_COOKIE] : []),
-      ...(dark ? ["--dark"] : []),
-      "--eval-file", probeFile,
-    ],
-    { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
-  );
-  /*
-   * 从整段输出里捞那一行 JSON，**不能按行找**。
-   *
-   * `--eval-file` 回显的是整个文件的内容，那是几十行 ——
-   * 于是「以【开头的那一行」找到的是文件的第一行，而不是结果。
-   * 结果跟在最后一个 `】 ` 后面，而 JSON.stringify 不会产生换行。
-   */
-  const at = out.lastIndexOf("】 ");
-  if (at === -1) throw new Error(`没拿到样式快照：\n${out.slice(0, 400)}`);
-  const json = out.slice(at + 2).split("\n")[0];
-  const parsed = JSON.parse(json);
-  /*
-   * 下限定在 15 个，而不是 1 个。
-   *
-   * 「量到 3 个元素」和「量到 0 个」都说明抓的不是真页面，
-   * 而只判 0 的话，一个只剩骨架的错误页照样能过。
-   */
-  if (Object.keys(parsed).length < 15) {
-    throw new Error(`${url} 只量到 ${Object.keys(parsed).length} 个元素 —— 抓到的不像是真页面`);
-  }
-  return parsed;
-}
 
 /**
  * 先确认这一页**真的是那一页**。
@@ -140,6 +205,43 @@ async function assertRealPage(url) {
   }
 }
 
+function capture(url, dark) {
+  const out = execFileSync(
+    "node",
+    [
+      "scripts/shoot.mjs",
+      url,
+      join(tmp, "shot.png"),
+      "--size", "1440,1600",
+      "--wait", "13000",
+      ...(process.env.AUDIT_COOKIE ? ["--cookie", process.env.AUDIT_COOKIE] : []),
+      ...(dark ? ["--dark"] : []),
+      "--eval-file", probeFile,
+    ],
+    { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+  );
+  /*
+   * 从整段输出里捞那一行 JSON，**不能按行找**。
+   *
+   * `--eval-file` 回显的是整个文件的内容，那是几十行 ——
+   * 于是「以【开头的那一行」找到的是文件的第一行，而不是结果。
+   * 结果跟在最后一个 `】 ` 后面，而 JSON.stringify 不会产生换行。
+   */
+  const at = out.lastIndexOf("】 ");
+  if (at === -1) throw new Error(`没拿到样式快照：\n${out.slice(0, 400)}`);
+  const parsed = JSON.parse(out.slice(at + 2).split("\n")[0]);
+  /*
+   * 下限定在 15 个，而不是 1 个。
+   *
+   * 「量到 3 个元素」和「量到 0 个」都说明抓的不是真页面，
+   * 而只判 0 的话，一个只剩骨架的错误页照样能过。
+   */
+  if (Object.keys(parsed.surfaces).length < 15) {
+    throw new Error(`${url} 只量到 ${Object.keys(parsed.surfaces).length} 个元素 —— 抓到的不像是真页面`);
+  }
+  return parsed;
+}
+
 let bad = 0;
 for (const path of paths) {
   const url = base.replace(/\/$/, "") + path;
@@ -147,25 +249,67 @@ for (const path of paths) {
   const light = capture(url, false);
   const dark = capture(url, true);
 
-  const seen = new Set();
-  const hits = [];
-  for (const [key, v] of Object.entries(dark)) {
-    if (!(key in light)) continue;
+  /* ── 判据一：两边一模一样的浅色表面 ── */
+  const seenSurface = new Set();
+  const unthemed = [];
+  for (const [key, v] of Object.entries(dark.surfaces)) {
+    if (!(key in light.surfaces)) continue;
     const [dbg, dfg, cls] = v.split("|");
-    const [lbg] = light[key].split("|");
+    const [lbg] = light.surfaces[key].split("|");
     if (dbg !== lbg) continue;                       // 变了就是好的
     const L = brightness(dbg);
     if (L === null || L < 140) continue;             // 不是浅色底就无所谓
-    if (seen.has(cls)) continue;
-    seen.add(cls);
-    hits.push(`    ${cls}  bg=${dbg} fg=${dfg}`);
+    if (seenSurface.has(cls)) continue;
+    seenSurface.add(cls);
+    unthemed.push(`    没跟着主题走：${cls}  bg=${dbg} fg=${dfg}`);
   }
 
+  /* ── 判据二：深色下读不出来的文字 ── */
+  const lightByKey = new Map(light.text.map((t) => [t.key, t]));
+  const seenText = new Set();
+  const lowContrast = [];
+  /*
+   * 两套配色下都不够的单独记一笔，**不算这一轮的问题**。
+   *
+   * 那是全站一致的取舍（四级文字、占位符、禁用态），不是深色回归。
+   * 但也不能就这么消失 —— 它是另一件该查的事，
+   * 藏起来的话下一个人会以为对比度全站都过了。
+   */
+  const both = [];
+  for (const t of dark.text) {
+    if (t.ratio >= t.need) continue;
+    /*
+     * 只报**深色下才不够**的。
+     *
+     * 两套配色下都不够的，那是全站一致的设计取舍（比如四级文字），
+     * 而这一轮问的是「深色这一半有没有被落下」。
+     * 混在一起报的话，真正的深色回归会被淹在几十条设计取舍里。
+     */
+    const l = lightByKey.get(t.key);
+    if (l && l.ratio < l.need) { both.push({ ...t, lightRatio: l.ratio }); continue; }
+    if (seenText.has(t.cls + t.ratio)) continue;
+    seenText.add(t.cls + t.ratio);
+    lowContrast.push(
+      `    对比度 ${t.ratio}（要 ${t.need}，浅色下 ${l ? l.ratio : "?"}）：「${t.sample}」\n` +
+      `      ${t.fg} on ${t.bg}  ${t.cls}`,
+    );
+  }
+
+  const hits = [...unthemed, ...lowContrast];
   bad += hits.length;
-  console.log(`${hits.length === 0 ? "✅" : "❌"} ${path}${hits.length ? `（${hits.length} 处）` : ""}`);
+  const note = both.length ? `　（另有 ${both.length} 处两套配色下都不够，不算深色回归）` : "";
+  console.log(`${hits.length === 0 ? "✅" : "❌"} ${path}${hits.length ? `（${hits.length} 处）` : ""}${note}`);
   for (const h of hits) console.log(h);
+  if (process.env.AUDIT_SHOW_BOTH && both.length) {
+    const seenBoth = new Set();
+    for (const t of both) {
+      if (seenBoth.has(t.cls)) continue;
+      seenBoth.add(t.cls);
+      console.log(`    深 ${t.ratio} / 浅 ${t.lightRatio}（要 ${t.need}）：「${t.sample}」 ${t.fg}  ${t.cls}`);
+    }
+  }
 }
 
 rmSync(tmp, { recursive: true, force: true });
-console.log(bad === 0 ? "\n深色下没有发现没跟着主题走的表面" : `\n一共 ${bad} 处`);
+console.log(bad === 0 ? "\n深色下没有发现问题" : `\n一共 ${bad} 处`);
 process.exit(bad === 0 ? 0 : 1);
