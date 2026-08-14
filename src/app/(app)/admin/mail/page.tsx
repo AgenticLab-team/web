@@ -2,11 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AdminNote, AdminRow, AdminTag } from "@/components/admin/ui";
+import { DomainRow } from "@/components/admin/DomainRow";
+import type { MailDomainKind, MailDomainTier } from "@/lib/mail/kinds";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Callout, Empty, PageNote, Section } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/admin/guard";
 import {
+  domainOwnerCandidates,
   domainSummary,
   listBanwords,
   listBoxes,
@@ -38,6 +41,8 @@ export default async function AdminMailPage() {
   // 时钟在查询层读完传下来 —— 渲染期读 Date.now() 过不了 React Compiler
   const domains = listDomains();
   const summary = domainSummary(domains);
+  // 指定域名主人时的下拉。整页一次查完 —— 一百行各查一次就是 N+1
+  const candidates = domainOwnerCandidates();
   const config = mailConfig();
 
   const boxes = canReadBoxes ? listBoxes({ limit: 60 }) : [];
@@ -123,7 +128,33 @@ export default async function AdminMailPage() {
           {domains.map((d) => {
             const tone = expiryTone(d.expiryDays);
             return (
-              <AdminRow key={d.domain}>
+              /*
+                * 一行一个域名，**点开就能改**。
+                *
+                * 这一页原来整个是只读的：`updateDomain` 那一串字段
+                * （归谁用、谁是主人、四个开关）后端全写好了，
+                * 而界面上一个都碰不到 —— 想改一个域名的用途只能进库。
+                */
+              <DomainRow
+                key={d.domain}
+                domain={{
+                  domain: d.domain,
+                  kind: d.kind as MailDomainKind,
+                  tier: (d.tier ?? null) as MailDomainTier | null,
+                  ownerUserId: d.ownerUserId,
+                  ownerName: d.ownerName,
+                  allowBurner: d.allowBurner,
+                  allowClaim: d.allowClaim,
+                  allowCustomLocal: d.allowCustomLocal,
+                  inRandomRotation: d.inRandomRotation,
+                  catchAll: d.catchAll,
+                  enabled: d.enabled,
+                  note: d.note,
+                  boxCount: d.boxCount,
+                }}
+                candidates={candidates}
+                summary={
+                  <span className="flex items-center gap-2">
                 <span className="min-w-0 flex-1">
                   <span className={`t-body block truncate ${d.enabled ? "" : "opacity-45"}`}>
                     {d.domain}
@@ -183,7 +214,9 @@ export default async function AdminMailPage() {
                 >
                   {expiryLabel(d.expiryDays)}
                 </span>
-              </AdminRow>
+              </span>
+                }
+              />
             );
           })}
         </div>

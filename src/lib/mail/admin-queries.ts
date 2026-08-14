@@ -37,6 +37,19 @@ export interface DomainRow {
   status: string;
   enabled: boolean;
   note: string | null;
+  /*
+   * 下面这四个是「这个域名上能做什么」—— 后台编辑器要拿它们当初值。
+   *
+   * 原来这张视图不带它们，因为页面是只读的、只显示不编辑。
+   * 而少了初值的编辑器最坏的形态不是报错，是**它把没显示的字段
+   * 按默认值写回去** —— 一次保存顺手关掉了 catchAll，而屏幕上
+   * 从头到尾没出现过这个词。
+   */
+  allowBurner: boolean;
+  allowClaim: boolean;
+  allowCustomLocal: boolean;
+  inRandomRotation: boolean;
+  catchAll: boolean;
 }
 
 export function listDomains(now = Date.now()): DomainRow[] {
@@ -106,6 +119,11 @@ export function listDomains(now = Date.now()): DomainRow[] {
     status: d.status,
     enabled: d.enabled,
     note: d.note,
+    allowBurner: d.allowBurner,
+    allowClaim: d.allowClaim,
+    allowCustomLocal: d.allowCustomLocal,
+    inRandomRotation: d.inRandomRotation,
+    catchAll: d.catchAll,
   }));
 }
 
@@ -257,3 +275,26 @@ export function domainsNeedingExpiryNotice(now = Date.now()) {
 }
 
 export { EXPIRY_STAGES };
+
+/**
+ * 能被指定为域名主人的人。
+ *
+ * ─────────────────────────────────────────
+ * 只列绑了微信的
+ * ─────────────────────────────────────────
+ *
+ * 域名归属是**认到人**的事：一个域名归了某个只有站内账号、
+ * 没有微信身份的人，出问题时联系不上他。而这个站的身份根在群里。
+ *
+ * 名字兜底到微信昵称，但**绝不退化成 wx_id** —— 那条线全站都不许破。
+ */
+export function domainOwnerCandidates(limit = 500): { id: string; name: string }[] {
+  return db
+    .select({ id: users.id, site: users.siteNickname, wx: users.wxNickname })
+    .from(users)
+    .where(and(isNotNull(users.wxId), eq(users.status, "active")))
+    .limit(limit)
+    .all()
+    .map((u) => ({ id: u.id, name: (u.site || u.wx || "（未设昵称）").trim() }))
+    .sort((a, b) => a.name.localeCompare(b.name, "zh"));
+}
