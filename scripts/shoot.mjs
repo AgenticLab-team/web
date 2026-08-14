@@ -24,7 +24,7 @@
 // 静默继续的话，截回来的是一张没展开的图，而它长得和「展开了但没变化」
 // 一模一样。
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -68,6 +68,23 @@ const prints = all("--print");
  * 溢出的部分直接切掉，切得和「本来就这么短」一模一样）。
  */
 const evals = all("--eval");
+/*
+ * 深色模式。
+ *
+ * 站里的配色是靠 `prefers-color-scheme` 和 `data-theme` 两条路走的，
+ * 而**深色那一半从来没被看过** —— 每一张截图都是浅色。
+ * 一个只在深色下才不对的对比度问题，在浅色截图里是完全隐形的。
+ */
+const dark = args.includes("--dark");
+/*
+ * 从文件读一段要跑的 JS。
+ *
+ * `--eval` 走命令行，而一段稍微长一点的检查（比如「扫出所有在深色下
+ * 仍然是浅色的元素」）经过 shell 的引号、反斜杠、`!` 之后就不是原来那段了 ——
+ * 表现是 WebSocket 那头直接崩，而报错里一个字都不提是表达式的问题。
+ * 放文件里就没有这一层。
+ */
+const evalFiles = all("--eval-file");
 const cookies = all("--cookie");
 
 const CHROME =
@@ -175,10 +192,28 @@ try {
    * 踩过一次：手机档截出来的图上照样写着「Ctrl↵ 发布」，
    * 而那一行本该整个不出现。
    */
-  await cdp.send("Emulation.setTouchEmulationEnabled", {
-    enabled: width < 700,
-    maxTouchPoints: width < 700 ? 5 : 0,
-  });
+  /*
+   * ⚠️ `maxTouchPoints` 只接受 **1–16**，关掉时不能传 0。
+   *
+   * 传 0 的报错是「Touch points must be between 1 and 16」，
+   * 而它从 WebSocket 那头抛回来、混在一长串 undici 栈里 ——
+   * 我盯着那串栈以为是**表达式太长把帧写崩了**，
+   * 于是去给工具加了个 `--eval-file` 绕它。
+   * （那个功能本身留着，它确实有用：一段多行的检查经过 shell 的
+   * 引号和反斜杠之后就不是原来那段了。）
+   */
+  if (width < 700) {
+    await cdp.send("Emulation.setTouchEmulationEnabled", {
+      enabled: true,
+      maxTouchPoints: 5,
+    });
+  }
+
+  if (dark) {
+    await cdp.send("Emulation.setEmulatedMedia", {
+      features: [{ name: "prefers-color-scheme", value: "dark" }],
+    });
+  }
 
   await cdp.send("Page.enable");
   await cdp.send("Page.navigate", { url });
@@ -239,6 +274,8 @@ try {
     });
     console.log(`【${selector}】\n${result.value}`);
   }
+
+  for (const file of evalFiles) evals.push(readFileSync(file, "utf8"));
 
   for (const expr of evals) {
     const { result } = await cdp.send("Runtime.evaluate", {
