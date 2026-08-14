@@ -42,11 +42,29 @@ sudo chown -R mailgw:mailgw "$HOME_DIR"
 sudo -u mailgw bash -c "cd '$HOME_DIR' && npm install --omit=dev --no-audit --no-fund"
 
 # ── 配置 ─────────────────────────────────────────────────────
+#
+# ⚠️ **只改这两行，别的原样留着。**
+#
+# 原来这里是整份覆盖（`tee` 一个 heredoc）。而 `.env` 里还有别的东西 ——
+# 最要紧的是 TLS 证书那两行（`TLS_KEY_PATH` / `TLS_CERT_PATH`）。
+#
+# 于是「升级一次网关」= **悄悄关掉 STARTTLS**，
+# 而唯一的症状是启动日志里一句 warning：
+# 「smtp-server is using the built-in default TLS certificate」——
+# 服务照常 active、25 端口照常在听、信照常收得到，
+# 只是从那一刻起每一封信在路上都是明文的。
+#
+# 这件事真的发生过一次（2026-08-15 升级带附件的那版时）。
+KEEP="$(sudo cat "$HOME_DIR/.env" 2>/dev/null | grep -vE '^(MAIL_INGRESS_SECRET|SITE_URL)=' || true)"
 sudo -u mailgw tee "$HOME_DIR/.env" >/dev/null <<EOF
 MAIL_INGRESS_SECRET=$SECRET
 SITE_URL=$SITE_URL
+$KEEP
 EOF
 sudo chmod 600 "$HOME_DIR/.env"
+
+# 装完要**重启**，不是 enable --now —— 后者对已经在跑的服务什么都不做，
+# 于是文件换了、进程里还是旧代码。这个也踩过一次。
 
 # node 的绝对路径按这台机器实际的来填。
 #
@@ -68,7 +86,8 @@ if [[ -d /etc/letsencrypt ]]; then
 fi
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now agenticlab-mail
+sudo systemctl enable agenticlab-mail
+sudo systemctl restart agenticlab-mail
 
 # ── 放行 25 ──────────────────────────────────────────────────
 #

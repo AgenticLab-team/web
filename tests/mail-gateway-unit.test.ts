@@ -156,3 +156,40 @@ describe("**证书续期之后要有人重启网关**", () => {
     assert.match(gw, /readFileSync\(TLS_KEY\)/, "网关不再是启动时读证书了，这一组的前提没了");
   });
 });
+
+describe("**升级不能悄悄关掉 STARTTLS**", () => {
+  /*
+   * ═════════════════════════════════════════
+   * 这件事真的发生过一次
+   * ═════════════════════════════════════════
+   *
+   * `install.sh` 原来是整份覆盖 `.env`。而那个文件里还有别的东西 ——
+   * 最要紧的是 TLS 证书那两行。于是「升级一次网关」= 关掉 STARTTLS，
+   * 而唯一的症状是启动日志里一句 warning：
+   *
+   *   smtp-server is using the built-in default TLS certificate
+   *
+   * 服务照常 active、25 端口照常在听、信照常收得到 ——
+   * 只是从那一刻起每一封信在路上都是明文的。
+   *
+   * 没有任何监控会报这个，因为从外面看什么都没坏。
+   */
+  it("写 .env 时保留已有的其它行", () => {
+    assert.match(install, /KEEP=/, "又变回整份覆盖了");
+    assert.match(install, /grep -vE '\^\(MAIL_INGRESS_SECRET\|SITE_URL\)='/);
+  });
+
+  it("**装完是 restart，不是 enable --now**", () => {
+    /*
+     * `enable --now` 对**已经在跑**的服务什么都不做 ——
+     * 于是文件换了、进程里还是旧代码。
+     * 这个也踩过一次：升级带附件的那版之后，网关照旧不发附件内容。
+     */
+    assert.match(install, /systemctl restart agenticlab-mail/);
+    assert.equal(
+      /enable --now agenticlab-mail/.test(install),
+      false,
+      "又用 enable --now 了 —— 它不会重启已经在跑的服务",
+    );
+  });
+});
