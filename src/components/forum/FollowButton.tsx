@@ -61,7 +61,7 @@ export function FollowButton({
             else setError(null);
           })
         }
-        className={`inline-flex shrink-0 items-center gap-1 rounded-[var(--radius-pill)] font-medium transition active:scale-[0.96] disabled:opacity-50 ${
+        className={`tap-target inline-flex shrink-0 items-center gap-1 rounded-[var(--radius-pill)] font-medium transition active:scale-[0.96] disabled:opacity-50 ${
           size === "compact" ? "t-caption px-2.5 py-1" : "t-footnote min-h-9 px-3.5"
         } ${
           on

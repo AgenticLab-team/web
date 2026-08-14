@@ -74,7 +74,7 @@ export function EditPostForm({
         maxLength={120}
         aria-label="修改说明"
         placeholder="改了什么？（可选，会显示在编辑历史里）"
-        className="t-footnote w-full rounded-[var(--radius-control)] bg-[var(--surface)] px-4 py-3 outline-none hairline placeholder:text-[var(--ink-quaternary)]"
+        className="t-footnote min-h-11 w-full rounded-[var(--radius-control)] bg-[var(--surface)] px-4 py-3 outline-none hairline placeholder:text-[var(--ink-quaternary)]"
       />
 
       {error && (

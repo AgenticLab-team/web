@@ -45,7 +45,7 @@ export function AcceptButton({
             else router.refresh();
           })
         }
-        className={`t-caption flex items-center gap-1 rounded-[var(--radius-pill)] px-2.5 py-1 font-medium transition active:scale-95 ${
+        className={`tap-target t-caption flex items-center gap-1 rounded-[var(--radius-pill)] px-2.5 py-1 font-medium transition active:scale-95 ${
           accepted
             ? "bg-[var(--success)]/15 text-[var(--success)]"
             : "bg-[var(--fill)] text-[var(--ink-tertiary)] hover:bg-[var(--fill-strong)] hover:text-[var(--ink-secondary)]"

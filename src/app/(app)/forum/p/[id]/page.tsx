@@ -431,7 +431,11 @@ export default async function PostPage({
         className="mt-9"
       >
         {allReplies.length > 0 && (
-          <div className="mb-3 flex items-center justify-between gap-3">
+          <div
+            /* `min-h-11`：这一行里的 Pill 只有 30 高，靠 .tap-target 撑到 44 ——
+               行本身不够高的话，那圈命中区没地方放 */
+            className="mb-3 flex min-h-11 items-center justify-between gap-3"
+          >
             {/* 和全站的筛选 Pill 同一个构件 —— 这里以前是手写的另一款药丸，
                 选中态用 accent 而别处用 ink，同一种交互两种长相 */}
             <Pill
@@ -571,7 +575,7 @@ export default async function PostPage({
                   )}
                   <a
                     href={`#f${reply.floor}`}
-                    className="tabular t-caption text-[var(--ink-quaternary)] transition hover:text-[var(--ink-tertiary)]"
+                    className="tap-target tabular t-caption text-[var(--ink-quaternary)] transition hover:text-[var(--ink-tertiary)]"
                   >
                     #{reply.floor}
                   </a>

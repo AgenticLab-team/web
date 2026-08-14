@@ -70,7 +70,7 @@ function Option({
       href={href}
       scroll={false}
       aria-current={active ? "true" : undefined}
-      className={`t-caption inline-flex items-center gap-1 rounded-[var(--radius-pill)] px-2.5 py-1 font-medium transition ${
+      className={`tap-target t-caption inline-flex items-center gap-1 rounded-[var(--radius-pill)] px-2.5 py-1 font-medium transition ${
         active
           ? "bg-[var(--surface)] text-[var(--ink)] shadow-sm"
           : "text-[var(--ink-tertiary)] hover:text-[var(--ink-secondary)]"

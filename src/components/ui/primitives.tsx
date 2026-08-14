@@ -16,17 +16,36 @@ import { FloatingBack } from "@/components/ui/FloatingBack";
 
 export function Section({
   title,
+  srTitle,
   action,
   children,
   className = "",
 }: {
   title?: string;
+  /**
+   * 只给读屏的小标题。
+   *
+   * ─────────────────────────────────────────
+   * 它补的是**标题层级上的一个洞**
+   * ─────────────────────────────────────────
+   *
+   * 读屏用户是按标题层级在页面里跳的（「下一个二级标题」）。
+   * 版块页是 `<h1>` 版块名 + 一列 `<h3>` 帖子标题 ——
+   * 中间那一级是空的，而这个洞在视觉上完全看不出来。
+   * （论坛首页没这个问题：那儿每组外面都有一个带 title 的 Section。）
+   *
+   * 给它一个看得见的标题会和上面的 h1 重复；所以放一个
+   * `sr-only` 的 —— 屏幕上一个像素都不变，层级补齐了。
+   * 是 `scripts/ax-audit.mjs` 把无障碍树拉出来才看见的。
+   */
+  srTitle?: string;
   action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <section className={`mb-7 ${className}`}>
+      {srTitle && <h2 className="sr-only">{srTitle}</h2>}
       {(title || action) && (
         <div className="mb-2 flex items-end justify-between px-1">
           {title && <h2 className="t-group-label">{title}</h2>}

@@ -77,7 +77,7 @@ export function ReactionBar({
             aria-pressed={r.mine}
             aria-label={`${meta.label}${r.count > 0 ? ` ${r.count}` : ""}`}
             title={meta.label}
-            className={`flex items-center gap-1 rounded-[var(--radius-pill)] transition ${
+            className={`tap-target flex items-center gap-1 rounded-[var(--radius-pill)] transition ${
               compact ? "px-2 py-1" : "px-2.5 py-1.5"
             } ${
               r.mine

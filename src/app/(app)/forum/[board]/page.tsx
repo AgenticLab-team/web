@@ -68,7 +68,7 @@ export default async function BoardPage({
               <FollowButton target="board" targetId={board.id} following={following} />
               <Link
                 href={`/forum/new?board=${board.key}`}
-                className="t-subhead flex shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--accent)] px-3.5 py-2 font-medium text-[var(--accent-ink)] transition active:scale-[0.97]"
+                className="t-subhead flex min-h-11 shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--accent)] px-3.5 py-2 font-medium text-[var(--accent-ink)] transition active:scale-[0.97]"
               >
                 <PenLine className="h-4 w-4" strokeWidth={2} aria-hidden />
                 发帖
@@ -90,7 +90,7 @@ export default async function BoardPage({
         ))}
       </PillRow>
 
-      <Section>
+      <Section srTitle="帖子列表">
         <PostList posts={posts} />
       </Section>
     </>
