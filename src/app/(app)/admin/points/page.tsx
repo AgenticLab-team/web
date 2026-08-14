@@ -181,7 +181,8 @@ export default async function AdminPointsPage() {
             <ul className="space-y-1.5">
               {earners.map((e) => (
                 <li key={e.userId} className="flex items-baseline gap-2">
-                  <Link href={`/admin/users/${e.userId}`} className="t-subhead min-w-0 flex-1 truncate">
+                  <Link href={`/admin/users/${e.userId}`} /* truncate 带着 overflow:hidden，tap-target 的伪元素会被剪掉 —— 只能自己长高 */
+                    className="t-subhead min-h-11 min-w-0 flex-1 truncate leading-[44px]">
                     {resolveDisplayName([e.name, e.wxName], { wxId: e.wxId, fallback: e.userId })}
                   </Link>
                   <span className="tabular t-subhead text-[var(--ink-secondary)]">{e.earned}</span>

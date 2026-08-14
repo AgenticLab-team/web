@@ -224,7 +224,7 @@ function Exit({ href, children }: { href: string; children: React.ReactNode }) {
   return (
     <Link
       href={href}
-      className="t-caption inline-flex items-center rounded-full bg-[var(--fill)] px-3 py-1.5 text-[var(--ink-secondary)] transition-colors hover:bg-[var(--fill-strong)]"
+      className="tap-target t-caption inline-flex items-center rounded-full bg-[var(--fill)] px-3 py-1.5 text-[var(--ink-secondary)] transition-colors hover:bg-[var(--fill-strong)]"
     >
       {children}
     </Link>

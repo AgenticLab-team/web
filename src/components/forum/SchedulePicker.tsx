@@ -56,7 +56,7 @@ export function SchedulePicker({
       <button
         type="button"
         onClick={openPicker}
-        className="t-caption inline-flex items-center gap-1.5 text-[var(--ink-tertiary)] underline-offset-4 transition hover:text-[var(--ink-secondary)] hover:underline"
+        className="tap-target t-caption inline-flex items-center gap-1.5 text-[var(--ink-tertiary)] underline-offset-4 transition hover:text-[var(--ink-secondary)] hover:underline"
       >
         <CalendarClock className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
         等一会儿再发

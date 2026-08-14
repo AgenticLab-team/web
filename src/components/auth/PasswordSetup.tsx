@@ -113,7 +113,7 @@ export function PasswordSetup({
                 setOpen(true);
                 setMessage(null);
               }}
-              className="t-subhead shrink-0 text-[var(--accent)] transition active:opacity-60"
+              className="tap-target t-subhead shrink-0 text-[var(--accent)] transition active:opacity-60"
             >
               {hasPassword ? "修改" : "设置"}
             </button>

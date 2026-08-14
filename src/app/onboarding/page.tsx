@@ -65,7 +65,7 @@ export default async function OnboardingPage() {
 
       <Link
         href="/"
-        className="t-subhead mt-3 text-center text-[var(--ink-tertiary)] transition active:opacity-60"
+        className="tap-target t-subhead mt-3 text-center text-[var(--ink-tertiary)] transition active:opacity-60"
       >
         {passkeys.length ? "直接进入社区" : "以后再说"}
       </Link>

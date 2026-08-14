@@ -221,13 +221,27 @@ export function ComposeForm({
       }}
       className="space-y-4"
     >
-      <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+      {/*
+        * 纵向 `py-[9px]` + 负 margin：这一排是横滚容器，而 CSS 规定
+        * 一个轴是 auto/scroll 时另一个轴不能是 visible —— 于是药丸靠
+        * `.tap-target` 往外撑的那圈命中区在纵向被**整个裁掉**。
+        * 类名在、样式在，就是不起作用（`primitives.tsx` 的 PillRow 同理）。
+        *
+        * ⚠️ 负边距只能加在**上边**。
+        *
+        * 我第一版写的是 `-my-[9px]`，想把让出来的空间两头都收回去 ——
+        * 结果下面那个兄弟被拉进了这排药丸的命中区里，
+        * 而它画得更晚、命中测试就归它。量出来命中区 29，
+        * 比药丸自己（30）还小。
+        * 上边没这个问题：前面的兄弟画在下层，药丸的伪元素压得住它。
+        */}
+      <div className="no-scrollbar -mx-4 -mt-[9px] flex gap-1.5 overflow-x-auto px-4 py-[9px] sm:mx-0 sm:px-0">
         {boards.map((b) => (
           <button
             key={b.key}
             type="button"
             onClick={() => setBoardKey(b.key)}
-            className={`t-footnote shrink-0 rounded-[var(--radius-pill)] px-3 py-1.5 font-medium transition-colors ${
+            className={`tap-target t-footnote shrink-0 rounded-[var(--radius-pill)] px-3 py-1.5 font-medium transition-colors ${
               b.key === boardKey
                 ? "bg-[var(--ink)] text-[var(--canvas)]"
                 : "bg-[var(--fill)] text-[var(--ink-secondary)]"
@@ -244,7 +258,7 @@ export function ComposeForm({
             key={t.key}
             type="button"
             onClick={() => setType(t.key)}
-            className={`t-footnote rounded-[var(--radius-pill)] px-3 py-1.5 transition-colors ${
+            className={`tap-target t-footnote rounded-[var(--radius-pill)] px-3 py-1.5 transition-colors ${
               t.key === type
                 ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]"
                 : "text-[var(--ink-tertiary)] hover:bg-[var(--fill)]"

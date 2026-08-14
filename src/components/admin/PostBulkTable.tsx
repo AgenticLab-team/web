@@ -127,13 +127,22 @@ export function PostBulkTable({ rows }: { rows: AdminPostRow[] }) {
       <div className="inset-group">
         {rows.map((row) => (
           <AdminRow key={row.id} align="start">
-            <input
-              type="checkbox"
-              checked={selected.has(row.id)}
-              onChange={() => toggle(row.id)}
-              className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--accent)]"
-              aria-label={`选择「${row.title}」`}
-            />
+            {/*
+              * 包一层 `<label>` 才有落点：`<input>` 是替换元素，
+              * **伪元素在它身上不渲染** —— `.tap-target` 那一套对它无效。
+              * 上面「全选本页」那个早就包着 label（所以量出来是 44），
+              * 而每一行这个没有，裸着 20×20。
+              * `-m-3 p-3` 把落点撑到 44 又不影响排版。
+              */}
+            <label className="-m-3 flex shrink-0 cursor-pointer items-start p-3">
+              <input
+                type="checkbox"
+                checked={selected.has(row.id)}
+                onChange={() => toggle(row.id)}
+                className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--accent)]"
+                aria-label={`选择「${row.title}」`}
+              />
+            </label>
 
             <div className="min-w-0 flex-1">
               <p className="t-body flex flex-wrap items-center gap-1.5">

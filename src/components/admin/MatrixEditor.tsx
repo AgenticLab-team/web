@@ -182,7 +182,13 @@ export function MatrixEditor({ roles, categories, initial, canEdit, lookupBase }
 
   return (
     <div>
-      <div className="no-scrollbar -mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+      {/*
+        * 纵向 `py-[9px]` + 负 margin：这一排是横滚容器，而 CSS 规定
+        * 一个轴是 auto/scroll 时另一个轴不能是 visible —— 于是药丸靠
+        * `.tap-target` 往外撑的那圈命中区在纵向被**整个裁掉**。
+        * 类名在、样式在，就是不起作用（`primitives.tsx` 的 PillRow 同理）。
+        */}
+      <div className="no-scrollbar -mx-4 -mt-[9px] mb-[7px] flex gap-1.5 overflow-x-auto px-4 py-[9px] sm:mx-0 sm:px-0">
         {categories.map((c) => {
           const pending = editsByCategory.get(c.category) ?? 0;
           const isActive = c.category === active;

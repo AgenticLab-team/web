@@ -77,11 +77,11 @@ export function SkillEditor({ initial }: { initial: { slug: string; label: strin
 
   return (
     <div>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-x-1.5 gap-y-5">
         {tags.map((tag) => (
           <span
             key={tag.slug}
-            className="t-footnote inline-flex items-center gap-1 rounded-full bg-[var(--accent-soft)] py-1 pl-2.5 pr-1 text-[var(--accent)]"
+            className="tap-target t-footnote inline-flex items-center gap-1 rounded-full bg-[var(--accent-soft)] py-1 pl-2.5 pr-1 text-[var(--accent)]"
           >
             {tag.label}
             <button
@@ -119,7 +119,7 @@ export function SkillEditor({ initial }: { initial: { slug: string; label: strin
             }
           }}
           onBlur={() => draft.trim() && add(draft)}
-          className="t-body min-w-0 flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none transition focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-45"
+          className="t-body min-h-11 min-w-0 flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 outline-none transition focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-45"
         />
         <button
           type="button"
@@ -133,14 +133,14 @@ export function SkillEditor({ initial }: { initial: { slug: string; label: strin
 
       {/* 空状态给具体例子 —— 一个空输入框问「你会什么」，多数人会关掉页面 */}
       {tags.length === 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="mt-2 flex flex-wrap gap-x-1.5 gap-y-5">
           {EXAMPLES.map((example) => (
             <button
               key={example}
               type="button"
               disabled={pending}
               onClick={() => add(example)}
-              className="t-caption inline-flex items-center gap-0.5 rounded-full bg-[var(--fill)] py-1 pl-2 pr-2.5 text-[var(--ink-secondary)] transition active:opacity-60"
+              className="tap-target t-caption inline-flex items-center gap-0.5 rounded-full bg-[var(--fill)] py-1 pl-2 pr-2.5 text-[var(--ink-secondary)] transition active:opacity-60"
             >
               <Plus className="h-3 w-3" strokeWidth={2.4} aria-hidden />
               {example}

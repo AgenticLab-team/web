@@ -311,7 +311,19 @@ export function Editor({
 
   return (
     <div className="overflow-hidden rounded-[var(--radius-card)] bg-[var(--surface)] hairline">
-      <div className="flex items-center gap-0.5 border-b border-[var(--separator)] px-2 py-1.5">
+      {/*
+        * `py-2`（8px）不是留白，是**命中区要用的地方**。
+        *
+        * 工具条上的按钮 28px 见方，靠 `.tap-target` 撑到 44 —— 上下各要 8px。
+        * 而外面那层卡片是 `overflow-hidden`（圆角要它），扩到卡片外面的部分
+        * 会被直接剪掉。所以空间只能留在条**里面**。
+        *
+        * 用 `py-2` 而不是 `py-2.5`：8px 刚好够，而 `px-2 py-2` 是站里
+        * **已有的**内边距组合。`tests/visual-consistency.test.ts` 有一条棘轮
+        * 数着这些组合的种类数不许再涨 —— 我第一版写 `py-2.5` 就把它顶到了 39，
+        * 而那 2px 什么也没多买。
+        */}
+      <div className="flex items-center gap-0.5 border-b border-[var(--separator)] px-2 py-2">
         {TOOLS.map((tool) => (
           <button
             key={tool.label}
@@ -356,7 +368,7 @@ export function Editor({
         <button
           type="button"
           onClick={() => setMode(mode === "write" ? "preview" : "write")}
-          className="t-caption flex items-center gap-1 rounded-[var(--radius-chip)] px-2 py-1.5 font-medium text-[var(--ink-secondary)] transition-colors hover:bg-[var(--fill)]"
+          className="tap-target t-caption flex items-center gap-1 rounded-[var(--radius-chip)] px-2 py-1.5 font-medium text-[var(--ink-secondary)] transition-colors hover:bg-[var(--fill)]"
         >
           {mode === "write" ? (
             <>

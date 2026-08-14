@@ -99,7 +99,7 @@ export function TagInput({
           placeholder={
             full ? `最多 ${MAX_TAGS_PER_POST} 个` : picked.length === 0 ? "加个标签，回车确认" : "还可以加"
           }
-          className="t-caption min-w-32 flex-1 bg-transparent py-1 outline-none placeholder:text-[var(--ink-quaternary)]"
+          className="t-caption min-h-11 min-w-32 flex-1 bg-transparent py-1 outline-none placeholder:text-[var(--ink-quaternary)]"
         />
       </div>
 

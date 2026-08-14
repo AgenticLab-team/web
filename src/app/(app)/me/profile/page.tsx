@@ -63,7 +63,7 @@ export default async function ProfilePage() {
               </p>
               <Link
                 href="/me/privacy"
-                className="t-caption2 mt-1.5 inline-block text-[var(--accent)] transition active:opacity-60"
+                className="tap-target t-caption2 mt-1.5 inline-block text-[var(--accent)] transition active:opacity-60"
               >
                 去隐私设置改 —— 那儿还有榜单和检索两个开关 →
               </Link>

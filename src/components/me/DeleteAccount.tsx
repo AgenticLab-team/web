@@ -56,7 +56,7 @@ export function DeleteAccount() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="t-caption text-[var(--ink-tertiary)] underline underline-offset-2 transition-colors hover:text-[var(--danger)]"
+        className="tap-target t-caption text-[var(--ink-tertiary)] underline underline-offset-2 transition-colors hover:text-[var(--danger)]"
       >
         注销账号
       </button>
