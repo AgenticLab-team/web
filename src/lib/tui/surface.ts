@@ -1034,7 +1034,11 @@ export const SURFACES: readonly Surface[] = [
      */
     web: null,
     tui: "me/mail/box",
-    api: ["GET /api/v1/mail/burners/{id}", "GET /api/v1/mail/burners/{id}/messages"],
+    api: [
+      "GET /api/v1/mail/burners/{id}",
+      "GET /api/v1/mail/burners/{id}/messages",
+      "GET /api/v1/mail/burners/{id}/messages/{message_id}",
+    ],
     scopes: ["mail:burner"],
   },
   {

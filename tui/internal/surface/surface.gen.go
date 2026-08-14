@@ -976,7 +976,7 @@ var Surfaces = []Surface{
 		Web:            "",
 		Screen:         "me/mail/box",
 		Why:            "",
-		API:            []string{"GET /api/v1/mail/burners/{id}", "GET /api/v1/mail/burners/{id}/messages"},
+		API:            []string{"GET /api/v1/mail/burners/{id}", "GET /api/v1/mail/burners/{id}/messages", "GET /api/v1/mail/burners/{id}/messages/{message_id}"},
 		Scopes:         []string{"mail:burner"},
 		OptionalScopes: nil,
 		AdminSection:   "",

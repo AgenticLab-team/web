@@ -1,10 +1,11 @@
 "use client";
 
-import { Check, Copy, Loader2, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronDown, Copy, Loader2, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { Card, Empty, buttonClass } from "@/components/ui/primitives";
-import { createBurner, discardBurner } from "@/lib/mail/burner-actions";
+import { createBurner, discardBurner, openMessage } from "@/lib/mail/burner-actions";
+import type { MailMessageDetail } from "@/lib/mail/message";
 import type { BurnerMessageView, BurnerView } from "@/lib/mail/burner";
 
 /**
@@ -208,30 +209,162 @@ function BurnerCard({ box, messages }: { box: BurnerView; messages: BurnerMessag
  * 然后怀疑是网站的问题再试一次，而很多网站试错三次就锁定。
  */
 function MessageRow({ message }: { message: BurnerMessageView }) {
+  const [open, setOpen] = useState(false);
+  const [detail, setDetail] = useState<MailMessageDetail | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, startLoad] = useTransition();
+
+  /*
+   * ─────────────────────────────────────────
+   * 展开，而不是跳转到另一个页面
+   * ─────────────────────────────────────────
+   *
+   * 这一页的用途是**等一封信**，而等的人多半还要等第二封
+   * （改密码、二次验证）。跳走再回来的话，地址、倒计时、
+   * 其它几封信全部要重新找一遍。
+   *
+   * 展开的代价是长页面，而这一页本来就只有一两封信。
+   */
+  const toggle = () => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    if (detail || loading) return;
+    startLoad(async () => {
+      const r = await openMessage({ id: message.id });
+      if (r.ok) setDetail(r.message);
+      else setLoadError(r.error);
+    });
+  };
+
   return (
-    <div className="rounded-[var(--radius-control)] bg-[var(--fill)] p-3">
-      <p className="t-caption flex items-center gap-1.5 text-[var(--ink-secondary)]">
-        <span className="min-w-0 truncate font-medium">
-          {message.fromName ?? message.from ?? "（未知发件人）"}
-        </span>
-        <span className="tabular ml-auto shrink-0 text-[var(--ink-quaternary)]">
-          <RelativeTime at={message.receivedAt} />
-        </span>
-      </p>
+    <div className="rounded-[var(--radius-control)] bg-[var(--fill)]">
+      {/*
+        * 整条可点。
+        *
+        * 原来这里是个死的 `<div>` —— 收到信、看得见主题、**点不开**。
+        * 而抽不出验证码的时候恰恰最需要看正文（`extractOtp` 宁可不抽
+        * 也不猜），所以那正好是这个功能最尴尬的形状。
+        *
+        * 用 `<button>` 而不是给 div 加 onClick：键盘要能到，
+        * 读屏要念得出「按钮，已展开」。
+        */}
+      <button
+        type="button"
+        className="tap-target w-full rounded-[var(--radius-control)] p-3 text-left"
+        aria-expanded={open}
+        onClick={toggle}
+      >
+        <p className="t-caption flex items-center gap-1.5 text-[var(--ink-secondary)]">
+          <span className="min-w-0 truncate font-medium">
+            {message.fromName ?? message.from ?? "（未知发件人）"}
+          </span>
+          {!message.readAt && !open && (
+            <span
+              className="size-1.5 shrink-0 rounded-full"
+              style={{ background: "var(--accent)" }}
+              aria-label="未读"
+            />
+          )}
+          <span className="tabular ml-auto shrink-0 text-[var(--ink-quaternary)]">
+            <RelativeTime at={message.receivedAt} />
+          </span>
+          <ChevronDown
+            className={`size-3.5 shrink-0 text-[var(--ink-quaternary)] transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </p>
 
-      {message.otpCode ? (
-        <div className="mt-1.5 flex items-center gap-2">
-          <code className="t-title1 tabular font-mono tracking-[0.2em]">{message.otpCode}</code>
-          <CopyButton value={message.otpCode} label="复制验证码" />
+        {/*
+          * 验证码仍然是最大的那一样，展开与否都不变。
+          *
+          * 抽到了就 34px 铺开、带复制；抽不到就老老实实显示主题 ——
+          * **不猜**。抽错一个数字比不抽糟得多：用户会复制、粘贴、
+          * 提交、被拒，然后怀疑是网站的问题再试一次，
+          * 而很多网站试错三次就锁定。
+          */}
+        {message.otpCode ? (
+          <span className="mt-1.5 flex items-center gap-2">
+            <code className="t-title1 tabular font-mono tracking-[0.2em]">{message.otpCode}</code>
+            <CopyButton value={message.otpCode} label="复制验证码" />
+          </span>
+        ) : (
+          <p className="t-footnote mt-1">{message.subject ?? "(无主题)"}</p>
+        )}
+
+        {message.otpCode && message.subject && (
+          <p className="t-caption2 mt-1 truncate text-[var(--ink-quaternary)]">{message.subject}</p>
+        )}
+      </button>
+
+      {open && (
+        <div className="border-t border-[var(--separator)] px-3 pb-3 pt-2">
+          {loading && !detail && (
+            <p className="t-caption flex items-center gap-2 py-2 text-[var(--ink-tertiary)]">
+              <Loader2 className="size-3.5 animate-spin" />
+              正在打开…
+            </p>
+          )}
+          {loadError && (
+            <p className="t-caption py-2" style={{ color: "var(--danger)" }}>
+              {loadError}
+            </p>
+          )}
+          {detail && <MessageBody detail={detail} />}
         </div>
-      ) : (
-        <p className="t-footnote mt-1">{message.subject ?? "(无主题)"}</p>
-      )}
-
-      {message.otpCode && message.subject && (
-        <p className="t-caption2 mt-1 truncate text-[var(--ink-quaternary)]">{message.subject}</p>
       )}
     </div>
+  );
+}
+
+/**
+ * 信的正文。
+ *
+ * ─────────────────────────────────────────
+ * 只渲染纯文本，而这不是偷懒
+ * ─────────────────────────────────────────
+ *
+ * HTML 那一份**根本没落盘**（`ingest.ts` 里 `bodyHtmlPath` 恒为 null）。
+ * 而那是个有意的选择：渲染陌生人发来的 HTML 要么塞进 iframe
+ * 沙箱、要么过一遍消毒器，两条路都得为「一次性验证码」这个用途
+ * 养一份长期要跟着 CVE 走的代码。
+ *
+ * 验证码邮件的纯文本部分几乎总是够用的 —— 而这一页的用途就是它。
+ */
+function MessageBody({ detail }: { detail: MailMessageDetail }) {
+  return (
+    <>
+      <dl className="t-caption2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[var(--ink-quaternary)]">
+        <dt>发件人</dt>
+        <dd className="min-w-0 truncate font-mono">{detail.from ?? "（未知）"}</dd>
+        <dt>收件地址</dt>
+        <dd className="min-w-0 truncate font-mono">{detail.toAddress}</dd>
+        {detail.subject && (
+          <>
+            <dt>主题</dt>
+            <dd className="min-w-0">{detail.subject}</dd>
+          </>
+        )}
+      </dl>
+
+      {detail.bodyText ? (
+        <pre className="t-footnote mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-[var(--radius-chip)] bg-[var(--surface)] p-2.5 font-sans leading-relaxed">
+          {detail.bodyText}
+        </pre>
+      ) : (
+        <p className="t-caption mt-2 text-[var(--ink-tertiary)]">
+          这封信没有纯文本正文 —— 多半整封都是 HTML，而 HTML 这一份不留存
+        </p>
+      )}
+
+      {detail.attachments.length > 0 && (
+        <p className="t-caption2 mt-2 text-[var(--ink-tertiary)]">
+          {/* 只列名字：附件内容不落盘，列出来是为了让人知道「这封信本来带着东西」 */}
+          附件（不保存内容）：{detail.attachments.map((a) => a.filename).join("、")}
+        </p>
+      )}
+    </>
   );
 }
 

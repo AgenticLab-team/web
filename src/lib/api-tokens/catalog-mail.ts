@@ -56,6 +56,19 @@ export const MAIL_ENDPOINTS: readonly Endpoint[] = [
   },
   {
     method: "GET",
+    path: "/api/v1/mail/burners/{id}/messages/{message_id}",
+    summary: "读一封信的全文",
+    scopes: ["mail:burner"],
+    example: `curl -H "Authorization: Bearer $TOKEN" https://agenticlab.sh/api/v1/mail/burners/<id>/messages/<message_id>`,
+    note:
+      "**抽不出验证码时用这条**。列表那条只给摘要和抽好的码 —— " +
+      "那是为了让轮询便宜；而 `otp_code` 是 null 的时候（宁可不抽也不猜），" +
+      "你得能把整封信拿出来自己看。" +
+      "只有 `body_text`：HTML 那一份不留存。" +
+      "★ 读一次就**标记已读**",
+  },
+  {
+    method: "GET",
     path: "/api/v1/mail/burners/{id}/messages",
     summary: "这个箱子收到的信，带抽好的验证码",
     scopes: ["mail:burner"],

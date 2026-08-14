@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { readMessage, type MailMessageDetail } from "@/lib/mail/message";
 import { destroyBurner, openBurner } from "@/lib/mail/burner";
 
 /**
@@ -48,4 +49,34 @@ export async function discardBurner(input: { id: string }): Promise<BurnerAction
 
   revalidatePath("/mail/burner");
   return { ok: true };
+}
+
+/**
+ * 打开一封信。
+ *
+ * ─────────────────────────────────────────
+ * 为什么是 action 而不是让页面直接查
+ * ─────────────────────────────────────────
+ *
+ * 打开一封信会**改状态**（标记已读）。写在服务端组件里的话，
+ * 那次写会发生在渲染期 —— 而渲染是可以被重放的（预取、
+ * 快速前进后退、React 的并发渲染都会），于是「已读时间」
+ * 变成一个说不清什么时候被写的值。
+ *
+ * 走 action 就只有一个入口：人点了那一下。
+ */
+export async function openMessage(input: { id: string }): Promise<
+  { ok: true; message: MailMessageDetail } | { ok: false; error: string }
+> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "请先登录" };
+
+  const message = readMessage({ userId: user.id, messageId: input.id });
+  /*
+   * 「不是你的」和「不存在」给同一句话。
+   * 分开说的话，这个 action 就成了一个「这个 id 存不存在」的探针。
+   */
+  if (!message) return { ok: false, error: "这封信不在了" };
+
+  return { ok: true, message };
 }
