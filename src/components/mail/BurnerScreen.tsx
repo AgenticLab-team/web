@@ -363,7 +363,7 @@ function MessageBody({ detail }: { detail: MailMessageDetail }) {
           {detail.attachments.map((a) => (
             <p key={a.id} className="t-caption2 text-[var(--ink-tertiary)]">
               <span className="font-mono">{a.filename}</span>
-              <span className="ml-1.5">{Math.max(1, Math.round(a.size / 1024))}K</span>
+              <span className="ml-1.5">{fileSize(a.size)}</span>
               {/*
                 * 存了就说存了，没存就说**为什么**没存。
                 *
@@ -466,4 +466,19 @@ function RelativeTime({ at }: { at: number }) {
   if (s < 60) return <>{s} 秒前</>;
   if (s < 3600) return <>{Math.floor(s / 60)} 分钟前</>;
   return <>{Math.floor(s / 3600)} 小时前</>;
+}
+
+/**
+ * 文件大小。
+ *
+ * 超过 1024K 就换成 M —— `8789K` 是要人自己心算的写法，
+ * 而这一行的用途是「这个附件大概多大」，不是精确计量。
+ */
+function fileSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) {
+    const m = bytes / 1024 / 1024;
+    // 10M 以上不给小数：`12.3M` 里那个 .3 不带任何判断价值
+    return m >= 10 ? `${Math.round(m)}M` : `${m.toFixed(1)}M`;
+  }
+  return `${Math.max(1, Math.round(bytes / 1024))}K`;
 }
