@@ -18,7 +18,7 @@ export function MarkAllRead() {
           if (result.ok) setLiveUnread(result.unread);
         })
       }
-      className="t-footnote shrink-0 rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 font-medium transition active:scale-[0.97] disabled:opacity-50"
+      className="tap-target t-footnote shrink-0 rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2 font-medium transition active:scale-[0.97] disabled:opacity-50"
     >
       全部已读
     </button>

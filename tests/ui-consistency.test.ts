@@ -238,8 +238,33 @@ describe("**窄屏行为收在构件里**", () => {
      * shrink-0 不是装饰：不包的话 flex 会把 Pill 压扁而不是让容器滚。
      * 之前 11 处手写里有一半靠每页自己记得写 <span className="shrink-0">。
      */
-    assert.match(primitives, /-mx-4 mb-3 flex gap-1\.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0/);
+    assert.match(primitives, /-mx-4 .*flex gap-1\.5 overflow-x-auto px-4 .*sm:mx-0 sm:px-0/);
     assert.match(primitives, /className="shrink-0"/);
+  });
+
+  it("PillRow 纵向要留出地方 —— 不然药丸的 .tap-target 会被这个滚动容器裁掉", () => {
+    /*
+     * ═════════════════════════════════════════
+     * 这一条断言的是**原因**，不是那一串类名
+     * ═════════════════════════════════════════
+     *
+     * 药丸只有 30px 高，靠 `.tap-target` 的 ::after 把命中区撑到 44 ——
+     * 上下各往外探 7px。而 CSS 规定：一个轴是 auto/scroll 时，
+     * 另一个轴不能是 visible。于是这排横滚的药丸把纵向探出去的部分
+     * **整个裁掉** —— 实测命中区只剩 34 高，
+     * 而每颗药丸上都明明白白写着 tap-target。类名在、样式在，就是不起作用。
+     *
+     * 所以纵向必须有 padding 把地方让出来。没有它的话，
+     * 「加了 tap-target」这件事在这个容器里是**假的**，
+     * 而假的方式很安静：类名俱在，只有拇指知道。
+     */
+    const row = primitives.match(/overflow-x-auto[^"]*/)?.[0] ?? "";
+    const py = row.match(/\bpy-\[(\d+)px\]/);
+    assert.ok(py, `PillRow 少了纵向 padding，tap-target 会被裁掉：${row}`);
+    assert.ok(
+      Number(py[1]) >= 7,
+      `纵向只留了 ${py[1]}px，药丸每边要探出 7px 才够 44：${row}`,
+    );
   });
 
   it("EmptyAction 的可点高度至少 44px —— 它几乎只在微信内置浏览器里被点", () => {

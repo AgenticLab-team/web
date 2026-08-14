@@ -225,7 +225,7 @@ export default async function HomePage() {
           <Section
             title="本周贡献榜"
             action={
-              <Link href="/leaderboard" className="t-footnote text-[var(--accent)]">
+              <Link href="/leaderboard" className="tap-target t-footnote text-[var(--accent)]">
                 查看全部
               </Link>
             }
@@ -270,7 +270,7 @@ export default async function HomePage() {
                * 想补的人找得到，不需要的人不会被反复提醒。
                */
               action={
-                <Link href="/welcome" className="t-caption text-[var(--accent)]">
+                <Link href="/welcome" className="tap-target t-caption text-[var(--accent)]">
                   补课
                 </Link>
               }

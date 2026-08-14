@@ -71,7 +71,7 @@ export function DayNav({
       <Link
         href={href(shiftDateKey(day, -1))}
         aria-label="前一天"
-        className="inline-flex items-center rounded-[var(--radius-control)] p-2 transition hover:bg-[var(--fill)] active:scale-95"
+        className="tap-target inline-flex items-center rounded-[var(--radius-control)] p-2 transition hover:bg-[var(--fill)] active:scale-95"
       >
         <ChevronLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden />
       </Link>
@@ -95,11 +95,11 @@ export function DayNav({
           defaultValue={day}
           max={today}
           aria-label="跳到某一天"
-          className="tabular t-subhead bg-transparent font-medium outline-none"
+          className="tabular t-subhead min-h-11 bg-transparent font-medium outline-none"
         />
         <button
           type="submit"
-          className="t-caption2 rounded-[var(--radius-control)] px-1.5 py-0.5 text-[var(--ink-tertiary)] transition hover:bg-[var(--fill)]"
+          className="tap-target t-caption2 rounded-[var(--radius-control)] px-1.5 py-0.5 text-[var(--ink-tertiary)] transition hover:bg-[var(--fill)]"
         >
           跳转
         </button>
@@ -116,7 +116,7 @@ export function DayNav({
          * 会让人以为数据丢了。pointer-events-none 之外还要 aria-disabled ——
          * 只调淡颜色的话，读屏软件照样会念「后一天，链接」。
          */
-        className={`inline-flex items-center rounded-[var(--radius-control)] p-2 transition ${
+        className={`tap-target inline-flex items-center rounded-[var(--radius-control)] p-2 transition ${
           isToday ? "pointer-events-none opacity-30" : "hover:bg-[var(--fill)] active:scale-95"
         }`}
       >

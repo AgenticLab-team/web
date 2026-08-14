@@ -53,7 +53,14 @@ export function PersonLink({
     <Link
       href={target}
       aria-label={`${name} 的主页`}
-      className={`transition active:opacity-60 ${className}`}
+      /*
+       * `tap-target` 在这里，不在各个调用点上。
+       *
+       * 成员目录里同一个人有两个入口：40px 的头像和一行名字（25 高）——
+       * 两个都不到 44。而它们指向同一个人，命中区重叠没有代价。
+       * 放在这个共用组件上，帖子里、榜单里、雷达里的每一处人名一起受益。
+       */
+      className={`tap-target transition active:opacity-60 ${className}`}
     >
       {children}
     </Link>

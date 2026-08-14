@@ -91,7 +91,7 @@ export default async function MembersPage({
         action={
           <Link
             href="/me/profile"
-            className="t-subhead text-[var(--accent)] transition active:opacity-60"
+            className="tap-target t-subhead text-[var(--accent)] transition active:opacity-60"
           >
             我的资料
           </Link>
@@ -276,7 +276,7 @@ export default async function MembersPage({
                           member.isMe && (
                             <Link
                               href="/me/profile"
-                              className="t-caption2 mt-1.5 inline-block text-[var(--accent)]"
+                              className="tap-target t-caption2 mt-1.5 inline-block text-[var(--accent)]"
                             >
                               加上你的技能标签 →
                             </Link>

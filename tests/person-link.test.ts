@@ -168,7 +168,8 @@ describe("**滚动条不该一直挂在那儿**", () => {
      */
     assert.match(css, /\.no-scrollbar \{/);
     assert.match(css, /\.no-scrollbar::-webkit-scrollbar \{/);
-    assert.match(src("components/ui/primitives.tsx"), /"no-scrollbar -mx-4 mb-3 flex/);
+    // 这里只该管「有没有用上 no-scrollbar」；纵向留白归 ui-consistency 那条管
+    assert.match(src("components/ui/primitives.tsx"), /"no-scrollbar -mx-4 /);
   });
 
   it("手写的那几排药丸也用上了同一个类", () => {

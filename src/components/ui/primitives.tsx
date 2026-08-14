@@ -233,7 +233,7 @@ export function Pill({
        * 顺带解决另一件事：inline 元素的垂直 padding 不参与行高计算，
        * 所以 `py-1.5` 在原来那个写法下根本撑不开药丸。
        */
-      className={`t-footnote inline-flex items-center gap-1 rounded-[var(--radius-pill)] px-3 py-1.5 font-medium transition-colors ${
+      className={`tap-target t-footnote inline-flex items-center gap-1 rounded-[var(--radius-pill)] px-3 py-1.5 font-medium transition-colors ${
         active
           ? "bg-[var(--ink)] text-[var(--canvas)]"
           : "bg-[var(--fill)] text-[var(--ink-secondary)] hover:bg-[var(--fill-strong)]"
@@ -265,10 +265,30 @@ export function PillRow({
   wrap?: boolean;
   className?: string;
 }) {
+  /*
+   * ═════════════════════════════════════════
+   * `.tap-target` 在这个容器里**是失效的**，所以要给它让出地方
+   * ═════════════════════════════════════════
+   *
+   * 药丸只有 30px 高，靠 `.tap-target` 的 `::after` 把命中区撑到 44 ——
+   * 也就是上下各往外探 7px（实际给 9px —— 7 刚好卡在边界上，量出来是 41）。
+   *
+   * 而 CSS 规定：一个轴是 `auto/scroll` 时，另一个轴**不能是 visible**
+   * （它会被强制算成 auto）。于是这排横滚的药丸把纵向探出去的那 7px
+   * 整个裁掉 —— 实测命中区只有 34 高，而每颗药丸上都明明白白写着
+   * `tap-target`。类名在、样式在、就是不起作用。
+   *
+   * 所以纵向 `py-[7px]` 把地方让出来，再用负 margin 抵掉它对排版的影响 ——
+   * 一个像素都没动，而命中区回到 44。
+   * （`mb` 用 5px 而不是 -my：`-my-*` 会和 `mb-3` 抢同一条属性。）
+   *
+   * 换行那一档不横滚，但**上下两行的药丸会互相压**：
+   * gap 只有 6px，而两颗都想往外探 7px。所以纵向 gap 给到 14px。
+   */
   const base = wrap
-    ? "mb-3 flex flex-wrap gap-1.5"
+    ? "mb-3 flex flex-wrap gap-x-1.5 gap-y-3.5"
     // no-scrollbar：一排 30px 高的药丸底下压一条横条，看起来就是根下划线
-    : "no-scrollbar -mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0";
+    : "no-scrollbar -mx-4 -mt-[9px] mb-[3px] flex gap-1.5 overflow-x-auto px-4 py-[9px] sm:mx-0 sm:px-0";
   return (
     <div className={`${base} ${className}`}>
       {Children.map(children, (child) =>
@@ -434,7 +454,12 @@ export function SearchField({
   autoFocus?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-[var(--radius-card)] bg-[var(--surface)] px-4 py-3 hairline">
+    /*
+     * 外面这层是 `<label>` 而不是 `<div>`：整个框 49 高，
+     * 而输入框自己只有 25 —— 点在上下那 12px 的留白上原来什么都不会发生。
+     * 换成 label 之后点哪儿都能聚焦，而**一个像素都没动**。
+     */
+    <label className="flex items-center gap-2 rounded-[var(--radius-card)] bg-[var(--surface)] px-4 py-3 hairline">
       <Search className="h-4 w-4 shrink-0 text-[var(--ink-tertiary)]" strokeWidth={2} aria-hidden />
       <input
         type="search"
@@ -445,7 +470,7 @@ export function SearchField({
         enterKeyHint="search"
         className="t-body w-full bg-transparent outline-none placeholder:text-[var(--ink-quaternary)]"
       />
-    </div>
+    </label>
   );
 }
 

@@ -101,7 +101,8 @@ export function ClaimSection({
         {domains.map((d) => (
           <label
             key={d.domain}
-            className={`flex items-center gap-2 rounded-[var(--radius-control)] px-3 py-2 ${
+            /* `min-h-11` = 44px：整条 label 都能点，而它原来只有 34 高 */
+            className={`flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] px-3 py-2 ${
               picked === d.domain ? "bg-[var(--accent-soft)]" : "bg-[var(--fill)]"
             }`}
           >

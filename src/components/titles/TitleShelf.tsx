@@ -85,7 +85,7 @@ export function TitleShelf({ titles }: { titles: OwnedTitle[] }) {
               onClick={() => toggle(title)}
               aria-pressed={title.equipped}
               title={title.description ?? undefined}
-              className={`flex items-center gap-1.5 rounded-[var(--radius-pill)] px-3 py-1.5 transition active:scale-[0.97] ${
+              className={`tap-target flex items-center gap-1.5 rounded-[var(--radius-pill)] px-3 py-1.5 transition active:scale-[0.97] ${
                 title.active ? "" : "opacity-45"
               }`}
               style={{

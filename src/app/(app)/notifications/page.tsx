@@ -41,7 +41,7 @@ export default async function NotificationsPage({
                 找不到开关的人不会去翻设置，他只会不再打开通知页 */}
             <Link
               href="/me/notifications"
-              className="t-subhead text-[var(--accent)] transition active:opacity-60"
+              className="tap-target t-subhead text-[var(--accent)] transition active:opacity-60"
             >
               设置
             </Link>

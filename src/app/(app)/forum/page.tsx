@@ -120,7 +120,7 @@ export default async function ForumPage() {
           action={
             <Link
               href="/forum/deep"
-              className="t-caption inline-flex items-center gap-1 text-[var(--accent)] transition active:opacity-60"
+              className="tap-target t-caption inline-flex items-center gap-1 text-[var(--accent)] transition active:opacity-60"
             >
               全部
               <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />

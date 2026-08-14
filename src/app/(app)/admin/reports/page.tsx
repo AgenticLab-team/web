@@ -99,7 +99,7 @@ export default async function AdminReportsPage({
               <li key={r.postId}>
                 <Link
                   href={`/forum/p/${r.postId}`}
-                  className="t-footnote text-[var(--accent)] transition active:opacity-60"
+                  className="tap-target t-footnote text-[var(--accent)] transition active:opacity-60"
                 >
                   {r.title}
                 </Link>

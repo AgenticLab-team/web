@@ -169,6 +169,18 @@ function BurnerCard({ box, messages }: { box: BurnerView; messages: BurnerMessag
         <code className="t-title3 min-w-0 flex-1 break-all font-mono font-semibold">
           {box.displayAddress}
         </code>
+        {/*
+          * ⚠️ 这两个按钮之间是 `gap-4`（16px），不是别处的 `gap-2`。
+          *
+          * 它们各自只有 28px 见方，靠 `.tap-target` 的 `::after`
+          * 把命中区撑到 44 —— 也就是每边往外吃 8px。
+          * 隔 8px 摆的话，两个命中区在中间**撞在一起**，
+          * 谁在上面谁赢，实测复制键的有效宽度只剩 36。
+          *
+          * 而这件事在 rect 上完全看不出来（两个按钮都规规矩矩 28×28），
+          * 也没法靠看截图发现 —— 它是 mobile-audit 探出来的。
+          */}
+        <div className="flex shrink-0 items-start gap-4">
         <CopyButton value={box.displayAddress} label="复制地址" />
         <button
           className="tap-target shrink-0 rounded-[var(--radius-chip)] p-1.5 text-[var(--ink-quaternary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--danger)]"
@@ -183,6 +195,7 @@ function BurnerCard({ box, messages }: { box: BurnerView; messages: BurnerMessag
         >
           <Trash2 className="size-4" />
         </button>
+        </div>
       </div>
 
       <Countdown expiresAt={box.expiresAt} />

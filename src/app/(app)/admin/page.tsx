@@ -262,7 +262,7 @@ export default async function AdminDashboard() {
         <Section
           title="最近的管理操作"
           action={
-            <Link href="/admin/audit" className="t-footnote text-[var(--accent)]">
+            <Link href="/admin/audit" className="tap-target t-footnote text-[var(--accent)]">
               全部
             </Link>
           }

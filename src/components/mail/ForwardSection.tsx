@@ -174,7 +174,8 @@ function BoxToggle({ box }: { box: ForwardState["boxes"][number] }) {
   };
 
   return (
-    <label className="flex items-center gap-2 rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2">
+    /* `min-h-11` = 44px：整条 label 都能点，但它原来只有 34 高 */
+    <label className="flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2">
       <input type="checkbox" checked={on} onChange={toggle} disabled={pending} />
       <code className="t-footnote min-w-0 flex-1 truncate font-mono">{box.address}</code>
       <span className="t-caption2 shrink-0 text-[var(--ink-quaternary)]">
