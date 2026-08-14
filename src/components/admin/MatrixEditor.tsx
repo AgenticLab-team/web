@@ -1,4 +1,5 @@
 "use client";
+import { roleInk } from "@/lib/ui/role-color";
 
 import { Check, Minus, X, type LucideIcon } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
@@ -245,7 +246,7 @@ export function MatrixEditor({ roles, categories, initial, canEdit, lookupBase }
                 <th key={role.id} scope="col" className="px-2 py-2 text-center align-bottom">
                   <span
                     className="t-caption block truncate font-medium"
-                    style={role.color ? { color: role.color } : undefined}
+                    style={role.color ? { color: roleInk(role.color) } : undefined}
                   >
                     {role.name}
                   </span>

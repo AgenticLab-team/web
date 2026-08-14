@@ -1,4 +1,5 @@
 "use client";
+import { roleInk } from "@/lib/ui/role-color";
 
 import { AlertTriangle, Plus, Trash2, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -170,7 +171,8 @@ function Row({ role }: { role: RoleView }) {
         aria-expanded={open}
         className="flex min-h-11 w-full flex-wrap items-center gap-x-2.5 gap-y-1 text-left"
       >
-        <AdminTag color={role.color ?? undefined} className="px-2 py-0.5">
+        {/* 传混好的字色进去 —— AdminTag 也给 var(--danger) 那类主题变量用，不能在它内部一律掺 */}
+        <AdminTag color={role.color ? roleInk(role.color) : undefined} className="px-2 py-0.5">
           {role.name}
         </AdminTag>
         <span className="t-caption2 font-mono text-[var(--ink-quaternary)]">{role.key}</span>

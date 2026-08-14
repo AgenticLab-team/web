@@ -33,6 +33,7 @@ import { getPrefs } from "@/lib/notifications/store";
 import { equippedTitle, titlesOf } from "@/lib/titles/queries";
 import { rarityColor } from "@/lib/titles/rules";
 import { resolveDisplayName } from "@/lib/users/display-name";
+import { roleInk, roleTint } from "@/lib/ui/role-color";
 import { shiftDateKey, todayKey } from "@/lib/time";
 
 export const metadata: Metadata = { title: "我的" };
@@ -185,10 +186,7 @@ export default async function MePage() {
                 <span
                   key={role.name}
                   className="t-caption rounded-[var(--radius-pill)] px-2 py-0.5 font-medium"
-                  style={{
-                    background: `color-mix(in srgb, ${role.color ?? "var(--ink)"} 14%, transparent)`,
-                    color: role.color ?? "var(--ink-secondary)",
-                  }}
+                  style={{ background: roleTint(role.color), color: roleInk(role.color) }}
                 >
                   {role.name}
                 </span>
