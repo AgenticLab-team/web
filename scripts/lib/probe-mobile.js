@@ -117,9 +117,22 @@
     if (seen.has(key)) continue;
     seen.add(key);
 
-    // 探之前先滚到视野中间 —— 视口外的点 `elementFromPoint` 一律回 null
-    el.scrollIntoView({ block: "center", inline: "center" });
-    const q = el.getBoundingClientRect();
+    /*
+     * 视口外的点 `elementFromPoint` 一律回 null，所以要先滚过去。
+     *
+     * 但**已经在视野里的就别滚** —— `scrollIntoView` 每次都强制重排，
+     * 而后台域名表有上百行、几百个可点元素，一个一个滚下来
+     * 整页要跑十分钟以上（第一次在 320 宽下跑就是这么超时的，
+     * 而它的表现是「命令没有任何输出」，看着像卡死）。
+     */
+    let q = el.getBoundingClientRect();
+    const inView =
+      q.top >= 26 && q.bottom <= document.documentElement.clientHeight - 26 &&
+      q.left >= 26 && q.right <= docW - 26;
+    if (!inView) {
+      el.scrollIntoView({ block: "center", inline: "center" });
+      q = el.getBoundingClientRect();
+    }
     const cx = q.left + q.width / 2;
     const cy = q.top + q.height / 2;
 
