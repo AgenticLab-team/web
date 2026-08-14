@@ -57,6 +57,23 @@ describe("扫描器：不能误报", () => {
     assert.deepEqual(auditSource(source).filter((f) => f.rule === "input-name"), []);
   });
 
+  it("★ 只包着图标的**空 label** 要报 —— 那比不包更糟", () => {
+    /*
+     * 名字的算法是：外层 label 一旦存在，名字就由它的文字内容决定，
+     * 而 placeholder 的兜底**只在没有 label 时**才轮得到。
+     * 所以一个只包着图标的 label 给出的是空名字，
+     * 并且把 placeholder 挡在外面 —— 读屏念到那个框只说「编辑框」。
+     *
+     * 踩过：搜索框外层为了扩大命中区从 <div> 换成 <label>，
+     * 视觉上一个像素没动，这条规则也照旧放行（「它在 label 里」），
+     * 而运行时的无障碍树上那个框失去了名字。
+     * 是 scripts/ax-audit.mjs 把 AX 树拉出来才看见的。
+     */
+    const source = `<label><Search className="h-4 w-4" aria-hidden /><input type="search" /></label>`;
+    const found = auditSource(source).filter((f) => f.rule === "input-name");
+    assert.equal(found.length, 1, "空 label 里的输入框应该被报出来");
+  });
+
   it("**包在带 label 属性的组件里的输入框也不报**", () => {
     // BoardEditor 的 <Field label="名称"> 写法 —— 第一版在这里误报了四条
     const source = `<Field label="名称"><input value={name} onChange={f} className={c} /></Field>`;

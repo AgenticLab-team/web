@@ -244,8 +244,25 @@ const inputNeedsName: Rule = (source) => {
    * 全被报了出来。误报会让整条规则被删掉，所以宁可把「带 label 属性的
    * 大写组件」一律当成有名字。
    */
+  /*
+   * ⚠️ 空的 `<label>` **不算**有名字，而且比不包更糟。
+   *
+   * 名字的算法是：外层 label 一旦存在，名字就由它的文字内容决定，
+   * 而 placeholder 的兜底**只在没有 label 时**才轮得到。
+   * 所以一个只包着图标的 label 会给出一个空名字，并且把 placeholder
+   * 挡在外面 —— 读屏念到那个框只说「编辑框」。
+   *
+   * 这一条是踩出来的：搜索框外层为了扩大命中区从 `<div>` 换成
+   * `<label>`，视觉上一个像素没动，静态这条规则也照旧放行
+   * （「它在 label 里」），而运行时的无障碍树上那个框失去了名字。
+   * 是把 AX 树拉出来才看见的（`scripts/ax-audit.mjs`）。
+   *
+   * 所以只有**带文字的** label 才算数：把标签里的元素剥掉之后
+   * 还剩下非空白字符，才说明读屏念得出东西。
+   */
+  const hasText = (body: string) => body.replace(/<[^>]*>/g, "").replace(/\{[^}]*\}/g, "").trim().length > 0;
   const wrapped: [number, number][] = [
-    ...findElements(source, "label"),
+    ...findElements(source, "label").filter((l) => hasText(l.body)),
     ...componentsWithLabelProp(source),
   ].map((l) => [l.index, l.index + l.attrs.length + l.body.length + 16]);
   const insideLabel = (index: number) => wrapped.some(([from, to]) => index > from && index < to);

@@ -486,6 +486,21 @@ export function SearchField({
         placeholder={placeholder}
         autoFocus={autoFocus}
         enterKeyHint="search"
+        /*
+         * ⚠️ `aria-label` 是**必须的**，而且是被外面那层 `<label>` 逼出来的。
+         *
+         * 外层原来是 `<div>`，那时读屏会拿 placeholder 当兜底名字。
+         * 换成 `<label>` 之后（为了让整个 49px 高的框都能点），
+         * 名字改由 label 的文字内容决定 —— 而它里面只有一个
+         * `aria-hidden` 的放大镜图标，文字是空的。
+         *
+         * 结果：**一个空名字盖过了 placeholder 的兜底**，
+         * 读屏念到这个框只说「编辑框」。
+         *
+         * 视觉上一个像素都没变，静态扫源码也看不出来（label 在、input 在），
+         * 是把运行时的无障碍树拉出来才看见的。
+         */
+        aria-label={placeholder}
         className="t-body w-full bg-transparent outline-none placeholder:text-[var(--ink-quaternary)]"
       />
     </label>
