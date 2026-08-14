@@ -5,11 +5,16 @@ import { eq } from "drizzle-orm";
 import type { CurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { userPrivacy, users } from "@/lib/db/schema";
-import { withDefaults, type PrivacySettings } from "@/lib/privacy/rules";
+import {
+  PRIVACY_SWITCHES,
+  withDefaults,
+  type PrivacyKey,
+  type PrivacySettings,
+} from "@/lib/privacy/rules";
 import { can } from "@/lib/rbac/can";
 
 /**
- * 管理员不受这两个开关的限制。
+ * 管理员不受**其中一个**开关的限制。
  *
  * ─────────────────────────────────────────
  * 为什么是「处理举报队列」这个权限
@@ -35,6 +40,31 @@ export const PRIVACY_BYPASS_PERMISSION = "moderation.queue" as const;
 
 export function bypassesPrivacy(user: CurrentUser | null): boolean {
   return !!user && can(user, PRIVACY_BYPASS_PERMISSION).allowed;
+}
+
+/**
+ * 这个人对**这一条**开关有没有豁免。
+ *
+ * ═════════════════════════════════════════
+ * 有权限**不等于**能绕过任何一个开关
+ * ═════════════════════════════════════════
+ *
+ * 原来这里只有 `bypassesPrivacy` 一个判断，四个调用点各自调它 ——
+ * 于是一个权限一次性打开了所有开关。榜单和作息那两条从来没人
+ * 决定过要不要给豁免，它们只是**顺带**被打开的。
+ *
+ * 站长把自己从榜上藏了，换个有管理权限的账号一看还在，
+ * 就是这么来的。而榜单那条开关对他说的是「别人看到的榜单里没有你」。
+ *
+ * 所以豁免改成一条一条给，答案写在开关自己的登记表里
+ * （`PRIVACY_SWITCHES[].adminBypass`），这里只负责取。
+ * 这样「哪些开关有豁免」和「用户在界面上读到的那句话」
+ * 挨在一起 —— 改一个不改另一个会当场被测试拦下。
+ */
+export function exemptFrom(viewer: CurrentUser | null, key: PrivacyKey): boolean {
+  const spec = PRIVACY_SWITCHES.find((s) => s.key === key)!;
+  // 先看这条开关准不准豁免，再花力气去解析权限
+  return spec.adminBypass && bypassesPrivacy(viewer);
 }
 
 /**
@@ -92,86 +122,54 @@ export function privacyOf(userId: string): PrivacySettings {
  * 只能靠相信，而只能靠相信的隐私开关跟没有是一样的。
  */
 /**
- * 谁把自己从榜单上藏起来了 —— **不看视角**。
- *
- * ─────────────────────────────────────────
- * 这个函数的返回值不能直接给人看
- * ─────────────────────────────────────────
- *
- * `leaderboardHiddenWxIds` 回答的是「这个视角下该排除谁」，
- * 对管理员返回空名单（他看得到完整的榜）。
- *
- * 而管理员还需要另一个答案：**这几行里哪些是别人看不到的** ——
- * 不知道的话，他会照着一个只有自己看得见的名次去发公告、发奖。
- *
- * 两个问题不同，所以是两个函数。**调用这一个之前必须先确认
- * 调用方有绕过隐私的权限** —— 把「谁藏了自己」告诉普通成员，
- * 等于把那个开关直接废掉：藏起来的人反而更显眼。
- */
-/**
  * 榜单要用的那一整套判定，**一次算完**。
  *
  * ─────────────────────────────────────────
- * 为什么不是两个函数各调一次
+ * 为什么不是「排除名单」加一次权限判断
  * ─────────────────────────────────────────
  *
- * 榜单需要两件事：「该排除谁」和「这几行里哪些是别人看不到的」。
- * 分开调的话，`bypassesPrivacy` 会被判两遍 ——
- * 而它背后是一次完整的权限解析（角色、权限、例外），
+ * 榜单需要两件事：「该排除谁」和「这个人能不能看到访客看不到的东西」。
+ * 分开问的话，权限解析要跑两遍（角色、权限、例外），
  * 一次榜单查询因此多花三条 SQL。
  *
- * 更要紧的是**豁免判定必须只写在这个文件里**：
- * 调用点各写一遍的话，漏判的方向是「把关掉开关的人重新暴露出去」，
- * 而那种漏没有人看得出来。`tests/privacy-switches.test.ts`
- * 逐个文件盯着这一条。
+ * ⚠️ `privileged` 现在**只管一件事**：给管理员标出
+ * 「这一行访客看到的是『群成员』」（`anonymousToGuests`）。
+ * 它**不再**影响 `hidden` —— 那条曾经让管理员看到完整的榜，
+ * 而榜单开关对用户承诺的是「别人看到的榜单里没有你」。
+ * 详见 `leaderboardHiddenWxIds` 上那段。
+ *
+ * 「谁藏了自己」这个答案现在**谁都拿不到**，包括管理员：
+ * 它一旦被显示出来，藏起来的人反而比不藏更显眼。
  */
 export interface LeaderboardPrivacy {
-  /** 这个视角下该从榜上排除的 wx_id */
+  /** 该从榜上排除的 wx_id —— 对所有视角都一样，除了自己看得到自己 */
   hidden: string[];
-  /** 这个人能不能看到完整的榜（管理员） */
+  /** 这个人看不看得到「访客眼里这一行是谁」这类审计信息 */
   privileged: boolean;
-  /**
-   * 谁把自己藏起来了 —— **只在 privileged 时才有值**。
-   *
-   * 给普通成员的话等于把那个开关直接废掉：藏起来的人反而更显眼。
-   */
-  hiddenForAudit: Set<string> | null;
 }
 
 export function leaderboardPrivacy(viewer: CurrentUser | null): LeaderboardPrivacy {
-  const privileged = bypassesPrivacy(viewer);
-  const all = hiddenWxIdsForAudit();
-
   return {
-    // 管理员看得到完整的榜，所以排除名单是空的
-    hidden: privileged ? [] : all.filter((wxId) => wxId !== viewer?.wxId),
-    privileged,
-    hiddenForAudit: privileged ? new Set(all) : null,
+    hidden: leaderboardHiddenWxIds(viewer),
+    privileged: bypassesPrivacy(viewer),
   };
-}
-
-function hiddenWxIdsForAudit(): string[] {
-  return db
-    .select({ wxId: users.wxId })
-    .from(userPrivacy)
-    .innerJoin(users, eq(users.id, userPrivacy.userId))
-    .where(eq(userPrivacy.hideFromLeaderboard, true))
-    .all()
-    .map((r) => r.wxId)
-    .filter((wxId): wxId is string => wxId !== null);
 }
 
 export function leaderboardHiddenWxIds(viewer: CurrentUser | null): string[] {
   /*
-   * 管理员看到的是完整的榜。
+   * **管理员也看不到。**
    *
-   * 界面上会把「别人看不到的那几行」标出来 —— 见
-   * `hiddenWxIdsForAudit` 和 `BoardEntry.hiddenFromOthers`。
-   * 不标的话管理员会以为公开的榜就长这样，然后照着一个只有他
-   * 自己看得到的名次去发公告、发奖。
+   * 这里原来有一条 `if (bypassesPrivacy(viewer)) return []`，
+   * 理由写的是「不然管理员会以为公开的榜就长这样」——
+   * 而那句话是反的：公开的榜**就是**长这样。
+   *
+   * 榜单那条开关对用户说的是「关掉之后别人看到的榜单里没有你」，
+   * 一句没有例外的话。豁免的标准是「不给的话处理不了举报」，
+   * 而没有任何一件审核工作需要知道一个藏起来的人排第几。
+   *
+   * 所以这个函数**不问视角有没有权限**，只排除自己 ——
+   * 自己那一行要留着，否则没人能确认开关生效了。
    */
-  if (bypassesPrivacy(viewer)) return [];
-
   const rows = db
     .select({ wxId: users.wxId })
     .from(userPrivacy)
@@ -199,7 +197,7 @@ export function unsearchableWxIds(viewer: CurrentUser | null): string[] {
    * 不能只写在代码里：让人以为管理员也搜不到，
    * 他会照着一个不存在的保护去说话。
    */
-  if (bypassesPrivacy(viewer)) return [];
+  if (exemptFrom(viewer, "searchableByOthers")) return [];
 
   const rows = db
     .select({ wxId: users.wxId })
@@ -241,7 +239,17 @@ export interface HiddenWxIds {
  * **两个开关的语义一个字都没变** —— 只是少问了两遍同一个问题。
  */
 export function hiddenWxIds(viewer: CurrentUser | null): HiddenWxIds {
-  if (bypassesPrivacy(viewer)) return { leaderboard: [], unsearchable: [], activityHours: [] };
+  /*
+   * ⚠️ **豁免是逐条的，不是一刀切。**
+   *
+   * 这里原来是一句 `if (bypassesPrivacy(viewer)) return {三个都空}` ——
+   * 一个权限同时打开了榜单、检索、作息三条，而只有检索那条
+   * 想清楚过、也写给用户看过。
+   *
+   * 作息那条尤其不能跟着走：它暴露的是**一个人什么时候醒着**，
+   * 而没有一条举报是靠这个处理的。
+   */
+  const searchExempt = exemptFrom(viewer, "searchableByOthers");
 
   const rows = db
     .select({
@@ -261,7 +269,7 @@ export function hiddenWxIds(viewer: CurrentUser | null): HiddenWxIds {
     // 自己永远看得见自己 —— 和两个单独取的函数同一条口径
     if (!row.wxId || row.wxId === viewer?.wxId) continue;
     if (row.hideFromLeaderboard) leaderboard.push(row.wxId);
-    if (!row.searchableByOthers) unsearchable.push(row.wxId);
+    if (!row.searchableByOthers && !searchExempt) unsearchable.push(row.wxId);
     if (row.hideActivityHours) activityHours.push(row.wxId);
   }
   return { leaderboard, unsearchable, activityHours };

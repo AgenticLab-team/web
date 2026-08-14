@@ -47,27 +47,14 @@ export interface BoardEntry {
   /** 上一周期的名次，用于显示升降箭头 */
   previousRank: number | null;
   /**
-   * 这一行**别人看不到**。
-   *
-   * ─────────────────────────────────────────
-   * 只有能绕过隐私的人才拿得到这个字段
-   * ─────────────────────────────────────────
-   *
-   * 管理员看到的是完整的榜（`leaderboardHiddenWxIds` 对他返回空名单），
-   * 而界面上不标出来的话，他会以为公开的榜就长这样 ——
-   * 然后照着一个**只有他自己看得到的名次**去发公告、发奖。
-   * 那是一次好心办出来的隐私事故。
-   *
-   * 反过来，这个字段绝不能给普通成员：告诉他们「谁把自己藏了」，
-   * 等于把那个开关直接废掉 —— 藏起来的人反而更显眼。
-   * 所以非特权视角下它恒为 undefined，不是 false。
-   */
-  hiddenFromOthers?: boolean;
-  /**
    * 访客看到的是「群成员」—— 这个人还没注册过本站。
    *
-   * 和上面那条一样只给特权视角：管理员要知道自己看到的名字，
+   * **只给特权视角**：管理员要知道自己看到的名字，
    * 有哪些是访客看不到的。
+   *
+   * 注意这是这份榜上**唯一**一个「管理员多看到的东西」，
+   * 而它多出来的信息是「这个账号存不存在」，不是任何人的隐私开关 ——
+   * 藏起来的人对管理员同样不出现，见 `leaderboardPrivacy`。
    */
   anonymousToGuests?: boolean;
 }
@@ -186,17 +173,15 @@ export function getLeaderboard(options: BoardOptions): BoardEntry[] {
   const { from, to, previousFrom, previousTo } = rangeFor(period);
 
   /*
-   * 一次算完：该排除谁、这个人是不是管理员、以及（只对管理员）
-   * 哪几行别人看不到。
+   * 一次算完：该排除谁，以及这个人能不能看到「访客眼里这一行是谁」。
    *
-   * 豁免判定全部在 `privacy/queries.ts` 里 —— 这里再判一遍的话，
+   * 隐私判定全部在 `privacy/queries.ts` 里 —— 这里再判一遍的话，
    * 一是权限解析要跑两遍（一次榜单多三条 SQL），
    * 二是漏判的方向永远是「把关掉开关的人重新暴露出去」。
    */
   const privacy = leaderboardPrivacy(options.viewer ?? null);
   const hidden = privacy.hidden;
   const privileged = privacy.privileged;
-  const hiddenSet = privacy.hiddenForAudit;
 
   // 赛季有结束日，所以上界要传进去 —— 不传的话看历史赛季会把之后的也算进来
   const current = aggregate(from, to ?? null, options.convIds, options.convId, limit, hidden);
@@ -277,12 +262,7 @@ export function getLeaderboard(options: BoardOptions): BoardEntry[] {
       anonymize && registered && !registered.has(row.wxId)
         ? null
         : (profiles.get(row.wxId)?.avatar ?? null),
-    ...(privileged
-      ? {
-          hiddenFromOthers: hiddenSet?.has(row.wxId) ?? false,
-          anonymousToGuests: !(registered?.has(row.wxId) ?? true),
-        }
-      : {}),
+    ...(privileged ? { anonymousToGuests: !(registered?.has(row.wxId) ?? true) } : {}),
     quality: Number(row.quality),
     messages: Number(row.messages),
     chars: Number(row.chars),

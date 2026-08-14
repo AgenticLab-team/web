@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ForumBoardList } from "@/components/ForumBoardList";
 import { forumBoard, MIN_REPLY_CHARS, POST_WEIGHT } from "@/lib/queries/forum-board";
-import { leaderboardPrivacy } from "@/lib/privacy/queries";
+import { leaderboardPrivacy, privacyOf } from "@/lib/privacy/queries";
 
 import { LeaderboardList } from "@/components/LeaderboardList";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -58,6 +58,15 @@ export default async function LeaderboardPage({
   const params = await searchParams;
   const user = await getCurrentUser();
   const myGroups = visibleGroupsFor(user);
+  /*
+   * 自己藏没藏 —— 只是为了在自己那一行上标一句「仅自己可见」。
+   *
+   * 藏起来的人榜上**还看得到自己**（排除名单里没有自己）。
+   * 不标的话他看到的榜和没藏时一模一样，也就没有任何办法
+   * 确认那个开关生效了 —— 而只能靠相信的隐私开关跟没有是一样的。
+   */
+  const meHidden = user ? privacyOf(user.id).hideFromLeaderboard : false;
+
   const period = (PERIODS.find((p) => p.key === params.period)?.key ?? "season") as Period;
   const season = currentSeasonView();
 
@@ -189,7 +198,7 @@ export default async function LeaderboardPage({
       {/* 自己不在前 50 时单独把名次拎出来，否则这个人永远看不到自己 */}
       {board === "chat" && myRank && !inTop && (
         <Section title="我的名次">
-          <LeaderboardList entries={[myRank]} highlightWxId={user?.wxId} />
+          <LeaderboardList entries={[myRank]} highlightWxId={user?.wxId} meHidden={meHidden} />
         </Section>
       )}
 
@@ -197,7 +206,12 @@ export default async function LeaderboardPage({
         {board === "forum" ? (
           <ForumBoardList entries={forumEntries} highlightWxId={user?.wxId} />
         ) : (
-          <LeaderboardList entries={entries} highlightWxId={user?.wxId} showDelta={period !== "all"} />
+          <LeaderboardList
+            entries={entries}
+            highlightWxId={user?.wxId}
+            showDelta={period !== "all"}
+            meHidden={meHidden}
+          />
         )}
       </Section>
 

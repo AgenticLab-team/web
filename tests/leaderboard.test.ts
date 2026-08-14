@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
+import { readCode } from "./_source";
 
 /**
  * 排行榜。
@@ -152,16 +153,18 @@ describe("真库", async () => {
     });
   });
 
-  describe("**「别人看不到这一行」要标出来 —— 但只标给管理员**", () => {
+  describe("**藏起来的人对谁都不出现，「谁藏了自己」谁都拿不到**", () => {
     /*
-     * 管理员看到的是**完整**的榜（隐私排除对他返回空名单）。
-     * 界面上不标的话，他会以为公开的榜就长这样，
-     * 然后照着一个只有他自己看得见的名次去发公告、发奖 ——
-     * 那是一次好心办出来的隐私事故。
+     * 这里原来是反的：管理员看到完整的榜，藏起来的那几行标着「仅你可见」。
+     * 理由写的是「不然他会以为公开的榜就长这样」——
+     * 而那句话是反的，公开的榜**就是**长这样。
      *
-     * 反过来，这个信息**绝不能给普通成员**：
-     * 告诉他们「谁把自己藏了」等于把那个开关直接废掉 ——
-     * 藏起来的人反而更显眼。
+     * 站长自己把自己藏了、换个有管理权限的账号一看还在榜上，
+     * 这条才被翻出来。榜单开关对用户说的是
+     * 「关掉之后别人看到的榜单里没有你」，一句没有例外的话。
+     *
+     * 「谁藏了自己」这个答案现在谁都拿不到 —— 它一旦被显示出来，
+     * 藏起来的人反而比不藏更显眼。
      */
     const hide = (userId: string) =>
       dbm.db
@@ -169,13 +172,27 @@ describe("真库", async () => {
         .values({ userId, hideFromLeaderboard: true })
         .run();
 
-    it("**普通成员的结果里根本没有这两个字段**", () => {
+    it("**「谁藏了自己」这个字段已经不存在了** —— 连管理员也没有", () => {
       /*
-       * 用一个**没藏起来**的人来测 —— 藏起来的那个对成员本来就不出现，
+       * 不是「不给普通成员」，是**根本不产出**。
+       * 只要它还在响应里，就总有一天会被渲染出来。
+       */
+      const q = readFileSync(
+        new URL("../src/lib/queries/leaderboard.ts", import.meta.url),
+        "utf8",
+      );
+      assert.equal(q.includes("hiddenFromOthers"), false);
+      const list = readFileSync(
+        new URL("../src/components/LeaderboardList.tsx", import.meta.url),
+        "utf8",
+      );
+      assert.equal(list.includes("仅你可见"), false, "界面上还标着别人藏没藏");
+    });
+
+    it("**普通成员的结果里没有审计字段**", () => {
+      /*
+       * 用一个**没藏起来**的人来测 —— 藏起来的那个对谁都不出现，
        * 拿它测的话，测的是「排除生效了」而不是「字段没漏」。
-       *
-       * 恒为 undefined 而不是 false：一个 `hiddenFromOthers: false`
-       * 的字段本身就在说「这个概念存在」，而普通成员不该知道它存在。
        */
       reset();
       stat("wx_a", 100);
@@ -186,7 +203,7 @@ describe("真库", async () => {
       assert.equal("anonymousToGuests" in row, false);
     });
 
-    it("**访客那一侧同样没有这两个字段**", () => {
+    it("**访客那一侧同样没有审计字段**", () => {
       reset();
       stat("wx_ghost", 100);
       const [row] = guest();
@@ -209,7 +226,6 @@ describe("真库", async () => {
 
     it("**权限只在 privacy/queries.ts 里判一次**", () => {
       /*
-       * 榜单需要两件事：该排除谁、哪几行别人看不到。
        * 分开调的话 `bypassesPrivacy` 会被判两遍 ——
        * 而它背后是一次完整的权限解析，一次榜单查询因此多花三条 SQL。
        *
@@ -221,13 +237,30 @@ describe("真库", async () => {
         "utf8",
       );
       assert.match(pq, /export function leaderboardPrivacy\(/);
-      assert.match(pq, /hiddenForAudit: privileged \? new Set\(all\) : null/);
 
       const q = readFileSync(
         new URL("../src/lib/queries/leaderboard.ts", import.meta.url),
         "utf8",
       );
       assert.equal(q.includes("bypassesPrivacy"), false, "榜单自己又判了一遍权限");
+    });
+
+    it("**排除名单不看视角有没有权限** —— 管理员和普通成员拿到同一份", () => {
+      /*
+       * 带真角色的那一版在 `tests/privacy-switches.test.ts` 里
+       * （那边有 RBAC 夹具）。这里盯的是更硬的一条：
+       * 这个函数**根本不问权限**，所以不存在「谁能绕过」这个问题。
+       */
+      // 必须去注释：那个函数上面**写着**当年那条豁免长什么样
+      const pq = readCode("lib/privacy/queries.ts");
+      const start = pq.indexOf("export function leaderboardHiddenWxIds");
+      const body = pq.slice(start, pq.indexOf("\nexport ", start + 1));
+      assert.notEqual(start, -1);
+      assert.equal(
+        /bypassesPrivacy|exemptFrom|moderation\.queue/.test(body),
+        false,
+        "榜单排除名单又开始看视角的权限了",
+      );
     });
 
     it("**藏起来的人对普通成员根本不出现** —— 那才是开关的本意", () => {
@@ -279,9 +312,13 @@ describe("**界面上的两个标**", () => {
     "utf8",
   );
 
-  it("「仅你可见」标出别人看不到的那一行", () => {
-    assert.match(list, /entry\.hiddenFromOthers &&/);
-    assert.match(list, /仅你可见/);
+  it("**自己藏起来时，自己那一行标着「仅自己可见」**", () => {
+    /*
+     * 藏起来的人榜上还看得到自己（排除名单里没有自己）。
+     * 不标的话，他看到的榜和没藏时一模一样，也就没有任何办法
+     * 确认那一下拨生效了 —— 而只能靠相信的隐私开关跟没有是一样的。
+     */
+    assert.match(list, /meHidden \? "仅自己可见" : "你"/);
   });
 
   it("「访客不具名」标出没注册过本站的人", () => {
@@ -299,11 +336,12 @@ describe("**界面上的两个标**", () => {
     assert.equal(list.includes("bypassesPrivacy"), false);
   });
 
-  it("**两个标各说各的**，不能合成一个", () => {
-    // 「藏起来了」和「没注册」是两件事，合成一个标之后管理员分不清该怎么办
-    assert.notEqual(
-      list.indexOf("仅你可见"),
-      list.indexOf("访客不具名"),
-    );
+  it("**「访客不具名」说的不是隐私开关** —— 别让人以为管理员多看到了什么", () => {
+    /*
+     * 这是榜上唯一一个「管理员多看到的东西」，而它多出来的信息是
+     * 「这个账号存不存在」，不是任何人拨的开关。
+     */
+    assert.match(list, /访客不具名/);
+    assert.equal(list.includes("仅你可见"), false);
   });
 });

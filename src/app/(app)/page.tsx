@@ -12,6 +12,7 @@ import { Empty, EmptyAction, Group, Row, Section, StatTile } from "@/components/
 import { passkeyNudgeFor } from "@/lib/auth/passkey-nudge";
 import { configProblem } from "@/lib/notifications/webpush";
 import { getCurrentUser, getRealUser } from "@/lib/auth/session";
+import { privacyOf } from "@/lib/privacy/queries";
 import { db } from "@/lib/db";
 import { messages, people } from "@/lib/db/schema";
 import { checkinStatus } from "@/lib/points/checkin";
@@ -42,6 +43,15 @@ export const dynamic = "force-dynamic";
  */
 export default async function HomePage() {
   const user = await getCurrentUser();
+
+  /*
+   * 自己藏没藏 —— 只是为了在自己那一行上标一句「仅自己可见」。
+   *
+   * 藏起来的人榜上**还看得到自己**（排除名单里没有自己）。
+   * 不标的话他看到的榜和没藏时一模一样，也就没有任何办法
+   * 确认那个开关生效了 —— 而只能靠相信的隐私开关跟没有是一样的。
+   */
+  const meHidden = user ? privacyOf(user.id).hideFromLeaderboard : false;
 
   // 总榜对所有人开放 —— 贡献排名是荣誉。
   // 但群的身份不外泄：下面只用 id 做聚合，不渲染任何群名。
@@ -220,7 +230,11 @@ export default async function HomePage() {
               </Link>
             }
           >
-            <LeaderboardList entries={board} highlightWxId={user?.wxId} />
+            <LeaderboardList
+              entries={board}
+              highlightWxId={user?.wxId}
+              meHidden={meHidden}
+            />
             <p className="t-caption mt-2 px-1 leading-relaxed text-[var(--ink-tertiary)]">
               按<strong className="font-medium">高质量消息</strong>排名（≥15 字的文本或引用回复）。
               按总条数排会让复读机上榜。

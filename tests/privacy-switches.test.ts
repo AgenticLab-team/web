@@ -431,7 +431,11 @@ const stat = (wxId: string, quality: number) =>
     .values({ wxId, convId: CONV, date: today(), messages: quality, qualityMessages: quality })
     .run();
 
-const hide = (userId: string, field: "hideFromLeaderboard" | "searchableByOthers", value: boolean) =>
+const hide = (
+  userId: string,
+  field: "hideFromLeaderboard" | "searchableByOthers" | "hideActivityHours",
+  value: boolean,
+) =>
   dbm.db
     .insert(schema.userPrivacy)
     .values({ userId, [field]: value, updatedAt: 1 })
@@ -522,11 +526,21 @@ describe("名单（真库）", () => {
 
 });
 
-describe("**管理员不受这两个开关的限制**", () => {
+describe("**豁免是逐条给的，不是一个权限打开全部**", () => {
   /*
-   * 有人举报一条发言，而发言的人关掉了「别人能搜到我的发言」——
-   * 处理举报的人找不到那条内容，举报就处理不了。
-   * **一个能被当事人自己关掉的审核，等于没有审核。**
+   * 这一组是补一次真实的事故补上的。
+   *
+   * 原来只有一个 `bypassesPrivacy` 判断，四个调用点各自调它 ——
+   * 于是 `moderation.queue` 一次性打开了榜单、检索、作息三条开关。
+   * 只有检索那条想清楚过、也写给用户看过；另外两条是**顺带**开的。
+   *
+   * 站长把自己从榜上藏了，换一个有管理权限的账号一看，自己还在榜上，
+   * 旁边标着「仅你可见」—— 而榜单开关对他说的是
+   * 「关掉之后别人看到的榜单里没有你」。
+   *
+   * 检索那条留着，理由是**不给的话举报处理不了**：
+   * 有人举报一条发言、而发言的人自己关掉了检索，那条举报就查不下去。
+   * 一个能被当事人自己关掉的审核，等于没有审核。
    */
   const admin = () => {
     dbm.db.insert(schema.userRoles).values({ userId: "u_c", roleId: "r_mod" }).run();
@@ -548,7 +562,7 @@ describe("**管理员不受这两个开关的限制**", () => {
     assert.deepEqual(pq.unsearchableWxIds(null), ["wx_a"]);
   });
 
-  it("管理员看到的是完整的榜", () => {
+  it("**管理员看到的榜和别人一样** —— 藏起来的人对他也不出现", () => {
     stat("wx_a", 30);
     stat("wx_b", 20);
     hide("u_b", "hideFromLeaderboard", true);
@@ -556,8 +570,64 @@ describe("**管理员不受这两个开关的限制**", () => {
     const seen = board.getLeaderboard({ period: "all", convIds: [CONV], viewer: admin() });
     assert.deepEqual(
       seen.map((e) => e.wxId),
-      ["wx_a", "wx_b"],
+      ["wx_a"],
+      "榜单开关说的是「别人看到的榜单里没有你」，那句话没有例外",
     );
+  });
+
+  it("**管理员也看不到别人的作息** —— 它暴露的是一个人什么时候醒着", () => {
+    hide("u_a", "hideActivityHours", true);
+    assert.deepEqual(pq.hiddenWxIds(admin()).activityHours, ["wx_a"]);
+  });
+
+  it("合并取名单时，只有检索那一份会因为豁免变空", () => {
+    hide("u_a", "hideFromLeaderboard", true);
+    hide("u_a", "searchableByOthers", false);
+    hide("u_a", "hideActivityHours", true);
+
+    const lists = pq.hiddenWxIds(admin());
+    assert.deepEqual(lists.unsearchable, [], "检索有豁免");
+    assert.deepEqual(lists.leaderboard, ["wx_a"], "榜单没有");
+    assert.deepEqual(lists.activityHours, ["wx_a"], "作息没有");
+  });
+
+  it("**逐条豁免和一刀切在管理员身上要给出不同答案** —— 否则这组测试等于没测", () => {
+    /*
+     * 把上面三条合起来说一遍：如果哪天有人把
+     * `exemptFrom` 改回 `bypassesPrivacy`，三份名单会一起变空，
+     * 而这一条会当场红。
+     */
+    hide("u_a", "hideFromLeaderboard", true);
+    const lists = pq.hiddenWxIds(admin());
+    assert.notDeepEqual(
+      { l: lists.leaderboard, u: lists.unsearchable },
+      { l: [], u: [] },
+      "三份名单一起空了 —— 豁免又变回一刀切的了",
+    );
+  });
+
+  it("**豁免答案来自开关登记表**，不是各函数自己写死的", () => {
+    /*
+     * `adminBypass` 和界面上那句话挨在一起（同一个对象字面量），
+     * 改一个不改另一个会被下面「说明里要写明」那条拦下。
+     * 判定散在 queries.ts 里的话，两者就隔了一个文件 ——
+     * 而那个距离正是这次事故发生的地方。
+     */
+    const body = strip(src("lib/privacy/queries.ts"));
+    assert.match(body, /spec\.adminBypass/, "exemptFrom 应该去登记表里取答案");
+    for (const [fn, expected] of [
+      ["unsearchableWxIds", true],
+      ["leaderboardHiddenWxIds", false],
+    ] as const) {
+      const start = body.indexOf(`export function ${fn}`);
+      const slice = body.slice(start, body.indexOf("\nexport ", start + 1));
+      assert.notEqual(start, -1, `找不到 ${fn}`);
+      assert.equal(
+        /exemptFrom|bypassesPrivacy/.test(slice),
+        expected,
+        expected ? `${fn} 应该问一次豁免` : `${fn} 不该有任何豁免判断`,
+      );
+    }
   });
 
   it("**被封的管理员没有豁免** —— can() 第一条就把封禁挡在外面", () => {
@@ -600,6 +670,40 @@ describe("**管理员不受这两个开关的限制**", () => {
      */
     const spec = PRIVACY_SWITCHES.find((s) => s.key === "searchableByOthers")!;
     assert.match(spec.limit, /管理员|站长|审核/);
+  });
+
+  it("**有豁免的开关必须自己说出来，没豁免的不许乱说** —— 两个方向都盯", () => {
+    /*
+     * ═════════════════════════════════════════
+     * 这一条是这次事故真正的修法
+     * ═════════════════════════════════════════
+     *
+     * 删掉那两条豁免只解决了今天这一次。真正的问题是
+     * **加一条豁免不需要跟任何人交代** —— 顺手加个 `bypassesPrivacy`
+     * 就行，用户读到的那句话不会跟着变。
+     *
+     * 所以把两者绑成互为条件：想加豁免，就得先想清楚怎么写给用户看；
+     * 写不出口的那条，本来就不该加。反过来，`limit` 里提了管理员
+     * 而代码里没有豁免也一样红 —— 那是吓唬用户。
+     */
+    for (const spec of PRIVACY_SWITCHES) {
+      const mentions = /管理员|站长|审核/.test(spec.limit);
+      assert.equal(
+        spec.adminBypass,
+        mentions,
+        spec.adminBypass
+          ? `${spec.key} 有豁免，但说明里一个字都没提 —— 用户会照着一个不存在的保护去说话`
+          : `${spec.key} 说明里提了管理员，但代码里没有豁免 —— 别吓唬人`,
+      );
+    }
+  });
+
+  it("**只有一条开关有豁免** —— 数量本身就是一条防线", () => {
+    // 有豁免的开关多一条，这一行就要改一次，而改它的人必须说出理由
+    assert.deepEqual(
+      PRIVACY_SWITCHES.filter((s) => s.adminBypass).map((s) => s.key),
+      ["searchableByOthers"],
+    );
   });
 });
 

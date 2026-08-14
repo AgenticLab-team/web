@@ -587,12 +587,21 @@ describe("⑤ 目录里的贡献数字也要过榜单开关", () => {
     assert.equal(me.points, 999);
   });
 
-  it("处理举报的人看得到完整数字 —— 和榜单那边同一条豁免", () => {
+  it("**处理举报的人也看不到那个数字** —— 榜单开关没有豁免", () => {
+    /*
+     * 这里原来断言的是相反的：管理员看得到完整数字，
+     * 「和榜单那边同一条豁免」。而榜单那边那条豁免本身就是错的 ——
+     * 它是 `moderation.queue` 顺带打开的，没人决定过要不要给
+     * （见 `privacy/rules.ts` 里 `adminBypass` 那段）。
+     *
+     * 目录里这个数字过的是榜单开关，所以它跟着一起收回来。
+     * 处理举报要的是「找得到那条内容」，不是「知道他多少积分」。
+     */
     dbm.db.insert(schema.userRoles).values({ userId: "me", roleId: "r_mod" }).run();
     const shy = q
       .memberDirectory({ id: "me", wxId: "wx_me", status: "active", kind: "member" } as never)
       .members.find((m) => m.name === "不想上榜的")!;
-    assert.equal(shy.points, 999);
+    assert.equal(shy.points, null, "管理员那边还在显示藏起来的积分");
   });
 
   it("按积分排序时，藏了积分的人不会被顶到最前面", () => {

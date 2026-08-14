@@ -463,11 +463,14 @@ describe("**两份隐私名单一次取完，语义一个字都不能变**", () 
     assert.equal(got.unsearchable.includes("wx_b"), false);
   });
 
-  it("**管理员看得到全部** —— 举报要处理，一个当事人能关掉的审核等于没有审核", () => {
+  it("**管理员只在检索那一份上有豁免**，榜单那份对他一样藏", () => {
     /*
-     * 这条豁免收在 privacy/queries.ts 里，调用点一律不许自己再判一遍
-     * （见 leaderboard.test.ts 那条同样的规矩）——
-     * 各写一遍的话，漏的方向永远是「把关掉开关的人重新暴露出去」。
+     * 豁免是**逐条**给的（`PRIVACY_SWITCHES[].adminBypass`）。
+     * 检索那条给了，理由是不给的话举报处理不了；
+     * 榜单那条没给 —— 没有一件审核工作需要知道藏起来的人排第几。
+     *
+     * 这个函数一次取两份名单，正是最容易一刀切的地方：
+     * 原来它开头就是一句「有豁免就三份全空」。
      *
      * 用用户级授权把 viewer 变成有豁免权的人，比铺一套身份组便宜得多。
      */
@@ -487,8 +490,8 @@ describe("**两份隐私名单一次取完，语义一个字都不能变**", () 
     const got = privacy.hiddenWxIds(
       { id: "u_a", wxId: "wx_a", status: "active" } as never,
     );
-    assert.deepEqual(got.leaderboard, [], "管理员那边还在藏人");
-    assert.deepEqual(got.unsearchable, []);
+    assert.deepEqual(got.unsearchable, [], "检索那条该有豁免");
+    assert.deepEqual(got.leaderboard, ["wx_c"], "榜单那条不该跟着一起放开");
   });
 
   it("没设过隐私的人不在任何名单里", () => {
