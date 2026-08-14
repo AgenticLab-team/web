@@ -14,13 +14,40 @@
 // 启动等待写短了表现是「偶发的 ECONNREFUSED」，
 // 清理写漏了表现是「跑几十次之后磁盘满了」。
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+/*
+ * 无头浏览器在哪。
+ *
+ * ⚠️ 它**不能住在 worktree 里**。
+ *
+ * 原来这个默认值指着 `.claude/worktrees/audit-refactor/chrome/…` ——
+ * 那是当初在那个 worktree 里下载的。而 worktree 是临时的：
+ * 我刚要把已经合并完的那几个删掉，才发现五个审计工具的地基在里面。
+ * 删完之后的报错会是「Chrome 的调试端口没起来」，
+ * 和「机器上没装浏览器」「端口被占」长得一模一样 —— 极难往回查。
+ *
+ * `.gitignore` 里本来就写着 `/chrome/`（仓库根目录），
+ * 说明这才是它该待的地方。
+ *
+ * 没有的话自己下一个：
+ *   npx @puppeteer/browsers install chrome@stable --path "$PWD"
+ */
 const CHROME =
-  process.env.CHROME_PATH ??
-  ".claude/worktrees/audit-refactor/chrome/linux-152.0.7977.42/chrome-linux64/chrome";
+  process.env.CHROME_PATH ?? findChrome();
+
+function findChrome() {
+  const root = new URL("../../", import.meta.url).pathname;
+  const base = join(root, "chrome");
+  if (!existsSync(base)) return join(base, "missing");   // 下面会给出人话
+  for (const dir of readdirSync(base)) {
+    const bin = join(base, dir, "chrome-linux64", "chrome");
+    if (existsSync(bin)) return bin;
+  }
+  return join(base, "missing");
+}
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -71,6 +98,23 @@ export async function launch({ width = 1440, height = 1600 } = {}) {
     "about:blank",
   ], { stdio: "ignore" });
 
+  /*
+   * 二进制不在时给一句**能照着做**的话。
+   *
+   * 默认的 `spawn … ENOENT` 看得懂但没说下一步，
+   * 而这个二进制是 gitignore 的 —— 换台机器、或者删掉那个 worktree
+   * （它原来就住在里面），第一次跑就会撞上。
+   */
+  chrome.on("error", (err) => {
+    if (err.code === "ENOENT") {
+      console.error(
+        `找不到无头浏览器：${CHROME}\n` +
+          '装一个：npx @puppeteer/browsers install chrome@stable --path "$PWD"',
+      );
+      process.exit(1);
+    }
+  });
+
   /* 等调试端口起来 —— 它有几百毫秒的启动时间，失败的样子是 ECONNREFUSED */
   let wsUrl = null;
   for (let i = 0; i < 60 && !wsUrl; i++) {
@@ -86,7 +130,12 @@ export async function launch({ width = 1440, height = 1600 } = {}) {
   if (!wsUrl) {
     chrome.kill();
     rmSync(profile, { recursive: true, force: true });
-    throw new Error("Chrome 的调试端口没起来");
+    throw new Error(
+      existsSync(CHROME)
+        ? "Chrome 的调试端口没起来"
+        : `找不到无头浏览器（${CHROME}）。装一个：\n` +
+          '  npx @puppeteer/browsers install chrome@stable --path "$PWD"',
+    );
   }
 
   const ws = new WebSocket(wsUrl);
