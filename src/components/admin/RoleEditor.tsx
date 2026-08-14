@@ -184,8 +184,21 @@ function Row({ role }: { role: RoleView }) {
 
         {role.autoGrantRule != null && <AdminTag color="var(--accent)">自动发</AdminTag>}
 
-        <span className="flex-1" />
-        <span className="tabular t-caption2 text-[var(--ink-quaternary)]">优先级 {role.priority}</span>
+        {/*
+          * 优先级跟在这一簇后面，**不再用 `flex-1` 顶到最右边**。
+          *
+          * 顶到右边只有在「一列数字要互相比较」时才划算，而这个列表
+          * 本来就是按优先级降序排的 —— 数字是印证，不是用来比的。
+          *
+          * 而代价是实打实的：后台正文栏修好之后是 78rem，
+          * 减掉目录还有一千像素，于是每一行左边一小簇、右边一个数字，
+          * 中间九百像素空着，九行都这样。
+          * （在栏宽那个 bug 还在的时候这里只有两百多像素，看不出来 ——
+          * 一个修复会照出另一个地方的问题，这是第二个了。）
+          */}
+        <span className="tabular t-caption2 ml-1 text-[var(--ink-quaternary)]">
+          优先级 {role.priority}
+        </span>
       </button>
 
       {open && (

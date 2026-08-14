@@ -21,6 +21,11 @@
 /.next-*/
 /out/
 
+# 本地看界面时下载的无头浏览器（npx @puppeteer/browsers install chrome@stable）。
+# 三百多 MB，和 .next-* 是同一个理由：不写在这儿的话它是「未跟踪」，
+# 迟早被一次 git add -A 带进去，而那种提交没人 review 得动。
+/chrome/
+
 # production
 /build
 

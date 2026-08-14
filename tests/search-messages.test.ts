@@ -180,8 +180,62 @@ describe("检索能力", () => {
   });
 
   it("空查询返回空而不是全部", () => {
+    /*
+     * 网页的 /search 是**无条件**调这个函数的（还没输入时也调一次）。
+     * 空查询自动列出全部的话，那一页一打开就会显示「共 45000 条结果」
+     * 并铺满整个群的聊天记录 —— 那不是搜索页该有的样子。
+     */
     assert.equal(search.searchMessages(userOf(ALICE), { query: "" }).hits.length, 0);
     assert.equal(search.searchMessages(userOf(ALICE), { query: "   " }).hits.length, 0);
+  });
+
+  it("**但 listWhenEmpty 时要真的列出来** —— 开放 API 的「读这个群」靠它", () => {
+    /*
+     * `GET /api/v1/groups/<id>/messages` 的主用途是读聊天记录，关键词只是可选筛选。
+     * 它原来永远返回空：空关键词让 FTS 表达式变成 null，查询直接短路 ——
+     * 而自带的调试控制台默认就不带 query string，每次运行都复现。
+     * FTS5 没有「匹配全部」的写法，所以这条路必须绕开 FTS 直接扫 messages。
+     */
+    const listed = search.searchMessages(userOf(ALICE), { query: "", listWhenEmpty: true });
+    assert.ok(listed.hits.length > 0, "listWhenEmpty 时应该列出最近的消息");
+    assert.ok(listed.total >= listed.hits.length);
+    // 按时间倒序，和有关键词那条路一致
+    const ts = listed.hits.map((h) => h.ts);
+    assert.deepEqual(ts, [...ts].sort((a, b) => b - a), "没按时间倒序");
+    // 没有关键词就没有高亮片段，别拿正文冒充
+    assert.equal(listed.hits[0].snippet, "");
+  });
+
+  it("**可见性在 listWhenEmpty 这条路上一样收口**", () => {
+    /*
+     * 新开一条不走 FTS 的查询，最大的风险就是可见性没跟着搬过去 ——
+     * 而这条路一次能拿走一整个群，漏了比搜索漏了更严重。
+     * 用 Bob 来验：他只在一号群，二号群那条一个字都不该出现。
+     */
+    const bobs = search.searchMessages(userOf(BOB), { query: "", listWhenEmpty: true });
+    assert.ok(bobs.hits.length > 0, "Bob 在一号群，应该列得出东西");
+    assert.deepEqual(
+      [...new Set(bobs.hits.map((h) => h.convId))],
+      [G1],
+      "列出了 Bob 看不见的群",
+    );
+
+    // 访客那条也要一起守住 —— 它走的是更前面的 noAccess 分支
+    const guest = search.searchMessages(null, { query: "", listWhenEmpty: true });
+    assert.equal(guest.hits.length, 0);
+    assert.equal(guest.noAccess, true);
+  });
+
+  it("**负数 limit 不等于不限** —— SQLite 里 LIMIT -1 是「全给」", () => {
+    /*
+     * 原来只夹了上界。`?limit=-1` 一路穿到 SQL，一次响应把整个群拖走；
+     * 而这个接口没有 offset 参数，那还是唯一能拿到最新 N 条以外内容的路子。
+     */
+    const negative = search.searchMessages(userOf(ALICE), { query: "鉴权", limit: -1 });
+    assert.equal(negative.hits.length, 1, "负数 limit 应该被夹成 1，不是不限");
+
+    const huge = search.searchMessages(userOf(ALICE), { query: "鉴权", limit: 9999 });
+    assert.ok(huge.hits.length <= 100, "上界也要夹住");
   });
 
   it("注入字符不会让检索炸掉", () => {

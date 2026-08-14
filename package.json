@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "bootstrap": "tsx --conditions=react-server --env-file=.env.local scripts/bootstrap.ts",
+    "seed-ui": "tsx --conditions=react-server --env-file=.env.local scripts/seed-ui.ts",
+    "demo-login": "tsx --conditions=react-server --env-file=.env.local scripts/demo-login.ts",
     "sync": "tsx --conditions=react-server --env-file=.env.local scripts/sync.ts",
     "groups": "tsx --conditions=react-server --env-file=.env.local scripts/groups.ts",
     "db:generate": "drizzle-kit generate",

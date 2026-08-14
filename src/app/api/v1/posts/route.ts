@@ -46,7 +46,14 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const limit = Math.min(Number(url.searchParams.get("limit") ?? 20) || 20, 50);
+  /*
+   * 上下界都要夹。只夹上界的话 `?limit=-1` 会一路穿下去：
+   * drizzle 见到负数直接**整条 LIMIT 都不发**，于是这一条查询变成全表扫描，
+   * 后面 `visible.slice(0, -1)` 再把「除最后一条以外的全部可见帖子」交出去。
+   * （`listPosts` 里也夹了一次 —— 这里是 HTTP 边界，那里是所有调用方的兜底。）
+   */
+  const rawLimit = Number(url.searchParams.get("limit") ?? 20);
+  const limit = Math.min(Math.max(1, Number.isFinite(rawLimit) ? Math.trunc(rawLimit) : 20), 50);
   /*
    * 按版块筛要的是 board **id**，而外面给的是 key（人看得懂的那个）。
    * 查不到就当没筛 —— 报错的话，一个拼错版块名的请求会拿到

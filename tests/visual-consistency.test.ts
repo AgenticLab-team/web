@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { readCode, srcRoot, walkSource } from "./_source";
+import { readCode, repoRoot, srcRoot, walkSource } from "./_source";
 
 /**
  * 长相的变体数量。
@@ -60,8 +62,32 @@ describe("圆角只走 token", () => {
     assert.deepEqual(
       [...hard.keys()],
       [],
+      /*
+       * ═════════════════════════════════════════
+       * 这条消息里**不许出现一个长得像类名的字符串**
+       * ═════════════════════════════════════════
+       *
+       * Tailwind v4 靠扫全仓库的**纯文本**找候选类名，tests/ 也在扫描范围里 ——
+       * 它不知道自己扫到的是一句给人看的提示，还是真的写在 className 上。
+       *
+       * 这一句原来写的是「用 rounded-方括号 var(--radius-A 竖线 B) 方括号」，
+       * 于是 Tailwind 真的照着生成了一条任意值规则，而它的值里带着竖线 ——
+       * 那不是合法 CSS。后果分两边：
+       *
+       *   · `next build` 里 lightningcss 把它咽了下去，只留一条没人用的死规则，
+       *     **构建照常成功**；
+       *   · `next dev` 的 CSS 解析器直接报错，整份 globals.css 编译失败，
+       *     **站上每一个页面 500**。
+       *
+       * 也就是说：一句写在断言消息里、从来不会被执行到的提示文本，
+       * 把整个开发环境搞停了，而 tsc、eslint、七千个测试全是绿的 ——
+       * 没有任何一处会提醒你，因为从每一个工具的角度看这里都没有代码。
+       *
+       * 所以下面只列 token 的名字，不摆出那个「圆角-方括号」的形状。
+       * 下面那个 it() 用同样的理由盯着别再退回去。
+       */
       `这些绕过了 token：${[...hard.keys()].join("、")}。` +
-        `用 rounded-[var(--radius-chip|control|card|pill)]`,
+        `改用 --radius-chip / --radius-control / --radius-card / --radius-pill 之一`,
     );
   });
 
@@ -74,6 +100,69 @@ describe("圆角只走 token", () => {
     const tiny = countAll(/\brounded-\[[0-9]px\]|\brounded-sm\b/g);
     const total = [...tiny.values()].reduce((a, b) => a + b, 0);
     assert.ok(total <= 8, `几像素圆角涨到 ${total} 处（基线 8）—— 确认它们真的是图表而不是构件`);
+  });
+});
+
+describe("任意值类名不能生成非法 CSS", () => {
+  /*
+   * ═════════════════════════════════════════
+   * 一句给人看的提示文本，把 `next dev` 整个搞停了
+   * ═════════════════════════════════════════
+   *
+   * Tailwind v4 没有 content 配置，它**扫全仓库的纯文本**找候选类名，
+   * `tests/`、`docs/`、注释、断言消息，一律在扫描范围内。它无从判断
+   * 一段文字是写在 className 上的，还是写给人看的。
+   *
+   * 上面那条断言的提示语原来摆出了「圆角-方括号-var(A 竖线 B)」的形状，
+   * 于是 Tailwind 真的照着生成了一条任意值规则，值里带着竖线 ——
+   * 而那不是合法 CSS。后果分两边，这也是它为什么活得下来：
+   *
+   *   · `next build`：lightningcss 咽了下去，只留一条没人用的死规则，
+   *     **构建成功**，线上一切正常；
+   *   · `next dev`：CSS 解析器直接抛错，整份 globals.css 编译失败，
+   *     **每一个页面 500**。
+   *
+   * tsc、eslint、七千个测试当时全是绿的 —— 从每个工具的角度看，
+   * 出问题的地方根本没有代码。唯一能发现它的办法是把站跑起来。
+   *
+   * 所以这条守卫盯的不是「写得好不好看」，是**别再让一段纯文本
+   * 变成一条编译不过的规则**。
+   */
+
+  /** 全仓库里 Tailwind 会去扫的那些文本文件 */
+  function walkAll(dir: string, out: string[] = []): string[] {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === "node_modules" || e.name === "data" || e.name.startsWith(".")) continue;
+      const full = join(dir, e.name);
+      if (e.isDirectory()) walkAll(full, out);
+      else if (/\.(ts|tsx|js|mjs|css|md|json|html)$/.test(e.name)) out.push(full);
+    }
+    return out;
+  }
+
+  it("**没有任何任意值里带着竖线** —— 竖线在 CSS 值里非法", () => {
+    /*
+     * 只认「工具类名-方括号」这个形状，且排除以 & 开头的任意变体
+     * （那是选择器，`[lang|="en"]` 这类属性选择器里的竖线是合法的）。
+     */
+    const CANDIDATE = /(?<![[&])\b[a-z][a-z0-9]*(?:-[a-z0-9]+)*-\[([^\s\]]*\|[^\s\]]*)\]/g;
+    const bad: string[] = [];
+
+    for (const file of walkAll(repoRoot)) {
+      const text = readFileSync(file, "utf8");
+      for (const m of text.matchAll(CANDIDATE)) {
+        if (m[1].startsWith("&")) continue;
+        bad.push(`${file.slice(repoRoot.length)}: ${m[0]}`);
+      }
+    }
+
+    assert.deepEqual(
+      bad,
+      [],
+      `这些文本会被 Tailwind 当成类名、生成带竖线的非法 CSS，` +
+        `从而让 next dev 整站 500：\n  ${bad.join("\n  ")}\n` +
+        `如果它只是一句说明文字，就别把它写成类名的形状。`,
+    );
   });
 });
 

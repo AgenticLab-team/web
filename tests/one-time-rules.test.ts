@@ -41,9 +41,11 @@ const PAYOUTS: Record<string, { key: string; safeAfterDelete: boolean; why: stri
       "而「能不能再被邀请一次」那一层已经改成顺着 prior_wx_id 查历史账号",
   },
   "lib/forum/qa.ts": {
-    key: "bounty-award:<reply.id>",
+    key: "bounty-award:<post.id>",
     safeAfterDelete: true,
-    why: "键挂在回复上，而回复是抹名字不是删行 —— 重绑之后那条回复还在，键也还在",
+    why:
+      "键挂在帖子上，而 forum_posts 是抹名字不是删行 —— 重绑之后那篇提问还在，键也还在。" +
+      "（原来挂在回复上，注销这一层同样安全，但那样「换一个采纳对象」就能再付一次全额）",
   },
   "lib/titles/settle.ts": {
     key: "title-renew:<userTitle.id>:<expiresAt>",
@@ -135,12 +137,59 @@ describe("**幂等键确实在代码里**", () => {
      */
     const checks: [string, RegExp][] = [
       ["lib/invites/settle.ts", /idempotencyKey: `invite:\$\{use\.id\}`/],
-      ["lib/forum/qa.ts", /idempotencyKey: `bounty-award:\$\{reply\.id\}`/],
+      // 悬赏的键只在 bountyAwardKey 里定义一次，调用点引用它 —— 所以对的是定义
+      ["lib/forum/qa.ts", /function bountyAwardKey\(postId: string\): string \{\s*\n\s*return `bounty-award:\$\{postId\}`;/],
       ["lib/points/checkin.ts", /idempotencyKey: `checkin:\$\{user\.id\}:\$\{today\}`/],
     ];
     for (const [file, pattern] of checks) {
       const body = readFileSync(join(repoRoot, "src", file), "utf8");
       assert.match(body, pattern, `${file} 的幂等键变了 —— PAYOUTS 里的判断要重新过一遍`);
     }
+  });
+});
+
+describe("**一笔悬赏只结算一次**", () => {
+  /*
+   * ═════════════════════════════════════════
+   * 「采纳 A → 取消 → 采纳 B」曾经能付两次全额
+   * ═════════════════════════════════════════
+   *
+   * 幂等键当时挂在**回复**上，而撤销采纳既不清零悬赏也不冲正。
+   * 于是同一笔悬赏付给了两个人，提问者只被扣过一次 ——
+   * 而且可以对 C、D…… 无限重复。积分流水是这个站唯一的硬通货，
+   * 那是凭空增发。
+   *
+   * 堵法有两头，缺一不可，所以这里分两条断言：
+   *   · 键挂在帖子上 —— 换个采纳对象也是同一个键，发不出第二次；
+   *   · 结算过之后不许再追加悬赏 —— 否则那笔钱会照常扣走，
+   *     而下一次采纳撞上幂等键发不出去，分反过来蒸发。
+   */
+  const qa = readFileSync(join(repoRoot, "src/lib/forum/qa.ts"), "utf8");
+
+  it("键挂在帖子上，不是挂在回复上", () => {
+    assert.match(qa, /idempotencyKey: bountyAwardKey\(post\.id\)/);
+    assert.doesNotMatch(
+      qa,
+      /idempotencyKey: `bounty-award:\$\{reply\.id\}`/,
+      "键又挂回回复上了 —— 换一个采纳对象就能再付一次全额",
+    );
+  });
+
+  it("**结算过之后不许再追加悬赏** —— 不然扣了款却发不出去", () => {
+    const addBounty = qa.slice(qa.indexOf("export async function addBounty"));
+    assert.match(
+      addBounty.slice(0, addBounty.indexOf("export async function acceptAnswer")),
+      /bountyAwarded\(post\.id\)/,
+      "addBounty 没有挡住「已经结算过的悬赏」",
+    );
+  });
+
+  it("**发放失败时采纳不落库** —— 静默吞掉的话，帖子标着已解决而答主一分没拿到", () => {
+    const accept = qa.slice(qa.indexOf("export async function acceptAnswer"));
+    const awardAt = accept.indexOf("grantPoints({");
+    const solveAt = accept.indexOf("solvedReplyId: reply.id");
+    assert.ok(awardAt >= 0 && solveAt >= 0, "acceptAnswer 的结构变了，这条断言要重写");
+    assert.ok(awardAt < solveAt, "发钱必须排在落采纳之前 —— 反过来那一半失败是不可自愈的");
+    assert.match(accept.slice(awardAt), /if \(!award\.ok\) return fail\(/, "没有检查发放结果");
   });
 });

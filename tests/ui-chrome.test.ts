@@ -139,10 +139,9 @@ describe("**栏宽按内容类型走**", () => {
      * 而忘了改的表现是那一页莫名其妙比别的窄。
      */
     const css = src("app/globals.css");
-    assert.match(css, /main:has\(\[data-dense\]\)/);
+    assert.match(css, /main#main:has\(\[data-dense\]\)/);
 
     const shell = src("components/shell/AppShell.tsx");
-    assert.match(shell, /var\(--content-max\)/);
     assert.doesNotMatch(shell, /pathname|startsWith\("\/admin/, "外壳里写死了路由判断");
   });
 
@@ -151,11 +150,32 @@ describe("**栏宽按内容类型走**", () => {
   });
 
   it("**不支持 :has() 的浏览器只是窄一点，不会坏** —— 宽度是渐进增强", () => {
+    /*
+     * 默认值和覆盖**必须写在同一个文件、同一种优先级上**。
+     *
+     * 原来这条断言分两半：默认值在 AppShell 的内联 style 里匹配一次，
+     * 覆盖在 css 里匹配一次 —— 两半各自都在，所以一直是绿的。
+     * 而内联样式赢过任何普通样式表规则，那条覆盖**从来没生效过一次**，
+     * 三十个后台页面一直被压在 52rem 的正文栏宽里。
+     *
+     * 两个字符串各自存在，不代表它们之间的关系成立。所以现在改成
+     * 断言这段关系本身：默认与覆盖相邻、后者靠多一个 :has() 取胜。
+     */
     const css = src("app/globals.css");
-    // 默认值写在 main 上（通过变量），:has() 只是覆盖
-    const shell = src("components/shell/AppShell.tsx");
-    assert.match(shell, /maxWidth: "var\(--content-max\)"/);
-    assert.match(css, /main:has\(\[data-dense\]\) \{\s*\n?\s*max-width/);
+    assert.match(css, /main#main \{\s*\n?\s*max-width: var\(--content-max\);/);
+    assert.match(css, /main#main:has\(\[data-dense\]\) \{\s*\n?\s*max-width: var\(--content-max-wide\);/);
+
+    /*
+     * 剥注释再断言。AppShell 里那段说明**引用了**旧写法的样子，
+     * 而这条断言问的是「代码里还有没有」——
+     * 不剥的话，一句讲清楚为什么不能这么写的注释会把测试判红。
+     */
+    const shell = strip(src("components/shell/AppShell.tsx"));
+    assert.doesNotMatch(
+      shell,
+      /style=\{\{[^}]*maxWidth/,
+      "栏宽又回到内联 style 上了 —— 内联样式赢过 :has()，覆盖会静默失效",
+    );
   });
 });
 

@@ -207,8 +207,26 @@ export function listPosts(viewer: ViewerContext, options: ListPostsOptions = {})
     ],
   }[options.sort ?? "recent"];
 
+  /*
+   * ─────────────────────────────────────────
+   * 上下界都要夹，不是只夹上界
+   * ─────────────────────────────────────────
+   *
+   * 负数会一路穿到底，而且两处都会翻车：
+   *   · `overFetch` 变成负数，**drizzle 见到负数干脆整条 LIMIT 都不发** ——
+   *     这条查询于是变成一次全表扫描；
+   *   · `slice(0, -1)` 又会返回「除最后一条以外的全部可见帖子」。
+   * 合起来就是：`?limit=-1` 一次拿走全站帖子。
+   *
+   * 夹在这里而不是只夹在路由上：这是所有调用方的最后一道关口。
+   */
+  const rawLimit = Number(options.limit);
+  const limit = Math.min(Math.max(1, Number.isFinite(rawLimit) ? Math.trunc(rawLimit) : 20), 100);
+  const rawOffset = Number(options.offset);
+  const offset = Math.max(0, Number.isFinite(rawOffset) ? Math.trunc(rawOffset) : 0);
+
   // 精判会滤掉一部分，所以先多取一些，避免翻页时页面变空
-  const overFetch = (options.limit ?? 20) * 3;
+  const overFetch = limit * 3;
 
   const rows = db
     .select({ post: posts, board: boards })
@@ -217,11 +235,11 @@ export function listPosts(viewer: ViewerContext, options: ListPostsOptions = {})
     .where(and(...conditions))
     .orderBy(...order)
     .limit(overFetch)
-    .offset(options.offset ?? 0)
+    .offset(offset)
     .all();
 
   const visible = rows.filter((r) => canSeePost(toVisibilityInfo(r.post), viewer).visible);
-  const page = visible.slice(0, options.limit ?? 20);
+  const page = visible.slice(0, limit);
 
   return hydrateAuthors(page.map((r) => ({ post: r.post, board: r.board })));
 }

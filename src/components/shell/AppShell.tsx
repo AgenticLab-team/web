@@ -132,21 +132,22 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         <main
           id="main"
           /*
-           * 底部留白分两种情况，所以只能写在类名里 ——
-           * 内联样式没有断点。手机上要给底部 Tab Bar 和 Home Indicator
-           * 让出位置；而桌面上那条 Tab Bar 是 `lg:hidden`，
-           * 变量却不会跟着变 0 —— 于是每一页的末尾都白白空出 3.25rem，
-           * 页脚说明看起来像是漏在了半空中。
+           * 底部留白分两种情况，所以写在类名里而不是别处 —— 它需要断点。
+           * 手机上要给底部 Tab Bar 和 Home Indicator 让出位置；
+           * 而桌面上那条 Tab Bar 是 `lg:hidden`，变量却不会跟着变 0 ——
+           * 于是每一页的末尾都白白空出 3.25rem，页脚说明看起来像是漏在了半空中。
+           *
+           * ── 栏宽**整个不在这里** ──────────────────────
+           *
+           * 默认值和 `[data-dense]` 的加宽覆盖都在 globals.css 里挨着写
+           * （`main#main` 与 `main#main:has([data-dense])`）。
+           *
+           * 它原来是写在这个元素的内联样式上的，而内联样式**赢过任何
+           * 普通样式表规则** —— 于是那条为后台准备的 :has() 覆盖
+           * 从来没生效过一次，三十个后台页面一直被压在正文栏宽里。
+           * 默认值和覆盖必须待在同一种优先级上，否则覆盖只是句空话。
            */
           className="mx-auto w-full px-4 pb-[calc(var(--tabbar-height)+env(safe-area-inset-bottom,0px)+1.5rem)] sm:px-6 lg:pb-10"
-          style={{
-            /*
-             * 栏宽由内容类型决定，不写死在这里 ——
-             * 密集页面（后台、表格）用 [data-dense] 声明自己要宽的，
-             * globals.css 里那条 :has() 会把它放到 78rem。
-             */
-            maxWidth: "var(--content-max)",
-          }}
         >
           {/*
             * 公告摆在正文之上、外壳之内。

@@ -218,7 +218,23 @@ export function MatrixEditor({ roles, categories, initial, canEdit, lookupBase }
         })}
       </div>
 
-      <div className="inset-group overflow-x-auto">
+      {/*
+        * ─────────────────────────────────────────
+        * 这里**不能**写 `inset-group overflow-x-auto`
+        * ─────────────────────────────────────────
+        *
+        * 原来就是那么写的，而它算出来是 `overflow-x: hidden`：
+        * `.inset-group` 在 globals.css 里是**层外**的，设的是 `overflow`
+        * 简写；`overflow-x-auto` 是 Tailwind 工具类，住在 utilities 层 ——
+        * 层外的一律赢过层内的。
+        *
+        * 后果：这张表 min-w 是 36rem(576px)，在 360px 的手机上有两百多像素
+        * 被直接裁掉，**没有滚动条也划不动**，管理员永远够不到后面几个
+        * 身份组的列。桌面上身份组一多也一样。
+        *
+        * `.inset-group-scroll` 是同一档材质的横滚版本，见 globals.css。
+        */}
+      <div className="inset-group-scroll">
         <table className="w-full min-w-[36rem] border-collapse text-left">
           <thead>
             <tr>
