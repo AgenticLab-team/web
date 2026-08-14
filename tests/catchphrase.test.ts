@@ -137,7 +137,12 @@ describe("计数", () => {
 
 describe("**挑得出真口头禅**", () => {
   it("他常说、别人不说的那个", () => {
-    const mine = [...rep("卧槽这个厉害", 20), ...filler(30)];
+    /*
+     * 夹具里让「卧槽」有时候**自己占一整条** —— 真人就是这么说的，
+     * 而门槛只认整条率（理由见 catchphrase.ts 里那段实测数据）。
+     * 全都嵌在句子里的话它进不来，那是对的。
+     */
+    const mine = [...rep("卧槽这个厉害", 10), ...rep("卧槽", 10), ...filler(30)];
     const others = filler(200, "别");
     const got = pick({ mine, others });
     assert.ok(got, "什么都没挑出来");
@@ -240,7 +245,7 @@ describe("**昵称不是口头禅**", () => {
      * 名册里混进一个空字符串就会把候选全部清空，
      * 而表现是「所有人都没有口头禅」，看不出哪里错了。
      */
-    const mine = [...rep("卧槽这个厉害", 20), ...filler(30)];
+    const mine = [...rep("卧槽这个厉害", 10), ...rep("卧槽", 10), ...filler(30)];
     const got = pick({ mine, others: filler(200), exclude: ["", "别人"] });
     assert.ok(got, "空昵称把候选全清掉了");
   });
@@ -289,7 +294,8 @@ describe("边界", () => {
   });
 
   it("lift 是个有限的正数", () => {
-    const mine = [...rep("卧槽这个厉害", 20), ...filler(30)];
+    // 同上：让它有时候自己占一整条，否则过不了整条率那道门槛
+    const mine = [...rep("卧槽这个厉害", 10), ...rep("卧槽", 10), ...filler(30)];
     const got = pick({ mine, others: filler(200) });
     assert.ok(got && got.lift > 1 && Number.isFinite(got.lift));
   });
@@ -608,5 +614,56 @@ describe("**长词的残片不能当口头禅**", () => {
     });
     assert.notEqual(picked?.phrase, "工智能", "残片当上了口头禅");
     assert.notEqual(picked?.phrase, "人工智");
+  });
+});
+
+describe("**边界率不再是入场资格**", () => {
+  /*
+   * 在真实数据上逐个跟踪之后改的。边界那条路放进来的几乎全是噪音：
+   *
+   *   好东西  确实 67% / 牛逼 67% / 速吃 60% / 绷不住 40% / 等下 14% / 你看 11%
+   *   噪音    可以 0% / 直接 0% / 问题 0% / 注册 0% / 域名 0% / 不过 0% / 但是 0%
+   *
+   * 整条率把两类分得干净得不像话：好的没有一个低于 10%，噪音没有一个高于 0%。
+   * 而且这不只是第 2~5 名的问题 —— 有些人的**冠军**就是「可以」「不过」。
+   */
+  const day = (i: number) => `2026-08-${String((i % 25) + 1).padStart(2, "0")}`;
+
+  it("从不单独成句的词进不来，哪怕它总在句首", () => {
+    /*
+     * 「不过」这种连接词天然在句首，边界率很高 —— 而它谁都在说。
+     * 用数字当分隔符，让「不过」成为唯一重复的成分。
+     */
+    const mine = Array.from({ length: 60 }, (_, i) => ({ text: `${i}不过${i + 1}`, day: day(i) }));
+    const others = tally(
+      Array.from({ length: 20 }, (_, i) => ({ text: `${i}随便说点${i}`, day: day(i) })),
+    );
+    const got = pickCatchphrases({ mine, others, otherMessages: 20 });
+    assert.equal(
+      got.some((c) => c.phrase === "不过"),
+      false,
+      "从不单独成句的词不该进来",
+    );
+  });
+
+  it("单独成句的进得来", () => {
+    const mine = Array.from({ length: 40 }, (_, i) => ({ text: "确实", day: day(i) }));
+    const others = tally(
+      Array.from({ length: 20 }, (_, i) => ({ text: `${i}随便说点${i}`, day: day(i) })),
+    );
+    assert.equal(pickCatchphrases({ mine, others, otherMessages: 20 })[0]?.phrase, "确实");
+  });
+
+  it("**一个都没有是一个真实的结论**，不是失败", () => {
+    /*
+     * 「这个人没有明显的口头禅」是真话；
+     * 「他的口头禅是『不过』」是假话。宁可给前者。
+     */
+    const mine = Array.from({ length: 60 }, (_, i) => ({
+      text: `${i}这个也可以${i + 1}`,
+      day: day(i),
+    }));
+    const got = pickCatchphrases({ mine, others: tally([]), otherMessages: 1 });
+    assert.deepEqual(got, []);
   });
 });
