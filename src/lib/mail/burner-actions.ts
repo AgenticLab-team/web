@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { can } from "@/lib/rbac/can";
 import { readMessage, type MailMessageDetail } from "@/lib/mail/message";
 import { destroyBurner, openBurner } from "@/lib/mail/burner";
 
@@ -28,10 +29,32 @@ export async function createBurner(input: {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "请先登录" };
 
+  /*
+   * ═════════════════════════════════════════
+   * 能管邮箱的人不受额度限制
+   * ═════════════════════════════════════════
+   *
+   * 判据用 `mail.box.write`（「替别人开箱/改到期/收回申领」），
+   * 而不是「是不是管理员」这种笼统的说法：额度护的是
+   * **池域名的命名空间和声誉**，而有权替别人开箱的人本来就能
+   * 绕开这一层 —— 他跑一趟后台就是了。
+   * 那么让他在自己这一页多开几个，不多出任何新的能力，
+   * 只是少绕一圈。
+   *
+   * ⚠️ `bypassLimits` 同时也绕过最短长度和禁用词（见 burner.ts）。
+   * 这是同一条口径：这些限制拦的是「别人抢好地址」，
+   * 而站长本来就是那个决定谁能拿到好地址的人。
+   *
+   * 它每次都进 `mail_events`，所以「谁开了多少」照样查得到 ——
+   * 不受限不等于不留痕。
+   */
+  const privileged = can(user, "mail.box.write").allowed;
+
   const result = openBurner({
     userId: user.id,
     localPart: input.localPart?.trim() || null,
     domain: input.domain?.trim() || null,
+    bypassLimits: privileged,
   });
 
   if (!result.ok) return { ok: false, error: result.error };

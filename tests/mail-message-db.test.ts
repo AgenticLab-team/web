@@ -33,6 +33,7 @@ let burner: typeof import("@/lib/mail/burner");
 let ingest: typeof import("@/lib/mail/ingest");
 let seed: typeof import("@/lib/mail/seed-domains");
 let message: typeof import("@/lib/mail/message");
+let settings: typeof import("@/lib/settings/store");
 
 const ME = "01USER_ME";
 const OTHER = "01USER_OTHER";
@@ -46,6 +47,7 @@ before(async () => {
   ingest = await import("@/lib/mail/ingest");
   seed = await import("@/lib/mail/seed-domains");
   message = await import("@/lib/mail/message");
+  settings = await import("@/lib/settings/store");
 });
 
 after(() => rmSync(tmp, { recursive: true, force: true }));
@@ -204,5 +206,104 @@ describe("**网页和接口共用同一份校验**", () => {
         `${file} 自己查了 mail_messages —— 校验就有了第二份`,
       );
     }
+  });
+});
+
+describe("**额度：普通人受限，能管邮箱的人不受限**", () => {
+  /*
+   * ═════════════════════════════════════════
+   * 「不受限」最容易悄悄变成「谁都不受限」
+   * ═════════════════════════════════════════
+   *
+   * 判据是 `mail.box.write`（替别人开箱的那个权限），不是
+   * 「是不是管理员」这种笼统说法 —— 额度护的是池域名的命名空间和声誉，
+   * 而有权替别人开箱的人本来就能绕开这一层（跑一趟后台就是了）。
+   *
+   * 这一组盯两个方向：普通人**还被拦着**，以及有权的人**真的不被拦**。
+   * 只测后者的话，一个「所有人都 bypass」的写法会全绿。
+   */
+  const RATE = "mail.burner.per_hour";
+
+  /*
+   * 把某个设置临时压成某个值。
+   *
+   * ⚠️ 写完必须 `invalidateSettingsCache()` —— 设置在进程里是缓存着的
+   * （`lib/settings/store.ts`），直接写库的话 `mailConfig()` 读到的
+   * 还是旧值，于是这一组测的其实是默认值。第一版就是这么红的。
+   */
+  const put = (key: string, value: string) => {
+    dbm.db
+      .insert(schema.settings)
+      .values({ key, value, type: "int", category: "mail", updatedAt: Date.now() })
+      .onConflictDoUpdate({ target: schema.settings.key, set: { value } })
+      .run();
+    settings.invalidateSettingsCache();
+  };
+
+  /*
+   * 并发上限默认是 3，而 `scene()` 已经给 ME 开了一个 ——
+   * 不放开的话先撞上的是并发那道闸，这一组测的就不是时限了。
+   * 第一版就是这么红的：`code` 是 `concurrent_limit` 而不是 `rate_limit`。
+   */
+  const roomToSpare = () => put("mail.burner.concurrent_limit", "99");
+
+  it("普通人撞到每小时上限就开不出来了", () => {
+    scene();
+    roomToSpare();
+
+    /*
+     * ⚠️ 从**已经用掉的**那几次算起，不要写死次数。
+     *
+     * `scene()` 自己就开过一个箱子，也就是已经记了一次 `burner_created`。
+     * 写死「前两个该成功」的话，实际上第二个就撞线了 —— 第一版正是这么红的，
+     * 而红出来的 code 还是 `concurrent_limit`（那时并发那道闸也没放开），
+     * 一个指向完全另一件事的错误。
+     */
+    const used = dbm.db
+      .select()
+      .from(schema.mailEvents)
+      .all()
+      .filter((e) => e.event === "burner_created" && e.actorId === ME).length;
+    put(RATE, String(used + 2));
+
+    assert.ok(burner.openBurner({ userId: ME }).ok, "还没到上限就该开得出来");
+    assert.ok(burner.openBurner({ userId: ME }).ok, "刚好到上限前那一个也该开得出来");
+
+    const refused = burner.openBurner({ userId: ME });
+    assert.equal(refused.ok, false, "超了上限还开得出来");
+    if (!refused.ok) assert.equal(refused.code, "rate_limit", "拦下来的不是时限那道闸");
+  });
+
+  it("**带 bypassLimits 的开得出来** —— 那条路是给有权的人留的", () => {
+    scene();
+    roomToSpare();
+    // 已经用过一次（scene 里那个），所以上限设成 1 时下一次就该被拦
+    put(RATE, "1");
+
+    assert.equal(burner.openBurner({ userId: ME }).ok, false, "普通开箱该被拦");
+    assert.ok(
+      burner.openBurner({ userId: ME, bypassLimits: true }).ok,
+      "bypassLimits 没能绕过额度",
+    );
+  });
+
+  it("**两个调用点都判了权限** —— 只放开网页的话，站长跑脚本反而被卡", () => {
+    /*
+     * 网页和 API 各是一条路。只在网页上放开的话，站长用自己的令牌
+     * 批量开箱时被卡住 —— 而那正是他最需要批量开箱的场合。
+     */
+    for (const file of ["lib/mail/burner-actions.ts", "app/api/v1/mail/burners/route.ts"]) {
+      const code = readCode(file);
+      assert.match(code, /bypassLimits:/, `${file} 没接 bypassLimits`);
+      assert.match(code, /can\([^)]*"mail\.box\.write"\)/, `${file} 判的不是 mail.box.write`);
+    }
+  });
+
+  it("**不受限不等于不留痕** —— 每次开箱都进 mail_events", () => {
+    scene();
+    const before = dbm.db.select().from(schema.mailEvents).all().length;
+    burner.openBurner({ userId: ME, bypassLimits: true });
+    const after = dbm.db.select().from(schema.mailEvents).all().length;
+    assert.ok(after > before, "绕过额度的那次没有留下事件");
   });
 });

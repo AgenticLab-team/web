@@ -711,7 +711,9 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
   },
   {
     key: "mail.burner.per_hour",
-    value: "5",
+    // 5 → 50：原来那个数是按「一个人一天注册几个账号」估的，
+    // 而实际用法是「一次注册试好几个服务」，5 个一小时就撞墙
+    value: "50",
     type: "int",
     category: "mail",
     label: "每小时最多开几个一次性箱",
@@ -721,7 +723,9 @@ export const DEFAULT_SETTINGS: readonly SettingDef[] = [
   },
   {
     key: "mail.burner.per_day",
-    value: "20",
+    // 跟着上面一起放宽。日限比时限高一个量级才有意义 ——
+    // 两个数贴太近的话，撞到的永远是时限，日限等于不存在
+    value: "200",
     type: "int",
     category: "mail",
     label: "每天最多开几个一次性箱",

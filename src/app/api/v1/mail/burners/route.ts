@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { apiError, authenticate } from "@/lib/api-tokens/auth";
 import { listBurners, openBurner } from "@/lib/mail/burner";
 import { burnerPayload } from "@/lib/mail/api-view";
+import { can } from "@/lib/rbac/can";
 
 export const dynamic = "force-dynamic";
 
@@ -46,9 +47,17 @@ export async function POST(request: Request) {
     }
   }
 
+  /*
+   * 和网页那边同一条口径：能管邮箱的人不受额度限制。
+   * 判据是 `mail.box.write` —— 理由写在 `lib/mail/burner-actions.ts` 里。
+   *
+   * 两处都要判，不能只判一处：只在网页上放开的话，
+   * 站长用自己的令牌跑脚本时反而被卡住，而那正是他最需要批量开箱的场合。
+   */
   const result = openBurner({
     userId: auth.caller.user.id,
     tokenId: auth.caller.tokenId,
+    bypassLimits: can(auth.caller.user, "mail.box.write").allowed,
     localPart: typeof body.local_part === "string" ? body.local_part : null,
     domain: typeof body.domain === "string" ? body.domain : null,
   });
