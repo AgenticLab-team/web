@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Editor } from "@/components/forum/Editor";
 import { createReply } from "@/lib/forum/actions";
 import type { DraftSnapshot } from "@/lib/forum/draft-rules";
+import { scrollToElement } from "@/lib/ui/motion";
 
 import { DraftSync } from "./DraftSync";
 import { clearLocalDraft } from "./local-draft";
@@ -75,7 +76,7 @@ export function ReplyForm({
   // 点了某楼的「回复」之后把回复框滚进视野 ——
   // 长帖里回复框在几屏之外，不滚过去用户会以为点了没反应
   useEffect(() => {
-    if (quote) rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (quote) scrollToElement(rootRef.current, { block: "center" });
   }, [quote]);
 
   if (locked) {

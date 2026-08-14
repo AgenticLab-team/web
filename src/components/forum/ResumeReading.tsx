@@ -4,6 +4,7 @@ import { CornerRightDown } from "lucide-react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { markReadFloor } from "@/lib/forum/actions";
+import { scrollToElement } from "@/lib/ui/motion";
 
 function subscribeHash(onChange: () => void) {
   window.addEventListener("hashchange", onChange);
@@ -88,7 +89,7 @@ export function ResumeReading({
       type="button"
       onClick={() => {
         setDismissed(true);
-        document.getElementById(`f${lastReadFloor}`)?.scrollIntoView({ behavior: "smooth" });
+        scrollToElement(document.getElementById(`f${lastReadFloor}`));
       }}
       className="t-footnote mb-3 inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] bg-[var(--accent-soft)] px-3 py-1.5 font-medium text-[var(--accent)] transition active:scale-95"
     >

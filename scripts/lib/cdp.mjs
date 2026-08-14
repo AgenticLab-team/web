@@ -100,9 +100,19 @@ export async function launch({ width = 1440, height = 1600 } = {}) {
   return { send, close };
 }
 
-/** 跑一段表达式，把值取回来 */
+/**
+ * 跑一段表达式，把值取回来。
+ *
+ * `awaitPromise` 一直开着：不开的话，一段返回 Promise 的表达式
+ * 会被序列化成 `{}` —— 那看起来像「探针什么都没查到」，
+ * 而实际上它还没跑完。踩过一次，查了半天探针本身。
+ */
 export async function evaluate(cdp, expression) {
-  const { result } = await cdp.send("Runtime.evaluate", { expression, returnByValue: true });
+  const { result } = await cdp.send("Runtime.evaluate", {
+    expression,
+    returnByValue: true,
+    awaitPromise: true,
+  });
   return result.value;
 }
 

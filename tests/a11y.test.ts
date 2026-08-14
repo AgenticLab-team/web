@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
+import { srcRoot, stripComments, walkSource } from "./_source";
 import {
   auditSource,
   componentsWithLabelProp,
@@ -189,6 +190,38 @@ describe("样式层的无障碍基础", () => {
   it("尊重「减少动效」", () => {
     assert.match(css, /prefers-reduced-motion/);
     assert.match(css, /animation-duration:\s*0\.01ms\s*!important/);
+  });
+
+  it("★ JS 里不许出现裸的 behavior: smooth —— 上面那条 CSS **管不住它**", () => {
+    /*
+     * ═════════════════════════════════════════
+     * 上面那条测试是绿的，而站里照样会把人滚晕
+     * ═════════════════════════════════════════
+     *
+     * CSS 里 `scroll-behavior: auto !important` 写得好好的，
+     * 但规范规定：ScrollOptions 里显式给了 `smooth` 就平滑滚，
+     * **只有传 auto 时才回去看 CSS**。也就是说 JS 那一句
+     * 从旁边绕过了整块无障碍处理。
+     *
+     * 实测过，不是照规范推的：打开减少动效、确认 CSS 那边已经是 auto，
+     * 然后 `scrollTo({ top: 2420, behavior: "smooth" })` ——
+     * 80 毫秒后 scrollY 是 80，还在路上。
+     *
+     * 站里需要平滑滚动的两处（接着读、引用回复）恰好都是**跳很远**的，
+     * 正是最会引起眩晕的一类。所以统一走 `lib/ui/motion.ts`，
+     * 由它读偏好。
+     *
+     * 这一条盯的是「有没有人绕过去」——
+     * 漏掉的后果对当事人是生理上的，而他多半不会来报。
+     */
+    const offenders: string[] = [];
+    for (const file of walkSource(srcRoot())) {
+      if (file.endsWith("/lib/ui/motion.ts")) continue;   // 偏好就是在这里读的
+      if (/behavior:\s*["']smooth["']/.test(stripComments(readFileSync(file, "utf8")))) {
+        offenders.push(file.slice(file.indexOf("/src/") + 1));
+      }
+    }
+    assert.deepEqual(offenders, [], "这些地方绕过了「减少动效」，改用 lib/ui/motion.ts 的 scrollToElement");
   });
 
   it("sr-only 用的是裁剪不是 display:none —— 后者读屏也读不到", () => {

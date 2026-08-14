@@ -91,11 +91,18 @@ try {
   // 视口和触摸模拟的那几条坑记在 lib/cdp.mjs 里
   await setViewport(cdp, { width, height });
 
-  if (dark) {
-    await cdp.send("Emulation.setEmulatedMedia", {
-      features: [{ name: "prefers-color-scheme", value: "dark" }],
-    });
-  }
+  /*
+   * 减少动效。站里 CSS 里认真处理过它，而 JS 里传的
+   * `behavior: "smooth"` **不受那条 CSS 管** —— 要验这件事
+   * 就得能真的把这个偏好打开。
+   */
+  const reduceMotion = args.includes("--reduce-motion");
+
+  const media = [
+    ...(dark ? [{ name: "prefers-color-scheme", value: "dark" }] : []),
+    ...(reduceMotion ? [{ name: "prefers-reduced-motion", value: "reduce" }] : []),
+  ];
+  if (media.length) await cdp.send("Emulation.setEmulatedMedia", { features: media });
 
   await cdp.send("Page.enable");
   await cdp.send("Page.navigate", { url });
