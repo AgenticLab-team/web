@@ -56,6 +56,11 @@ after(() => rmSync(tmp, { recursive: true, force: true }));
 function scene() {
   for (const t of [
     schema.mailMessages,
+    schema.mailSlots,
+    // ⚠️ 流水也要清： 的幂等键是「用户 + 第几个」这种确定性的键，
+    // 不清的话上一条用例记下的那笔会让下一条直接被判成重复提交。
+    // （键确定性在生产里正是对的 —— 连点两下只买到一个。）
+    schema.pointsLedger,
     schema.mailIngressLog,
     schema.mailEvents,
     schema.mailBoxes,
@@ -696,12 +701,17 @@ describe("**到期 → 宽限期 → 放回池子**", () => {
     assert.equal(rules.renewedExpiry(future, now), future + rules.RENT_DAYS * DAY);
   });
 
-  it("**宽限期满才真的放回池子，而且信一起删**", () => {
+  it("**宽限期满进赎回期，不是直接放回池子** —— 而信这时就删", () => {
     /*
-     * 留着行的话别人根本申领不了（address 上有唯一索引），
-     * 而「放回池子」这句话的全部意思就是别人能拿到它。
-     * 信也要删：一个已经不属于任何人的地址下面挂着别人的旧邮件，
-     * 下一个申领者会看到它们。
+     * ═════════════════════════════════════════
+     * 两个窗口，两件不同的事
+     * ═════════════════════════════════════════
+     *
+     *   宽限期（30 天）  地址**仍然是他的**，信照收，别人抢不走
+     *   赎回期（7 天）   地址**已经不是他的了**，但别人也还拿不到
+     *
+     * 信在进赎回期时就删：赎回回来的是**地址**，不是历史。
+     * 留着的话，万一最后是别人拿到了它，那些信就到了别人手里。
      */
     const id = expired();
     settle.settleMail();
@@ -720,13 +730,39 @@ describe("**到期 → 宽限期 → 放回池子**", () => {
     });
 
     settle.settleMail();
-    assert.equal(boxOf(id), undefined, "宽限期满了还占着地址");
+    const b = boxOf(id);
+    assert.ok(b, "宽限期一满就把行删了 —— 原主的 7 天优先权没了");
+    assert.equal(b.status, "expired");
+    assert.ok(b.redeemUntil && b.redeemUntil > Date.now(), "没记赎回期到哪天");
+
     const left = dbm.db
       .select()
       .from(schema.mailMessages)
       .where(eq(schema.mailMessages.boxId, id))
       .all();
-    assert.equal(left.length, 0, "地址放回池子了，旧信还留着 —— 下一个人会看到");
+    assert.equal(left.length, 0, "进赎回期了信还留着 —— 万一被别人拿到，信就到别人手里了");
+  });
+
+  it("**赎回期也过了才真的删行** —— 留着行别人根本申领不了", () => {
+    /*
+     * 地址的唯一性靠 `address` 上那个唯一索引保证。
+     * 「放回池子」这句话的全部意思就是别人能拿到它。
+     */
+    const id = expired();
+    settle.settleMail();
+    dbm.db
+      .update(schema.mailBoxes)
+      .set({ graceUntil: Date.now() - DAY })
+      .where(eq(schema.mailBoxes.id, id))
+      .run();
+    settle.settleMail();
+    dbm.db
+      .update(schema.mailBoxes)
+      .set({ redeemUntil: Date.now() - DAY })
+      .where(eq(schema.mailBoxes.id, id))
+      .run();
+    settle.settleMail();
+    assert.equal(boxOf(id), undefined, "赎回期过了还占着地址");
   });
 
   it("**续期不查等级也不查槽位** —— 掉级就续不了费是最糟的结果", () => {
@@ -822,3 +858,165 @@ describe("**申领来的地址要能被看见**", () => {
     assert.match(code, /box\.daysLeft/, "没用服务端算好的天数");
   });
 });
+
+describe("**赎回期：原主 7 天优先权**", () => {
+  let claim: typeof import("@/lib/mail/claim");
+  let settle: typeof import("@/lib/mail/settle");
+  let ledger: typeof import("@/lib/points/ledger");
+  const DAY = 86_400_000;
+
+  before(async () => {
+    claim = await import("@/lib/mail/claim");
+    settle = await import("@/lib/mail/settle");
+    ledger = await import("@/lib/points/ledger");
+  });
+
+  /** 申领一个，然后一路推到赎回期 */
+  const intoRedeem = () => {
+    scene();
+    dbm.db
+      .insert(schema.mailDomains)
+      .values({
+        domain: "good.icu",
+        punycode: "good.icu",
+        kind: "reserved",
+        tier: "b",
+        status: "active",
+        enabled: true,
+        allowClaim: true,
+      })
+      .onConflictDoUpdate({ target: schema.mailDomains.domain, set: { allowClaim: true } })
+      .run();
+    for (const u of [ME, OTHER]) ledger.grantPoints({ userId: u, delta: 5000, reason: "测试铺底" });
+
+    const r = claim.claimAddress({ userId: ME, domain: "good.icu", localPart: "hello" });
+    assert.ok(r.ok, r.ok ? "" : r.error);
+    dbm.db
+      .update(schema.mailBoxes)
+      .set({ expiresAt: Date.now() - DAY })
+      .where(eq(schema.mailBoxes.id, r.boxId))
+      .run();
+    settle.settleMail();
+    dbm.db
+      .update(schema.mailBoxes)
+      .set({ graceUntil: Date.now() - DAY })
+      .where(eq(schema.mailBoxes.id, r.boxId))
+      .run();
+    settle.settleMail();
+    return r.boxId;
+  };
+
+  it("**赎回期里别人拿不到，而且要说清楚什么时候能拿**", () => {
+    /*
+     * 只说「暂时不能申领」的话，他只能每天来试一次 ——
+     * 而这个地址他可能已经等了一个月。
+     */
+    intoRedeem();
+    const r = claim.claimAddress({ userId: OTHER, domain: "good.icu", localPart: "hello" });
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.match(r.error, /\d/, `没给日期：${r.error}`);
+  });
+
+  it("**原主原价拿得回来**，而且是同一行不是新开一个", () => {
+    const id = intoRedeem();
+    const r = claim.claimAddress({ userId: ME, domain: "good.icu", localPart: "hello" });
+    assert.ok(r.ok, r.ok ? "" : r.error);
+    if (r.ok) assert.equal(r.boxId, id, "赎回开成了新的一行 —— address 上有唯一索引，这会撞");
+
+    const b = dbm.db.select().from(schema.mailBoxes).where(eq(schema.mailBoxes.id, id)).get()!;
+    assert.equal(b.status, "active");
+    assert.equal(b.redeemUntil, null, "赎回回来了还留着赎回期");
+    assert.ok(b.expiresAt! > Date.now());
+  });
+
+  it("赎回期过了之后别人就拿得到了", () => {
+    const id = intoRedeem();
+    dbm.db
+      .update(schema.mailBoxes)
+      .set({ redeemUntil: Date.now() - DAY })
+      .where(eq(schema.mailBoxes.id, id))
+      .run();
+    settle.settleMail();
+    const r = claim.claimAddress({ userId: OTHER, domain: "good.icu", localPart: "hello" });
+    assert.ok(r.ok, r.ok ? "" : r.error);
+  });
+});
+
+describe("**买槽位**", () => {
+  let claim: typeof import("@/lib/mail/claim");
+  let ledger: typeof import("@/lib/points/ledger");
+  let rules: typeof import("@/lib/mail/slot-rules");
+
+  before(async () => {
+    claim = await import("@/lib/mail/claim");
+    ledger = await import("@/lib/points/ledger");
+    rules = await import("@/lib/mail/slot-rules");
+  });
+
+  it("买一个，槽位总数涨一个，而且真的落了一行", () => {
+    /*
+     * `mail_slots` 那张表在这之前**只被读、从没被写过** ——
+     * 算出来的「买来的」永远是 0。
+     */
+    scene();
+    ledger.grantPoints({ userId: ME, delta: 5000, reason: "测试铺底" });
+    const before = claim.slotStatus(ME).total;
+    const r = claim.buySlot({ userId: ME });
+    assert.ok(r.ok, r.ok ? "" : r.error);
+    assert.equal(claim.slotStatus(ME).total, before + 1);
+    assert.equal(dbm.db.select().from(schema.mailSlots).all().length, 1);
+  });
+
+  it(`**最多 ${3} 个** —— 没有上限就是「钱能买断」`, () => {
+    scene();
+    ledger.grantPoints({ userId: ME, delta: 99999, reason: "测试铺底" });
+    for (let i = 0; i < rules.PURCHASED_SLOT_CAP; i++) {
+      assert.ok(claim.buySlot({ userId: ME }).ok, `第 ${i + 1} 个该买得到`);
+    }
+    assert.equal(claim.buySlot({ userId: ME }).ok, false, "买到第四个了");
+  });
+
+  it("**分不够就买不到，而且一分不扣**", () => {
+    scene();
+    const before = dbm.db.select().from(schema.users).where(eq(schema.users.id, ME)).get()!.points;
+    assert.equal(claim.buySlot({ userId: ME }).ok, false);
+    const after = dbm.db.select().from(schema.users).where(eq(schema.users.id, ME)).get()!.points;
+    assert.equal(after, before);
+  });
+
+  it("**连点两下只买到一个** —— 幂等键挡下的那次不能再插一行", () => {
+    /*
+     * `grantPoints` 对重复的键返回 `{ ok: true, duplicate: true }` ——
+     * 那是「这笔账已经记过了」，不是「又记了一笔」。
+     * 不看这个标志的话，连点两下会扣一次分、拿到两个槽位。
+     *
+     * ⚠️ 要**真的再调一次 `buySlot`**，不能手工去调 `grantPoints`。
+     * 第一版就是那么写的，于是它绕开了被测的那条路 ——
+     * 把 `if (paid.duplicate) return` 整行删掉，那条测试照样绿。
+     * （变异测试发现的。）
+     *
+     * 真实的并发形状是：两次调用都看到 `owned === 0`，
+     * 于是都算出同一个幂等键。这里用一次成功 + 一次强行同键来模拟。
+     */
+    scene();
+    ledger.grantPoints({ userId: ME, delta: 5000, reason: "测试铺底" });
+    const balance = () =>
+      dbm.db.select().from(schema.users).where(eq(schema.users.id, ME)).get()!.points;
+    const before = balance();
+
+    assert.ok(claim.buySlot({ userId: ME }).ok);
+    // 把刚落的那一行撤掉，让第二次调用重新算出**同一个**幂等键 ——
+    // 这正是两个并发请求都读到 owned=0 时的样子
+    dbm.db.delete(schema.mailSlots).run();
+
+    const again = claim.buySlot({ userId: ME });
+    assert.ok(again.ok, "第二次调用不该报错，它只是撞上了幂等键");
+    assert.equal(
+      dbm.db.select().from(schema.mailSlots).all().length,
+      0,
+      "幂等键挡下的那次又插了一行槽位 —— 扣一次分拿两个槽位",
+    );
+    assert.equal(before - balance(), rules.SLOT_PRICE, "重复提交多扣了分");
+  });
+});
+

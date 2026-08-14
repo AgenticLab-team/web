@@ -11,7 +11,7 @@ import { and, isNotNull, isNull, lt } from "drizzle-orm";
 import { domainsNeedingExpiryNotice } from "./admin-queries";
 import { reclaimExpiredBurners } from "./burner";
 import { expiryLabel, expiryStage } from "./expiry-rules";
-import { GRACE_DAYS } from "./slot-rules";
+import { GRACE_DAYS, REDEEM_DAYS } from "./slot-rules";
 
 /**
  * 邮箱这一块在 health 那一轮里要做的事。
@@ -46,7 +46,7 @@ import { GRACE_DAYS } from "./slot-rules";
  * 信照收，只是别人抢不走。30 天内补交年租原样恢复
  * （`renewClaim` 会把状态改回 active）。
  */
-function settleLongTermBoxes(now: number): { grace: number; released: number } {
+function settleLongTermBoxes(now: number): { grace: number; released: number; redeemable: number } {
   /*
    * ① 到期的进宽限期。
    *
@@ -97,17 +97,22 @@ function settleLongTermBoxes(now: number): { grace: number; released: number } {
   }
 
   /*
-   * ② 宽限期满的真正放回池子。
+   * ② 宽限期满 → **进赎回期**，不是直接放回池子。
    *
-   * **删行**，不是改状态：地址的唯一性靠 `mail_boxes.address` 上那个
-   * 唯一索引保证，留着行的话别人根本申领不了 —— 而「放回池子」
-   * 这句话的全部意思就是别人能拿到它。
+   * ─────────────────────────────────────────
+   * 两个窗口，两件不同的事
+   * ─────────────────────────────────────────
    *
-   * 信跟着一起删。留着的话，一个已经不属于任何人的地址下面
-   * 挂着一堆别人的旧邮件，而下一个申领者会看到它们。
+   *   宽限期（30 天）  地址**仍然是他的**，信照收，别人抢不走
+   *   赎回期（7 天）   地址**已经不是他的了**，但别人也还拿不到 ——
+   *                    他有优先权，原价拿回
+   *
+   * 信在这一步就删掉：赎回回来的是**地址**，不是历史。
+   * 留着的话，一个已经不属于任何人的地址下面挂着旧邮件，
+   * 而万一最后是别人拿到了它，那些信就到了别人手里。
    */
-  const dead = db
-    .select({ id: mailBoxes.id, domain: mailBoxes.domain })
+  const toRedeem = db
+    .select({ id: mailBoxes.id, domain: mailBoxes.domain, userId: mailBoxes.userId })
     .from(mailBoxes)
     .where(
       and(
@@ -115,6 +120,58 @@ function settleLongTermBoxes(now: number): { grace: number; released: number } {
         eq(mailBoxes.status, "grace"),
         isNotNull(mailBoxes.graceUntil),
         lt(mailBoxes.graceUntil, now),
+      ),
+    )
+    .all();
+
+  for (const box of toRedeem) {
+    db.delete(mailMessages).where(eq(mailMessages.boxId, box.id)).run();
+    db.update(mailBoxes)
+      .set({
+        status: "expired",
+        graceUntil: null,
+        redeemUntil: now + REDEEM_DAYS * 86_400_000,
+        updatedAt: now,
+      })
+      .where(eq(mailBoxes.id, box.id))
+      .run();
+
+    db.insert(mailEvents)
+      .values({
+        boxId: box.id,
+        domain: box.domain,
+        event: "redeem_window",
+        actorKind: "system",
+        detail: { until: now + REDEEM_DAYS * 86_400_000 },
+      })
+      .run();
+
+    notify({
+      userId: box.userId,
+      type: "system",
+      groupKey: `mail:redeem:${box.id}`,
+      title: "邮箱地址已经放开了",
+      body: `你还有 ${REDEEM_DAYS} 天优先权，原价就能拿回来。过了这几天别人就可以申领它。`,
+      link: "/mail/burner",
+    });
+  }
+
+  /*
+   * ③ 赎回期也过了 → 真的删行。
+   *
+   * **删行**，不是改状态：地址的唯一性靠 `mail_boxes.address` 上那个
+   * 唯一索引保证，留着行的话别人根本申领不了 —— 而「放回池子」
+   * 这句话的全部意思就是别人能拿到它。
+   */
+  const dead = db
+    .select({ id: mailBoxes.id, domain: mailBoxes.domain })
+    .from(mailBoxes)
+    .where(
+      and(
+        eq(mailBoxes.kind, "temp"),
+        eq(mailBoxes.status, "expired"),
+        isNotNull(mailBoxes.redeemUntil),
+        lt(mailBoxes.redeemUntil, now),
       ),
     )
     .all();
@@ -127,13 +184,15 @@ function settleLongTermBoxes(now: number): { grace: number; released: number } {
       .run();
   }
 
-  return { grace: expiring.length, released: dead.length };
+  return { grace: expiring.length, released: dead.length, redeemable: toRedeem.length };
 }
 
 export interface MailSettleResult {
   /** 这一轮有几个长期箱进了宽限期 */
   grace?: number;
-  /** 有几个宽限期满、真的放回池子了 */
+  /** 有几个宽限期满、进了原主的 7 天赎回期 */
+  redeemable?: number;
+  /** 有几个赎回期也过了、真的放回池子 */
   released?: number;
   /** 回收掉的一次性箱 */
   reclaimed: number;

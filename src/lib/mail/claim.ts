@@ -14,6 +14,8 @@ import type { MailDomainTier } from "./kinds";
 import {
   canClaim,
   explainRefusal,
+  PURCHASED_SLOT_CAP,
+  SLOT_PRICE,
   renewedExpiry,
   RENT_DAYS,
   slotsFor,
@@ -149,11 +151,38 @@ export function claimAddress(input: {
 
   const address = buildAddress(verdict.local, domainRow.punycode);
   const taken = db
-    .select({ id: mailBoxes.id })
+    .select({
+      id: mailBoxes.id,
+      userId: mailBoxes.userId,
+      status: mailBoxes.status,
+      redeemUntil: mailBoxes.redeemUntil,
+    })
     .from(mailBoxes)
     .where(eq(mailBoxes.address, address))
     .get();
-  if (taken) return { ok: false, error: "这个地址已经有人了" };
+
+  /*
+   * ─────────────────────────────────────────
+   * 赎回期：原主有 7 天优先权
+   * ─────────────────────────────────────────
+   *
+   * 这一段是三种情况，而它们的答案都不一样：
+   *
+   *   ① 还在用          谁都拿不到
+   *   ② 赎回期 + 是原主   **原价拿回**，走下面那条正常路
+   *   ③ 赎回期 + 是别人   拿不到，但要说清楚**什么时候能拿**
+   *
+   * ③ 那句话要给日期。只说「暂时不能申领」的话，他只能每天来试一次 ——
+   * 而这个地址他可能已经等了一个月。
+   */
+  const redeemable =
+    taken && taken.status === "expired" && (taken.redeemUntil ?? 0) > now;
+
+  if (taken && !redeemable) return { ok: false, error: "这个地址已经有人了" };
+  if (taken && redeemable && taken.userId !== input.userId) {
+    const when = new Date(taken.redeemUntil!).toLocaleDateString("zh-CN");
+    return { ok: false, error: `原主人还有优先权，${when} 之后才放开` };
+  }
 
   const rent = TIER_RENT[tier];
 
@@ -195,7 +224,24 @@ export function claimAddress(input: {
   const expiresAt = now + RENT_DAYS * 86_400_000;
 
   try {
-    const box = db
+    /*
+     * 赎回走 `update` —— 那一行还在（`status: expired`），
+     * 而 `address` 上有唯一索引，insert 会直接撞上去。
+     */
+    const box = taken
+      ? db
+          .update(mailBoxes)
+          .set({
+            status: "active",
+            expiresAt,
+            redeemUntil: null,
+            graceUntil: null,
+            updatedAt: now,
+          })
+          .where(eq(mailBoxes.id, taken.id))
+          .returning()
+          .get()
+      : db
       .insert(mailBoxes)
       .values({
         userId: input.userId,
@@ -438,4 +484,92 @@ export function listClaimed(userId: string, now = Date.now()): ClaimedView[] {
       };
     })
     .sort((a, b) => (a.expiresAt ?? Infinity) - (b.expiresAt ?? Infinity));
+}
+
+/**
+ * 买一个额外槽位。
+ *
+ * ═════════════════════════════════════════
+ * 它是**一次性**的，而地址的年租是周期性的
+ * ═════════════════════════════════════════
+ *
+ * 这个区别要紧：一次性商品买完回收就归零，所以它不能是唯一的
+ * 花分出口（`ECONOMY.md` 那条）。槽位买的是「能同时拥有几个地址」，
+ * 而每个地址自己还在按年扣租 —— 两者叠起来才是完整的回收。
+ *
+ * ─────────────────────────────────────────
+ * 上限 3 个，而且这个上限本身就是设计
+ * ─────────────────────────────────────────
+ *
+ * 没有上限的话，「钱能买断」——一个攒够分的人可以把好前缀囤成资产，
+ * 而那正是 `LEVEL_SLOT_CAP` 那条要防的同一件事，只是换了条路进来。
+ */
+export function buySlot(input: {
+  userId: string;
+  now?: number;
+}): { ok: true; total: number; paid: number } | { ok: false; error: string } {
+  const now = input.now ?? Date.now();
+
+  const owned =
+    db
+      .select({ n: count() })
+      .from(mailSlots)
+      .where(and(eq(mailSlots.userId, input.userId), isNull(mailSlots.revokedAt)))
+      .get()?.n ?? 0;
+
+  if (owned >= PURCHASED_SLOT_CAP) {
+    return { ok: false, error: `最多买 ${PURCHASED_SLOT_CAP} 个。再要就只能升级 —— 每升一级多一个（L5 封顶）` };
+  }
+
+  const user = db
+    .select({ balance: users.points })
+    .from(users)
+    .where(eq(users.id, input.userId))
+    .get();
+  if (!user) return { ok: false, error: "没有这个人" };
+  if (user.balance < SLOT_PRICE) {
+    return {
+      ok: false,
+      error: `一个槽位 ${SLOT_PRICE} 分，你有 ${user.balance} 分 —— 还差 ${SLOT_PRICE - user.balance}`,
+    };
+  }
+
+  /*
+   * 幂等键带上**这是第几个**。
+   *
+   * 同一个人连点两下只会买到一个（两次算出来的序号相同）；
+   * 而他真的想买第二个时序号变了，照价收费。
+   *
+   * 用序号而不是时间戳：时间戳会让「连点两下」在跨秒时变成两笔。
+   */
+  const paid = grantPoints({
+    userId: input.userId,
+    delta: -SLOT_PRICE,
+    reason: `买邮箱槽位（第 ${owned + 1} 个）`,
+    ruleKey: "mail.slot",
+    refType: "mail_slot",
+    refId: `${input.userId}:${owned + 1}`,
+    idempotencyKey: `mail.slot:${input.userId}:${owned + 1}`,
+  });
+  if (!paid.ok) return { ok: false, error: paid.error ?? "扣分没成功" };
+
+  /*
+   * ⚠️ 幂等键挡下的那次**不能再插一行槽位**。
+   *
+   * `grantPoints` 对重复的键返回 `{ ok: true, duplicate: true }` ——
+   * 它是「这笔账已经记过了」，不是「又记了一笔」。
+   * 不看这个标志的话，连点两下会扣一次分、拿到两个槽位。
+   */
+  if (paid.duplicate) return { ok: true, total: owned, paid: 0 };
+
+  db.insert(mailSlots)
+    .values({
+      userId: input.userId,
+      source: "purchase",
+      ledgerId: paid.ledgerId ?? null,
+      createdAt: now,
+    })
+    .run();
+
+  return { ok: true, total: owned + 1, paid: SLOT_PRICE };
 }

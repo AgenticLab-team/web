@@ -435,6 +435,13 @@
       "when": 1786696992741,
       "tag": "0064_low_mattie_franklin",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "6",
+      "when": 1786718869685,
+      "tag": "0065_motionless_paladin",
+      "breakpoints": true
     }
   ]
 }

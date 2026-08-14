@@ -163,6 +163,22 @@ export const mailBoxes = sqliteTable(
     expiresAt: integer("expires_at"),
     /** 宽限期结束时间。见 MAIL.md 4.2 —— 到期不是立刻没收 */
     graceUntil: integer("grace_until"),
+    /**
+     * 放回池子之后，**原主还能原价赎回到哪天**。
+     *
+     * ─────────────────────────────────────────
+     * 它和 `grace_until` 是两个窗口，不能合成一个
+     * ─────────────────────────────────────────
+     *
+     *   宽限期  地址**仍然是他的**，信照收，别人抢不走
+     *   赎回期  地址**已经不是他的了**，但别人也还拿不到 ——
+     *           他有 7 天的优先权，原价拿回
+     *
+     * 合成一个字段的话，「这个地址现在归谁」这个问题要靠
+     * `status` 和它一起判 —— 而那种两列合起来才有意义的状态，
+     * 迟早会有一处只看了其中一列。
+     */
+    redeemUntil: integer("redeem_until"),
     renewedAt: integer("renewed_at"),
     renewCount: integer("renew_count").notNull().default(0),
 

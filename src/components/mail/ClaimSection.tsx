@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { Card, buttonClass } from "@/components/ui/primitives";
-import { claim } from "@/lib/mail/claim-actions";
+import { claim, purchaseSlot } from "@/lib/mail/claim-actions";
 
 /**
  * 申领公共池上的长期地址。
@@ -72,9 +72,29 @@ export function ClaimSection({
       </p>
 
       {full && (
-        <p className="t-caption mt-2" style={{ color: "var(--warning)" }}>
-          槽位满了。退掉一个不用的，或者升一级 —— 每升一级多一个（到 L5 封顶）
-        </p>
+        <div className="mt-2">
+          <p className="t-caption" style={{ color: "var(--warning)" }}>
+            槽位满了。升一级会多一个（到 L5 封顶），或者直接买一个
+          </p>
+          {/*
+            * 「或者买一个」后面直接跟按钮，而不是让他自己去别处找。
+            * 一句「可以买」而没有入口，等于把人推去问别人怎么买。
+            */}
+          <button
+            className={`${buttonClass("quiet", "sm")} mt-1.5`}
+            onClick={() =>
+              start(async () => {
+                setError(null);
+                const r = await purchaseSlot();
+                if (!r.ok) setError(r.error);
+                else setDone(`买好了，现在有 ${r.total} 个买来的槽位`);
+              })
+            }
+            disabled={pending}
+          >
+            花 60 分买一个槽位
+          </button>
+        </div>
       )}
 
       <div className="mt-3 space-y-1.5">

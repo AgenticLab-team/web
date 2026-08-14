@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getCurrentUser } from "@/lib/auth/session";
-import { claimAddress, renewClaim, slotStatus } from "@/lib/mail/claim";
+import { buySlot, claimAddress, renewClaim, slotStatus } from "@/lib/mail/claim";
 import { claimableDomains } from "@/lib/mail/claim-queries";
 
 /**
@@ -48,6 +48,20 @@ export async function renew(input: {
   if (!user) return { ok: false, error: "请先登录" };
 
   const r = renewClaim({ userId: user.id, boxId: input.boxId });
+  if (!r.ok) return { ok: false, error: r.error };
+
+  revalidatePath("/mail/burner");
+  return r;
+}
+
+/** 花分买一个额外槽位。最多 3 个 —— 上限本身就是设计，见 buySlot 上那段 */
+export async function purchaseSlot(): Promise<
+  { ok: true; total: number; paid: number } | { ok: false; error: string }
+> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "请先登录" };
+
+  const r = buySlot({ userId: user.id });
   if (!r.ok) return { ok: false, error: r.error };
 
   revalidatePath("/mail/burner");
