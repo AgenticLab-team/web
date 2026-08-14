@@ -4,6 +4,7 @@ import { and, count, eq, gt, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import {
+  mailAttachments,
   mailBlocks,
   mailBoxes,
   mailDomains,
@@ -16,6 +17,7 @@ import {
 import { splitAddress } from "./address-rules";
 import { mailConfig, retentionDaysFor } from "./config";
 import { extractOtp } from "./otp";
+import { shouldStore } from "./attachment-rules";
 import type { MailIngressVerdict } from "./kinds";
 
 /**
@@ -44,12 +46,40 @@ export interface InboundMessage {
   text?: string | null;
   html?: string | null;
   size: number;
-  attachments?: { filename: string; mime?: string | null; size: number }[];
+  /**
+   * 附件。`content` 是可选的 base64 ——
+   * **老网关不发它，站点当它是 undefined**（协议注释里那条：
+   * 加字段不用 +1）。没有内容时只留文件名和大小，
+   * 界面上显示成「未保存」。
+   */
+  attachments?: {
+    filename: string;
+    mime?: string | null;
+    size: number;
+    content?: string | null;
+  }[];
   spamScore?: number | null;
   spfPass?: boolean | null;
   dkimPass?: boolean | null;
   dmarcPass?: boolean | null;
   sourceIp?: string | null;
+}
+
+/**
+ * 这个人已经存了多少字节的附件。
+ *
+ * 按**人**算不是按箱子算：一个人开十个箱子不该有十份配额，
+ * 而磁盘是全站共用的那一份。
+ */
+function attachmentUsage(userId: string): number {
+  const row = db
+    .select({ n: sql<number>`coalesce(sum(${mailAttachments.size}), 0)` })
+    .from(mailAttachments)
+    .innerJoin(mailMessages, eq(mailMessages.id, mailAttachments.messageId))
+    .innerJoin(mailBoxes, eq(mailBoxes.id, mailMessages.boxId))
+    .where(and(eq(mailBoxes.userId, userId), eq(mailAttachments.stored, true)))
+    .get();
+  return Number(row?.n ?? 0);
 }
 
 export interface IngestResult {
@@ -192,6 +222,43 @@ export function ingestMessage(input: InboundMessage): IngestResult {
         })
         .returning()
         .get();
+
+      /*
+       * ─────────────────────────────────────────
+       * 附件和信**在同一个事务里**
+       * ─────────────────────────────────────────
+       *
+       * 分开写的话，中间失败一次就会出现「信在、附件不在」——
+       * 而界面上那封信会显示成「有附件」然后什么都点不开，
+       * 一个没有任何地方能解释的状态。
+       *
+       * 每一个都单独判：一封信里可能第一个附件够小、第二个超了。
+       * 配额也要**边写边加**，否则五个 1.9M 的附件会一起通过。
+       */
+      let used = attachmentUsage(box.userId);
+      for (const a of input.attachments ?? []) {
+        const verdict = shouldStore({
+          level,
+          size: a.size,
+          hasContent: typeof a.content === "string" && a.content.length > 0,
+          usedBytes: used,
+        });
+
+        tx.insert(mailAttachments)
+          .values({
+            messageId: row.id,
+            filename: a.filename,
+            mime: a.mime ?? null,
+            size: a.size,
+            stored: verdict.store,
+            // 存不下的只留元信息 —— 界面显示「文件名 · 大小 · 未保存」
+            content: verdict.store ? Buffer.from(a.content!, "base64") : null,
+            expiresAt: now + retentionDaysFor(level, config) * 86400_000,
+          })
+          .run();
+
+        if (verdict.store) used += a.size;
+      }
 
       tx.update(mailBoxes)
         .set({

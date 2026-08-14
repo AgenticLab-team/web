@@ -57,6 +57,16 @@ const PROTOCOL = 1;
 
 const SECRET = required("MAIL_INGRESS_SECRET");
 const SITE = (process.env.SITE_URL ?? "https://agenticlab.sh").replace(/\/$/, "");
+
+/**
+ * 单个附件最大多少字节才带内容过去。
+ *
+ * ⚠️ 要和站点的 `lib/mail/attachment-rules.ts` 里那个数对得上。
+ * 两处各写一份是因为网关**不 import 站点的任何代码**（见 README）——
+ * 而这个数写错的方向是不对称的：这边传了那边不收，浪费的只是带宽；
+ * 这边不传那边想收，那是功能缺失。所以宁可这边略宽。
+ */
+const ATTACHMENT_MAX_BYTES = 2 * 1024 * 1024;
 const PORT = Number(process.env.SMTP_PORT ?? 25);
 const MAX_BYTES = Number(process.env.MAX_MESSAGE_BYTES ?? 2 * 1024 * 1024);
 const SNAPSHOT_MS = Number(process.env.SNAPSHOT_REFRESH_MS ?? 60_000);
@@ -300,11 +310,30 @@ const server = new SMTPServer({
               text: parsed.text ?? null,
               html: typeof parsed.html === "string" ? parsed.html : null,
               size: raw.length,
-              attachments: (parsed.attachments ?? []).map((a) => ({
-                filename: a.filename ?? "(未命名)",
-                mime: a.contentType ?? null,
-                size: a.size ?? 0,
-              })),
+              /*
+               * 附件：**够小的才带内容**。
+               *
+               * 站点那边的上限是单个 2M（`attachment-rules.ts`），
+               * 超了它也只会记元信息 —— 那就别在网络上白传一趟。
+               * 这里的数要和站点那个对得上；对不上的方向如果是
+               * 「这边传了、那边不收」，代价只是浪费带宽；
+               * 反过来「这边不传、那边想收」才是功能缺失，
+               * 所以宁可这边略宽一点。
+               *
+               * base64 会把体积撑大三分之一，所以判的是原始字节数。
+               */
+              attachments: (parsed.attachments ?? []).map((a) => {
+                const size = a.size ?? a.content?.length ?? 0;
+                return {
+                  filename: a.filename ?? "(未命名)",
+                  mime: a.contentType ?? null,
+                  size,
+                  content:
+                    a.content && size > 0 && size <= ATTACHMENT_MAX_BYTES
+                      ? a.content.toString("base64")
+                      : null,
+                };
+              }),
             },
             session.remoteAddress,
           );

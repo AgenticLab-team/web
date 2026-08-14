@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { blob, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 import {
   MAIL_BANWORD_KINDS,
@@ -311,12 +311,36 @@ export const mailAttachments = sqliteTable(
     mime: text("mime"),
     size: integer("size").notNull().default(0),
     /**
-     * 有没有真的落盘。**默认没有** —— 附件是吃盘大户，
+     * 有没有真的存下来。**默认没有** —— 附件是吃盘大户，
      * 而九成的临时邮件里那个附件没人会点开。
      * 界面上要显示成「文件名 · 大小 · 未保存」，
      * 不能是一个点了没反应的下载按钮。
      */
     stored: integer("stored", { mode: "boolean" }).notNull().default(false),
+    /**
+     * 内容本身，**存在库里而不是盘上**。
+     *
+     * ═════════════════════════════════════════
+     * 这一条偏离了 MAIL.md 里的设计，理由在这里
+     * ═════════════════════════════════════════
+     *
+     * 原设计是落盘 + 记 `path`。改成 BLOB 是因为两件事：
+     *
+     *   ① **备份只覆盖数据库文件**（`scripts/backup.ts` 备的是
+     *      `data/agenticlab.db`，不是任意目录）。落盘的话，
+     *      一次机器故障之后数据库回来了、附件没了 ——
+     *      而那种「恢复成功但少了东西」最难发现。
+     *   ② **删除路径有四条**（正文到期清理、宽限期满放回池子、
+     *      账号注销、后台收回地址），落盘意味着每一条都要配一次
+     *      unlink。漏掉一条的后果是**别人的私人附件永远留在盘上**，
+     *      而磁盘上多几个文件是没有任何症状的。
+     *      存在库里的话，删行就是删内容 —— 那四条路一条都不用改。
+     *
+     * 代价是数据库和备份都会变大。而配额本来就压得很死
+     * （单封 2M、个人 50M），所以那个增长是有上界的。
+     */
+    content: blob("content"),
+    /** ⚠️ 落盘那版留下的。见上面 `content` 那段 —— 现在恒为 null */
     path: text("path"),
     expiresAt: integer("expires_at"),
     createdAt: now("created_at"),

@@ -442,6 +442,13 @@
       "when": 1786718869685,
       "tag": "0065_motionless_paladin",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "6",
+      "when": 1786719810996,
+      "tag": "0066_reflective_white_tiger",
+      "breakpoints": true
     }
   ]
 }

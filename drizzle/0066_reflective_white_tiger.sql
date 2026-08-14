@@ -1,0 +1,1 @@
+ALTER TABLE `mail_attachments` ADD `content` blob;

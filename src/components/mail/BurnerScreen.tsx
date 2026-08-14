@@ -359,10 +359,27 @@ function MessageBody({ detail }: { detail: MailMessageDetail }) {
       )}
 
       {detail.attachments.length > 0 && (
-        <p className="t-caption2 mt-2 text-[var(--ink-tertiary)]">
-          {/* 只列名字：附件内容不落盘，列出来是为了让人知道「这封信本来带着东西」 */}
-          附件（不保存内容）：{detail.attachments.map((a) => a.filename).join("、")}
-        </p>
+        <div className="mt-2 space-y-0.5">
+          {detail.attachments.map((a) => (
+            <p key={a.id} className="t-caption2 text-[var(--ink-tertiary)]">
+              <span className="font-mono">{a.filename}</span>
+              <span className="ml-1.5">{Math.max(1, Math.round(a.size / 1024))}K</span>
+              {/*
+                * 存了就说存了，没存就说**为什么**没存。
+                *
+                * 只显示「未保存」的话，人会以为是出错了然后来问；
+                * 而那几种原因里多数他自己能处理。
+                */}
+              {a.stored ? (
+                <span className="ml-1.5" style={{ color: "var(--success)" }}>
+                  已保存
+                </span>
+              ) : (
+                <span className="ml-1.5">· {a.skipNote ?? "未保存"}</span>
+              )}
+            </p>
+          ))}
+        </div>
       )}
     </>
   );

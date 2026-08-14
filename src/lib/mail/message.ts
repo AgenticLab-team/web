@@ -3,7 +3,8 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { mailBoxes, mailMessages } from "@/lib/db/schema";
+import { mailAttachments, mailBoxes, mailMessages } from "@/lib/db/schema";
+import { ATTACHMENT_MAX_BYTES, explainSkip } from "./attachment-rules";
 
 /**
  * 读一封信。
@@ -43,7 +44,25 @@ export interface MailMessageDetail {
   otpCode: string | null;
   /** 纯文本正文。HTML 那一份现在根本不落盘（见 ingest.ts），所以只有这个 */
   bodyText: string | null;
-  attachments: { filename: string; mime?: string | null; size: number }[];
+  /**
+   * 附件。`stored` 为假时**只有文件名和大小** ——
+   * 界面上要显示成「未保存」，而不是一个点了没反应的下载按钮。
+   */
+  attachments: {
+    id: string;
+    filename: string;
+    mime: string | null;
+    size: number;
+    stored: boolean;
+    /**
+     * 没存的时候，**为什么**。
+     *
+     * 只说「未保存」的话，人会以为是出错了然后来问。
+     * 而这四种原因里有三种他自己能处理（升级、删旧信、
+     * 让对方发小一点的），说清楚就不用问。
+     */
+    skipNote: string | null;
+  }[];
   receivedAt: number;
   /** 这次读之前的已读时间。null = 这是第一次打开 */
   readAt: number | null;
@@ -105,7 +124,38 @@ export function readMessage(input: {
     subject: row.m.subject,
     otpCode: row.m.otpCode,
     bodyText: row.m.bodyText,
-    attachments: (row.m.attachmentMeta as MailMessageDetail["attachments"] | null) ?? [],
+    /*
+     * 从 `mail_attachments` 读，不再读 `messages.attachment_meta` 那份 JSON。
+     *
+     * 两份的差别是**有没有「存没存」这一栏** —— 而那一栏决定界面上
+     * 是给一个下载按钮还是一句「未保存」。读 JSON 那份的话，
+     * 界面只能假设所有附件都能下，然后有一半点了没反应。
+     */
+    attachments: db
+      .select({
+        id: mailAttachments.id,
+        filename: mailAttachments.filename,
+        mime: mailAttachments.mime,
+        size: mailAttachments.size,
+        stored: mailAttachments.stored,
+      })
+      .from(mailAttachments)
+      .where(eq(mailAttachments.messageId, row.m.id))
+      .all()
+      .map((a) => ({
+        ...a,
+        /*
+         * 反推「为什么没存」。
+         *
+         * 不落一列存原因：那一列会在规则改了之后变成历史谎言 ——
+         * 一封三个月前因为等级不够而没存的信，在他升级之后仍然写着
+         * 「等级不够」，而那句话现在是错的。按当下的规则重算，
+         * 说出来的永远是**他现在能做什么**。
+         */
+        skipNote: a.stored
+          ? null
+          : explainSkip(a.size > ATTACHMENT_MAX_BYTES ? "too_big" : "level"),
+      })),
     receivedAt: row.m.receivedAt,
     // 返回的是**这次打开之前**的值 —— 界面要靠它决定显不显示「新」
     readAt,
