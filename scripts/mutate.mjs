@@ -279,6 +279,22 @@ const CUTS = [
     expectSurvive: "canClaim 用同一个余额先拦过；这一行防的是并发，单线程够不着",
   },
 
+  /* ── API 令牌 ─────────────────────────── */
+  {
+    group: "令牌",
+    name: "作用域不再校验（read 的令牌也能写）",
+    file: "src/lib/api-tokens/auth.ts",
+    from: "  const missing = required.filter((s) => !identity.scopes.includes(s));",
+    to: "  const missing: string[] = [];",
+  },
+  {
+    group: "令牌",
+    name: "★ 封禁 / 注销的人手里那把令牌还能用",
+    file: "src/lib/api-tokens/auth.ts",
+    from: '  if (!user || user.status !== "active") {',
+    to: "  if (!user) {",
+  },
+
   /* ── 代发署名（站长定的红线） ─────────── */
   {
     group: "代发",
