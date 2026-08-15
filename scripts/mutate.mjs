@@ -144,6 +144,38 @@ const CUTS = [
     to: 'case "private":\n      return { visible: true };',
   },
 
+  /* ── 会话 ─────────────────────────────── */
+  {
+    group: "会话",
+    name: "过期的会话照样能登录",
+    file: "src/lib/auth/session.ts",
+    from: "gt(sessions.expiresAt, Date.now()),",
+    to: "",
+  },
+  {
+    group: "会话",
+    name: "被吊销的会话照样能登录",
+    file: "src/lib/auth/session.ts",
+    from: "        isNull(sessions.revokedAt),\n        gt(sessions.expiresAt, Date.now()),",
+    to: "        gt(sessions.expiresAt, Date.now()),",
+  },
+  {
+    group: "会话",
+    name: "封禁的人手里的旧会话还能用",
+    file: "src/lib/auth/session.ts",
+    from: 'if (row.user.status === "banned" || row.user.status === "deleted") return null;',
+    to: "",
+  },
+  {
+    group: "会话",
+    // ★ 令牌不再哈希 —— 库里存的是哈希，明文比对等于所有人都登不上，
+    //   而「登不上」这种坏法测试往往是覆盖到的；真正要问的是它有没有覆盖
+    name: "★ 令牌按明文比对",
+    from: "eq(sessions.tokenHash, hashToken(token)),",
+    to: "eq(sessions.tokenHash, token),",
+    file: "src/lib/auth/session.ts",
+  },
+
   /* ── 隐私开关 ─────────────────────────── */
   {
     group: "隐私",
@@ -224,6 +256,7 @@ if (before !== 0) {
 }
 
 let survived = 0;
+let ambiguous = 0;
 let group = null;
 for (const cut of cuts) {
   if (cut.group !== group) {
@@ -232,8 +265,26 @@ for (const cut of cuts) {
   }
   const path = ROOT + cut.file;
   const original = readFileSync(path, "utf8");
-  if (!original.includes(cut.from)) {
+  /*
+   * ⚠️ 刀口必须**在文件里只出现一次**。
+   *
+   * `String.replace` 只换第一处。出现两次的话，刀就砍到了别的地方 ——
+   * 而结果会显示成「这一刀活了下来」，看起来像测试有洞。
+   *
+   * 踩过：`isNull(sessions.revokedAt),` 在 `session.ts` 里有两处，
+   * 一处在会话上限的查询里、一处在 `resolveSession` 里。
+   * 刀砍中了前者，于是「被吊销的会话照样能登录」一直报活着 ——
+   * 而我照着它去补的那条测试其实早就守住了。
+   * 差一点就得出「吊销功能没人测」这个错误结论。
+   */
+  const hits = original.split(cut.from).length - 1;
+  if (hits === 0) {
     console.log(`  ⚠️  ${cut.name}：刀口没对上（代码改过了？这一条要跟着更新）`);
+    continue;
+  }
+  if (hits > 1) {
+    console.log(`  ⚠️  ${cut.name}：刀口在 ${cut.file} 里出现了 ${hits} 次 —— 写具体一点，否则砍的是别处`);
+    ambiguous++;
     continue;
   }
   writeFileSync(path, original.replace(cut.from, cut.to));
@@ -251,9 +302,10 @@ for (const cut of cuts) {
   }
 }
 
+const note = ambiguous ? `（另有 ${ambiguous} 条刀口不唯一，没砍）` : "";
 console.log(
   survived === 0
-    ? `\n${cuts.length} 刀，一刀都没漏。`
-    : `\n❌ ${survived} 刀活了下来 —— 那几处的测试是绿的，但它不守。`,
+    ? `\n${cuts.length - ambiguous} 刀，一刀都没漏。${note}`
+    : `\n❌ ${survived} 刀活了下来 —— 那几处的测试是绿的，但它不守。${note}`,
 );
-process.exit(survived === 0 ? 0 : 1);
+process.exit(survived === 0 && ambiguous === 0 ? 0 : 1);

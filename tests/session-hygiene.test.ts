@@ -162,6 +162,53 @@ describe("真库", async () => {
       .all()
       .filter((s) => s.revokedAt === null && s.expiresAt > Date.now());
 
+  /*
+   * ═════════════════════════════════════════
+   * 下面这一组是**变异测试逼出来的**
+   * ═════════════════════════════════════════
+   *
+   * `scripts/mutate.mjs` 往 `resolveSession()` 里下刀，逐条量下来：
+   *
+   *   · 吊销、过期 —— **早就有测试守着**（`logout.test.ts` 里
+   *     那条「撤销后立即失效」）。我一开始以为这两处有洞，
+   *     是因为刀口字符串在文件里出现了两次，砍中了别处。
+   *   · **封禁的人手里的旧会话** —— 真的没人管。
+   *
+   * 「封禁立即生效，不等会话过期」就写在 `resolveSession` 里那一行上面，
+   * 而封一个人最常见的场景恰恰是「他正在捣乱」——
+   * 不验的话，他那台还开着的手机可以一直用到会话自然过期。
+   */
+  describe("★ 一个令牌什么时候就不该再认了", () => {
+    it("★ 人被封禁 / 注销之后，他手里的旧令牌立刻失效", () => {
+      /*
+       * 「封禁立即生效，不等会话过期」—— 这句话就写在 resolveSession 里。
+       * 不验的话，封一个人之后他那台还开着的手机可以继续用到会话过期，
+       * 而封禁最常见的场景恰恰是「他正在捣乱」。
+       */
+      for (const status of ["banned", "deleted"] as const) {
+        reset();
+        const token = session.createSession(USER);
+        assert.ok(session.resolveSession(token), "先确认它本来是好使的");
+        dbm.db.update(schema.users).set({ status }).where(eq(schema.users.id, USER)).run();
+        assert.equal(session.resolveSession(token), null, `status=${status} 之后旧令牌还能用`);
+      }
+    });
+
+    it("★ 令牌是按哈希存的 —— 库里那一列不是明文", () => {
+      /*
+       * 库被读走时，明文令牌等于一把把现成的钥匙。
+       * 这一条同时也钉住了「比对时要哈希」：
+       * 哪天有人把 `hashToken()` 去掉，这里和上面几条会一起红。
+       */
+      reset();
+      const token = session.createSession(USER);
+      const rows = dbm.db.select().from(schema.sessions).all();
+      assert.equal(rows.length, 1);
+      assert.notEqual(rows[0].tokenHash, token, "库里存的是明文令牌");
+      assert.equal(rows[0].tokenHash, hashToken(token));
+    });
+  });
+
   describe("**同时登录的设备有上限**", () => {
     it("没超上限时一个都不踢", () => {
       reset();
