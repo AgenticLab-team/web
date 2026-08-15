@@ -355,6 +355,24 @@ const CUTS = [
     to: "",
   },
 
+  /* ── 审计留痕 ─────────────────────────── */
+  {
+    group: "审计",
+    // 「审计日志」这个模块被锁成常开，理由是「关掉等于让后台操作无迹可查」。
+    // 那么问一个更狠的：函数本身变成空操作，有人会发现吗
+    name: "audit() 整个变成空操作",
+    file: "src/lib/audit.ts",
+    from: "export function audit(ctx: AuditContext, entry: AuditEntry) {",
+    to: "export function audit(ctx: AuditContext, entry: AuditEntry) {\n  if (1) return;",
+  },
+  {
+    group: "审计",
+    name: "★ 危险等级一律记成 0（高危操作混进普通流水里）",
+    file: "src/lib/audit.ts",
+    from: "      dangerLevel: dangerLevelOf(entry.action),",
+    to: "      dangerLevel: 0,",
+  },
+
   /* ── API 令牌 ─────────────────────────── */
   {
     group: "令牌",
