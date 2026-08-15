@@ -183,8 +183,8 @@ const CUTS = [
     // 而另一个管理员视角照样能在榜单上看见他
     name: "管理员又能看见藏起来的人",
     file: "src/lib/privacy/queries.ts",
-    from: "  const rows = db\n    .select({ wxId: users.wxId })",
-    to: "  if (bypassesPrivacy(viewer)) return [];\n  const rows = db\n    .select({ wxId: users.wxId })",
+    from: "    .where(eq(userPrivacy.hideFromLeaderboard, true))\n    .all();",
+    to: "    .where(eq(userPrivacy.hideFromLeaderboard, true))\n    .all();\n  if (bypassesPrivacy(viewer)) return [];",
   },
   {
     group: "隐私",
@@ -197,15 +197,15 @@ const CUTS = [
     group: "隐私",
     name: "★ 排除自己时比错字段（wxId → id）",
     file: "src/lib/privacy/queries.ts",
-    from: "wxId !== viewer?.wxId",
-    to: "wxId !== viewer?.id",
+    from: "    .where(eq(userPrivacy.hideFromLeaderboard, true))\n    .all();\n\n  return rows\n    .map((r) => r.wxId)\n    .filter((wxId): wxId is string => wxId !== null && wxId !== viewer?.wxId);",
+    to: "    .where(eq(userPrivacy.hideFromLeaderboard, true))\n    .all();\n\n  return rows\n    .map((r) => r.wxId)\n    .filter((wxId): wxId is string => wxId !== null);",
   },
   {
     group: "隐私",
     name: "★ 把「不上榜单」也改成管理员可豁免",
     file: "src/lib/privacy/rules.ts",
-    from: "    adminBypass: false,\n",
-    to: "    adminBypass: true,\n",
+    from: "    /** **没有豁免**。没有一件审核工作需要知道藏起来的人排第几 —— 见顶上那段 */\n    adminBypass: false,",
+    to: "    adminBypass: true,",
   },
 ];
 
