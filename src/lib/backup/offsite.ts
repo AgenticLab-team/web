@@ -62,6 +62,26 @@ export interface OffsiteResult {
   note: string;
 }
 
+/*
+ * ⚠️ 这个函数会让 `next build` 报几条
+ * 「Dynamic filesystem access causes tracing of the whole project」。
+ *
+ * ─────────────────────────────────────────
+ * 那几条是**预期之内的**，别去「修」它
+ * ─────────────────────────────────────────
+ *
+ * 备份文件的名字本来就只有运行时才知道（`readdirSync` 一个变量目录），
+ * 打包器静态跟不过去，于是它把整个项目标进依赖追踪。
+ *
+ * 而这个站的部署是**整棵源码树 rsync 上去、在服务器上构建**
+ * （`scripts/deploy.sh`），没有开 `output: standalone` ——
+ * 追踪结果根本不参与产物裁剪。也就是说这条警告在这里没有代价。
+ *
+ * 之所以要把这段写下来：为了这几条警告去改成「把文件名写死」
+ * 或者「加一层间接」，是拿真实功能换一条构建输出的干净 ——
+ * 而备份要列的就是「目录里现在有什么」。
+ * （`instrumentation.ts` 那两条不一样：那是真的可以拆干净的，已经拆了。）
+ */
 function localFiles(): { file: LocalFile; path: string; remoteKey: string }[] {
   const out: { file: LocalFile; path: string; remoteKey: string }[] = [];
 

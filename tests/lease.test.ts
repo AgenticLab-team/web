@@ -192,7 +192,19 @@ describe("**收到停止信号时要松手**", () => {
    *
    * 这是启用蓝绿之后第一次真部署时看出来的 —— 部署脚本本身没报错。
    */
-  const boot = strip(src("instrumentation.ts"));
+  /*
+   * 信号处理搬到了 `instrumentation.node.ts`。
+   *
+   * 入口那个文件会被打进**两个**运行时（Node 和 Edge），
+   * 而 `process.once` 在 Edge 里不存在 —— 打包器是静态看的，
+   * 每次 `next build` 都会为此报警告。按 Next 文档拆开之后，
+   * 入口只剩一句分支，实现挪到了只有 Node 那侧才加载的文件里。
+   *
+   * 这几条断言跟着搬过来：它们守的是**信号处理本身**，
+   * 不是它住在哪个文件。
+   */
+  const boot = strip(src("instrumentation.node.ts"));
+  const entry = strip(src("instrumentation.ts"));
   const live = strip(src("lib/notifications/live.ts"));
 
   it("注册了 SIGTERM 处理", () => {
@@ -206,6 +218,19 @@ describe("**收到停止信号时要松手**", () => {
   it("**用 once 不用 on** —— 停不掉时会再发一次信号", () => {
     // 第二次进来时该断的已经断了，重复跑只会在日志里多一行噪音
     assert.equal(/process\.on\("SIG/.test(boot), false);
+  });
+
+  it("★ 入口文件里不许出现 Node 专有的东西 —— 它也会被打进 Edge", () => {
+    /*
+     * 这一条是拆分之后新加的：拆开的意义就在于入口保持「两边都能跑」。
+     * 哪天有人图省事把 `process.once` 写回入口，构建警告会回来，
+     * 而一个长期有警告的构建等于没有构建输出可看 ——
+     * 真出问题那天，新的那条会混在老的里面。
+     */
+    for (const forbidden of ["process.once", "process.on(", "better-sqlite3"]) {
+      assert.equal(entry.includes(forbidden), false, `入口里出现了 ${forbidden}`);
+    }
+    assert.match(entry, /NEXT_RUNTIME !== "nodejs"/, "入口没有挡住 Edge");
   });
 
   it("**不自己 process.exit** —— 正在写库的那一笔会被拦腰截断", () => {
