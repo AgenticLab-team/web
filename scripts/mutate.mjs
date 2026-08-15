@@ -279,6 +279,48 @@ const CUTS = [
     expectSurvive: "canClaim 用同一个余额先拦过；这一行防的是并发，单线程够不着",
   },
 
+  /* ── 同意闸门（提升可见范围） ─────────── */
+  {
+    group: "同意",
+    // 群聊转帖要提升可见范围，必须每位原作者都同意 —— 站长那条
+    // 「只有原群成员可见，公开需每位原作者同意」
+    name: "同意闸门不再拦（少一个人同意也能公开）",
+    file: "src/lib/forum/convert.ts",
+    from: "  if (!gate.ok) return fail(gate.reason!);",
+    to: "",
+  },
+
+  /* ── 转发（开放中继的防线） ───────────── */
+  {
+    group: "转发",
+    // forward-rules.ts 里那四道闸关的是同一扇门：别把自己变成开放中继
+    name: "四道闸的判定结果被忽略（照样转发出去）",
+    file: "src/lib/mail/forward.ts",
+    from: "      if (refusal) {",
+    to: "      if (false) {",
+  },
+  {
+    group: "转发",
+    name: "★ 没验证过的私人邮箱也转",
+    file: "src/lib/mail/forward-rules.ts",
+    from: "  if (!input.target || !input.targetVerified) return { code: \"unverified\" };",
+    to: "  if (!input.target) return { code: \"unverified\" };",
+  },
+  {
+    group: "转发",
+    name: "★ 转发到自己的域名（无限循环）",
+    file: "src/lib/mail/forward-rules.ts",
+    from: "  if (input.ourDomains.some((d) => d.toLowerCase() === domain)) {",
+    to: "  if (false) {",
+  },
+  {
+    group: "转发",
+    name: "★ 转发不再限频（被拿去当靶子时没有爆炸半径）",
+    file: "src/lib/mail/forward-rules.ts",
+    from: '  if (input.sentLastHour >= FORWARD_PER_HOUR) return { code: "rate", limit: FORWARD_PER_HOUR };',
+    to: "",
+  },
+
   /* ── API 令牌 ─────────────────────────── */
   {
     group: "令牌",
