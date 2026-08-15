@@ -1,10 +1,11 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { mailDomains } from "@/lib/db/schema";
 
+import { CLAIMABLE_DOMAIN_KINDS } from "./kinds";
 import type { MailDomainTier } from "./kinds";
 import { TIER_MIN_LEVEL, TIER_RENT } from "./slot-rules";
 
@@ -30,6 +31,8 @@ export function claimableDomains(): {
     .from(mailDomains)
     .where(
       and(
+        // 白名单在 `kinds.ts` 上，连同「为什么是白名单」一起
+        inArray(mailDomains.kind, [...CLAIMABLE_DOMAIN_KINDS]),
         eq(mailDomains.allowClaim, true),
         eq(mailDomains.enabled, true),
         eq(mailDomains.status, "active"),

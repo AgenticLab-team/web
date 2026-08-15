@@ -105,6 +105,8 @@ export default async function BurnerPage() {
           aliases={aliases}
           slots={slots}
           claimable={claimable}
+          level={user.level}
+          points={user.points}
           ownedDomains={owned.map((d) => ({ domain: d.domain }))}
         />
       </div>

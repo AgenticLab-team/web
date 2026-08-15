@@ -506,10 +506,12 @@ describe("**申领：三道闸各防各的**", () => {
    *
    * 少任何一道，剩下两道都拦不住那件事 —— 所以这一组一道一道验。
    */
+  let claimQueries: typeof import("@/lib/mail/claim-queries");
   let claim: typeof import("@/lib/mail/claim");
   let ledger: typeof import("@/lib/points/ledger");
 
   before(async () => {
+    claimQueries = await import("@/lib/mail/claim-queries");
     claim = await import("@/lib/mail/claim");
     ledger = await import("@/lib/points/ledger");
   });
@@ -643,6 +645,74 @@ describe("**申领：三道闸各防各的**", () => {
 
     const boxesAfter = dbm.db.select().from(schema.mailBoxes).all().length;
     assert.equal(boxesAfter, boxesBefore, "申领失败却留下了一个箱子");
+  });
+
+  it("★★ 有主域名**不能**被别人从公共池申领 —— 哪怕开关是开的", () => {
+    /*
+     * ═════════════════════════════════════════
+     * 站长报的：「为什么公共池子里包含了私有域名」
+     * ═════════════════════════════════════════
+     *
+     * `claimableDomains` 和 `claimAddress` 原来都只看 `allow_claim`，
+     * 不看 `kind` —— 而那个开关在 `owned`（有主域名）上照样能是 1。
+     * 线上有三十九个这样的域名挂在公共池里，站长自己的两个就在其中：
+     * **任何人攒够分都能在他的域名上开地址。**
+     *
+     * 而 `openAlias` 那条路守得很严（「唯一的判据：这个域名是不是你的」）——
+     * 两条路通向同一张表，只有一条设了闸。
+     */
+    const d = setup({ tier: "b", points: 5000 });
+    dbm.db
+      .update(schema.mailDomains)
+      .set({ kind: "owned", ownerUserId: OTHER, allowClaim: true })
+      .where(eq(schema.mailDomains.domain, d))
+      .run();
+
+    const r = claim.claimAddress({ userId: ME, domain: d, localPart: "steal" });
+    assert.equal(r.ok, false, "在别人的域名上申领成功了");
+
+    const listed = claimQueries.claimableDomains().map((x) => x.domain);
+    assert.equal(listed.includes(d), false, "有主域名出现在公共申领池的列表里");
+  });
+
+  it("★ 一次性箱池**可以**长期申领 —— 便宜档基本都在上面", () => {
+    /*
+     * 这是站长定的：`temp` 那些域名同时也接受长期申领。
+     * 代价是它们天天在发一次性地址，长期用的人要知道这一点 ——
+     * 那是取舍，不是疏漏。（白名单写在 `kinds.ts` 上。）
+     *
+     * 这一条钉住它，免得下一次收紧「公共池里都有什么」时
+     * 顺手把 temp 一起砍掉。
+     */
+    const d = setup({ tier: "b", points: 5000 });
+    dbm.db
+      .update(schema.mailDomains)
+      .set({ kind: "temp", allowClaim: true, ownerUserId: null })
+      .where(eq(schema.mailDomains.domain, d))
+      .run();
+
+    const r = claim.claimAddress({ userId: ME, domain: d, localPart: "okok" });
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    assert.equal(
+      claimQueries.claimableDomains().some((x) => x.domain === d),
+      true,
+      "一次性箱池没有出现在公共申领池里",
+    );
+  });
+
+  it("★ 只有管理员能开的域名不进公共池", () => {
+    const d = setup({ tier: "b", points: 5000 });
+    dbm.db
+      .update(schema.mailDomains)
+      .set({ kind: "admin", allowClaim: true })
+      .where(eq(schema.mailDomains.domain, d))
+      .run();
+
+    assert.equal(claim.claimAddress({ userId: ME, domain: d, localPart: "x" }).ok, false);
+    assert.equal(
+      claimQueries.claimableDomains().some((x) => x.domain === d),
+      false,
+    );
   });
 
   it("**等级不够时说的是等级**，不是分不够", () => {

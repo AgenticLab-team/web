@@ -184,6 +184,20 @@ export async function updateDomain(input: {
       patch.catchAll = false;
       patch.inRandomRotation = false;
     }
+    /*
+     * ★ 改成「有主域名」时关掉 `allow_claim`。
+     *
+     * 那个开关在 `owned` 上是**没有意义而且误导**的：有主域名走的是
+     * `openAlias`（主人自己开），它根本不看这个开关。
+     * 而留着它开着的话，后台看起来就像「这个域名放在公共池里」——
+     * 线上就是这么来的：三十九个有主域名带着 allow_claim=1，
+     * 而申领那条路当时只看开关不看 kind，于是站长自己的域名
+     * 真的挂在了公共池的货架上。
+     *
+     * 现在读取那侧已经按 kind 白名单挡住了（`CLAIMABLE_DOMAIN_KINDS`），
+     * 这一条是让**数据本身**也不再说假话。
+     */
+    if (input.kind === "owned") patch.allowClaim = false;
     if (input.kind !== "reserved") patch.tier = null;
   }
   if (input.tier !== undefined && (input.kind ?? before.kind) === "reserved") patch.tier = input.tier;

@@ -46,6 +46,8 @@ export function LongTermSection({
   slots,
   claimable,
   ownedDomains,
+  level,
+  points,
 }: {
   claimed: ClaimedView[];
   aliases: AliasView[];
@@ -54,6 +56,9 @@ export function LongTermSection({
   claimable: React.ComponentProps<typeof ClaimForm>["domains"];
   /** 我自己拥有的域名。空数组 = 这条路对我不存在 */
   ownedDomains: { domain: string }[];
+  /** 我的等级和余额 —— 申领那一栏靠它们在**挑之前**就说清楚够不够得着 */
+  level: number;
+  points: number;
 }) {
   const router = useRouter();
   /** 打开哪个「再开一个」的表单。同时只开一个 —— 两个表单并排会让人不知道该填哪个 */
@@ -136,7 +141,7 @@ export function LongTermSection({
 
       {opening === "claim" && (
         <div className="mt-3">
-          <ClaimForm slots={slots} domains={claimable} />
+          <ClaimForm slots={slots} domains={claimable} level={level} points={points} />
         </div>
       )}
       {opening === "alias" && (

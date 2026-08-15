@@ -10,6 +10,7 @@ import { levelOf } from "@/lib/points/rules";
 import { buildAddress, checkLocalPart, MAIL_BANWORD_KINDS } from "./address-rules";
 import { listBanwords } from "./admin-queries";
 import { mailConfig } from "./config";
+import { CLAIMABLE_DOMAIN_KINDS } from "./kinds";
 import type { MailDomainTier } from "./kinds";
 import {
   canClaim,
@@ -117,6 +118,21 @@ export function claimAddress(input: {
   if (!domainRow) return { ok: false, error: "没有这个域名" };
   if (!domainRow.enabled || domainRow.status !== "active") {
     return { ok: false, error: "这个域名现在不开放申领" };
+  }
+  /*
+   * ★ 两道闸，因为它们防的不是同一件事。
+   *
+   * `allow_claim` 是管理员的开关（这个域名现在放不放出来）。
+   * `kind` 是域名的**身份**：`owned` 是有主的，只有主人能在上面开地址
+   * （走 `openAlias`）；`temp` 是一次性箱池。
+   *
+   * 只看开关的话，一个 `owned` 域名被误标成 allow_claim 就等于
+   * 把别人的域名放上了货架 —— 而列表那边（`claimableDomains`）
+   * 已经过滤过一次了，这里再挡一次是因为**列表和申领是两条路**：
+   * 申领只要一个域名名字，不必先从列表里点。
+   */
+  if (!CLAIMABLE_DOMAIN_KINDS.includes(domainRow.kind as (typeof CLAIMABLE_DOMAIN_KINDS)[number])) {
+    return { ok: false, error: "这个域名不在公共申领池里" };
   }
   if (!domainRow.allowClaim) return { ok: false, error: "这个域名不接受申领" };
 
