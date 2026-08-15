@@ -4,7 +4,8 @@ import Link from "next/link";
 import { AdminNote, AdminRow, AdminTag } from "@/components/admin/ui";
 import { DomainRow } from "@/components/admin/DomainRow";
 import { MAIL_DOMAIN_KIND_LABEL } from "@/lib/mail/kinds";
-import type { MailDomainKind, MailDomainTier } from "@/lib/mail/kinds";
+import { ActivateDomains } from "@/components/admin/ActivateDomains";
+import type { MailDomainKind, MailDomainStatus, MailDomainTier } from "@/lib/mail/kinds";
 import { relativeTime } from "@/components/forum/PostList";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Callout, Empty, PageNote, Section } from "@/components/ui/primitives";
@@ -121,6 +122,7 @@ export default async function AdminMailPage() {
       )}
 
       <Section title="域名池">
+        <ActivateDomains pendingCount={domains.filter((d) => d.status === "pending").length} />
         <div className="inset-group">
           {domains.map((d) => {
             const tone = expiryTone(d.expiryDays);
@@ -146,6 +148,8 @@ export default async function AdminMailPage() {
                   inRandomRotation: d.inRandomRotation,
                   catchAll: d.catchAll,
                   enabled: d.enabled,
+                  status: d.status as MailDomainStatus,
+                  mxOk: d.mxOk,
                   note: d.note,
                   boxCount: d.boxCount,
                 }}

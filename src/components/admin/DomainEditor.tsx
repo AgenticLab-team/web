@@ -11,8 +11,14 @@ import {
 } from "@/components/admin/ui";
 import { useToast } from "@/components/ui/Toast";
 import { updateDomain } from "@/lib/mail/admin-actions";
-import { MAIL_DOMAIN_KINDS, MAIL_DOMAIN_KIND_LABEL, MAIL_DOMAIN_TIERS } from "@/lib/mail/kinds";
-import type { MailDomainKind, MailDomainTier } from "@/lib/mail/kinds";
+import {
+  MAIL_DOMAIN_KINDS,
+  MAIL_DOMAIN_KIND_LABEL,
+  MAIL_DOMAIN_STATUSES,
+  MAIL_DOMAIN_STATUS_LABEL,
+  MAIL_DOMAIN_TIERS,
+} from "@/lib/mail/kinds";
+import type { MailDomainKind, MailDomainStatus, MailDomainTier } from "@/lib/mail/kinds";
 
 /**
  * 一个域名怎么用。
@@ -64,6 +70,9 @@ export interface DomainEditorProps {
     inRandomRotation: boolean;
     catchAll: boolean;
     enabled: boolean;
+    status: MailDomainStatus;
+    /** DNS 三个灯。`null` 是「还没体检过」，不是「配错了」 */
+    mxOk: boolean | null;
     note: string | null;
     boxCount: number;
   };
@@ -86,6 +95,7 @@ export function DomainEditor({ domain, candidates, onDone }: DomainEditorProps) 
   const [inRandomRotation, setInRandomRotation] = useState(domain.inRandomRotation);
   const [catchAll, setCatchAll] = useState(domain.catchAll);
   const [enabled, setEnabled] = useState(domain.enabled);
+  const [status, setStatus] = useState<MailDomainStatus>(domain.status);
   const [note, setNote] = useState(domain.note ?? "");
 
   /*
@@ -120,6 +130,7 @@ export function DomainEditor({ domain, candidates, onDone }: DomainEditorProps) 
         inRandomRotation,
         catchAll,
         enabled,
+        status,
         note: note.trim() || null,
       });
       if (!r.ok) {
@@ -183,6 +194,47 @@ export function DomainEditor({ domain, candidates, onDone }: DomainEditorProps) 
           指定之后这个域名就是他私享的：他能在上面开自己的别名。
           {domain.boxCount > 0 && ` 现在上面已经有 ${domain.boxCount} 个地址 —— 换主人不会动它们`}
         </AdminNote>
+      </div>
+
+      <div>
+        <label className="t-caption block text-[var(--ink-secondary)]" htmlFor="domain-status">
+          状态
+        </label>
+        <select
+          id="domain-status"
+          className={adminFieldClass}
+          value={status}
+          onChange={(e) => setStatus(e.target.value as MailDomainStatus)}
+        >
+          {MAIL_DOMAIN_STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {MAIL_DOMAIN_STATUS_LABEL[s]}
+            </option>
+          ))}
+        </select>
+        {/*
+          * 这一句是这个控件存在的全部理由。
+          *
+          * 域名是按 `pending` 建进池子的（MX 还没配之前放出去，
+          * 人会申领到一个收不到信的地址）。而在这之前**没有任何地方
+          * 能把它改回来** —— 于是一百个域名全卡在 pending，
+          * 申领长期地址那条路要求 active，站上就只剩一次性邮箱了。
+          */}
+        <p className="t-caption2 mt-1 text-[var(--ink-quaternary)]">
+          {status === "active"
+            ? "申领页上会出现它。DNS 没配好的话，人会花分买到一个收不到信的地址"
+            : "「待核」的域名只有一次性箱用得到 —— 申领页上看不见它"}
+        </p>
+        {domain.mxOk === false && (
+          <p className="t-caption2 mt-1" style={{ color: "var(--danger)" }}>
+            这个域名的 MX 查出来是错的，转「已启用」会被拦下
+          </p>
+        )}
+        {domain.mxOk === null && status === "active" && (
+          <p className="t-caption2 mt-1" style={{ color: "var(--warning)" }}>
+            还没体检过 DNS（跑 `npm run mail-dns`）—— 不拦，但最好先核一遍
+          </p>
+        )}
       </div>
 
       <fieldset className="space-y-1.5">

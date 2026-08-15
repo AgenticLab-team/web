@@ -8,9 +8,18 @@
  * 不存在的域名会返回一个假地址，而且 `dig @1.1.1.1` 也一样 ——
  * 查询根本没出去。这个脚本走 DoH（HTTPS 上的 DNS），劫不了。
  *
- * DNS 体检任务（写进 mail_domains 那三个灯）是 P1，还没做。
- * 在那之前这个脚本是唯一的核对手段。
+ * 结果**会写进库**（`mail_domains` 上的 mx_ok / spf_ok / dmarc_ok /
+ * dns_checked_at / dns_detail）—— 后台域名表上那三个灯就是它们。
+ * 写库这件事原来标着「P1，还没做」，于是线上一百个域名的灯全是「?」，
+ * 而「哪些域名能放出去」正是靠那三个灯判断的。
+ *
+ * 只写、不改 `status`：**放不放出去是人的决定**，
+ * 这个脚本只负责把事实记下来。转正走后台那个按钮。
  */
+import { eq } from "drizzle-orm";
+
+import { db } from "@/lib/db";
+import { mailDomains } from "@/lib/db/schema";
 import { CATALOG } from "@/lib/mail/domain-catalog";
 import { DEFAULT_RESOLVERS, checkDomainDns, type DnsVerdict } from "@/lib/mail/dns-check";
 import { getSetting } from "@/lib/settings/store";
@@ -44,6 +53,32 @@ async function main() {
     }
   }
   if (process.stdout.isTTY) process.stdout.write("\r" + " ".repeat(40) + "\r");
+
+  /*
+   * 把结果记下来。
+   *
+   * 「没查成」（null）也照实写 null，不写成 false ——
+   * 那两件事在后台的意义完全不同：false 是「配错了，去修」，
+   * null 是「还不知道，再跑一次」。混成一个的话，
+   * 一次 DoH 限流会让一屏域名看起来像是配错了。
+   */
+  let written = 0;
+  for (const v of verdicts) {
+    const r = db
+      .update(mailDomains)
+      .set({
+        mxOk: v.mxOk,
+        spfOk: v.spfOk,
+        dmarcOk: v.dmarcOk,
+        dnsCheckedAt: Date.now(),
+        dnsDetail: v.detail,
+        updatedAt: Date.now(),
+      })
+      .where(eq(mailDomains.domain, v.domain))
+      .run();
+    written += r.changes;
+  }
+  console.log(`已写回 ${written}/${verdicts.length} 条（库里没有的域名跳过）\n`);
 
   const bad = verdicts.filter((v) => v.mxOk !== true || v.spfOk !== true || v.dmarcOk !== true);
   const unknown = verdicts.filter((v) => v.mxOk === null || v.spfOk === null || v.dmarcOk === null);

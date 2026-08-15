@@ -54,7 +54,24 @@ export const MAIL_DOMAIN_KIND_LABEL: Record<MailDomainKind, string> = {
 export const MAIL_DOMAIN_TIERS = ["s", "a", "b"] as const;
 export type MailDomainTier = (typeof MAIL_DOMAIN_TIERS)[number];
 
+/**
+ * 域名的生命周期。
+ *
+ *   pending  刚进池子，DNS 还没核过 —— **申领看不到它**
+ *   active   可以放出去
+ *   paused   暂时停用（比如注册商那边出问题），已有的箱子不动
+ *   retired  不再续期，收完手上的信就退役
+ */
 export const MAIL_DOMAIN_STATUSES = ["pending", "active", "paused", "retired"] as const;
+export type MailDomainStatus = (typeof MAIL_DOMAIN_STATUSES)[number];
+
+/** 界面上一律用这几个词 —— 「pending」直接显示给人看没人懂 */
+export const MAIL_DOMAIN_STATUS_LABEL: Record<MailDomainStatus, string> = {
+  pending: "待核",
+  active: "已启用",
+  paused: "暂停",
+  retired: "退役中",
+};
 
 /**
  * 四种箱子。

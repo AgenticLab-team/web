@@ -13,7 +13,8 @@ import { checkLocalPart } from "./address-rules";
 import { openBurner } from "./burner";
 import { isPunycodeSane, toPunycode } from "./domain-catalog";
 import { MAIL_BANWORD_KINDS, MAIL_DOMAIN_KINDS, MAIL_DOMAIN_TIERS } from "./kinds";
-import type { MailBanwordKind, MailDomainKind, MailDomainTier } from "./kinds";
+import type { MailBanwordKind, MailDomainKind, MailDomainStatus, MailDomainTier } from "./kinds";
+import { refuseActivation, splitByReadiness } from "./activation-rules";
 
 /**
  * 邮箱后台的写操作。
@@ -134,6 +135,22 @@ export async function importDomains(input: {
 export async function updateDomain(input: {
   domain: string;
   kind?: MailDomainKind;
+  /**
+   * 生命周期状态。
+   *
+   * ═════════════════════════════════════════
+   * 这一项原来**根本不在参数表里**
+   * ═════════════════════════════════════════
+   *
+   * 于是一百个域名全卡在 `pending` 出不来 —— 而申领长期地址那条路
+   * 要求 `status = "active"`（`claim-queries.ts`）。
+   * 一次性箱那条只看 `enabled` / `allowBurner`，所以它绕过了这道卡，
+   * 表现就成了「站上只有一次性邮箱」。
+   *
+   * 种子把域名建成 `pending` 是对的：MX 还没配好之前收不了信，
+   * 摆出去只会让人申领一个死地址。缺的是**从 pending 出来的那条路**。
+   */
+  status?: MailDomainStatus;
   tier?: MailDomainTier | null;
   ownerUserId?: string | null;
   domainExpiresAt?: number | null;
@@ -186,6 +203,21 @@ export async function updateDomain(input: {
   }
   if (input.catchAll !== undefined && patch.catchAll === undefined) patch.catchAll = input.catchAll;
   if (input.enabled !== undefined) patch.enabled = input.enabled;
+  /*
+   * 转 active 之前先看 DNS 那三个灯。
+   *
+   * 不拦死 —— 灯是 `npm run mail-dns` 写的，没跑过就是三个 null，
+   * 而「还没体检过」不等于「配错了」。但**明确查出来是错的**那种要拦：
+   * 一个 MX 指错的域名一旦 active，人可以花 400 分申领上去，
+   * 然后收不到任何信 —— 而他要等到用它注册某个服务时才发现。
+   */
+  if (input.status !== undefined) {
+    if (input.status === "active") {
+      const refusal = refuseActivation(before.mxOk);
+      if (refusal) return fail(refusal);
+    }
+    patch.status = input.status;
+  }
   if (input.note !== undefined) patch.note = input.note;
 
   db.update(mailDomains).set(patch).where(eq(mailDomains.domain, input.domain)).run();
@@ -526,4 +558,75 @@ export async function testLocalPart(input: { local: string }): Promise<MailAdmin
   return verdict.ok
     ? { ok: true, note: `${verdict.local} 可以用` }
     : { ok: true, note: `挡下了：${verdict.error}` };
+}
+
+
+/**
+ * 把**体检过、而且三个灯全绿**的待核域名批量转正。
+ *
+ * ═════════════════════════════════════════
+ * 为什么是这个形状，而不是一个「全选 → 改状态」
+ * ═════════════════════════════════════════
+ *
+ * 一百个域名一个个点开改，没人会真的去做 —— 于是它们就一直待核，
+ * 而申领长期地址那条路要求 `active`：站上就永远只有一次性邮箱。
+ *
+ * 但「批量改状态」这种自由度太高的按钮，在这里恰好是危险的：
+ * 一个 MX 没配对的域名转正之后，人可以花 400 分申领上去，
+ * 然后**收不到任何信** —— 而他要等到拿它去注册某个服务时才发现。
+ *
+ * 所以这个动作把转正和体检**绑死**：只动 `mxOk === true` 的那些。
+ * 没体检过的（null）一律不碰，并在返回里点名 ——
+ * 「跳过了 37 个，因为没体检过」是一句能让人知道下一步做什么的话，
+ * 而「转正了 63 个」不是。
+ */
+export async function activateVerifiedDomains(): Promise<
+  MailAdminResult & { activated?: number; skippedUnchecked?: number; skippedBad?: number }
+> {
+  const ctx = await requireWritableAdmin("mail.domain.write");
+
+  const pending = db
+    .select({ domain: mailDomains.domain, mxOk: mailDomains.mxOk })
+    .from(mailDomains)
+    .where(eq(mailDomains.status, "pending"))
+    .all();
+
+  // 分堆的规则拆在 `activation-rules.ts` 里 —— 那是这个动作的全部安全性，
+  // 而它不该藏在一个要过鉴权才跑得到的函数里
+  const { ready, unchecked, bad } = splitByReadiness(pending);
+  const skippedUnchecked = unchecked.length;
+  const skippedBad = bad.length;
+
+  for (const d of ready) {
+    db.update(mailDomains)
+      .set({ status: "active", updatedAt: Date.now() })
+      .where(eq(mailDomains.domain, d.domain))
+      .run();
+    /*
+     * 一条一条记事件，不合成一条。
+     *
+     * 域名的事件流是「这个域名身上发生过什么」——
+     * 合成一条的话，日后查某一个域名为什么在池子里，那一行不会出现。
+     */
+    db.insert(mailEvents)
+      .values({
+        domain: d.domain,
+        event: "domain_updated",
+        actorId: ctx.user.id,
+        actorKind: "admin",
+        detail: { status: "active", via: "activateVerifiedDomains" },
+      })
+      .run();
+  }
+
+  audit({ actorId: ctx.user.id }, {
+    action: "mail.domain.write",
+    targetType: "mail_domain",
+    targetId: "*",
+    targetLabel: `批量转正 ${ready.length} 个域名`,
+    after: { activated: ready.length, skippedUnchecked, skippedBad },
+  });
+
+  revalidatePath("/admin/mail");
+  return { ok: true, activated: ready.length, skippedUnchecked, skippedBad };
 }
