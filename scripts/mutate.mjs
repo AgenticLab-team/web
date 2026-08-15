@@ -279,6 +279,38 @@ const CUTS = [
     expectSurvive: "canClaim 用同一个余额先拦过；这一行防的是并发，单线程够不着",
   },
 
+  /* ── 代发署名（站长定的红线） ─────────── */
+  {
+    group: "代发",
+    // 站长的原话是「网站不能带用户发这个消息」，后来放开成
+    // 「按群单独授权可以发，但必须带上代发署名」
+    name: "署名整个不加了",
+    file: "src/lib/api-tokens/send.ts",
+    from: "  const body = withAttribution(message.text, senderName);",
+    to: "  const body = message.text;",
+  },
+  {
+    group: "代发",
+    name: "★ 署名里不再写是谁发的",
+    file: "src/lib/api-tokens/rules.ts",
+    from: "  return `${text}\\n本消息由「${who}」使用 ${SITE_HOST} 代发`;",
+    to: "  return `${text}\\n本消息由 ${SITE_HOST} 代发`;",
+  },
+  {
+    group: "代发",
+    name: "★ 名字为空时不再兜底成「某位成员」",
+    file: "src/lib/api-tokens/rules.ts",
+    from: '  const who = senderName.trim() || "某位成员";',
+    to: "  const who = senderName.trim();",
+  },
+  {
+    group: "代发",
+    name: "★ 正文预算不再扣掉署名（长消息会被上游拒掉）",
+    file: "src/lib/api-tokens/rules.ts",
+    from: '  return [...withAttribution("", senderName)].length;',
+    to: "  return 0;",
+  },
+
   /* ── 限流 ─────────────────────────────── */
   {
     group: "限流",
