@@ -243,7 +243,7 @@ function BurnerCard({ box, messages }: { box: BurnerView; messages: BurnerMessag
  * **不猜**。抽错一个数字比不抽糟得多：用户会复制、粘贴、提交、被拒，
  * 然后怀疑是网站的问题再试一次，而很多网站试错三次就锁定。
  */
-function MessageRow({ message }: { message: BurnerMessageView }) {
+export function MessageRow({ message }: { message: BurnerMessageView }) {
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<MailMessageDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);

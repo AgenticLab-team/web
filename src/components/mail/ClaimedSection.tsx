@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 
 import { buttonClass } from "@/components/ui/primitives";
@@ -78,26 +79,35 @@ function ClaimedRow({ box }: { box: ClaimedView }) {
   return (
     <div className="rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2">
       <div className="flex items-center gap-2">
-        <code className="t-footnote min-w-0 flex-1 truncate font-mono">{box.address}</code>
         {/*
-          * 每行标出它是哪一种。
-          *
-          * 两种长期地址合进同一张卡之后，如果不标，人只能从
-          * 「有没有续期按钮」去反推 —— 而那正是原来两张同名卡片
-          * 造成的困惑，换个地方又出现一次。
+          * 地址 + 类型 + 未读数整块可点 —— 补上「点进去才是信」。
+          * 原来这行只显示未读徽标，没有任何入口，收的信根本读不到。
           */}
-        <span className="t-caption2 shrink-0 rounded-[var(--radius-pill)] bg-[var(--fill-strong,var(--fill))] px-1.5 py-0.5 text-[var(--ink-secondary)]">
-          申领
-        </span>
-
-        {box.unreadCount > 0 && (
-          <span
-            className="t-caption2 shrink-0 rounded-[var(--radius-pill)] px-1.5 py-0.5"
-            style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
-          >
-            {box.unreadCount}
+        <Link
+          href={`/mail/box/${box.id}`}
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-[var(--radius-control)] transition-colors hover:bg-[var(--fill-strong,var(--fill))]"
+        >
+          <code className="t-footnote min-w-0 flex-1 truncate font-mono">{box.address}</code>
+          {/*
+            * 每行标出它是哪一种。
+            *
+            * 两种长期地址合进同一张卡之后，如果不标，人只能从
+            * 「有没有续期按钮」去反推 —— 而那正是原来两张同名卡片
+            * 造成的困惑，换个地方又出现一次。
+            */}
+          <span className="t-caption2 shrink-0 rounded-[var(--radius-pill)] bg-[var(--fill-strong,var(--fill))] px-1.5 py-0.5 text-[var(--ink-secondary)]">
+            申领
           </span>
-        )}
+
+          {box.unreadCount > 0 && (
+            <span
+              className="t-caption2 shrink-0 rounded-[var(--radius-pill)] px-1.5 py-0.5"
+              style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
+            >
+              {box.unreadCount}
+            </span>
+          )}
+        </Link>
         <button
           className={buttonClass(inGrace || soon ? "primary" : "quiet", "sm")}
           onClick={doRenew}
