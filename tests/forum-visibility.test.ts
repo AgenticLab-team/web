@@ -92,6 +92,40 @@ describe("硬约束", () => {
     assert.equal(canSeePost(leaked, viewers.外部用户).visible, false);
   });
 
+  it("★ ① 群聊派生内容被误标成 member / role 级时，仍然挡得住非成员", () => {
+    /*
+     * ═════════════════════════════════════════
+     * 这一条是变异测试逼出来的
+     * ═════════════════════════════════════════
+     *
+     * 上面那条只用 `public` 试。而 `public` 那一支里**另有一道兜底**
+     * （`if (post.fromGroupChat) return deny("群聊内容不可公开")`），
+     * 所以就算把最前面那道「群聊内容只对成员开放」整段删掉，
+     * 上面那条测试照样绿 —— `scripts/mutate.mjs` 两刀都活了下来。
+     *
+     * 能分辨的输入是**别的可见性级别**：
+     * 一条群聊派生的帖子如果被误标成 `member`，
+     * 而 `case "member"` 是放 external 过的 ——
+     * 没有最前面那道闸，它就漏出去了。
+     *
+     * 「误标」不是假想：写入侧的 `normalizePostVisibility` 是唯一的保证，
+     * 而这道闸存在的全部意义就是「万一那边漏了一处」。
+     */
+    for (const level of ["member", "role", "unlisted"] as const) {
+      const mislabeled = post(level, { fromGroupChat: true });
+      assert.equal(
+        canSeePost(mislabeled, viewers.外部用户).visible,
+        false,
+        `群聊内容标成 ${level} 时对 external 漏了出去`,
+      );
+      assert.equal(
+        canSeePost(mislabeled, GUEST).visible,
+        false,
+        `群聊内容标成 ${level} 时对访客漏了出去`,
+      );
+    }
+  });
+
   it("① 群聊派生内容不可被搜索引擎索引", () => {
     assert.equal(isIndexable(post("public", { fromGroupChat: true })), false);
     assert.equal(isIndexable(post("public")), true);

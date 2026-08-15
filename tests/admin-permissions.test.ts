@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
 
+import { and, eq } from "drizzle-orm";
+
 /**
  * 权限矩阵与反查测试。
  *
@@ -198,6 +200,183 @@ describe("权限反查", () => {
         `${id}：反查说${holderIds.has(id) ? "有" : "没有"}，can() 说${allowed ? "有" : "没有"}`,
       );
     }
+  });
+
+  /*
+   * ═════════════════════════════════════════
+   * 下面这一组是**变异测试逼出来的**
+   * ═════════════════════════════════════════
+   *
+   * `scripts/mutate.mjs` 往 `can()` 里下刀，四刀活了下来 ——
+   * 也就是说：把封禁检查整段删掉、把身份组的「明确禁止」删掉、
+   * 把用户级授权和禁止的顺序调换、让过期的授权继续算数，
+   * **整套测试一条都不会红**。
+   *
+   * 那四处都不是边角：它们是「谁能做什么」这条链上最靠前的几道闸。
+   */
+  it("★ 封禁 / 注销 / 暂停的账号，哪怕身份组给了权限也一律拒绝", () => {
+    dbm.db.insert(schema.userRoles).values({ userId: "u_a", roleId: adminRoleId }).run();
+    canMod.invalidatePermissionCache();
+
+    const load = () => dbm.db.select().from(schema.users).all().find((u) => u.id === "u_a")!;
+    assert.equal(canMod.can(load(), PERMISSION).allowed, true, "先确认这个身份组本来是有权限的");
+
+    for (const status of ["banned", "deleted", "suspended"] as const) {
+      dbm.db.update(schema.users).set({ status }).where(eq(schema.users.id, "u_a")).run();
+      const d = canMod.can(load(), PERMISSION);
+      assert.equal(d.allowed, false, `status=${status} 时仍然放行了`);
+    }
+  });
+
+  it("★ 就算 banned 这个身份组被误配了权限，封禁的人也一样拿不到", () => {
+    /*
+     * ═════════════════════════════════════════
+     * 这一条测的是**冗余本身**
+     * ═════════════════════════════════════════
+     *
+     * `can()` 最前面有一道「封禁 / 注销一切免谈」，而 `effectiveRoles()`
+     * 里还有一道：封禁的人只剩一个 `banned` 隐式身份组，
+     * 原来的身份组全丢掉。两道闸互相冗余 ——
+     * 所以把前面那道删掉，上面那条测试照样绿
+     * （`scripts/mutate.mjs` 里那一刀一直活着）。
+     *
+     * 冗余不是多余：第二道闸只在「banned 身份组没有任何权限」时才够。
+     * 而权限是后台可以配的 —— 有人手滑给 banned 配上一条，
+     * 第二道闸就破了，只剩最前面那一道。
+     *
+     * 所以这里直接把那个手滑造出来：给 banned 配上权限，
+     * 再确认封禁的人依然拿不到。这样两道闸各自都被验过。
+     */
+    const bannedRoleId = dbm.db
+      .select()
+      .from(schema.roles)
+      .all()
+      .find((r) => r.key === "banned")!.id;
+
+    const before = dbm.db
+      .select()
+      .from(schema.rolePermissions)
+      .all()
+      .find((r) => r.roleId === bannedRoleId && r.permissionKey === PERMISSION);
+
+    dbm.db
+      .insert(schema.rolePermissions)
+      .values({ roleId: bannedRoleId, permissionKey: PERMISSION, granted: true })
+      .onConflictDoUpdate({
+        target: [schema.rolePermissions.roleId, schema.rolePermissions.permissionKey],
+        set: { granted: true },
+      })
+      .run();
+    dbm.db.update(schema.users).set({ status: "banned" }).where(eq(schema.users.id, "u_a")).run();
+    canMod.invalidatePermissionCache();
+
+    try {
+      const user = dbm.db.select().from(schema.users).all().find((u) => u.id === "u_a")!;
+      assert.equal(
+        canMod.can(user, PERMISSION).allowed,
+        false,
+        "banned 身份组被误配权限之后，封禁的人拿到了权限",
+      );
+    } finally {
+      dbm.db
+        .delete(schema.rolePermissions)
+        .where(
+          and(
+            eq(schema.rolePermissions.roleId, bannedRoleId),
+            eq(schema.rolePermissions.permissionKey, PERMISSION),
+          ),
+        )
+        .run();
+      if (before) dbm.db.insert(schema.rolePermissions).values(before).run();
+      canMod.invalidatePermissionCache();
+    }
+  });
+
+  it("★ 身份组里的「明确禁止」压过另一个身份组的允许", () => {
+    // 一个人同时在两个组里：一个给了权限，一个明确禁止 —— 必须是禁止赢
+    dbm.db
+      .insert(schema.userRoles)
+      .values([
+        { userId: "u_a", roleId: adminRoleId },
+        { userId: "u_a", roleId: memberRoleId },
+      ])
+      .run();
+    /*
+     * ⚠️ `beforeEach` 不清 `rolePermissions`（那是种子数据），
+     * 所以这里改完必须自己还原 —— 第一版没还原，
+     * 把后面一条**原有的**测试搞红了，而那看起来像是那条测试坏了。
+     */
+    const before = dbm.db
+      .select()
+      .from(schema.rolePermissions)
+      .all()
+      .find((r) => r.roleId === memberRoleId && r.permissionKey === PERMISSION);
+    dbm.db
+      .insert(schema.rolePermissions)
+      .values({ roleId: memberRoleId, permissionKey: PERMISSION, granted: false })
+      .onConflictDoUpdate({
+        target: [schema.rolePermissions.roleId, schema.rolePermissions.permissionKey],
+        set: { granted: false },
+      })
+      .run();
+    canMod.invalidatePermissionCache();
+
+    try {
+      const user = dbm.db.select().from(schema.users).all().find((u) => u.id === "u_a")!;
+      assert.equal(canMod.can(user, PERMISSION).allowed, false, "明确禁止没有压过允许");
+    } finally {
+      dbm.db
+        .delete(schema.rolePermissions)
+        .where(
+          and(
+            eq(schema.rolePermissions.roleId, memberRoleId),
+            eq(schema.rolePermissions.permissionKey, PERMISSION),
+          ),
+        )
+        .run();
+      if (before) dbm.db.insert(schema.rolePermissions).values(before).run();
+      canMod.invalidatePermissionCache();
+    }
+  });
+
+  it("★ 用户级的「禁止」压过用户级的「授权」（顺序不能反）", () => {
+    /*
+     * 同一个人身上同时挂着一条授权和一条禁止 —— 这在治理里是真实存在的：
+     * 先临时授权，出了事再单独禁止，而那条授权还没到期。
+     * 判定链里禁止必须先看，否则「先禁后授」和「先授后禁」结果不一样，
+     * 而两条记录的先后在库里是不保证的。
+     */
+    dbm.db
+      .insert(schema.permissionOverrides)
+      .values([
+        { userId: "u_a", permissionKey: PERMISSION, granted: true, reason: "临时授权", grantedBy: "u_b" },
+        { userId: "u_a", permissionKey: PERMISSION, granted: false, reason: "出事了，单独禁止", grantedBy: "u_b" },
+      ])
+      .run();
+    canMod.invalidatePermissionCache();
+
+    const user = dbm.db.select().from(schema.users).all().find((u) => u.id === "u_a")!;
+    const d = canMod.can(user, PERMISSION);
+    assert.equal(d.allowed, false, "同时有授权和禁止时，禁止必须赢");
+    assert.match(d.reason ?? "", /单独禁止/);
+  });
+
+  it("★ 过期的用户级授权不算数", () => {
+    dbm.db
+      .insert(schema.permissionOverrides)
+      .values({
+        userId: "u_a",
+        permissionKey: PERMISSION,
+        granted: true,
+        reason: "上周的临时授权",
+        grantedBy: "u_b",
+        expiresAt: Date.now() - 60_000,
+      })
+      .run();
+    canMod.invalidatePermissionCache();
+
+    const user = dbm.db.select().from(schema.users).all().find((u) => u.id === "u_a")!;
+    assert.equal(canMod.can(user, PERMISSION).allowed, false, "已经过期的授权还在生效");
   });
 
   it("同一个人从多个身份组拿到同一权限时只列一次", () => {
