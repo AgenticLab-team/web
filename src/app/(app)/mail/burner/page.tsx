@@ -10,12 +10,10 @@ import { listBurnerMessages, listBurners } from "@/lib/mail/burner";
 import { mailConfig } from "@/lib/mail/config";
 import { burnerDomains } from "@/lib/mail/queries";
 import type { BurnerMessageView } from "@/lib/mail/burner";
-import { AliasSection } from "@/components/mail/AliasSection";
 import { listAliases, ownedDomains } from "@/lib/mail/alias";
-import { ClaimSection } from "@/components/mail/ClaimSection";
 import { claimableDomains } from "@/lib/mail/claim-queries";
 import { listClaimed, slotStatus } from "@/lib/mail/claim";
-import { ClaimedSection } from "@/components/mail/ClaimedSection";
+import { LongTermSection } from "@/components/mail/LongTermSection";
 import { ForwardSection } from "@/components/mail/ForwardSection";
 import { forwardState } from "@/lib/mail/forward-queries";
 
@@ -90,7 +88,7 @@ export default async function BurnerPage() {
         */}
       <PageHeader
         title="邮箱"
-        subtitle={`一次性地址 ${config.burnerTtlHours} 小时后自动销毁 · 同时最多 ${config.burnerConcurrentLimit} 个`}
+        subtitle="收验证码用一次性的，用完就没；长期地址在下面"
       />
 
       <BurnerScreen
@@ -101,21 +99,15 @@ export default async function BurnerPage() {
         domains={burnerDomains()}
       />
 
-      {claimed.length > 0 && (
-        <div className="mt-3">
-          <ClaimedSection boxes={claimed} />
-        </div>
-      )}
-
       <div className="mt-3">
-        <ClaimSection slots={slots} domains={claimable} />
+        <LongTermSection
+          claimed={claimed}
+          aliases={aliases}
+          slots={slots}
+          claimable={claimable}
+          ownedDomains={owned.map((d) => ({ domain: d.domain }))}
+        />
       </div>
-
-      {owned.length > 0 && (
-        <div className="mt-3">
-          <AliasSection aliases={aliases} domains={owned.map((d) => ({ domain: d.domain }))} />
-        </div>
-      )}
 
       <div className="mt-3">
         <ForwardSection state={forward} />

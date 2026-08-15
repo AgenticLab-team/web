@@ -164,9 +164,20 @@ function BurnerCard({ box, messages }: { box: BurnerView; messages: BurnerMessag
 
   return (
     <Card>
-      {/* 地址是这一页最大的两样东西之一 */}
+      {/*
+        * ⚠️ 地址用 `t-body`，不再是 `t-title3`。
+        *
+        * 原来的注释写着「地址是这一页最大的两样东西之一」——
+        * 那个判断在域名短的时候成立。而池子里有
+        * `pneumonoultramicroscopicsilicovolcanoconiosis.icu` 这种，
+        * 加上前缀之后 `t-title3 + break-all` 会占**四行**，
+        * 把整屏顶满，而那串随机前缀根本没人会读。
+        *
+        * 真正要大的是**验证码**（下面那个 `t-title1`）：
+        * 地址是拿去粘贴的，码是拿眼睛读的。
+        */}
       <div className="flex items-start gap-2">
-        <code className="t-title3 min-w-0 flex-1 break-all font-mono font-semibold">
+        <code className="t-body min-w-0 flex-1 break-all font-mono font-semibold">
           {box.displayAddress}
         </code>
         {/*
@@ -182,10 +193,20 @@ function BurnerCard({ box, messages }: { box: BurnerView; messages: BurnerMessag
           */}
         <div className="flex shrink-0 items-start gap-4">
         <CopyButton value={box.displayAddress} label="复制地址" />
+        {/*
+          * ⚠️ 这个键原来是**图标 + `--ink-quaternary`**，而站长的反馈是
+          * 「还没法删除」—— 按钮一直在，只是没人找得到它。
+          *
+          * quaternary 那一档量出来对比度 1.4:1（我拿工具扫过全站），
+          * 一个灰到几乎看不见的垃圾桶图标，在一堆文字里等于不存在。
+          * **一个动作永远不该用全站最淡的那一档。**
+          *
+          * 改成带字的按钮：图标能省地方，但省下的地方不值得
+          * 让人找不到怎么扔掉一个地址。
+          */}
         <button
-          className="tap-target shrink-0 rounded-[var(--radius-chip)] p-1.5 text-[var(--ink-quaternary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--danger)]"
+          className="tap-target t-caption shrink-0 rounded-[var(--radius-chip)] px-1.5 text-[var(--ink-secondary)] transition-colors hover:bg-[var(--fill)] hover:text-[var(--danger)]"
           title="扔掉这个地址"
-          aria-label="扔掉这个地址"
           onClick={() =>
             startTransition(async () => {
               await discardBurner({ id: box.id });
@@ -193,7 +214,8 @@ function BurnerCard({ box, messages }: { box: BurnerView; messages: BurnerMessag
           }
           disabled={pending}
         >
-          <Trash2 className="size-4" />
+          <Trash2 className="mr-0.5 inline size-3.5 align-[-2px]" aria-hidden />
+          扔掉
         </button>
         </div>
       </div>

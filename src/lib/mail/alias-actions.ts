@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getCurrentUser } from "@/lib/auth/session";
-import { openAlias, ownedDomains } from "@/lib/mail/alias";
+import { closeAlias, openAlias, ownedDomains } from "@/lib/mail/alias";
 
 /**
  * 自有域名上开一个长期地址。
@@ -28,6 +28,25 @@ export async function createAlias(input: {
 
   revalidatePath("/mail/burner");
   return { ok: true, address: r.box.address };
+}
+
+/**
+ * 关掉一个自有域名地址。
+ *
+ * 和 `createAlias` 一样：**不接受调用方传 userId**，
+ * 身份只从会话里拿 —— 那种参数就是一道后门。
+ */
+export async function removeAlias(input: {
+  boxId: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "请先登录" };
+
+  const r = closeAlias({ userId: user.id, boxId: input.boxId });
+  if (!r.ok) return { ok: false, error: r.error ?? "关不掉" };
+
+  revalidatePath("/mail/burner");
+  return { ok: true };
 }
 
 /** 我拥有哪些域名 —— 界面靠它决定要不要显示「开长期地址」那一块 */

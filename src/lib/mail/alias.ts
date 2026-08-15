@@ -1,11 +1,12 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { mailBoxes, mailDomains, mailEvents } from "@/lib/db/schema";
 
 import { buildAddress, checkLocalPart, MAIL_BANWORD_KINDS } from "./address-rules";
+import { MAIL_BOX_ALIVE_STATUSES } from "./kinds";
 import { mailConfig } from "./config";
 import { listBanwords } from "./admin-queries";
 
@@ -202,4 +203,62 @@ export function listAliases(userId: string): AliasView[] {
       lastReceivedAt: b.lastReceivedAt,
     }))
     .sort((a, b) => (b.lastReceivedAt ?? 0) - (a.lastReceivedAt ?? 0));
+}
+
+
+/**
+ * 关掉一个自有域名地址。
+ *
+ * ═════════════════════════════════════════
+ * 这个功能原来**整个不存在**
+ * ═════════════════════════════════════════
+ *
+ * 开得出来、关不掉 —— 站长的原话是「还没法删除」。
+ * 而自有域名上的地址是免费开的，那就意味着一个手滑的前缀
+ * （`qaq@`、测试用的 `aaa@`）会永远挂在他自己的域名上。
+ *
+ * ─────────────────────────────────────────
+ * 走 `revoked`，不删行
+ * ─────────────────────────────────────────
+ *
+ * 地址上有唯一索引，而且信是挂在箱子 id 上的。真删行的话：
+ * 已经收到的信要么跟着没（那是他的东西，不该替他决定），
+ * 要么变成孤儿。标成 revoked 之后收信侧不再匹配它，
+ * 而历史留在原地 —— 和一次性箱那条「扔掉」是同一套。
+ *
+ * 同一个前缀之后还能再开：`revoked` 的行不参与「地址被占了」的判断。
+ */
+export function closeAlias(input: { userId: string; boxId: string }): { ok: boolean; error?: string } {
+  /*
+   * 归属和存在性用**同一条 where** 判掉。
+   *
+   * 分两步查的话（先查在不在、再查是不是你的）就会分出两句不同的错误，
+   * 而那两句合起来是一个「这个 id 存不存在」的探针。
+   * 这一条和 `readMessage` 是同一个写法。
+   */
+  const changes = db
+    .update(mailBoxes)
+    .set({ status: "revoked", updatedAt: Date.now() })
+    .where(
+      and(
+        eq(mailBoxes.id, input.boxId),
+        eq(mailBoxes.userId, input.userId),
+        eq(mailBoxes.kind, "alias"),
+        inArray(mailBoxes.status, MAIL_BOX_ALIVE_STATUSES),
+      ),
+    )
+    .run().changes;
+
+  if (changes === 0) return { ok: false, error: "没有这个地址，或者它不是你的" };
+
+  db.insert(mailEvents)
+    .values({
+      boxId: input.boxId,
+      event: "alias_closed",
+      actorId: input.userId,
+      actorKind: "user",
+    })
+    .run();
+
+  return { ok: true };
 }

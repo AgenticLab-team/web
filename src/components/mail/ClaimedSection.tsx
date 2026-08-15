@@ -2,12 +2,20 @@
 
 import { useState, useTransition } from "react";
 
-import { Card, buttonClass } from "@/components/ui/primitives";
+import { buttonClass } from "@/components/ui/primitives";
 import { renew } from "@/lib/mail/claim-actions";
 import type { ClaimedView } from "@/lib/mail/claim";
 
 /**
- * 我申领来的长期地址。
+ * 我申领来的长期地址那几行。
+ *
+ * ⚠️ 这里**不再自带卡片和标题**。
+ *
+ * 原来它是一张写着「我申领的地址」的独立卡片，而隔壁还有一张
+ * 写着「我的长期地址」的（自有域名那种）—— 两个名字几乎一样、
+ * 装的却是两回事，站长的原话是「ui 奇差」。
+ * 现在两种都由 `LongTermSection` 收进同一张「长期地址」卡里，
+ * 每行自己说清楚它是哪一种。
  *
  * ═════════════════════════════════════════
  * 这一栏唯一会让人后悔的事是**错过续期**
@@ -26,18 +34,14 @@ import type { ClaimedView } from "@/lib/mail/claim";
  *
  * 和申领那一块同一条：按一下就扣分的东西，价格必须在按下之前看得见。
  */
-export function ClaimedSection({ boxes }: { boxes: ClaimedView[] }) {
+export function ClaimedRows({ boxes }: { boxes: ClaimedView[] }) {
   if (boxes.length === 0) return null;
-
   return (
-    <Card>
-      <h2 className="t-headline">我申领的地址</h2>
-      <div className="mt-3 space-y-1.5">
-        {boxes.map((b) => (
-          <ClaimedRow key={b.id} box={b} />
-        ))}
-      </div>
-    </Card>
+    <>
+      {boxes.map((b) => (
+        <ClaimedRow key={b.id} box={b} />
+      ))}
+    </>
   );
 }
 
@@ -75,6 +79,17 @@ function ClaimedRow({ box }: { box: ClaimedView }) {
     <div className="rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2">
       <div className="flex items-center gap-2">
         <code className="t-footnote min-w-0 flex-1 truncate font-mono">{box.address}</code>
+        {/*
+          * 每行标出它是哪一种。
+          *
+          * 两种长期地址合进同一张卡之后，如果不标，人只能从
+          * 「有没有续期按钮」去反推 —— 而那正是原来两张同名卡片
+          * 造成的困惑，换个地方又出现一次。
+          */}
+        <span className="t-caption2 shrink-0 rounded-[var(--radius-pill)] bg-[var(--fill-strong,var(--fill))] px-1.5 py-0.5 text-[var(--ink-secondary)]">
+          申领
+        </span>
+
         {box.unreadCount > 0 && (
           <span
             className="t-caption2 shrink-0 rounded-[var(--radius-pill)] px-1.5 py-0.5"

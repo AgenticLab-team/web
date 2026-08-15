@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 
-import { Card, buttonClass } from "@/components/ui/primitives";
+import { buttonClass } from "@/components/ui/primitives";
 import { claim, purchaseSlot } from "@/lib/mail/claim-actions";
 
 /**
@@ -26,7 +26,7 @@ import { claim, purchaseSlot } from "@/lib/mail/claim-actions";
  * 而槽位满了就只能退掉一个或者花分买。先说这个，
  * 免得他挑好了地址、算好了分，最后撞在一句「槽位满了」上。
  */
-export function ClaimSection({
+export function ClaimForm({
   slots,
   domains,
 }: {
@@ -59,15 +59,12 @@ export function ClaimSection({
   if (domains.length === 0) return null;
 
   return (
-    <Card>
-      <div className="flex items-baseline gap-2">
-        <h2 className="t-headline">申领一个长期地址</h2>
-        <span className="tabular t-caption2 ml-auto text-[var(--ink-tertiary)]">
-          槽位 {slots.used}/{slots.total}
-        </span>
-      </div>
-
-      <p className="t-caption mt-1 text-[var(--ink-tertiary)]">
+    <div>
+      {/*
+        * 标题和槽位数搬到外面那张「长期地址」卡上了 ——
+        * 这里只剩「怎么申领」这一件事。
+        */}
+      <p className="t-caption text-[var(--ink-tertiary)]">
         一年有效，到期可以续。地址是唯一的 —— 先到先得，不做竞价
       </p>
 
@@ -123,8 +120,9 @@ export function ClaimSection({
 
       <div className="mt-3 flex gap-2">
         <input
-          className="t-body min-w-0 flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2"
+          className="t-body min-h-11 min-w-0 flex-1 rounded-[var(--radius-control)] bg-[var(--fill)] px-3 py-2"
           placeholder="想要的前缀"
+          aria-label="申领地址的前缀"
           value={local}
           onChange={(e) => setLocal(e.target.value)}
           disabled={full}
@@ -148,6 +146,6 @@ export function ClaimSection({
           {done}
         </p>
       )}
-    </Card>
+    </div>
   );
 }

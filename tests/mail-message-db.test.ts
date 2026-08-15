@@ -366,6 +366,60 @@ describe("**自有域名上的长期地址**", () => {
     assert.equal(row.muted, false, "长期地址不该静音 —— 别人随时可能给你写信");
   });
 
+  it("★ 关得掉 —— 而且关掉之后收信侧不再认它", () => {
+    /*
+     * ═════════════════════════════════════════
+     * 这个功能原来**整个不存在**
+     * ═════════════════════════════════════════
+     *
+     * 开得出来、关不掉。站长的原话是「还没法删除」——
+     * 而自有域名上的地址是免费开的，一个手滑的前缀会永远挂在
+     * 他自己的域名上。
+     *
+     * 走 `revoked` 而不是删行：信是挂在箱子 id 上的，
+     * 真删的话已经收到的信要么跟着没（那是他的东西），要么变成孤儿。
+     */
+    scene();
+    const d = giveDomain(ME);
+    const opened = alias.openAlias({ userId: ME, domain: d, localPart: "hello" });
+    assert.ok(opened.ok, opened.ok ? "" : opened.error);
+
+    const closed = alias.closeAlias({ userId: ME, boxId: opened.box.id });
+    assert.equal(closed.ok, true, closed.error ?? "");
+
+    const row = dbm.db
+      .select()
+      .from(schema.mailBoxes)
+      .where(eq(schema.mailBoxes.id, opened.box.id))
+      .get()!;
+    assert.equal(row.status, "revoked");
+    assert.equal(alias.listAliases(ME).length, 0, "关掉之后还出现在列表里");
+  });
+
+  it("★ 关不掉别人的地址 —— 而且给的话和「没有这个地址」一样", () => {
+    /*
+     * 分成两句话写很自然（「不是你的」/「没有这个」），
+     * 而那当场就成了一个「这个 id 存不存在」的探针。
+     * 和 `readMessage` 是同一条。
+     */
+    scene();
+    const d = giveDomain(OTHER);
+    const his = alias.openAlias({ userId: OTHER, domain: d, localPart: "hello" });
+    assert.ok(his.ok, his.ok ? "" : his.error);
+
+    const mine = alias.closeAlias({ userId: ME, boxId: his.box.id });
+    const ghost = alias.closeAlias({ userId: ME, boxId: "box_根本不存在" });
+    assert.equal(mine.ok, false, "关掉了别人的地址");
+    assert.equal(mine.error, ghost.error, "两句话不一样 —— 那就成了归属探针");
+
+    const row = dbm.db
+      .select()
+      .from(schema.mailBoxes)
+      .where(eq(schema.mailBoxes.id, his.box.id))
+      .get()!;
+    assert.equal(row.status, "active", "别人的地址被动了");
+  });
+
   it("**别人的域名上开不出来**", () => {
     scene();
     const d = giveDomain(OTHER);
