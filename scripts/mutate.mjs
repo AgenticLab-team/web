@@ -339,6 +339,22 @@ const CUTS = [
     to: "  return requireAdmin(permission);",
   },
 
+  /* ── 模块开关 ─────────────────────────── */
+  {
+    group: "模块",
+    name: "关掉的模块也报「开着」",
+    file: "src/lib/modules/state.ts",
+    from: '  return state?.status === "on";',
+    to: "  return true;",
+  },
+  {
+    group: "模块",
+    name: "★ 锁定为常开的模块可以被关掉",
+    file: "src/lib/modules/state.ts",
+    from: "  if (moduleByKey(key)?.lockedOn) return true;",
+    to: "",
+  },
+
   /* ── API 令牌 ─────────────────────────── */
   {
     group: "令牌",
