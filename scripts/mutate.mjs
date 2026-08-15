@@ -221,6 +221,64 @@ const CUTS = [
     file: "src/lib/auth/session.ts",
   },
 
+  /* ── 邮箱申领（也是钱） ───────────────── */
+  {
+    group: "邮箱",
+    name: "等级不够也能申领",
+    file: "src/lib/mail/slot-rules.ts",
+    from: "  if (input.level < need) return { code: \"level\", need, have: input.level };",
+    to: "",
+  },
+  {
+    group: "邮箱",
+    name: "槽位用完了还能继续开",
+    file: "src/lib/mail/slot-rules.ts",
+    from: "  if (input.slotsUsed >= input.slotsTotal) {\n    return { code: \"no_slot\", total: input.slotsTotal, used: input.slotsUsed };\n  }",
+    to: "",
+  },
+  {
+    group: "邮箱",
+    name: "分不够也能申领",
+    file: "src/lib/mail/slot-rules.ts",
+    from: "  if (input.points < rent) return { code: \"poor\", need: rent, have: input.points };",
+    to: "",
+  },
+  {
+    group: "邮箱",
+    // ★ 槽位上限被绕过：等级再高也只该给到 LEVEL_SLOT_CAP
+    name: "★ 等级给的槽位不再封顶",
+    file: "src/lib/mail/slot-rules.ts",
+    from: "  const byLevel = Math.min(Math.max(0, Math.floor(level)), LEVEL_SLOT_CAP);",
+    to: "  const byLevel = Math.max(0, Math.floor(level));",
+  },
+  {
+    group: "邮箱",
+    // ★ 这一条今晚真的踩过：幂等键少了「天」，等于一辈子只扣一次
+    name: "★ 申领的幂等键去掉「天」（到期后再领是免费的）",
+    file: "src/lib/mail/claim.ts",
+    from: "    idempotencyKey: `mail.claim:${input.userId}:${address}:${Math.floor(now / 86_400_000)}`,",
+    to: "    idempotencyKey: `mail.claim:${input.userId}:${address}`,",
+  },
+  {
+    group: "邮箱",
+    name: "扣分没成功也照样开箱",
+    file: "src/lib/mail/claim.ts",
+    from: '  if (!paid.ok) return { ok: false, error: paid.error ?? "扣分没成功" };\n\n  const expiresAt = now + RENT_DAYS * 86_400_000;',
+    to: "  const expiresAt = now + RENT_DAYS * 86_400_000;",
+    /*
+     * 预期它活下来 —— 这是一道**够不着的纵深防线**。
+     *
+     * 扣分之前 `canClaim` 已经用同一个余额拦过一次（`user.balance`
+     * 就是 `users.points`），所以单线程走公开入口时，
+     * 「canClaim 放行了而 grantPoints 失败」这个组合出现不了。
+     * 它真正防的是并发：两个请求同时通过 canClaim，而只有一个扣得动。
+     *
+     * 写不出测试不代表这行代码该删 —— 它是那条竞态下唯一的闸。
+     * 但也不该让它在报告里长期红着：红的东西一多，人就不看了。
+     */
+    expectSurvive: "canClaim 用同一个余额先拦过；这一行防的是并发，单线程够不着",
+  },
+
   /* ── 限流 ─────────────────────────────── */
   {
     group: "限流",
@@ -377,7 +435,22 @@ for (const cut of cuts) {
   } finally {
     writeFileSync(path, original);   // 无论如何都还原
   }
-  if (n > 0) {
+  if (cut.expectSurvive) {
+    /*
+     * 预期活下来的：那是「够不着的纵深防线」——
+     * 有些闸只在并发或者数据被别处写坏时才用得上，单线程走公开入口
+     * 造不出那个组合。
+     *
+     * ⚠️ 但如果它**居然被拦下了**，那说明有测试真的覆盖到了 ——
+     * 这一条该从名单里去掉，否则它会一直替一条真实的覆盖打掩护。
+     */
+    if (n > 0) {
+      console.log(`  ⚠️  ${cut.name}：标着「预期活下来」，却红了 ${n} 条 —— 把 expectSurvive 去掉`);
+      survived++;
+    } else {
+      console.log(`  ○  ${cut.name}（预期活下来：${cut.expectSurvive}）`);
+    }
+  } else if (n > 0) {
     console.log(`  ✅ ${cut.name}（红了 ${n} 条）`);
   } else {
     survived++;

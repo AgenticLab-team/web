@@ -515,6 +515,82 @@ describe("**申领：三道闸各防各的**", () => {
     assert.equal(after, before, "申领失败还扣了分");
   });
 
+  it("★ 到期放回池子之后再申领，要**再收一次**年租", () => {
+    /*
+     * ═════════════════════════════════════════
+     * 这一条钉的是幂等键里那个「天」
+     * ═════════════════════════════════════════
+     *
+     * 幂等键原来写的是 `mail.claim:用户:地址` —— 那顺带变成了
+     * 「这个人对这个地址**一辈子只扣一次**」：长期箱到期放回池子、
+     * 他再申领一次，那一次是免费的。
+     * 年租是这套东西里唯一的周期性回收口，一个能被这样绕过的回收口等于没有。
+     *
+     * 修的时候在键里加了天。而 `scripts/mutate.mjs` 把那个天去掉之后
+     * **一条测试都不红** —— 修好了，却没留下守它的东西。
+     *
+     * 这里直接把那个场景走一遍：申领 → 到期进赎回期 → 原主赎回。
+     * 赎回是**原价拿回**，所以第二次必须再扣一次分。
+     */
+    const d = setup({ tier: "b", points: 5000 });
+
+    /*
+     * 两次申领要**隔开一天以上** —— 幂等键里带的是天。
+     * 同一天内重复提交本来就该拦（那是双击、是重试），
+     * 而隔了一个租期之后的重新申领必须照价收费。
+     * 真实场景里这两次隔着一整年，所以这里把 `now` 往前挪一年。
+     */
+    const YEAR_AGO = Date.now() - 366 * 86_400_000;
+    const first = claim.claimAddress({ userId: ME, domain: d, localPart: "again", now: YEAR_AGO });
+    assert.ok(first.ok, first.ok ? "" : first.error);
+    const afterFirst = dbm.db.select().from(schema.users).where(eq(schema.users.id, ME)).get()!.points;
+
+    /*
+     * 做成「已过期、还在 7 天赎回期里」的样子 —— 那是原主拿回它的正路
+     * （`redeemUntil` 之外别人也拿不到，见 claim.ts 里那段三情况的说明）。
+     */
+    dbm.db
+      .update(schema.mailBoxes)
+      .set({
+        status: "expired",
+        expiresAt: Date.now() - 86_400_000,
+        redeemUntil: Date.now() + 3 * 86_400_000,
+      })
+      .where(eq(schema.mailBoxes.id, first.boxId!))
+      .run();
+
+    const second = claim.claimAddress({ userId: ME, domain: d, localPart: "again" });   // 今天
+    assert.ok(second.ok, second.ok ? "" : second.error);
+    const afterSecond = dbm.db.select().from(schema.users).where(eq(schema.users.id, ME)).get()!.points;
+
+    assert.equal(
+      afterFirst - afterSecond,
+      first.paid,
+      "同一个地址到期后重新申领是免费的 —— 年租这个回收口被绕过去了",
+    );
+  });
+
+  it("★ 扣分没成功就不该开出箱子", () => {
+    /*
+     * 「先扣分再插箱子」这个顺序本身是对的（反过来会出现白拿的箱子），
+     * 而这一条钉的是**扣分失败时的返回**：
+     * 把 `if (!paid.ok) return …` 删掉，箱子照样开出来 ——
+     * 一个没付钱的长期地址，而且分文未动。
+     *
+     * 用「分不够」来制造扣分失败：canClaim 那一层也会拦，
+     * 所以这里把分卡在**刚好够 canClaim 过、但扣的时候不够**是做不到的；
+     * 换个角度直接验后果：失败时既不扣分，也不留下箱子。
+     */
+    const d = setup({ tier: "s", points: 10 });
+    const boxesBefore = dbm.db.select().from(schema.mailBoxes).all().length;
+
+    const r = claim.claimAddress({ userId: ME, domain: d, localPart: "nomoney" });
+    assert.equal(r.ok, false);
+
+    const boxesAfter = dbm.db.select().from(schema.mailBoxes).all().length;
+    assert.equal(boxesAfter, boxesBefore, "申领失败却留下了一个箱子");
+  });
+
   it("**等级不够时说的是等级**，不是分不够", () => {
     /*
      * S 档要 L4。给足分但等级不够 —— 拒绝理由必须指向等级，
