@@ -144,6 +144,51 @@ const CUTS = [
     to: 'case "private":\n      return { visible: true };',
   },
 
+  /* ── 积分（钱） ───────────────────────── */
+  {
+    group: "积分",
+    name: "余额可以扣成负数",
+    file: "src/lib/points/ledger.ts",
+    from: 'if (balance < 0) return { ok: false, error: "积分不足" };',
+    to: "",
+  },
+  {
+    group: "积分",
+    /*
+     * ⚠️ 名字里别写「可以重复入账」—— 那是错的。
+     * `idempotency_key` 上有唯一索引，删掉预检也不会重复扣分，
+     * 插入会撞约束、catch 那条路照样返回 duplicate。
+     * 这一刀真正砍掉的是**返回值**：重复那次拿不到 balance / ledgerId，
+     * 而调用方要用它们。
+     */
+    name: "幂等预检失效（重复那次拿不回余额和流水号）",
+    file: "src/lib/points/ledger.ts",
+    from: "    if (seen) {\n      return { ok: true, duplicate: true, balance: seen.balanceAfter, ledgerId: seen.id };\n    }",
+    to: "",
+  },
+  {
+    group: "积分",
+    // ★ 这一处今晚真的踩过：花掉的分让人掉级
+    name: "★ 花掉的分也从累计里扣（会掉级）",
+    file: "src/lib/points/ledger.ts",
+    from: "        input.delta > 0 ? user.pointsTotal + input.delta : user.pointsTotal;",
+    to: "        user.pointsTotal + input.delta;",
+  },
+  {
+    group: "积分",
+    name: "★ 等级按余额算，而不是按累计获得",
+    file: "src/lib/points/ledger.ts",
+    from: "          level: levelOf(pointsTotal, configuredLevels()).level,",
+    to: "          level: levelOf(balance, configuredLevels()).level,",
+  },
+  {
+    group: "积分",
+    name: "流水里记的余额和实际写进去的不是同一个数",
+    file: "src/lib/points/ledger.ts",
+    from: "          balanceAfter: balance,",
+    to: "          balanceAfter: balance + 1,",
+  },
+
   /* ── 会话 ─────────────────────────────── */
   {
     group: "会话",

@@ -105,6 +105,34 @@ describe("幂等", () => {
     assert.equal(ledger.auditBalance(ALICE).cached, 10, "只该加一次");
   });
 
+  it("★ 重复那一次要把**原来那笔的余额和流水号**带回来", () => {
+    /*
+     * ═════════════════════════════════════════
+     * 这一条测的是「预检」而不是「不重复扣」
+     * ═════════════════════════════════════════
+     *
+     * `points_ledger.idempotency_key` 上有唯一索引，所以就算把
+     * `grantPoints` 里那段预检整个删掉，**也不会重复入账** ——
+     * 插入会撞唯一约束，catch 那条路照样返回 `duplicate: true`。
+     * `scripts/mutate.mjs` 里那一刀因此一直活着，
+     * 而上面那条测试也确实拦不住它（它只问「加了几次」）。
+     *
+     * 但两条路的返回值**不一样**：走唯一约束那条拿不到
+     * `balance` 和 `ledgerId`。而调用方是要用它们的 ——
+     * 比如买邮箱槽位那段，先看 `duplicate` 再决定要不要插槽位行，
+     * 拿不到余额就没法把「扣了多少、现在还剩多少」告诉人。
+     *
+     * 所以这一条问的是预检本身：重复调用要能把原来那笔捞回来。
+     */
+    const key = "dup-shape";
+    const first = ledger.grantPoints({ userId: ALICE, delta: 30, reason: "第一次", idempotencyKey: key });
+    const second = ledger.grantPoints({ userId: ALICE, delta: 30, reason: "又来一次", idempotencyKey: key });
+
+    assert.equal(second.duplicate, true);
+    assert.equal(second.balance, first.balance, "重复那次没把余额带回来");
+    assert.equal(second.ledgerId, first.ledgerId, "重复那次没把流水号带回来");
+  });
+
   it("不同幂等键各记各的", () => {
     ledger.grantPoints({ userId: ALICE, delta: 10, reason: "第一天", idempotencyKey: "d1" });
     ledger.grantPoints({ userId: ALICE, delta: 10, reason: "第二天", idempotencyKey: "d2" });
