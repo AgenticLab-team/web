@@ -20,6 +20,10 @@
 //   node scripts/mutate.mjs              # 跑全部刀口
 //   node scripts/mutate.mjs 权限          # 只跑名字里带「权限」的那组
 //
+// ⚠️ 全量跑要**十分钟以上**：每一刀都要跑一遍完整的服务端测试
+// （八千多条，单轮约十秒），而刀口已经有五十多个。
+// 平时按组跑就够了；全量留给「改动了守卫本身」的时候。
+//
 // ─────────────────────────────────────────
 // 刀口怎么挑
 // ─────────────────────────────────────────
@@ -421,6 +425,41 @@ const CUTS = [
     to: "  return 0;",
   },
 
+  {
+    group: "积分",
+    // 对账是「缓存余额有没有飘」的唯一检测手段。它坏了的话，
+    // 它会一直说「都对得上」—— 而那正是最像正常的一种坏法
+    name: "★ 对账恒说一致（余额飘了也查不出来）",
+    file: "src/lib/points/ledger.ts",
+    from: "    consistent: (user?.points ?? 0) === Number(sum),",
+    to: "    consistent: true,",
+  },
+  {
+    group: "积分",
+    name: "★ 对账拿等级分去比余额（两个数本来就不该相等）",
+    file: "src/lib/points/ledger.ts",
+    from: "    cached: user?.points ?? 0,",
+    to: "    cached: user?.pointsTotal ?? 0,",
+  },
+
+  /* ── 注销账号 ─────────────────────────── */
+  {
+    group: "注销",
+    // 计划表说要清的那些表，是不是真的被清了
+    name: "计划表里的表一张都不清（注销跑完，数据全在）",
+    file: "src/lib/users/delete.ts",
+    from: '  const purgePlans = DELETION_PLAN.filter((p) => p.disposition === "purge");',
+    to: "  const purgePlans: typeof DELETION_PLAN = [];",
+  },
+  {
+    group: "注销",
+    // ★ 顺序：带 via 的（靠别的表定位）必须先删，否则定位用的行先没了
+    name: "★ 清理顺序打乱（靠别的表定位的那些会清不掉）",
+    file: "src/lib/users/delete.ts",
+    from: "  const ordered = [...purgePlans.filter((p) => p.via), ...purgePlans.filter((p) => !p.via)];",
+    to: "  const ordered = [...purgePlans.filter((p) => !p.via), ...purgePlans.filter((p) => p.via)];",
+  },
+
   /* ── 限流 ─────────────────────────────── */
   {
     group: "限流",
@@ -538,6 +577,30 @@ if (before !== 0) {
   process.exit(1);
 }
 
+/*
+ * ⚠️ 被打断时也要把源码还原回去。
+ *
+ * 正常路径上有 `finally` —— 而它挡不住超时或者 Ctrl-C：
+ * 进程直接没了，**改坏的源码留在盘上**。
+ *
+ * 这不是理论风险，今晚真的发生了：全量跑超过十分钟被杀掉，
+ * 盘上留下的那一刀正好是 `adminBypass: true`（榜单隐私开关的豁免）——
+ * 也就是站长最初报的那个 bug。差一点就跟着别的改动一起提交了。
+ *
+ * （和 `lib/cdp.mjs` 里那段是同一课：清理只写在正常路径上等于没写。）
+ */
+const dirty = new Map();
+const restoreAll = () => {
+  for (const [path, original] of dirty) {
+    try { writeFileSync(path, original); } catch { /* 尽力而为 */ }
+  }
+  dirty.clear();
+};
+for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+  process.once(sig, () => { restoreAll(); process.exit(130); });
+}
+process.once("exit", restoreAll);
+
 let survived = 0;
 let ambiguous = 0;
 let group = null;
@@ -570,12 +633,14 @@ for (const cut of cuts) {
     ambiguous++;
     continue;
   }
+  dirty.set(path, original);
   writeFileSync(path, original.replace(cut.from, cut.to));
   let n;
   try {
     n = failures();
   } finally {
-    writeFileSync(path, original);   // 无论如何都还原
+    writeFileSync(path, original);   // 正常路径
+    dirty.delete(path);
   }
   if (cut.expectSurvive) {
     /*
