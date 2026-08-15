@@ -221,6 +221,44 @@ const CUTS = [
     file: "src/lib/auth/session.ts",
   },
 
+  /* ── 限流 ─────────────────────────────── */
+  {
+    group: "限流",
+    // 站长明确要过：这个接口是全站唯一一个未鉴权就能写库的公网端点
+    name: "要设备码不再限流",
+    file: "src/lib/tui/device-ratelimit.ts",
+    from: "  if (recent < max) return null;",
+    to: "  return null;",
+  },
+  {
+    group: "限流",
+    name: "★ 拿不到 IP 就不限流（那句被特意删掉的话又回来了）",
+    file: "src/lib/tui/device-ratelimit.ts",
+    from: "  const max = getSettingInt(\"tui.device.max_starts_per_hour\", 60);",
+    to: "  if (!ip) return null;\n  const max = getSettingInt(\"tui.device.max_starts_per_hour\", 60);",
+  },
+  {
+    group: "限流",
+    name: "★ 时间窗从一小时放宽到一天（等于放宽 24 倍）",
+    file: "src/lib/tui/device-ratelimit.ts",
+    from: "          gt(deviceCodes.createdAt, now - 3_600_000),",
+    to: "          gt(deviceCodes.createdAt, now - 86_400_000),",
+  },
+  {
+    group: "限流",
+    name: "登录失败不再限流",
+    file: "src/lib/auth/ratelimit.ts",
+    from: "  if (failures < max) return null;",
+    to: "  return null;",
+  },
+  {
+    group: "限流",
+    name: "★ 连成功的登录也算进失败配额",
+    file: "src/lib/auth/ratelimit.ts",
+    from: "          eq(loginAttempts.success, false),\n",
+    to: "",
+  },
+
   /* ── 隐私开关 ─────────────────────────── */
   {
     group: "隐私",
