@@ -222,9 +222,29 @@ export async function getRealUser(): Promise<CurrentUser | null> {
  * requireAdmin 里已经调了它，覆盖了后台的全部写入口；
  * 后台之外的 server action 由 tests/preview-coverage.test.ts 逐个核对。
  */
-export async function assertNotPreviewing(): Promise<void> {
-  const preview = await currentPreview();
-  if (preview) throw new PreviewWriteError();
+export async function assertNotPreviewing(preview?: ActivePreview | null): Promise<void> {
+  /*
+   * 参数是给测试用的口子，生产代码一个字都不用改（不传就自己去读）。
+   *
+   * ─────────────────────────────────────────
+   * 为什么值得为它开这个口子
+   * ─────────────────────────────────────────
+   *
+   * 这一句是「预览态下不许写」的**唯一落点** —— 后台所有写操作走
+   * `requireWritableAdmin()`，而它第一件事就是调这里。
+   *
+   * 而它原来测不到：`currentPreview()` 要读 cookie，
+   * 而 `cookies()` 在测试里没有请求上下文。于是这一行成了
+   * 「所有人都依赖、没有人验证」的那种代码 ——
+   * `scripts/mutate.mjs` 把这句 throw 删掉，整套测试一条都不红，
+   * 而预览态下处处可写：管理员在别人视角下点一下，
+   * 那个动作就以那个人的名义留下了。
+   *
+   * 「接线」那一层已经有测试守着（requireWritableAdmin 里那句调用），
+   * 差的正好是这一句本身。
+   */
+  const active = preview !== undefined ? preview : await currentPreview();
+  if (active) throw new PreviewWriteError();
 }
 
 export class PreviewWriteError extends Error {

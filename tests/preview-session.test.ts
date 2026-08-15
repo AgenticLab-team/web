@@ -23,6 +23,7 @@ let dbm: typeof import("@/lib/db");
 let schema: typeof import("@/lib/db/schema");
 let preview: typeof import("@/lib/rbac/preview");
 let can: typeof import("@/lib/rbac/can");
+let session: typeof import("@/lib/auth/session");
 
 const ADMIN_ROLE = "01ROLEADMIN0000000000000AA";
 const MOD_ROLE = "01ROLEMOD00000000000000AA";
@@ -34,6 +35,7 @@ before(async () => {
   migrate(dbm.db, { migrationsFolder: "./drizzle" });
   preview = await import("@/lib/rbac/preview");
   can = await import("@/lib/rbac/can");
+  session = await import("@/lib/auth/session");
 });
 
 after(() => rmSync(tmp, { recursive: true, force: true }));
@@ -141,6 +143,43 @@ describe("开一次预览", () => {
   it("乱给一个令牌还原不出东西", () => {
     assert.equal(preview.resolvePreview("bogus"), null);
     assert.equal(preview.resolvePreview(undefined), null);
+  });
+});
+
+describe("★ 预览态下**一个字都不能写**", () => {
+  /*
+   * ═════════════════════════════════════════
+   * 这一组补的是「所有人都依赖、没有人验证」的那一句
+   * ═════════════════════════════════════════
+   *
+   * 后台所有写操作走 `requireWritableAdmin()`，而它第一件事就是
+   * `await assertNotPreviewing()`。那句调用有测试守着（源码断言），
+   * 而**被调的那一句本身**没有：
+   * `scripts/mutate.mjs` 把 `if (preview) throw` 删掉，
+   * 整套测试一条都不红 —— 预览态下处处可写。
+   *
+   * 后果不是「数据被改坏」，是**改动记在了别人名下**：
+   * 管理员以某个人的视角复现问题时点了一下，那个动作就成了他的。
+   */
+  it("★ 有预览在身上 → 抛 PreviewWriteError", async () => {
+    await assert.rejects(
+      () => session.assertNotPreviewing({ userId: "u_被预览的人" } as never),
+      (err: Error) => err.name === "PreviewWriteError",
+      "预览态下写操作没被拦住",
+    );
+  });
+
+  it("不在预览态 → 放行", async () => {
+    await session.assertNotPreviewing(null);
+  });
+
+  it("**错误信息是给人看的** —— 它会直接显示在后台", async () => {
+    const err = await session
+      .assertNotPreviewing({ userId: "u_x" } as never)
+      .then(() => null)
+      .catch((e: Error) => e);
+    assert.ok(err);
+    assert.ok(err.message.trim().length > 0, "抛了个没有话的错误");
   });
 });
 

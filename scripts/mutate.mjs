@@ -321,6 +321,24 @@ const CUTS = [
     to: "",
   },
 
+  /* ── 预览态（以别人的视角看站） ───────── */
+  {
+    group: "预览",
+    // 管理员可以「以某个人的视角」看站，用来复现他报的问题。
+    // 那种状态下**一个字都不能写** —— 否则会以他的名义留下动作
+    name: "预览态下也能写",
+    file: "src/lib/auth/session.ts",
+    from: "  if (active) throw new PreviewWriteError();",
+    to: "",
+  },
+  {
+    group: "预览",
+    name: "★ 后台的写操作不再先挡预览态",
+    file: "src/lib/admin/guard.ts",
+    from: "  await assertNotPreviewing();\n  return requireAdmin(permission);",
+    to: "  return requireAdmin(permission);",
+  },
+
   /* ── API 令牌 ─────────────────────────── */
   {
     group: "令牌",
